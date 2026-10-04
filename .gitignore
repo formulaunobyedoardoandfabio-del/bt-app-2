@@ -1,0 +1,12 @@
+node_modules/
+build/
+android/
+.env
+*.keystore
+*.jks
+__pycache__/
+*.pyc
+.superpowers/
+
+# Area di lavoro del piano (non va su GitHub)
+.superpowers/
