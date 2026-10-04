@@ -1,0 +1,8 @@
+{
+  "appId": "it.btapp.app",
+  "appName": "B&T App",
+  "webDir": "build",
+  "server": {
+    "androidScheme": "https"
+  }
+}
