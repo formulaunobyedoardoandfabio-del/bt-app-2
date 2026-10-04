@@ -13,3 +13,5 @@ __pycache__/
 test/e2e/app.js
 test/e2e/test.html
 test/logs/
+# Schermate che le prove della 2.0 (run9) salvano nella cartella principale
+/*.png
