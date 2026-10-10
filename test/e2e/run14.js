@@ -155,7 +155,8 @@ const tests = {
     assert(/Prove libere 3/.test(t1) && /Probabilità di pioggia/.test(t1) && /12:30/.test(t1), 'la descrizione completa delle FP3 non si apre');
     assert(/Il tuo pronostico: Pioggia/.test(t2) && /\+2 punti/.test(t2), 'il pronostico non viene registrato');
   },
-  async 'meteo: pronostico giusto = +2 punti FantaF1, e si chiude quando parte la sessione'(b) {
+  // Task 10 (D23): la prova DEMO non dà l'esito del meteo né i +2 punti (arriveranno coi dati veri a fine sessione).
+  async 'meteo: il pronostico si chiude quando parte la sessione; la prova DEMO non dà l\'esito né i +2 punti (D23)'(b) {
     const { ctx, p } = await open(b); await login(p);
     const outcome = await p.evaluate(() => { const A = window.__req('./App'); return A.weekendWeather(A.RACES_INIT[15]).sessions.find(s => s.key === 'FP1').outcome; });
     await goTab(p, 'FANTA'); const pts0 = await p.evaluate(() => parseInt(document.querySelector('[data-fanta-total]').textContent, 10));
@@ -170,9 +171,9 @@ const tests = {
     await goTab(p, 'FANTA'); const pts1 = await p.evaluate(() => parseInt(document.querySelector('[data-fanta-total]').textContent, 10));
     const fanta = norm(await text(p)); await ctx.close();
     assert(/Pronostico chiuso/.test(during) && !canGuess, 'durante la sessione il pronostico si può ancora cambiare');
-    assert(/Hai indovinato/.test(after), 'a fine sessione non dice che ho indovinato: ' + after.slice(0, 200));
-    assert(pts1 === pts0 + 2, `i punti FantaF1 non salgono di 2 (${pts0} → ${pts1})`);
-    assert(/\+2/.test(fanta) && /meteo/i.test(fanta), 'nel FantaF1 non si vede il bonus del meteo');
+    assert(!/Hai indovinato/.test(after) && /Il tuo pronostico/.test(after), 'la prova DEMO non deve dare l\'esito del meteo: ' + after.slice(0, 200));
+    assert(pts1 === pts0, `la prova DEMO non deve dare punti FantaF1 (${pts0} → ${pts1})`);
+    assert(!/Meteo Prove libere 1/.test(fanta), 'nel FantaF1 compare un bonus del meteo dalla prova DEMO');
   },
   async 'diretta: nel weekend Sprint si avviano anche Qualifiche Sprint e Sprint (21 giri)'(b) {
     const { ctx, p, errs } = await open(b); await login(p); await openAdmin(p, 'GARA LIVE');
@@ -226,8 +227,9 @@ const tests = {
     assert(cards[0] === 'leclerc', 'il pilota scelto non entra in squadra: ' + cards);
     assert(!errs.length, 'errori JS: ' + errs.join(' | '));
   },
-  async 'fanta: durante le qualifiche squadra e lega sono bloccate'(b) {
-    const { ctx, p } = await open(b); await login(p); await startLive(p, 'QUALIFICHE');
+  // Task 10 (D23): la squadra si blocca con l'ora vera delle qualifiche (la prova DEMO non la blocca più).
+  async 'fanta: durante le qualifiche (ora vera) squadra e lega sono bloccate'(b) {
+    const { ctx, p } = await open(b, { now: '2026-10-03T08:05:00Z' }); await login(p);
     await goTab(p, 'FANTA'); const t = norm(await text(p));
     await tapSel(p, '[aria-label="Cambia Lewis Hamilton"]').catch(() => {}); await w(p, 300);
     const picker = /SCEGLI IL PILOTA/.test(await text(p));
@@ -264,10 +266,13 @@ const tests = {
   async 'fanta: i punti bonus salgono anche nella classifica della lega'(b) {
     const { ctx, p } = await open(b); await login(p);
     await goTab(p, 'FANTA'); const me0 = await p.evaluate(() => document.querySelector('[data-league-me]').getAttribute('data-league-me'));
-    const outcome = await p.evaluate(() => { const A = window.__req('./App'); return A.weekendWeather(A.RACES_INIT[15]).sessions.find(s => s.key === 'FP1').outcome; });
-    await goRace(p); await tapText(p, 'Meteo', { exact: true }); await w(p, 300); await tapSel(p, '[data-weather-box="FP1"]'); await w(p, 200);
-    await tapText(p, 'Indovina il meteo'); await w(p, 150); await tapText(p, outcome === 'rain' ? 'Pioggia' : 'Asciutto', { exact: true }); await w(p, 200);
-    await startLive(p, 'PROVE LIBERE 1'); await stopLive(p);
+    // Task 10 (D23): il bonus viene da un sondaggio con la risposta esatta segnata dall'admin (la prova DEMO non dà più
+    // l'esito del meteo).
+    await goTab(p, 'HOME'); await tapText(p, 'Singapore: chi vince la Sprint?'); await w(p, 400);
+    await tapSel(p, '[data-poll-option="norris"]'); await w(p, 300);
+    await tapSel(p, '[aria-label="Indietro"]'); await w(p, 300);
+    await openAdmin(p, 'SONDAGGI'); await tapSel(p, '[data-poll-admin="art-12"] [data-answer="norris"]'); await w(p, 300);
+    await backHome(p);
     await goTab(p, 'FANTA'); const me1 = await p.evaluate(() => document.querySelector('[data-league-me]').getAttribute('data-league-me'));
     await ctx.close();
     assert(Number(me1) === Number(me0) + 2, `in classifica lega i punti non salgono di 2 (${me0} → ${me1})`);

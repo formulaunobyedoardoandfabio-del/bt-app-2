@@ -19,7 +19,8 @@ import Compat from "./services/compat";
 import { createAccount, MESSAGES as ACCOUNT_MSG, messageOf } from "./services/account";
 import { createChat, CHAT_MSG, ROOM_IDS } from "./services/chat";
 import { createFeedback, FEEDBACK_CATS, FEEDBACK_MSG } from "./services/feedback";
-import { local } from "./services/firebase";
+import { local, IMG_REF, uploadImage, loadImage as loadStoredImage, dropImage } from "./services/firebase";
+import { generateArticle } from "./services/backend";
 import LOGO from "./data/logo";
 
 /* ── DESIGN TOKENS (matches the B&T concept style) ─────────────────── */
@@ -61,6 +62,35 @@ const openUrl = url => {
   try { const B = window.Capacitor?.Plugins?.Browser; if (window.Capacitor?.isNativePlatform?.() && B) { B.open({ url }); return; } } catch (e) {}
   window.open(url, "_blank");
 };
+/* ── FOTO SALVATE SU FIREBASE: "fsimg:<id>" (notizie, copertine dei video) ── */
+// Le foto caricate dall'admin stanno in shared/img-<id> (src/services/firebase.js); notizie e video salvano solo il
+// riferimento "fsimg:<id>", come l'app di oggi. Link https e data URL si usano così come sono.
+const isStoredRef = src => typeof src === "string" && src.startsWith(IMG_REF);
+// Indirizzo da mettere nell'<img>: "" finché la foto salvata non è arrivata (o se non si trova).
+function useImageSrc(src) {
+  const [u, setU] = useState(() => (src && !isStoredRef(src) ? src : ""));
+  useEffect(() => {
+    let alive = true;
+    if (!src) { setU(""); return undefined; }
+    if (!isStoredRef(src)) { setU(src); return undefined; }
+    setU("");
+    loadStoredImage(src).then(v => { if (alive) setU(v || ""); }, () => {});
+    return () => { alive = false; };
+  }, [src]);
+  return u;
+}
+// <img> di una foto che può essere salvata su Firebase; finché non c'è, al suo posto fallback.
+function StoredImg({ src, fallback = null, ...rest }) {
+  const u = useImageSrc(src);
+  return u ? <img alt="" {...rest} src={u} /> : fallback;
+}
+// Riquadro con la foto come sfondo (copertine); empty è lo sfondo quando la foto non c'è.
+function StoredBg({ src, as: Tag = "div", fit = "cover", empty, style, children, ...rest }) {
+  const u = useImageSrc(src);
+  return <Tag {...rest} style={{ ...style, background: u ? `#111 url("${u}") center / ${fit} no-repeat` : empty }}>{children}</Tag>;
+}
+// Una foto tolta da una notizia o da un video si cancella da Firebase, se nient'altro la usa.
+const dropStoredImage = ref => { if (isStoredRef(ref)) dropImage(ref).catch(() => {}); };
 // Moderazione chat (richiesta da Google Play): i messaggi degli utenti bloccati non si vedono.
 // Messaggio di un utente bloccato? Con l'ID autore se c'è, altrimenti col nome (messaggi vecchi), come l'app di oggi.
 const isBlockedMsg = (blocked, m) => !m.mine && blocked.some(b => (b.aid && m.aid ? b.aid === m.aid : !b.aid && !m.aid && b.name === m.from));
@@ -657,7 +687,7 @@ async function renderArticleImage(a, opts) {
     drawArticle(ctx, true, a, o);
     return cv;
   };
-  const photo = await loadImage(a.image);
+  const photo = await loadImage(await loadStoredImage(a.image).catch(() => ""));   // foto salvata su Firebase (fsimg:) o link
   let cv = paintAll(photo), preview;
   try { preview = cv.toDataURL("image/jpeg", .85); }
   catch (e) { cv = paintAll(null); preview = cv.toDataURL("image/jpeg", .85); }   // foto di un altro sito che non si può esportare
@@ -1021,6 +1051,7 @@ function HomeScreen({ ig, onOpenIg, highlights = [], articles, tagFilter, onTag,
   // In grande sempre la notizia più recente; sotto le altre, dalla più nuova alla più vecchia.
   const sorted = BtLogic.newestFirst(matches);
   const featured = listMode ? null : sorted[0] || null;
+  const featuredImg = useImageSrc(featured ? featured.image : "");   // finché la foto non arriva, il riquadro B&T
   const rest = listMode ? sorted : sorted.slice(1);
   const ARCHIVE = [
     { name: "GP d'Australia 2025", winner: "L. Norris" },
@@ -1100,10 +1131,10 @@ function HomeScreen({ ig, onOpenIg, highlights = [], articles, tagFilter, onTag,
         <SaveBtn a={featured} saved={saved.includes(featured.id)} onToggle={onToggleSave} style={{ top: 12, right: 28 }} />
         <button className="press" data-featured={featured.id} onClick={() => onOpenArticle(featured.id)} style={{ display: "block", textAlign: "left", width: "calc(100% - 32px)", margin: "0 16px 14px", borderRadius: 18, overflow: "hidden", background: C.card, border: `1px solid ${C.border}` }}>
           {/* La foto si vede intera, con le sue proporzioni: niente ritagli. */}
-          <div style={{ minHeight: featured.image ? 0 : 170, position: "relative", background: featured.image ? "#111" : "linear-gradient(155deg,#3a0a0c 0%,#0f0f12 65%)" }}>
-            {featured.image && <img data-news-img="" src={featured.image} alt="" style={{ display: "block", width: "100%", height: "auto", maxHeight: 440, objectFit: "contain", background: "#111" }} />}
+          <div style={{ minHeight: featuredImg ? 0 : 170, position: "relative", background: featuredImg ? "#111" : "linear-gradient(155deg,#3a0a0c 0%,#0f0f12 65%)" }}>
+            {featuredImg && <img data-news-img="" src={featuredImg} alt="" style={{ display: "block", width: "100%", height: "auto", maxHeight: 440, objectFit: "contain", background: "#111" }} />}
             <span style={{ position: "absolute", top: 14, left: 14, padding: "5px 11px", borderRadius: 7, background: C.accent, fontFamily: F_HEAD, fontWeight: 800, fontSize: 10, letterSpacing: 1, color: "#fff" }}>{featured.cat}</span>
-            {!featured.image && (
+            {!featuredImg && (
               <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden" }}>
                 <span style={{ fontFamily: F_HEAD, fontWeight: 900, fontStyle: "italic", fontSize: 60, color: "rgba(255,255,255,.05)" }}>B&amp;T</span>
               </div>
@@ -1125,7 +1156,7 @@ function HomeScreen({ ig, onOpenIg, highlights = [], articles, tagFilter, onTag,
         <SaveBtn a={a} saved={saved.includes(a.id)} onToggle={onToggleSave} style={{ top: 8, right: 24 }} />
         <button className="press" data-news-item={a.id} data-age={String(BtLogic.newsAge(a))} onClick={() => onOpenArticle(a.id)} style={{ display: "flex", textAlign: "left", width: "calc(100% - 32px)", margin: "0 16px 12px", borderRadius: 16, overflow: "hidden", background: C.card, border: `1px solid ${C.border}` }}>
           <div style={{ width: 92, minHeight: 92, flexShrink: 0, position: "relative", background: a.image ? "#111" : "linear-gradient(155deg,#1a1a2e 0%,#0f0f12 70%)" }}>
-            {a.image && <img data-news-img="" src={a.image} alt="" style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "contain" }} />}
+            {a.image && <StoredImg data-news-img="" src={a.image} style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "contain" }} />}
             <span style={{ position: "absolute", top: 8, left: 8, padding: "3px 8px", borderRadius: 6, background: a.premium ? "rgba(231,179,76,.2)" : "rgba(255,255,255,.12)", fontFamily: F_HEAD, fontWeight: 800, fontSize: 8, letterSpacing: .8, color: a.premium ? C.gold : "#fff" }}>{a.cat}</span>
           </div>
           <div style={{ flex: 1, padding: "12px 52px 12px 14px", display: "flex", flexDirection: "column", justifyContent: "center", minWidth: 0 }}>
@@ -1186,6 +1217,7 @@ function HomeScreen({ ig, onOpenIg, highlights = [], articles, tagFilter, onTag,
 function ArticleScreen({ article, onBack, isPremium, onPremium, onTag, saved = false, onToggleSave, onShare, vote = null, onVote }) {
   const [zoomed, setZoomed] = useState(false);   // foto a tutto schermo, con lo zoom
   useBack(zoomed, () => setZoomed(false));
+  const photo = useImageSrc(article.image);       // foto salvata su Firebase (fsimg:) o link: finché non arriva, il riquadro B&T
   const locked = article.premium && !isPremium;
   const tags = articleTags(article);
   const round = { width: 38, height: 38, borderRadius: "50%", background: C.card, border: `1px solid ${C.border}`, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 };
@@ -1203,9 +1235,9 @@ function ArticleScreen({ article, onBack, isPremium, onPremium, onTag, saved = f
         <h1 style={{ fontFamily: F_HEAD, fontWeight: 900, fontStyle: "italic", fontSize: 22, color: C.text, lineHeight: 1.25, margin: "0 0 8px" }}>{article.title}</h1>
         <span style={{ fontFamily: F_BODY, fontSize: 11, color: C.dim }}>{article.author ? article.author + " · " : ""}{article.time}</span>
         {tags.length > 0 && <div style={{ marginTop: 12 }}><HashtagChips tags={tags} onTag={onTag} /></div>}
-        {article.image
+        {photo
           ? <button className="press" data-article-zoom="" aria-label="Apri la foto a tutto schermo" onClick={() => setZoomed(true)} style={{ position: "relative", display: "block", width: "100%", margin: "16px 0", padding: 0, borderRadius: 16, cursor: "zoom-in" }}>
-              <img data-article-img="" src={article.image} alt="" style={{ display: "block", width: "100%", height: "auto", maxHeight: 560, objectFit: "contain", borderRadius: 16, background: "#111" }} />
+              <img data-article-img="" src={photo} alt="" style={{ display: "block", width: "100%", height: "auto", maxHeight: 560, objectFit: "contain", borderRadius: 16, background: "#111" }} />
               <span aria-hidden="true" style={{ position: "absolute", right: 10, bottom: 10, display: "inline-flex", alignItems: "center", gap: 5, padding: "5px 9px", borderRadius: 999, background: "rgba(0,0,0,.6)", fontFamily: F_BODY, fontWeight: 700, fontSize: 11, color: "#fff" }}><Icon name="search" size={12} color="#fff" /> Tocca per ingrandire</span>
             </button>
           : (
@@ -1235,7 +1267,7 @@ function ArticleScreen({ article, onBack, isPremium, onPremium, onTag, saved = f
           </button>
         </div>
       </div>
-      {zoomed && article.image && <ImageViewer src={article.image} onClose={() => setZoomed(false)} />}
+      {zoomed && photo && <ImageViewer src={photo} onClose={() => setZoomed(false)} />}
     </div>
   );
 }
@@ -1469,7 +1501,7 @@ function CircuitScreen({ circuitId, races, articles, onBack, onTag, onOpenArticl
       <div style={{ margin: "0 16px 12px" }}>
         {related.length ? related.map(a => (
           <button key={a.id} className="press" onClick={() => onOpenArticle(a.id)} style={{ display: "flex", alignItems: "center", gap: 12, width: "100%", padding: "11px 12px", marginBottom: 8, borderRadius: 14, background: C.card, border: `1px solid ${C.border}`, textAlign: "left" }}>
-            <span style={{ width: 54, height: 54, flexShrink: 0, borderRadius: 10, background: a.image ? `#111 url(${a.image}) center / contain no-repeat` : "linear-gradient(155deg,#1a1a2e 0%,#0f0f12 70%)" }} />
+            <StoredBg as="span" src={a.image} fit="contain" empty="linear-gradient(155deg,#1a1a2e 0%,#0f0f12 70%)" style={{ width: 54, height: 54, flexShrink: 0, borderRadius: 10 }} />
             <span style={{ flex: 1, minWidth: 0 }}>
               <span style={{ display: "block", fontFamily: F_HEAD, fontWeight: 700, fontSize: 13.5, color: C.text, lineHeight: 1.3 }}>{a.title}</span>
               <span style={{ display: "block", fontFamily: F_BODY, fontSize: 11, color: C.dim, marginTop: 3 }}>{a.cat} · {a.time}</span>
@@ -1530,18 +1562,20 @@ function FlagBanner({ st, style }) {
 const liveCounter = st => isRaceType(st.type) ? `GIRO ${st.lap}/${st.totalLaps}` : `${st.segment ? st.segment + " · " : ""}${st.waiting ? "IN ATTESA" : st.clockText}`;
 
 // Riquadro in cima alla pagina Race durante una sessione: nome, giro o cronometro, bandiera e mappa.
-function LiveCard({ race, st, track, onExpand }) {
+// demo: sessione della "Prova diretta" del Pannello Admin (simulata, solo sul telefono dell'admin): scritta DEMO.
+function LiveCard({ race, st, track, demo, onExpand }) {
   const lastMsg = st.messages[st.messages.length - 1];
   return (
     <div style={{ margin: "4px 16px 14px", padding: "14px 14px 12px", borderRadius: 18, background: C.card, border: `1px solid ${C.border}` }}>
       <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
         <span style={{ width: 7, height: 7, borderRadius: "50%", background: C.accent }} />
         <span style={{ fontFamily: F_BODY, fontWeight: 700, fontSize: 11, color: C.accent, letterSpacing: 1.2 }}>IN DIRETTA · {sessionName(st.type)}</span>
+        {demo && <span data-demo="" title="Prova diretta: sessione simulata, la vedi solo tu" style={{ padding: "2px 7px", borderRadius: 6, background: C.gold, fontFamily: F_HEAD, fontWeight: 900, fontSize: 10, letterSpacing: .8, color: "#141414" }}>DEMO</span>}
         <div style={{ flexGrow: 1 }} />
         <span style={{ fontFamily: F_HEAD, fontWeight: 800, fontSize: 13, color: C.text, fontVariantNumeric: "tabular-nums" }}>{liveCounter(st)}</span>
       </div>
       <h1 style={{ fontFamily: F_HEAD, fontWeight: 900, fontStyle: "italic", fontSize: 20, color: C.text, margin: "0 0 2px" }}>{race.name}</h1>
-      <span style={{ fontFamily: F_BODY, fontSize: 12, color: C.muted }}>{race.circuit} · dati demo</span>
+      <span style={{ fontFamily: F_BODY, fontSize: 12, color: C.muted }}>{race.circuit}{demo ? " · sessione simulata, la vedi solo tu" : ""}</span>
       <FlagBanner st={st} style={{ marginTop: 10 }} />
       <div data-live-card-map="" style={{ position: "relative", marginTop: 8, borderRadius: 12, background: "#0D0D10", padding: "6px 4px" }}>
         <LiveMap track={track} st={st} />
@@ -3099,7 +3133,7 @@ function BackBar({ title, onBack }) {
   );
 }
 function InstagramView({ ig, onToast, onBack }) {
-  return <div data-ig-screen="" style={{ height: "100%", display: "flex", flexDirection: "column" }}><BackBar title="INSTAGRAM" onBack={onBack} /><div style={{ flex: 1, minHeight: 0 }}><InstagramScreen ig={ig} onToast={onToast} /></div></div>;
+  return <div data-ig-screen="" style={{ height: "100%", display: "flex", flexDirection: "column" }}><BackBar title="INSTAGRAM" onBack={onBack} /><div style={{ flex: 1, minHeight: 0 }}><InstagramScreen ig={ig} /></div></div>;
 }
 function ChatsView({ chats, onOpen, blocked, onBack, unreadOf }) {
   return <div data-chats-screen="" style={{ height: "100%", display: "flex", flexDirection: "column" }}><BackBar title="CHAT DEI TIFOSI" onBack={onBack} /><div style={{ flex: 1, minHeight: 0 }}><ChatListScreen chats={chats} onOpen={onOpen} blocked={blocked} unreadOf={unreadOf} /></div></div>;
@@ -4269,14 +4303,15 @@ function RaceScreen({ isPremium, onPremium, onSelectDriver, races, standings, li
   return (
     <div className="scrollcol" style={{ height: "100%" }}>
       {st && liveRace && st.finished && isRaceType(st.type) && <FinishPodium st={st} race={liveRace} onSelectDriver={onSelectDriver} />}
-      {st && liveRace ? <LiveCard race={liveRace} st={st} track={live.track} onExpand={onExpandMap} /> : (
+      {st && liveRace ? <LiveCard race={liveRace} st={st} track={live.track} demo={live.source === "demo"} onExpand={onExpandMap} /> : (
       <div style={{ position: "relative", margin: "4px 16px 14px", borderRadius: 18, overflow: "hidden", background: C.card, border: `1px solid ${C.border}` }}>
         {shown && <CircuitArt circuitId={shown.circuitId} uid="next" />}
         {shown && <div style={{ position: "absolute", inset: 0, background: "linear-gradient(90deg, rgba(13,13,16,.94) 0%, rgba(13,13,16,.72) 48%, rgba(13,13,16,.18) 100%)" }} />}
         <div style={{ position: "relative", padding: "18px 16px 16px" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
-          <span style={{ width: 7, height: 7, borderRadius: "50%", background: C.gold }} />
-          <span style={{ fontFamily: F_BODY, fontWeight: 700, fontSize: 11, color: C.gold, letterSpacing: 1.2 }}>PROSSIMA GARA</span>
+          {/* Gara messa LIVE dall'admin (shared/bt-races): "In diretta", senza dati simulati (D23); i dati veri arrivano da OpenF1. */}
+          <span style={{ width: 7, height: 7, borderRadius: "50%", background: shown && shown.status === "LIVE" ? C.accent : C.gold }} />
+          <span style={{ fontFamily: F_BODY, fontWeight: 700, fontSize: 11, color: shown && shown.status === "LIVE" ? C.accent : C.gold, letterSpacing: 1.2 }}>{shown && shown.status === "LIVE" ? "IN DIRETTA" : "PROSSIMA GARA"}</span>
           <div style={{ flexGrow: 1 }} />
           <span style={{ fontFamily: F_BODY, fontWeight: 600, fontSize: 12, color: C.muted }}>{shown ? `ROUND ${shown.round}/${races.length}` : `${done}/${races.length}`}</span>
         </div>
@@ -4406,8 +4441,10 @@ function RaceScreen({ isPremium, onPremium, onSelectDriver, races, standings, li
   );
 }
 
-function InstagramScreen({ ig, onToast }) {
+// "SEGUI SU INSTAGRAM" apre il profilo; un video apre il suo link (o il profilo, se l'admin non l'ha messo) (D06).
+function InstagramScreen({ ig }) {
   const GRADS = ["#3a0a0c", "#1a1a2e", "#241505", "#0a2e28"];
+  const profile = Compat.igProfileUrl(ig.handle);
   return (
     <div className="scrollcol" style={{ height: "100%" }}>
       <div style={{ margin: "4px 16px 16px", display: "flex", alignItems: "center", gap: 14 }}>
@@ -4431,7 +4468,7 @@ function InstagramScreen({ ig, onToast }) {
         </div>
       </div>
 
-      <button className="press" onClick={() => onToast("Apertura Instagram (demo)")} style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8, width: "calc(100% - 32px)", margin: "0 16px 22px", padding: "13px 0", borderRadius: 14, background: C.accent, boxShadow: `0 10px 22px -10px ${C.accent}` }}>
+      <button className="press" data-ig-follow="" onClick={() => openUrl(profile)} style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8, width: "calc(100% - 32px)", margin: "0 16px 22px", padding: "13px 0", borderRadius: 14, background: C.accent, boxShadow: `0 10px 22px -10px ${C.accent}` }}>
         <Icon name="instagram" size={16} color="#fff" />
         <span style={{ fontFamily: F_HEAD, fontWeight: 900, fontStyle: "italic", fontSize: 14, color: "#fff", letterSpacing: .3 }}>SEGUI SU INSTAGRAM</span>
       </button>
@@ -4442,17 +4479,19 @@ function InstagramScreen({ ig, onToast }) {
       </div>
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, margin: "0 16px 16px" }}>
         {ig.videos.map((v, i) => (
-          <button key={v.id} className="press" onClick={() => onToast("Apertura " + (v.title || "video") + " (demo)")} style={{ display: "block", padding: 0, borderRadius: 14, overflow: "hidden", background: C.card, border: `1px solid ${C.border}` }}>
-            <div style={{ height: 140, position: "relative", background: v.thumb ? `#111 url(${v.thumb}) center / cover` : `linear-gradient(155deg, ${GRADS[i % 4]} 0%, #0f0f12 70%)`, display: "flex", alignItems: "center", justifyContent: "center" }}>
+          <button key={v.id} className="press" data-ig-video={v.id} aria-label={"Apri su Instagram: " + (v.title || "video " + (i + 1))} onClick={() => openUrl(v.url || profile)} style={{ display: "block", padding: 0, borderRadius: 14, overflow: "hidden", background: C.card, border: `1px solid ${C.border}` }}>
+            <StoredBg data-ig-thumb="" src={v.thumb} empty={`linear-gradient(155deg, ${GRADS[i % 4]} 0%, #0f0f12 70%)`} style={{ height: 140, position: "relative", display: "flex", alignItems: "center", justifyContent: "center" }}>
               <div style={{ width: 34, height: 34, borderRadius: "50%", background: "rgba(255,255,255,.16)", display: "flex", alignItems: "center", justifyContent: "center" }}>
                 <Icon name="play" size={13} color="#fff" />
               </div>
-              <div style={{ position: "absolute", bottom: 8, left: 8, display: "flex", alignItems: "center", gap: 4, padding: "3px 7px", borderRadius: 6, background: "rgba(0,0,0,.55)" }}>
-                <Icon name="heart" size={10} color="#fff" />
-                <span style={{ fontFamily: F_BODY, fontWeight: 600, fontSize: 10, color: "#fff" }}>{v.likes}</span>
-              </div>
-            </div>
-            {v.title && <div style={{ padding: "8px 10px", textAlign: "left" }}><div style={{ fontFamily: F_BODY, fontWeight: 600, fontSize: 11.5, color: C.text, lineHeight: 1.3 }}>{v.title}</div><div style={{ fontFamily: F_BODY, fontSize: 10, color: C.dim, marginTop: 2 }}>{v.views} visualizzazioni</div></div>}
+              {String(v.likes || "").trim() !== "" && (
+                <div style={{ position: "absolute", bottom: 8, left: 8, display: "flex", alignItems: "center", gap: 4, padding: "3px 7px", borderRadius: 6, background: "rgba(0,0,0,.55)" }}>
+                  <Icon name="heart" size={10} color="#fff" />
+                  <span style={{ fontFamily: F_BODY, fontWeight: 600, fontSize: 10, color: "#fff" }}>{v.likes}</span>
+                </div>
+              )}
+            </StoredBg>
+            {v.title && <div style={{ padding: "8px 10px", textAlign: "left" }}><div style={{ fontFamily: F_BODY, fontWeight: 600, fontSize: 11.5, color: C.text, lineHeight: 1.3 }}>{v.title}</div>{String(v.views || "").trim() !== "" && <div style={{ fontFamily: F_BODY, fontSize: 10, color: C.dim, marginTop: 2 }}>{v.views} visualizzazioni</div>}</div>}
           </button>
         ))}
       </div>
@@ -5546,36 +5585,16 @@ function TrashBtn({ onClick, label }) {
   useEffect(() => { if (!armed) return; const t = setTimeout(() => setArmed(false), 2500); return () => clearTimeout(t); }, [armed]);
   return <button className="press" aria-label={label} onClick={() => armed ? onClick() : setArmed(true)} style={{ flexShrink: 0, padding: armed ? "6px 9px" : 6, borderRadius: 8, background: armed ? "rgba(232,18,29,.18)" : "transparent", fontFamily: F_BODY, fontWeight: 700, fontSize: 10.5, color: C.accent }}>{armed ? "Elimina?" : <Icon name="trash" size={15} color={C.dim} />}</button>;
 }
-// Legge un'immagine scelta dal telefono e la ridimensiona (max 1280px) per non appesantire l'app
-const readImage = (file, cb, onErr) => {
-  if (file.type && !file.type.startsWith("image/")) { onErr && onErr("Il file scelto non è un'immagine."); return; }
-  const r = new FileReader();
-  r.onerror = () => onErr && onErr("Impossibile leggere il file, riprova.");
-  r.onload = () => {
-    const img = new Image();
-    img.onload = () => {
-      const k = Math.min(1, 1280 / Math.max(img.width, img.height));
-      const c = document.createElement("canvas");
-      c.width = Math.round(img.width * k); c.height = Math.round(img.height * k);
-      c.getContext("2d").drawImage(img, 0, 0, c.width, c.height);
-      const dataUrl = c.toDataURL("image/jpeg", .85);
-      if (c.toBlob) c.toBlob(blob => cb(dataUrl, blob), "image/jpeg", .85); else cb(dataUrl, null);
-    };
-    img.onerror = () => onErr && onErr("Formato non supportato: usa una foto JPG o PNG.");
-    img.src = r.result;
-  };
-  r.readAsDataURL(file);
+// Messaggi dell'app di oggi per la foto caricata dall'admin (codici di uploadImage, src/services/firebase.js).
+const IMG_MSG = {
+  formato: "Formato non supportato: scegli una foto JPG o PNG.",
+  "troppo-grande": "Foto troppo pesante anche dopo la compressione: scegline un'altra.",
+  timeout: "La foto non è stata caricata: connessione assente o troppo lenta, riprova.",
+  offline: "La foto non è stata caricata: connessione assente o troppo lenta, riprova.",
 };
-
-// Spazio di archiviazione per le foto (come lo Storage dell'app vera). Se non disponibile, la foto resta in memoria.
-let assetsPromise = null;
-const getAssets = () => {
-  if (!assetsPromise) assetsPromise = (window.claude && typeof window.claude.use === "function") ? window.claude.use("assets").catch(() => null) : Promise.resolve(null);
-  return assetsPromise;
-};
-
 // Pulsante "Allega immagine" come nella vecchia app: il tocco arriva direttamente al campo file vero,
 // che è trasparente e copre tutto il pulsante (funziona anche dove l'apertura "comandata" è bloccata).
+// La foto si comprime sul telefono e va su Firebase (shared/img-<id>); onChange riceve "fsimg:<id>".
 function ImagePicker({ id, value, onChange, label = "Allega immagine", changeLabel = "Cambia immagine", compact }) {
   const [err, setErr] = useState(null);
   const [busy, setBusy] = useState(false);
@@ -5586,14 +5605,7 @@ function ImagePicker({ id, value, onChange, label = "Allega immagine", changeLab
     e.target.value = "";
     if (!file) return;
     setErr(null); setBusy(true);
-    readImage(file, async (dataUrl, blob) => {
-      const assets = blob ? await getAssets() : null;
-      if (assets) {
-        try { const res = await assets.upload(blob, { type: "image/jpeg" }); setBusy(false); onChange(res.url); return; }
-        catch (x) { /* caricamento non riuscito: uso la copia in memoria */ }
-      }
-      setBusy(false); onChange(dataUrl);
-    }, msg => { setBusy(false); setErr(msg); });
+    uploadImage(file).then(ref => { setBusy(false); onChange(ref); }, x => { setBusy(false); setErr(IMG_MSG[x && x.code] || "Upload non riuscito, riprova."); });
   };
   const useUrl = () => {
     const u = url.trim();
@@ -5633,7 +5645,21 @@ function AdminNewsTab({ articles, setArticles, onPublish, onToast }) {
   const [pollOpts, setPollOpts] = useState(["", "", "", ""]);
   const [error, setError] = useState(null);
   const [imgBroken, setImgBroken] = useState(false);
+  const [gen, setGen] = useState({ busy: false, err: null });   // tasto "ChatGPT" (backend di oggi, src/services/backend.js)
   const set = (k, v) => { if (k === "image") setImgBroken(false); setF(p => ({ ...p, [k]: v })); setError(null); };
+  // Foto cambiata o tolta prima di pubblicare: quella caricata prima si cancella da Firebase (nessuna notizia la usa).
+  const setImage = v => { if (f.image && f.image !== v && !articles.some(a => a.image === f.image)) dropStoredImage(f.image); set("image", v); };
+  const writeWithChatGPT = () => {
+    setGen({ busy: true, err: null });
+    generateArticle({ title: f.title, summary: f.summary, category: f.cat })
+      .then(text => { setGen({ busy: false, err: null }); set("body", text); }, e => setGen({ busy: false, err: e.message }));
+  };
+  // Eliminando una notizia si cancella anche la sua foto, se nessun'altra notizia la usa (come l'app di oggi).
+  const remove = a => setArticles(list => list.filter(x => x.id !== a.id)).then(ok => {
+    if (!ok) return;
+    onToast("Articolo eliminato");
+    if (!articles.some(x => x.id !== a.id && x.image === a.image)) dropStoredImage(a.image);
+  });
   const toggle = (list, setList, id) => setList(list.includes(id) ? list.filter(x => x !== id) : [...list, id]);
   const preview = articleTags({ teams, drivers });
   const publish = () => {
@@ -5665,15 +5691,21 @@ function AdminNewsTab({ articles, setArticles, onPublish, onToast }) {
         {customCat && <input aria-label="Nuova categoria" value={f.cat} onChange={e => set("cat", e.target.value)} placeholder="Nome nuova categoria (riservata ai Premium)" style={{ ...aInput, marginBottom: 12, borderColor: "rgba(231,179,76,.4)" }} />}
         <label style={aLabel} htmlFor="adAuthor">AUTORE</label>
         <input id="adAuthor" value={f.author} onChange={e => set("author", e.target.value)} style={{ ...aInput, marginBottom: 12 }} />
-        <div style={{ display: "flex", alignItems: "flex-start", gap: 8, marginBottom: 10 }}>
-          <ImagePicker id="adImg" value={f.image} onChange={url => set("image", url)} />
+        <div style={{ display: "flex", alignItems: "flex-start", gap: 8, marginBottom: gen.err ? 6 : 10 }}>
+          <ImagePicker id="adImg" value={f.image} onChange={setImage} />
+          <button type="button" className="press" data-chatgpt="" onClick={writeWithChatGPT} disabled={gen.busy} aria-label="Scrivi il contenuto con ChatGPT"
+            style={{ flexShrink: 0, display: "flex", alignItems: "center", gap: 6, padding: "10px 13px", borderRadius: 10, background: "rgba(255,255,255,.06)", border: `1px solid ${C.border}`, fontFamily: F_BODY, fontWeight: 600, fontSize: 12.5, color: C.text, opacity: gen.busy ? .6 : 1, whiteSpace: "nowrap" }}>
+            <Icon name="sparkle" size={15} />{gen.busy ? "Scrivo…" : "ChatGPT"}
+          </button>
         </div>
+        {gen.err && <p role="alert" style={{ margin: "0 2px 10px", fontFamily: F_BODY, fontSize: 11.5, color: "#ff6b6b" }}>{gen.err}</p>}
         {f.image && (
           <div style={{ position: "relative", marginBottom: 10 }}>
             {imgBroken
               ? <div role="alert" style={{ height: 70, borderRadius: 10, border: "1px dashed rgba(232,18,29,.5)", display: "flex", alignItems: "center", justifyContent: "center", padding: "0 40px", fontFamily: F_BODY, fontSize: 12, color: "#ff6b6b", textAlign: "center" }}>Impossibile caricare l'immagine da questo link.</div>
-              : <img src={f.image} alt="Anteprima immagine" onError={() => setImgBroken(true)} style={{ width: "100%", height: "auto", maxHeight: 260, objectFit: "contain", background: "#111", borderRadius: 10, display: "block" }} />}
-            <button className="press" aria-label="Rimuovi immagine" onClick={() => set("image", "")} style={{ position: "absolute", top: 6, right: 6, width: 26, height: 26, borderRadius: "50%", background: "rgba(0,0,0,.6)", display: "flex", alignItems: "center", justifyContent: "center" }}><Icon name="close" size={11} color="#fff" sw={2.4} /></button>
+              : <StoredImg src={f.image} alt="Anteprima immagine" onError={() => setImgBroken(true)} style={{ width: "100%", height: "auto", maxHeight: 260, objectFit: "contain", background: "#111", borderRadius: 10, display: "block" }}
+                  fallback={<div style={{ height: 70, borderRadius: 10, background: "#111", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: F_BODY, fontSize: 12, color: C.dim }}>Caricamento della foto…</div>} />}
+            <button className="press" aria-label="Rimuovi immagine" onClick={() => setImage("")} style={{ position: "absolute", top: 6, right: 6, width: 26, height: 26, borderRadius: "50%", background: "rgba(0,0,0,.6)", display: "flex", alignItems: "center", justifyContent: "center" }}><Icon name="close" size={11} color="#fff" sw={2.4} /></button>
           </div>
         )}
         <label style={aLabel} htmlFor="adText">CONTENUTO</label>
@@ -5725,7 +5757,7 @@ function AdminNewsTab({ articles, setArticles, onPublish, onToast }) {
             <div style={{ fontFamily: F_BODY, fontWeight: 600, fontSize: 12.5, color: C.text, lineHeight: 1.3 }}>{a.title}</div>
           </div>
           <Toggle on={a.published !== false} onChange={v => { setArticles(list => list.map(x => x.id === a.id ? { ...x, published: v } : x)).then(ok => ok && onToast(v ? "Articolo pubblicato" : "Spostato in bozze")); }} label={"Pubblica " + a.title} />
-          <TrashBtn label={"Elimina " + a.title} onClick={() => { setArticles(list => list.filter(x => x.id !== a.id)).then(ok => ok && onToast("Articolo eliminato")); }} />
+          <TrashBtn label={"Elimina " + a.title} onClick={() => remove(a)} />
         </div>
       ))}
     </div>
@@ -5928,7 +5960,8 @@ function AdminStandingsTab({ standings, setStandings, onToast }) {
   );
 }
 
-// Comandi della diretta demo: avvia una sessione finta e manda bandiere come la direzione gara.
+// Prova diretta (DEMO): l'admin fa partire una sessione simulata e manda bandiere come la direzione gara, per provare
+// la pagina Race. Gira solo sul suo telefono e non cambia niente di quello che vedono gli altri (D23).
 function AdminLiveCard({ races, live, liveSt, onStart, onStop, onFlag, onLastLap, onRetire, speed, setSpeed }) {
   const firstId = (races.find(r => r.status === "LIVE") || races.find(r => r.status === "IN ARRIVO") || races[0] || {}).id;
   const [raceId, setRaceId] = useState(firstId);
@@ -5943,9 +5976,9 @@ function AdminLiveCard({ races, live, liveSt, onStart, onStop, onFlag, onLastLap
   );
   return (
     <>
-      <div style={aTitle}>DIRETTA DEMO</div>
-      <div style={aCard}>
-        <p style={{ margin: "0 0 10px", fontFamily: F_BODY, fontSize: 11.5, color: C.muted, lineHeight: 1.5 }}>Fa partire una sessione finta sul tracciato della gara scelta: piloti in pista, tempi, settori, bandiere e messaggi. Nell'app vera questi dati arriveranno da OpenF1.</p>
+      <div style={aTitle}>PROVA DIRETTA (DEMO)</div>
+      <div style={aCard} data-admin-demo="">
+        <p style={{ margin: "0 0 10px", fontFamily: F_BODY, fontSize: 11.5, color: C.muted, lineHeight: 1.5 }}>Prova la pagina Race con una sessione simulata sul tracciato della gara scelta: piloti in pista, tempi, settori, bandiere e messaggi, con la scritta DEMO. La vedi solo tu, su questo telefono: per gli altri non cambia niente (stato delle gare, ultima gara, punti FantaF1). Le dirette vere arrivano da OpenF1.</p>
         <select aria-label="Gara della diretta" value={raceId} onChange={e => setRaceId(e.target.value)} style={{ ...aInput, marginBottom: 10, colorScheme: "dark" }}>
           {races.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
         </select>
@@ -5998,8 +6031,8 @@ function AdminLiveCard({ races, live, liveSt, onStart, onStop, onFlag, onLastLap
 }
 
 // Calendario e stato delle gare (shared/bt-races). Le 23 gare del 2026 ci sono già; il menu dello stato scrive solo
-// bt-races (LIVE non fa partire la diretta simulata: quella è nella "Diretta demo"). Le gare aggiunte a mano restano
-// nel documento per l'app di oggi, fuori dal calendario della nuova app.
+// bt-races (LIVE non fa partire la diretta simulata: quella è nella "Prova diretta (DEMO)"). Le gare aggiunte a mano
+// restano nel documento per l'app di oggi, fuori dal calendario della nuova app.
 function AdminRacesTab({ races, setRaces, extra = [], setExtra, onToast, live, liveSt, onStartLive, onStopLive, onFlag, onLastLap, onRetire, liveSpeed, setLiveSpeed }) {
   const empty = { name: "", circuit: "", country: "", round: "", date: "" };
   const [g, setG] = useState(empty);
@@ -6060,11 +6093,27 @@ function AdminRacesTab({ races, setRaces, extra = [], setExtra, onToast, live, l
   );
 }
 
+// Profilo Instagram e video virali (shared/bt-ig-config): ogni video ha il suo link (url), che si apre toccandolo
+// nella pagina Instagram (D06); le copertine si caricano su Firebase (fsimg:) o con un link.
 function AdminInstagramTab({ ig, setIg, onToast }) {
-  const [d, setD] = useState(() => ({ ...ig, followers: ig.followers == null ? "" : String(ig.followers), posts: ig.posts == null ? "" : String(ig.posts), videos: ig.videos.map(v => ({ ...v })) }));
+  const [d, setD] = useState(() => ({ ...ig, followers: ig.followers == null ? "" : String(ig.followers), posts: ig.posts == null ? "" : String(ig.posts), videos: ig.videos.map(v => ({ ...v, url: v.url || "" })) }));
   const setV = (id, k, val) => setD(p => ({ ...p, videos: p.videos.map(v => v.id === id ? { ...v, [k]: val } : v) }));
   const count = v => (String(v).trim() === "" ? null : parseInt(v) || 0);   // campo vuoto = numero non indicato
-  const save = () => { setIg({ ...d, followers: count(d.followers), posts: count(d.posts) }).then(ok => ok && onToast("Instagram aggiornato")); };
+  const savedThumb = ref => ig.videos.some(v => v.thumb === ref);
+  // Copertina cambiata o video tolto prima di salvare: una copertina appena caricata (non ancora salvata) si cancella
+  // subito; quelle già salvate si cancellano quando il salvataggio riesce.
+  const setThumb = (v, url) => { if (v.thumb && v.thumb !== url && !savedThumb(v.thumb)) dropStoredImage(v.thumb); setV(v.id, "thumb", url); };
+  const removeVideo = v => { if (v.thumb && !savedThumb(v.thumb)) dropStoredImage(v.thumb); setD(p => ({ ...p, videos: p.videos.filter(x => x.id !== v.id) })); };
+  const save = () => {
+    const videos = d.videos.map(v => ({ ...v, url: String(v.url || "").trim() }));
+    const bad = videos.findIndex(v => v.url && !/^https:\/\/\S+$/i.test(v.url));
+    if (bad >= 0) { onToast(`Il link del video ${bad + 1} deve iniziare con https://`); return; }
+    setIg({ ...d, followers: count(d.followers), posts: count(d.posts), videos }).then(ok => {
+      if (!ok) return;
+      onToast("Instagram aggiornato");
+      ig.videos.forEach(v => { if (v.thumb && !videos.some(x => x.thumb === v.thumb)) dropStoredImage(v.thumb); });
+    });
+  };
   return (
     <div>
       <div style={aTitle}>PROFILO</div>
@@ -6084,20 +6133,22 @@ function AdminInstagramTab({ ig, setIg, onToast }) {
         <div key={v.id} style={aCard}>
           <div style={{ display: "flex", alignItems: "center", marginBottom: 8 }}>
             <span style={{ flex: 1, fontFamily: F_BODY, fontWeight: 700, fontSize: 12, color: C.text }}>Video {i + 1}</span>
-            <TrashBtn label={"Elimina video " + (i + 1)} onClick={() => setD(p => ({ ...p, videos: p.videos.filter(x => x.id !== v.id) }))} />
+            <TrashBtn label={"Elimina video " + (i + 1)} onClick={() => removeVideo(v)} />
           </div>
           <input aria-label={"Titolo video " + (i + 1)} placeholder="Titolo" value={v.title} onChange={e => setV(v.id, "title", e.target.value)} style={{ ...aInput, marginBottom: 8 }} />
+          <input aria-label={"Link video " + (i + 1)} placeholder="Link del video: https://www.instagram.com/reel/…" value={v.url || ""} onChange={e => setV(v.id, "url", e.target.value)} style={{ ...aInput, marginBottom: 8 }} />
           <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
             <input aria-label={"Visualizzazioni video " + (i + 1)} placeholder="Views" value={v.views} onChange={e => setV(v.id, "views", e.target.value)} style={aInput} />
             <input aria-label={"Like video " + (i + 1)} placeholder="Likes" value={v.likes} onChange={e => setV(v.id, "likes", e.target.value)} style={aInput} />
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            {v.thumb && <img src={v.thumb} alt="" style={{ width: 44, height: 44, borderRadius: 8, objectFit: "cover" }} />}
-            <ImagePicker id={"igThumb" + v.id} value={v.thumb} onChange={url => setV(v.id, "thumb", url)} label="Carica copertina" changeLabel="Cambia copertina" compact />
+            {v.thumb && <StoredImg src={v.thumb} alt={"Copertina video " + (i + 1)} style={{ width: 44, height: 44, borderRadius: 8, objectFit: "cover" }} />}
+            <ImagePicker id={"igThumb" + v.id} value={v.thumb} onChange={url => setThumb(v, url)} label="Carica copertina" changeLabel="Cambia copertina" compact />
           </div>
         </div>
       ))}
-      <button className="press" onClick={() => setD(p => ({ ...p, videos: [...p.videos, { id: "v" + Date.now(), title: "", views: "0", likes: "0", thumb: "" }] }))} style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8, width: "100%", padding: 12, borderRadius: 12, background: "transparent", border: `1.5px dashed ${C.border}`, fontFamily: F_BODY, fontWeight: 600, fontSize: 12.5, color: C.muted, marginBottom: 14 }}><Icon name="plus" size={14} color={C.muted} /> Aggiungi video</button>
+      <p style={{ margin: "-4px 2px 12px", fontFamily: F_BODY, fontSize: 11, color: C.dim, lineHeight: 1.45 }}>Toccando un video nell'app si apre il suo link; senza link si apre il profilo @{d.handle || "bt_formula1"}.</p>
+      <button className="press" onClick={() => setD(p => ({ ...p, videos: [...p.videos, { id: "v" + Date.now(), title: "", views: "", likes: "", thumb: "", url: "" }] }))} style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8, width: "100%", padding: 12, borderRadius: 12, background: "transparent", border: `1.5px dashed ${C.border}`, fontFamily: F_BODY, fontWeight: 600, fontSize: 12.5, color: C.muted, marginBottom: 14 }}><Icon name="plus" size={14} color={C.muted} /> Aggiungi video</button>
       <ABtn onClick={save}>SALVA TUTTO</ABtn>
     </div>
   );
@@ -6715,7 +6766,6 @@ function App() {
   const [squadBase, setSquadBase] = useState(USER_INIT.squadBase);
   const [freeTransfers, setFreeTransfers] = useState(USER_INIT.freeTransfers);
   const [fantaWeekends, setFantaWeekends] = useState([]);   // punti delle sessioni già corse: { id, raceId, type, total, lines }
-  const [demoLock, setDemoLock] = useState({});             // { idGara: true } squadra bloccata dalla diretta demo
   const [predictions, setPredictions] = useState(shared0.predictions);   // previsioni avanzate (+1 punto), dell'admin
   const [predAnswers, setPredAnswers] = useState(USER_INIT.predAnswers);   // { idDomanda: risposta }
   const [lastRace, setLastRace] = useState(LAST_RACE_INIT);           // ultima gara: podio e classifica
@@ -6756,8 +6806,10 @@ function App() {
   const [ig, setIg] = useState(shared0.ig);
   const [shareId, setShareId] = useState(null);   // articolo aperto nel foglio "Condividi"
   const [circuitId, setCircuitId] = useState(null); // pagina "Mostra di più" del circuito
-  // Diretta demo: sessione simulata (prove, qualifiche, gara) che avanza 4 volte al secondo.
-  const [live, setLive] = useState(null);          // { raceId, type, sim, track }
+  // Sessione in diretta che avanza 4 volte al secondo: { raceId, type, sim, track, source }. Per ora c'è solo la
+  // "Prova diretta" del Pannello Admin (source "demo", simulata): gira solo sul telefono dell'admin, su una copia
+  // dello stato, e non cambia niente di quello che vedono gli altri né dei suoi dati (D23).
+  const [live, setLive] = useState(null);
   const [, setLiveTick] = useState(0);
   const [liveSpeed, setLiveSpeed] = useState(3);
   const [telemetry, setTelemetry] = useState(null); // { carId, lapNo, sector }
@@ -6769,8 +6821,19 @@ function App() {
   const aboutMe = account ? account.about : null;             // "Su di te" dell'account: anno di nascita, anni di F1, tipo di tifoso
   // Pagelle della community: { "r16:RACE": { pilota: { pace, aggr, gomme, fortuna, strategia } } }; un voto per pilota.
   const [ratings, setRatings] = useState({});
-  const rateDriver = (key, id, vals) => setRatings(r => { const cur = r[key] || {}; return cur[id] ? r : { ...r, [key]: { ...cur, [id]: vals } }; });
-  const voteDotd = (raceId, kind, id) => setDotd(v => { const cur = v[raceId] || {}; return cur[kind] ? v : { ...v, [raceId]: { ...cur, [kind]: id } }; });
+  // Durante la prova DEMO i voti (pagelle e pilota del giorno) vanno in questa copia, solo in memoria: finita la prova
+  // spariscono e non toccano quelli dell'account (che valgono per le gare vere).
+  const demoOn = !!(live && live.source === "demo");
+  const [demoVotes, setDemoVotes] = useState({ ratings: {}, dotd: {} });
+  const votesNow = demoOn ? demoVotes : { ratings, dotd };
+  const rateDriver = (key, id, vals) => {
+    const add = r => { const cur = r[key] || {}; return cur[id] ? r : { ...r, [key]: { ...cur, [id]: vals } }; };
+    if (demoOn) setDemoVotes(v => ({ ...v, ratings: add(v.ratings) })); else setRatings(add);
+  };
+  const voteDotd = (raceId, kind, id) => {
+    const add = v => { const cur = v[raceId] || {}; return cur[kind] ? v : { ...v, [raceId]: { ...cur, [kind]: id } }; };
+    if (demoOn) setDemoVotes(v => ({ ...v, dotd: add(v.dotd) })); else setDotd(add);
+  };
   // Pronostici meteo (pioggia sì o no) e loro esito a fine sessione: danno i punti bonus del FantaF1.
   const [wxGuess, setWxGuess] = useState({});     // { "r16:FP1": "rain" | "dry" }
   const [wxResult, setWxResult] = useState({});   // { "r16:FP1": "rain" | "dry" }
@@ -7002,10 +7065,12 @@ function App() {
   };
   const openArticle = (id) => { setArticleId(id); setShareId(null); setView("article"); };
   const openCircuit = (id) => { setCircuitId(id); setView("circuit"); };
-  // Fine di una sessione (demo), una volta sola: com'è andato il meteo, punti FantaF1 della sessione
-  // e, a fine gara, podio e riapertura della squadra (con i cambi gratis del weekend dopo).
+  // Fine di una sessione, una volta sola: com'è andato il meteo, punti FantaF1 della sessione e, a fine gara, podio e
+  // riapertura della squadra (con i cambi gratis del weekend dopo). La prova DEMO non cambia niente di tutto questo:
+  // né l'ultima gara, né il meteo, né i punti, né squadra e cambi (D23).
   const closeSession = (lv) => {
     if (!lv || lv.closed) return;
+    if (lv.source === "demo") { lv.closed = true; return; }
     const race = races.find(r => r.id === lv.raceId); if (!race) return;
     lv.closed = true;
     const stNow = lv.sim.state();
@@ -7024,7 +7089,6 @@ function App() {
       if (tr.penalty) setFantaWeekends(ws => ws.some(w => w.id === race.id + ":PEN") ? ws : [...ws, { id: race.id + ":PEN", raceId: race.id, type: "PEN", total: -tr.penalty, lines: [] }]);
       setSquadBase({ drivers: squad.drivers.slice(), teams: squad.teams.slice() });
       setFreeTransfers(tr.unlimited ? BtLogic.RULES.freeTransfers : BtLogic.nextFree(freeTransfers, tr.used));
-      setDemoLock(d => ({ ...d, [race.id]: false }));
       if (stNow.finished) setLastRace({ raceId: race.id, name: race.name, type: "RACE", real: false, fastest: stNow.bestLap ? stNow.bestLap.id : null,
         rows: stNow.cars.map((c, i) => c.dnf ? { id: c.id, pos: null, time: "Ritirato", dnf: c.dnf.cause, why: `${DNF_LABEL[c.dnf.cause]} · giro ${c.dnf.lap}` } : ({ id: c.id, pos: c.pos, time: i === 0 ? `${stNow.totalLaps} giri` : c.lapsDown > 0 ? `+${c.lapsDown} ${c.lapsDown === 1 ? "giro" : "giri"}` : "+" + (c.gap || 0).toFixed(3) + "s" })) });
     }
@@ -7035,7 +7099,8 @@ function App() {
     setWxGuess(g => ({ ...g, [race.id + ":" + key]: v }));
     showToast(`Pronostico salvato: ${WX_WORD(v)}`);
   };
-  // Diretta demo: avvio, stop, bandiere e ultimo giro (dal pannello admin).
+  // Prova diretta (DEMO) dal Pannello Admin: avvio, stop, bandiere e ultimo giro. Non scrive niente su Firebase (né lo
+  // stato delle gare in shared/bt-races, né i dati dell'account) e non blocca la squadra FantaF1 (D23).
   const startLive = (raceId, type) => {
     if (live) closeSession(live);
     const race = races.find(r => r.id === raceId);
@@ -7045,14 +7110,13 @@ function App() {
     const sched = weekendWeather(race).sessions.find(s => s.key === type);
     const [hh, mm] = (sched ? sched.time : "15:00").split(":").map(Number);
     const sim = LiveSim.createSession({ track, drivers: LIVE_DRIVERS, type, seed: race.round * 97 + type.length, script: true, startClock: hh * 3600 + mm * 60 });
-    setLive({ raceId, type, sim, track }); setLapList(null);
-    if (["SQ", "QUALI", "SPRINT", "RACE"].includes(type)) setDemoLock(d => ({ ...d, [raceId]: true }));   // squadra bloccata fino a fine gara
-    setTelemetry(null);   // la prova non cambia lo stato delle gare: quello lo vedono tutti (shared/bt-races, D23)
-    showToast(`${sessionName(type)} in diretta (demo)`);
+    setLive({ raceId, type, sim, track, source: "demo" }); setLapList(null); setTelemetry(null);
+    setDemoVotes({ ratings: {}, dotd: {} });
+    showToast(`Prova diretta (DEMO): ${sessionName(type)}. La vedi solo tu.`);
   };
   const stopLive = () => {
     if (live) closeSession(live);
-    setLive(null); setTelemetry(null); setLapList(null); showToast("Diretta terminata");
+    setLive(null); setTelemetry(null); setLapList(null); setDemoVotes({ ratings: {}, dotd: {} }); showToast("Prova diretta terminata");
   };
   const liveFlag = (kind, sector) => { if (live) { live.sim.setFlag(kind, sector); setLiveTick(n => n + 1); } };
   const liveRetire = (id, cause) => {
@@ -7237,9 +7301,9 @@ function App() {
     ...predictions.filter(q => BtLogic.predictionCorrect(q, predAnswers[q.id]) === true).map(q => ({ id: "pred:" + q.id, kind: "previsione", label: "Previsione · " + q.q, pts: BtLogic.RULES.predictionBonus })),
   ];
   // Weekend del FantaF1: quello in diretta, altrimenti la prossima gara. La squadra si blocca all'inizio delle qualifiche.
-  const fantaRace = (live && races.find(r => r.id === live.raceId)) || races.find(r => r.status === "IN ARRIVO") || null;
+  const fantaRace = (live && !demoOn && races.find(r => r.id === live.raceId)) || races.find(r => r.status === "IN ARRIVO") || null;
   const fantaSessions = fantaRace && CIRCUIT_INFO[fantaRace.circuitId] ? CIRCUIT_INFO[fantaRace.circuitId].weekend || [] : [];
-  const teamLockInfo = BtLogic.teamLock({ sessions: fantaSessions, now: nowMs(), demo: { locked: !!(fantaRace && demoLock[fantaRace.id]) } });
+  const teamLockInfo = BtLogic.teamLock({ sessions: fantaSessions, now: nowMs() });   // solo l'ora vera: la prova DEMO non blocca (D23)
   // Previsioni sul weekend: si chiudono all'inizio della sessione a cui si riferiscono (o quando l'admin segna la risposta).
   const predLockOf = q => {
     if (q.kind === "history") return { locked: false, text: "" };
@@ -7275,7 +7339,7 @@ function App() {
   else if (view === "notifiche") body = <NotificheScreen onBack={viewBack.notifiche} onAction={a => { if (a === "feedback") { if (feedbackAsk && !feedbackAsk.read) saveAsk({ ...feedbackAsk, read: true }); setFeedbackOpen(true); } }} notifs={notifs} onReadAll={readAll} isPremium={isPremium} onPremium={() => setPremiumOpen(true)} favTeam={favTeam} favDriver={favDriver} prefs={notifPrefs} onPrefs={setNotifPrefs} onGoProfilo={() => setView("profilo")} />;
   else {
     if (tab === "home") body = <HomeScreen ig={ig} highlights={highlights} onOpenIg={() => { setIgFrom("tab"); setView("instagram"); }} articles={articles} tagFilter={tagFilter} onTag={filterByTag} onClearTag={() => setTagFilter(null)} onOpenArticle={openArticle} isPremium={isPremium} onPremium={() => setPremiumOpen(true)} onToast={showToast} onLiveTrack={() => setLiveTrackOpen(true)} onGoFanta={() => goTab("fanta")}  saved={saved} onToggleSave={toggleSave} savedOnly={savedOnly} setSavedOnly={setSavedOnly} onOpenCircuit={openCircuit} homePoll={homePoll} homeVote={votes.home || null} onVote={castVote} />;
-    else if (tab === "race") body = <RaceScreen dotdVote={live ? dotd[live.raceId] : null} onDotdVote={(k, id) => live && voteDotd(live.raceId, k, id)} ratings={ratings} onRate={rateDriver} onOpenChats={() => setView("chats")} onOpenGhost={() => setView("ghost")} races={races} standings={standings} isPremium={isPremium} onPremium={() => setPremiumOpen(true)} onSelectDriver={setSelectedDriver} live={live} liveSt={liveSt} onExpandMap={() => setLiveTrackOpen(true)} onTelemetry={(carId, lapNo, sector) => setTelemetry({ carId, lapNo, sector })} onOpenCircuit={openCircuit} wxGuess={wxGuess} wxResult={wxResult} onGuessWeather={guessWeather} onLapTimes={setLapList} onSecondScreen={() => setSsOpen(true)} lastRace={lastRace} />;
+    else if (tab === "race") body = <RaceScreen dotdVote={live ? votesNow.dotd[live.raceId] : null} onDotdVote={(k, id) => live && voteDotd(live.raceId, k, id)} ratings={votesNow.ratings} onRate={rateDriver} onOpenChats={() => setView("chats")} onOpenGhost={() => setView("ghost")} races={races} standings={standings} isPremium={isPremium} onPremium={() => setPremiumOpen(true)} onSelectDriver={setSelectedDriver} live={live} liveSt={liveSt} onExpandMap={() => setLiveTrackOpen(true)} onTelemetry={(carId, lapNo, sector) => setTelemetry({ carId, lapNo, sector })} onOpenCircuit={openCircuit} wxGuess={wxGuess} wxResult={wxResult} onGuessWeather={guessWeather} onLapTimes={setLapList} onSecondScreen={() => setSsOpen(true)} lastRace={lastRace} />;
     else if (tab === "garage") body = <GarageScreen races={races} pitBest={pitBest} onPitResult={t => setPitBest(b => b == null || t < b ? t : b)} sillyPreds={sillyPreds} onPredict={predictSeat} sillyOfficial={sillyOfficial} live={live} stratPreds={stratPreds} onStrat={(id, st) => setStratPreds(x => ({ ...x, [id]: { stints: st, at: nowMs() } }))} />;
     else if (tab === "fanta") body = <FantaScreen squad={squad} setSquad={setSquad} base={squadBase} freeTransfers={freeTransfers} budget={FANTA_BUDGET} stats={fantaStats} race={fantaRace} lock={teamLockInfo} weekends={fantaWeekends} isPremium={isPremium} onPremium={() => setPremiumOpen(true)} onToast={showToast} bonus={bonus} leagues={leagues} setLeagues={setLeagues} needAccount={needAccount} predictions={predictions} predAnswers={predAnswers} predLockOf={predLockOf} onAnswerPrediction={answerPrediction} />;
   }
@@ -7292,7 +7356,7 @@ function App() {
         {premiumOpen && <PremiumModal onClose={closePremium} isPremium={isPremium} plan={plan} setPlan={setPlan} onSubscribe={doSubscribe} subscribing={subscribing} subscribed={subscribed} trialUsed={!!trial} onTrial={doTrial} trial={trial} />}
         {selectedDriver && <DriverDetailModal driver={selectedDriver} onClose={() => setSelectedDriver(null)} />}
         {liveTrackOpen && <LiveMapView race={live ? races.find(r => r.id === live.raceId) : (races.find(r => r.status === "IN ARRIVO") || null)} live={live} st={liveSt} onClose={() => setLiveTrackOpen(false)} />}
-        {ssOpen && isPremium && <SecondScreen chat={chats.find(c => c.id === "generale")} blocked={blocked} onChatSend={guest ? () => needLogin("Per scrivere in chat serve un account.") : t => sendMessage("generale", t)} race={live ? races.find(r => r.id === live.raceId) : (races.find(r => r.status === "IN ARRIVO") || null)} live={live} st={liveSt} standings={standings} layout={ssLayout} setLayout={setSsLayout} prefs={ssPrefs} setPrefs={setSsPrefs} vote={live ? dotd[live.raceId] || {} : {}} onVote={(k, id) => live && voteDotd(live.raceId, k, id)} notice={notice} onCloseNotice={nextNotice} onClose={() => setSsOpen(false)} />}
+        {ssOpen && isPremium && <SecondScreen chat={chats.find(c => c.id === "generale")} blocked={blocked} onChatSend={guest ? () => needLogin("Per scrivere in chat serve un account.") : t => sendMessage("generale", t)} race={live ? races.find(r => r.id === live.raceId) : (races.find(r => r.status === "IN ARRIVO") || null)} live={live} st={liveSt} standings={standings} layout={ssLayout} setLayout={setSsLayout} prefs={ssPrefs} setPrefs={setSsPrefs} vote={live ? votesNow.dotd[live.raceId] || {} : {}} onVote={(k, id) => live && voteDotd(live.raceId, k, id)} notice={notice} onCloseNotice={nextNotice} onClose={() => setSsOpen(false)} />}
         {lapList && live && liveSt && <LapTimesModal live={live} st={liveSt} carId={lapList} onOpenLap={n => setTelemetry({ carId: lapList, lapNo: n, sector: 0 })} onClose={() => setLapList(null)} />}
         {telemetry && live && liveSt && <TelemetryModal live={live} st={liveSt} carId={telemetry.carId} lapNo={telemetry.lapNo} sector={telemetry.sector} onClose={() => setTelemetry(null)} />}
         {infoModal && <InfoModal title={infoModal.title} body={infoModal.body} onClose={() => setInfoModal(null)} />}

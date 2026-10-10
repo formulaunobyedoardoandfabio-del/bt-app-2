@@ -83,7 +83,8 @@ const tests = {
     assert(/fino alla fine delle FP1/.test(fp2), 'le FP2 devono chiudersi a fine FP1');
     assert(/fino all'inizio delle FP1/.test(fp1), 'le FP1 devono chiudersi al loro inizio');
   },
-  async 'meteo: durante una sessione i pronostici sono in pausa, dopo si riaprono (e quelli scaduti si chiudono)'(b) {
+  // Task 10 (D23): la prova DEMO mette in pausa i pronostici solo mentre gira; finita, non chiude quelli dopo.
+  async 'meteo: durante una sessione i pronostici sono in pausa, dopo si riaprono; la prova DEMO non chiude quelli dopo (D23)'(b) {
     const { ctx, p } = await open(b); await login(p);
     await startLive(p, 'PROVE LIBERE 2'); await tapText(p, 'Meteo', { exact: true }); await w(p, 400);
     await weatherBox(p, 'RACE');
@@ -92,11 +93,12 @@ const tests = {
     await stopLive(p); await goTab(p, 'RACE'); await tapText(p, 'Meteo', { exact: true }); await w(p, 400);
     await weatherBox(p, 'RACE');
     const after = await p.evaluate(() => [...document.querySelectorAll('button')].some(b => /Indovina il meteo/.test(b.textContent)));
-    await weatherBox(p, 'QUALI'); const quali = await text(p); await ctx.close();
+    await weatherBox(p, 'QUALI'); const quali = await text(p);
+    const qualiOpen = await p.evaluate(() => [...document.querySelectorAll('button')].some(b => /Indovina il meteo/.test(b.textContent))); await ctx.close();
     assert(/In pausa: prove libere 2 in corso/.test(during), 'durante le FP2 il pronostico non è in pausa');
     assert(!btnDuring, 'durante la sessione si può ancora pronosticare');
     assert(after, 'finita la sessione il pronostico della gara non si riapre');
-    assert(/Pronostico chiuso: si poteva fare fino alla fine delle FP2/.test(quali), 'finite le FP2 il pronostico delle qualifiche deve chiudersi');
+    assert(qualiOpen && !/Pronostico chiuso/.test(quali), 'la prova DEMO delle FP2 non deve chiudere il pronostico delle qualifiche');
   },
   // ── Podi ──────────────────────────────────────────────────────────────
   async 'mondiale: podio col 1° al centro più alto, il 2° a sinistra e il 3° a destra più basso (piloti e costruttori)'(b) {
@@ -133,17 +135,18 @@ const tests = {
     const pod = await has(p, '[data-champ-podium]'); await ctx.close();
     assert(!pod, 'il podio del mondiale compare anche con la gara in corso');
   },
-  async 'fine gara: podio coi primi tre, che poi diventa l\'ultima gara'(b) {
+  // Task 10 (D23): la prova DEMO non cambia l'ultima gara: finita la prova resta quella vera (Baku).
+  async 'fine gara (prova DEMO): podio coi primi tre; finita la prova l\'ultima gara resta quella vera'(b) {
     const { ctx, p, errs } = await open(b); await login(p); await startLive(p, 'GARA');
     await openAdmin(p, 'GARA LIVE'); await tapText(p, 'ULTIMO GIRO', { exact: true }); await w(p, 300); await backHome(p); await goTab(p, 'RACE');
     for (let i = 0; i < 40 && !(await has(p, '[data-finish-podium]')); i++) { await advance(p, 20); await w(p, 120); }
     const pd = await podium(p, '[data-finish-podium]');
     const top = await p.evaluate(() => [...document.querySelectorAll('[aria-label^="Tempi sul giro di"]')].slice(0, 3).map(e => e.getAttribute('aria-label')));
     await stopLive(p); await goTab(p, 'RACE');
-    const last = await podium(p, '[data-last-race="demo"]'); await ctx.close();
+    const last = await podium(p, '[data-last-race="real"]'), demoLast = await has(p, '[data-last-race="demo"]'); await ctx.close();
     assert(pd, 'a fine gara non compare il podio');
     assert(pd.map(x => x.place).join() === '2,1,3' && pd.every(x => x.who), 'podio di fine gara: ' + JSON.stringify(pd));
-    assert(last && last.map(x => x.who).join() === pd.map(x => x.who).join(), 'l\'ultima gara non mostra lo stesso podio: ' + JSON.stringify(last));
+    assert(last && last.map(x => x.who).join() === 'M. Verstappen,G. Russell,I. Hadjar' && !demoLast, 'finita la prova DEMO l\'ultima gara deve restare Baku: ' + JSON.stringify(last));
     assert(!errs.length, errs.join(' | '));
   },
   // ── FantaF1 ───────────────────────────────────────────────────────────
@@ -220,7 +223,8 @@ const tests = {
     assert(lock === 'locked', 'la squadra non è bloccata durante le qualifiche');
     assert(!picker && !x, 'da bloccata la squadra si può ancora cambiare');
   },
-  async 'fanta: nella demo le qualifiche bloccano la squadra fino a fine gara, poi arrivano i punti del weekend'(b) {
+  // Task 10 (D23): la prova DEMO gira su una copia dello stato: non blocca la squadra e non dà punti del weekend.
+  async 'fanta: la prova DEMO di qualifiche e gara non blocca la squadra e non dà punti (D23)'(b) {
     const { ctx, p, errs } = await open(b); await login(p);
     const total0 = await (async () => { await goTab(p, 'FANTA'); return parseInt(await inner(p, '[data-fanta-total]'), 10); })();
     await startLive(p, 'QUALIFICHE', 'FANTA');
@@ -237,14 +241,13 @@ const tests = {
     await stopLive(p); await goTab(p, 'FANTA');
     const l3 = await attr(p, '[data-team-lock]', 'data-team-lock');
     const rRow = await has(p, '[data-weekend-row="RACE"]');
-    const wk = parseInt(await inner(p, '[data-weekend-pts]'), 10), total1 = parseInt(await inner(p, '[data-fanta-total]'), 10);
+    const total1 = parseInt(await inner(p, '[data-fanta-total]'), 10);
     await ctx.close();
-    assert(l1 === 'locked', 'le qualifiche demo non bloccano la squadra');
-    assert(l2 === 'locked', 'finite le qualifiche la squadra deve restare bloccata fino a fine gara');
-    assert(qRow, 'mancano i punti delle qualifiche');
-    assert(l3 === 'open', 'finita la gara la squadra non si riapre');
-    assert(rRow, 'mancano i punti della gara');
-    assert(total1 === total0 + wk && wk !== 0, `totale ${total0} + weekend ${wk} ≠ ${total1}`);
+    assert(l1 === 'open', 'la prova DEMO delle qualifiche non deve bloccare la squadra: ' + l1);
+    assert(l2 === 'open', 'finita la prova delle qualifiche la squadra deve restare aperta: ' + l2);
+    assert(!qRow && !rRow, 'la prova DEMO non deve dare punti di qualifiche o gara');
+    assert(l3 === 'open', 'finita la prova della gara la squadra deve essere aperta: ' + l3);
+    assert(total1 === total0, `la prova DEMO ha cambiato il totale: ${total0} → ${total1}`);
     assert(!errs.length, errs.join(' | '));
   },
   async 'fanta: podio dei migliori di tutte le leghe coi nickname'(b) {
