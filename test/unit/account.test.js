@@ -47,14 +47,27 @@ t('password sbagliata: wrong-password e nessun passaggio; email sconosciuta: not
   assert.strictEqual(MESSAGES['not-found'], 'Account non trovato');
 });
 
+t('iscrizione: senza "Ho almeno 14 anni" o con meno di 14 anni non si crea l\'account', async () => {
+  const c = ctx();
+  const A = make();
+  await assert.rejects(A.register({ name: 'Fabio', email: 'f@b.it', pw: 'abcdef', pw2: 'abcdef', about: {} }), e => e.code === 'need-age');
+  await assert.rejects(A.register({ name: 'Fabio', email: 'f@b.it', pw: 'abcdef', pw2: 'abcdef', about: { birth: 2015 }, adult: true }), e => e.code === 'too-young');
+  assert.strictEqual(c.fs('users/f@b.it'), undefined, 'account creato lo stesso');
+  assert.ok(!c.auth().users['f@b.it'], 'account Authentication creato lo stesso');
+  assert.strictEqual(MESSAGES['need-age'], 'Conferma di avere almeno 14 anni.');
+  assert.strictEqual(MESSAGES['too-young'], 'Per iscriverti a Sector 4 devi avere almeno 14 anni.');
+  const u = await A.register({ name: 'Fabio', email: 'f@b.it', pw: 'abcdef', pw2: 'abcdef', about: { birth: 2012 }, adult: true });   // 14 anni nel 2026
+  assert.strictEqual(u.email, 'f@b.it');
+});
+
 t('registrazione: About you salvato, niente pw, almeno 6 caratteri', async () => {
   const c = ctx();
   const A = make();
   await assert.rejects(A.register({ name: 'F', email: 'f@b.it', pw: '123', pw2: '123', about: {} }), e => e.code === 'weak');
   await assert.rejects(A.register({ name: 'F', email: 'f@b.it', pw: 'abcdef', pw2: 'abcdeg', about: {} }), e => e.code === 'mismatch');
-  await assert.rejects(A.register({ name: '', email: 'f@b.it', pw: 'abcdef', pw2: 'abcdef', about: {} }), e => e.code === 'empty');
-  await assert.rejects(A.register({ name: 'Doppio', email: 'a@b.it', pw: 'abcdef', pw2: 'abcdef', about: {} }), e => e.code === 'exists');
-  const u = await A.register({ name: 'Fabio', email: 'F@b.it ', pw: 'abcdef', pw2: 'abcdef', about: { birth: 2001, follow: 3, fan: 'vivo' } });
+  await assert.rejects(A.register({ name: '', email: 'f@b.it', pw: 'abcdef', pw2: 'abcdef', about: {}, adult: true }), e => e.code === 'empty');
+  await assert.rejects(A.register({ name: 'Doppio', email: 'a@b.it', pw: 'abcdef', pw2: 'abcdef', about: {}, adult: true }), e => e.code === 'exists');
+  const u = await A.register({ name: 'Fabio', email: 'F@b.it ', pw: 'abcdef', pw2: 'abcdef', about: { birth: 2001, follow: 3, fan: 'vivo' }, adult: true });
   const doc = c.fs('users/f@b.it');
   assert.deepStrictEqual(doc.about, { birth: 2001, follow: 3, fan: 'vivo' });
   assert.strictEqual(doc.pw, undefined);
@@ -71,14 +84,14 @@ t('registrazione: About you salvato, niente pw, almeno 6 caratteri', async () =>
 
 t('registrazione con un account di oggi non ancora passato: Email già registrata', async () => {
   ctx({ docs: { 'users/v@b.it': { email: 'v@b.it', name: 'Edo', pw: 'segreta' } } });
-  await assert.rejects(make().register({ name: 'Altro', email: 'v@b.it', pw: 'abcdef', pw2: 'abcdef', about: {} }), e => e.code === 'exists');
+  await assert.rejects(make().register({ name: 'Altro', email: 'v@b.it', pw: 'abcdef', pw2: 'abcdef', about: {}, adult: true }), e => e.code === 'exists');
 });
 
 t('offline: errore offline e nessun account creato', async () => {
   const c = ctx();
   const A = make();
   c.fake.offline = true;
-  await assert.rejects(A.register({ name: 'X', email: 'x@y.it', pw: 'abcdef', pw2: 'abcdef', about: {} }), e => e.code === 'offline');
+  await assert.rejects(A.register({ name: 'X', email: 'x@y.it', pw: 'abcdef', pw2: 'abcdef', about: {}, adult: true }), e => e.code === 'offline');
   await assert.rejects(A.login('a@b.it', 'x'), e => e.code === 'offline');
   c.fake.offline = false;
   assert.strictEqual(c.fs('users/x@y.it'), undefined);
@@ -103,7 +116,7 @@ t('password dimenticata di un account non ancora passato: account Authentication
 t('eliminazione: se una pulizia fallisce il profilo resta', async () => {
   const c = ctx();
   const ok = make();
-  await ok.register({ name: 'Fabio', email: 'f@b.it', pw: 'abcdef', pw2: 'abcdef', about: {} });
+  await ok.register({ name: 'Fabio', email: 'f@b.it', pw: 'abcdef', pw2: 'abcdef', about: {}, adult: true });
   const B = make({ cleanups: [async () => { throw new Error('rete'); }] });
   await B.login('f@b.it', 'abcdef');
   await assert.rejects(B.deleteAccount('abcdef'), e => e.code === 'delete-failed');
@@ -116,7 +129,7 @@ t('eliminazione: password chiesta prima di cancellare; poi via profilo, resets, 
   const c = ctx({ requireRecentLogin: true });
   const seen = [];
   const A = make({ cleanups: [async u => { seen.push(u.email); }] });
-  await A.register({ name: 'Fabio', email: 'f@b.it', pw: 'abcdef', pw2: 'abcdef', about: {} });
+  await A.register({ name: 'Fabio', email: 'f@b.it', pw: 'abcdef', pw2: 'abcdef', about: {}, adult: true });
   c.fake.setDoc('resets/f@b.it', { code: '123456', exp: 1 });
   F.local.set('bt-blocked', [{ aid: 'u1', name: 'Marco' }]);
   F.local.set('bt-chat-seen-bt-chat-generale', 5);
@@ -139,14 +152,14 @@ t('accesso con email e password non acceso nella console di Firebase: lo dice (n
   const off = Object.assign(new Error('off'), { code: 'auth/operation-not-allowed' });
   const A = make({ getAuth: async () => ({ signInWithEmailAndPassword: async () => { throw off; }, createUserWithEmailAndPassword: async () => { throw off; } }) });
   await assert.rejects(A.login('a@b.it', 'x'), e => e.code === 'not-enabled');
-  await assert.rejects(A.register({ name: 'F', email: 'f@b.it', pw: 'abcdef', pw2: 'abcdef', about: {} }), e => e.code === 'not-enabled');
+  await assert.rejects(A.register({ name: 'F', email: 'f@b.it', pw: 'abcdef', pw2: 'abcdef', about: {}, adult: true }), e => e.code === 'not-enabled');
   assert.ok(/non è ancora attivo/.test(MESSAGES['not-enabled']));
 });
 
 t('isAdmin solo con il documento admins/<email>', async () => {
   ctx();
   const A = make();
-  await A.register({ name: 'Fabio', email: 'f@b.it', pw: 'abcdef', pw2: 'abcdef', about: {} });
+  await A.register({ name: 'Fabio', email: 'f@b.it', pw: 'abcdef', pw2: 'abcdef', about: {}, adult: true });
   assert.strictEqual(A.isAdmin(), false);
   await A.logout();
   await A.login('a@b.it', 'x');

@@ -116,6 +116,7 @@ const tests = {
     await tapText(p, 'REGISTRATI', { exact: true }); await w(p, 300);
     await p.fill('#regName', 'Tester'); await p.fill('#authEmail', 'a@b.it'); await p.fill('#authPw', 'abcdef'); await p.fill('#regPw2', 'abcdef');
     await tapSel(p, '[data-fan-option="vivo"]'); await w(p, 150);
+    await p.check('#regAdult');   // Task 22: "Ho almeno 14 anni"
     await tapText(p, 'CREA ACCOUNT', { exact: true }); await w(p, 1500);
     await tapText(p, 'Salvati'); await w(p);
     const t = await text(p); await ctx.close();

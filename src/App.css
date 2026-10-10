@@ -1,4 +1,11 @@
 /* Stile della 2.0 (dall'anteprima, tools/port-2.0.js). */
+/* Caratteri dentro l'app, solo lettere latine (licenza OFL: src/fonts/OFL-*.txt). Prima arrivavano da Google Fonts,
+   che riceveva l'indirizzo IP di chi apriva l'app. */
+@font-face { font-family: "Titillium Web"; font-style: normal; font-weight: 600; font-display: swap; src: url("./fonts/TitilliumWeb-SemiBold.woff") format("woff"); }
+@font-face { font-family: "Titillium Web"; font-style: normal; font-weight: 700; font-display: swap; src: url("./fonts/TitilliumWeb-Bold.woff") format("woff"); }
+@font-face { font-family: "Titillium Web"; font-style: normal; font-weight: 900; font-display: swap; src: url("./fonts/TitilliumWeb-Black.woff") format("woff"); }
+@font-face { font-family: "Titillium Web"; font-style: italic; font-weight: 700 900; font-display: swap; src: url("./fonts/TitilliumWeb-BoldItalic.woff") format("woff"); }
+@font-face { font-family: "Work Sans"; font-style: normal; font-weight: 400 700; font-display: swap; src: url("./fonts/WorkSans-var.woff") format("woff"); }
   :root{ color-scheme: dark; }
   html,body{ height:100%; margin:0; background:#000; }
   body{

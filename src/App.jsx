@@ -844,6 +844,7 @@ function LoginScreen({ auth, onDone, onGuest, onBack, reason }) {
   const [birth, setBirth] = useState(null);
   const [follow, setFollow] = useState(ABOUT_INIT.follow);
   const [fan, setFan] = useState(null);
+  const [adult, setAdult] = useState(false);   // "Ho almeno 14 anni" (Task 22)
   const isLogin = mode === "login";
   useBack(!isLogin, () => setMode("login"));   // da REGISTRATI il tasto indietro torna ad ACCEDI
 
@@ -853,7 +854,7 @@ function LoginScreen({ auth, onDone, onGuest, onBack, reason }) {
     setErr(""); setInfo(""); setBusy(true);
     try {
       if (isLogin) await auth.login(email, pw);
-      else await auth.register({ name, email, pw, pw2, about: { birth, follow, fan } });
+      else await auth.register({ name, email, pw, pw2, about: { birth, follow, fan }, adult });
       setBusy(false);
       onDone && onDone({ created: !isLogin });
     } catch (e) { setBusy(false); setErr(messageOf(e)); }
@@ -930,6 +931,12 @@ function LoginScreen({ auth, onDone, onGuest, onBack, reason }) {
             <div style={{ ...labelStyle, marginTop: 16, marginBottom: 8 }}>Che tifoso sei?</div>
             <FanTypePicker value={fan} onChange={setFan} />
           </div>
+        )}
+        {!isLogin && (
+          <label htmlFor="regAdult" style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 16, fontFamily: F_BODY, fontSize: 13, color: C.text, cursor: "pointer" }}>
+            <input id="regAdult" type="checkbox" checked={adult} onChange={e => setAdult(e.target.checked)} style={{ width: 18, height: 18, margin: 0, accentColor: C.accent, flexShrink: 0 }} />
+            Ho almeno 14 anni
+          </label>
         )}
         {isLogin && <div style={{ textAlign: "right", marginBottom: 18 }}><button className="press" onClick={forgot} style={{ fontFamily: F_BODY, fontWeight: 600, fontSize: 12, color: C.accent, padding: "6px 0" }}>Password dimenticata?</button></div>}
         {info && <p style={{ background: "rgba(255,255,255,.05)", border: `1px solid ${C.border}`, borderRadius: 10, padding: "9px 14px", marginTop: 0, marginBottom: 14, color: C.text, fontSize: 12, lineHeight: 1.5 }}>{info}</p>}
@@ -6971,7 +6978,7 @@ function App() {
     });
   };
 
-  const ABOUT_TEXT = APP_NAME + " è l'app di B&T, nata dalla passione di un gruppo di amici per la Formula 1: un posto solo nostro per seguire le gare, parlarne insieme e tenere traccia di come va la nostra lega FantaF1.\n\nQui trovi le news, la diretta gara, la nostra chat e il nostro Instagram, tutto in un'unica app.\n\nTracciati dei circuiti: f1-circuits di Tomislav Bacinger, licenza MIT.\n\nVersione 2.0 — 2026.";
+  const ABOUT_TEXT = APP_NAME + " è l'app di B&T, nata dalla passione di un gruppo di amici per la Formula 1: un posto solo nostro per seguire le gare, parlarne insieme e tenere traccia di come va la nostra lega FantaF1.\n\nQui trovi le news, la diretta gara, la nostra chat e il nostro Instagram, tutto in un'unica app.\n\nTracciati dei circuiti: f1-circuits di Tomislav Bacinger, licenza MIT.\nCaratteri: Titillium Web (Accademia di Belle Arti di Urbino) e Work Sans, licenza SIL Open Font License 1.1.\n\nVersione 2.0 — 2026.";
   const HELP_TEXT = "Hai domande o hai trovato un problema nell'app? Scrivici, ti rispondiamo il prima possibile.\n\nEmail: bt.formula1@gmail.com\n\nOppure passa dalla Chat Generale: la community è sempre pronta a dare una mano.";
 
   const showToast = (msg) => {

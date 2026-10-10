@@ -23,7 +23,11 @@ const MESSAGES = {
   "delete-failed": "Eliminazione non riuscita, controlla la connessione e riprova.",
   "reset-sent": "Ti abbiamo mandato un'email per scegliere una nuova password. Controlla anche lo spam.",
   "not-enabled": "L'accesso con email e password non è ancora attivo su Firebase (Authentication → Metodo di accesso).",
+  "need-age": "Conferma di avere almeno 14 anni.",
+  "too-young": "Per iscriverti a Sector 4 devi avere almeno 14 anni.",
 };
+// Età minima per iscriversi, come dice la privacy policy (in Italia 14 anni per i servizi online, D.Lgs. 101/2018).
+const MIN_AGE = 14;
 const messageOf = e => MESSAGES[(e && e.code) || ""] || MESSAGES.offline;
 
 const mkErr = code => Object.assign(new Error(MESSAGES[code] || code), { code });
@@ -116,11 +120,15 @@ function createAccount({
     return loadProfile(em, res && res.user ? res.user.uid : null);
   }
 
-  async function register({ name, email, pw, pw2, about } = {}) {
+  async function register({ name, email, pw, pw2, about, adult } = {}) {
     const nm = String(name || "").trim(), em = normEmail(email);
     if (!nm || !em || !pw || !pw2) throw mkErr("empty");
     if (pw !== pw2) throw mkErr("mismatch");
     if (String(pw).length < 6) throw mkErr("weak");
+    // Età: con l'anno di nascita si controlla quello (anno per anno); in ogni caso serve "Ho almeno 14 anni".
+    const birth = about && Number(about.birth);
+    if (birth && new Date().getFullYear() - birth < MIN_AGE) throw mkErr("too-young");
+    if (adult !== true) throw mkErr("need-age");
     const auth = await needAuth();
     const { doc, protectedDoc } = await peekUser(em);
     if (doc || protectedDoc) throw mkErr("exists");
@@ -238,4 +246,4 @@ function createAccount({
   };
 }
 
-module.exports = { MESSAGES, messageOf, normEmail, createAccount };
+module.exports = { MIN_AGE, MESSAGES, messageOf, normEmail, createAccount };

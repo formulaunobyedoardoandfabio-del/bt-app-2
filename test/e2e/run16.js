@@ -227,6 +227,7 @@ const tests = {
     await p.focus('#regFollow'); await p.keyboard.press('ArrowRight'); await p.keyboard.press('ArrowRight'); await w(p, 200);
     const lbl = await inner(p, '[data-follow-label]');
     await tapSel(p, '[data-fan-option="vroom"]'); await w(p, 150);
+    await p.check('#regAdult');   // Task 22: "Ho almeno 14 anni"
     await tapText(p, 'CREA ACCOUNT', { exact: true }); await w(p, 2900);   // Task 9: i Termini si accettano al primo avvio, non dopo l'accesso
     await tapSel(p, '[aria-label="Profilo"]'); await w(p, 400);
     const follow = await inner(p, '[data-about-row="follow"]'), fan = await inner(p, '[data-about-row="fan"]'), birth = await inner(p, '[data-about-row="birth"]');

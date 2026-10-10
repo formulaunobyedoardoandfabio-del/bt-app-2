@@ -191,7 +191,7 @@ run({
     const { ctx, p, errs } = await open(b);
     await tapText(p, 'REGISTRATI', { exact: true }); await w(p, 300);
     await p.fill('#regName', 'Fabio'); await p.fill('#authEmail', 'fabio@b.it'); await p.fill('#authPw', 'abcdef'); await p.fill('#regPw2', 'abcdef');
-    await tapSel(p, '[data-fan-option="vivo"]'); await tapText(p, 'CREA ACCOUNT', { exact: true }); await w(p, 1500);
+    await tapSel(p, '[data-fan-option="vivo"]'); await p.check('#regAdult'); await tapText(p, 'CREA ACCOUNT', { exact: true }); await w(p, 1500);
     await openFeedback(p);
     await tapSel(p, '[data-feedback-star="5"]'); await tapText(p, 'INVIA FEEDBACK'); await w(p, 2500);
     const before = Object.values(await docs(p)).filter(d => d && d.user === 'fabio@b.it' && d.stars).length;

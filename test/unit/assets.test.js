@@ -84,6 +84,21 @@ t('nome dell\'app "Sector 4": capacitor.config.json (nome sul telefono) e public
   assert.ok(!/B&amp;T App|B&T App/.test(html), 'in public/index.html c\'è ancora "B&T App"');
 });
 
+t('caratteri nell\'app: niente Google Fonts, @font-face per Titillium Web e Work Sans con i file in src/fonts e la licenza OFL', () => {
+  const html = fs.readFileSync(path.join(ROOT, 'public', 'index.html'), 'utf8');
+  assert.ok(!/fonts\.googleapis\.com|fonts\.gstatic\.com/.test(html), 'public/index.html chiede ancora i caratteri a Google (l\'indirizzo IP finisce a Google)');
+  const css = fs.readFileSync(path.join(ROOT, 'src', 'App.css'), 'utf8');
+  const faces = [...css.matchAll(/@font-face\s*{([^}]*)}/g)].map(m => m[1]);
+  const fam = f => faces.filter(b => b.includes(`font-family: "${f}"`));
+  assert.ok(fam('Titillium Web').length >= 4 && fam('Work Sans').length >= 1, 'mancano le @font-face: ' + faces.length);
+  for (const b of faces) {
+    const url = (b.match(/url\("\.\/fonts\/([^"]+)"\)/) || [])[1];
+    assert.ok(url && fs.existsSync(path.join(ROOT, 'src', 'fonts', url)), 'file del carattere mancante: ' + url);
+    assert.ok(/font-display:\s*swap/.test(b), 'senza font-display: swap');
+  }
+  for (const f of ['OFL-TitilliumWeb.txt', 'OFL-WorkSans.txt']) assert.ok(fs.existsSync(path.join(ROOT, 'src', 'fonts', f)), 'manca la licenza ' + f);
+});
+
 (async () => {
   const filter = process.argv[2] ? new RegExp(process.argv[2], 'i') : null;
   for (const [name, fn] of tests) {

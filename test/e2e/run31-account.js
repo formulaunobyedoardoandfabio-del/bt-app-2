@@ -5,17 +5,31 @@ const { open, w, text, inner, tapText, tapSel, goTab, login, assert, run } = req
 
 const doc = (p, path) => p.evaluate(x => window.firebase.__fake.doc(x), path);
 const authState = p => p.evaluate(() => window.firebase.__fake.authState());
-async function register(p, { name = 'Fabio', email = 'fabio@b.it', pw = 'abcdef', birth = null, steps = 0, fan = 'vivo' } = {}) {
+// adult: la casella "Ho almeno 14 anni" (Task 22), spuntata di serie.
+async function register(p, { name = 'Fabio', email = 'fabio@b.it', pw = 'abcdef', birth = null, steps = 0, fan = 'vivo', adult = true } = {}) {
   await tapText(p, 'REGISTRATI', { exact: true }); await w(p, 300);
   await p.fill('#regName', name); await p.fill('#authEmail', email); await p.fill('#authPw', pw); await p.fill('#regPw2', pw);
   if (birth) await p.selectOption('#regBirth', String(birth));
   if (steps) { await p.focus('#regFollow'); for (let i = 0; i < steps; i++) await p.keyboard.press('ArrowRight'); }
   await tapSel(p, `[data-fan-option="${fan}"]`); await w(p, 150);
+  if (adult) await p.check('#regAdult');
   await tapText(p, 'CREA ACCOUNT', { exact: true }); await w(p, 1500);
 }
 const OLD = { 'users/v@b.it': { name: 'Edo', nick: 'Edo', email: 'v@b.it', pw: 'segreta', isPremium: false, premium: false, notif: { news: true, live: true, fanta: true }, ts: 1726000000000, plan: 'free' } };
 
 run({
+  async 'iscrizione: senza "Ho almeno 14 anni" o nato nel 2015 l\'account non si crea'(b) {
+    const { ctx, p, errs } = await open(b);
+    await register(p, { adult: false });
+    const t1 = await text(p), u1 = await doc(p, 'users/fabio@b.it');
+    await p.selectOption('#regBirth', '2015'); await p.check('#regAdult');
+    await tapText(p, 'CREA ACCOUNT', { exact: true }); await w(p, 1500);
+    const t2 = await text(p), u2 = await doc(p, 'users/fabio@b.it'), auth = await authState(p); await ctx.close();
+    assert(/Conferma di avere almeno 14 anni\./.test(t1) && !u1, 'senza la casella si è creato l\'account (o manca l\'avviso)');
+    assert(/Per iscriverti a Sector 4 devi avere almeno 14 anni\./.test(t2) && !u2 && !auth.users['fabio@b.it'], 'con meno di 14 anni si è creato l\'account (o manca l\'avviso)');
+    assert(!errs.length, errs.join(' | '));
+  },
+
   async 'registrazione: "Su di te" (che tifoso sei, da quanti anni segui la F1, anno di nascita) nel profilo'(b) {
     const { ctx, p, errs } = await open(b);
     await register(p, { birth: 2001, steps: 1, fan: 'vroom' });
