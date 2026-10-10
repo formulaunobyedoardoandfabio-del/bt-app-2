@@ -22,7 +22,7 @@ const MESSAGES = {
   "need-password": "Per eliminare l'account scrivi la tua password.",
   "delete-failed": "Eliminazione non riuscita, controlla la connessione e riprova.",
   "reset-sent": "Ti abbiamo mandato un'email per scegliere una nuova password. Controlla anche lo spam.",
-  "not-enabled": "Accesso con email e password non ancora attivo su Firebase (Authentication → Metodo di accesso).",
+  "not-enabled": "L'accesso con email e password non è ancora attivo su Firebase (Authentication → Metodo di accesso).",
 };
 const messageOf = e => MESSAGES[(e && e.code) || ""] || MESSAGES.offline;
 
