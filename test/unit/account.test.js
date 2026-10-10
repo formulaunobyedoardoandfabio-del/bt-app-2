@@ -134,6 +134,15 @@ t('eliminazione: password chiesta prima di cancellare; poi via profilo, resets, 
   await assert.rejects(A.login('f@b.it', 'abcdef'), e => e.code === 'not-found');
 });
 
+t('accesso con email e password non acceso nella console di Firebase: lo dice (non "errore di connessione")', async () => {
+  ctx();
+  const off = Object.assign(new Error('off'), { code: 'auth/operation-not-allowed' });
+  const A = make({ getAuth: async () => ({ signInWithEmailAndPassword: async () => { throw off; }, createUserWithEmailAndPassword: async () => { throw off; } }) });
+  await assert.rejects(A.login('a@b.it', 'x'), e => e.code === 'not-enabled');
+  await assert.rejects(A.register({ name: 'F', email: 'f@b.it', pw: 'abcdef', pw2: 'abcdef', about: {} }), e => e.code === 'not-enabled');
+  assert.ok(/non è ancora attivo/.test(MESSAGES['not-enabled']));
+});
+
 t('isAdmin solo con il documento admins/<email>', async () => {
   ctx();
   const A = make();

@@ -22,6 +22,7 @@ const MESSAGES = {
   "need-password": "Per eliminare l'account scrivi la tua password.",
   "delete-failed": "Eliminazione non riuscita, controlla la connessione e riprova.",
   "reset-sent": "Ti abbiamo mandato un'email per scegliere una nuova password. Controlla anche lo spam.",
+  "not-enabled": "Accesso con email e password non ancora attivo su Firebase (Authentication → Metodo di accesso).",
 };
 const messageOf = e => MESSAGES[(e && e.code) || ""] || MESSAGES.offline;
 
@@ -37,6 +38,7 @@ function authErr(e) {
   if (c === "auth/too-many-requests") return mkErr("too-many");
   if (c === "auth/email-already-in-use") return mkErr("exists");
   if (c === "auth/weak-password") return mkErr("weak");
+  if (["auth/operation-not-allowed", "auth/configuration-not-found", "auth/admin-restricted-operation"].includes(c)) return mkErr("not-enabled");
   if (BAD_LOGIN.includes(c)) return mkErr("wrong-password");
   return mkErr("offline");
 }
