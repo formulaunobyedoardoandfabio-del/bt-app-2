@@ -1,5 +1,5 @@
 {
- "_nota": "Contenuti dimostrativi della 2.0 (ARTICLES, PREDICTIONS_INIT, HIGHLIGHTS_INIT, HOME_POLL, IG_INIT e i messaggi di CHATS_INIT di src/App.jsx al commit 40409d4, e il calendario con gli stati della 2.0) come documenti Firebase nel formato di oggi: servono alle prove copiate dalla 2.0 (run8-run23), che li cercano. Le date delle notizie danno le stesse etichette (\"2 min fa\", \"Ieri\"...) all'ora fissa delle prove (7/10/2026 10:00 UTC). Nell'app non ci sono più.",
+ "_nota": "Contenuti dimostrativi della 2.0 (ARTICLES, PREDICTIONS_INIT, HIGHLIGHTS_INIT, HOME_POLL, IG_INIT e i messaggi di CHATS_INIT di src/App.jsx al commit 40409d4, e il calendario con gli stati della 2.0) come documenti Firebase nel formato di oggi: servono alle prove copiate dalla 2.0 (run8-run23), che li cercano. Le date delle notizie danno le stesse etichette (\"2 min fa\", \"Ieri\"...) all'ora fissa delle prove (7/10/2026 10:00 UTC). Nell'app non ci sono più. I messaggi della chat hanno un aid (impronta di un indirizzo finto nome@esempio.it), come quelli scritti da tutte e due le app: un messaggio senza aid non si può sospendere (revisione della Fase B, I5).",
  "addDocs": {
   "shared/bt-news": {
    "__arr": [
@@ -707,28 +707,28 @@
     {
      "id": "generale-0",
      "user": "Marco T.",
-     "aid": "",
+     "aid": "uf0ae0e6ce730ab6d",
      "txt": "Ragazzi pronti per il weekend?",
      "t": 1791363360000
     },
     {
      "id": "generale-1",
      "user": "Giulia R.",
-     "aid": "",
+     "aid": "ude93fa8ff88d140c",
      "txt": "Sempre! Occhio alle previsioni meteo però",
      "t": 1791363420000
     },
     {
      "id": "generale-2",
      "user": "Davide S.",
-     "aid": "",
+     "aid": "u069d49787878f9f7",
      "txt": "Io spero in un po' di pioggia, gare più belle 😄",
      "t": 1791363480000
     },
     {
      "id": "generale-3",
      "user": "Marco T.",
-     "aid": "",
+     "aid": "uf0ae0e6ce730ab6d",
      "txt": "Vediamo cosa dice la redazione B&T",
      "t": 1791363540000
     }
@@ -739,21 +739,21 @@
     {
      "id": "live-0",
      "user": "Elena V.",
-     "aid": "",
+     "aid": "ue6c182839090a5ba",
      "txt": "Bel sorpasso alla curva 3!",
      "t": 1791363420000
     },
     {
      "id": "live-1",
      "user": "Paolo M.",
-     "aid": "",
+     "aid": "u9293fbe03fe8039d",
      "txt": "Strategia rischiosa quella gomma dura...",
      "t": 1791363480000
     },
     {
      "id": "live-2",
      "user": "Sara B.",
-     "aid": "",
+     "aid": "u66c18d757a811eaa",
      "txt": "Concordo, vediamo se regge fino alla fine",
      "t": 1791363540000
     }
@@ -764,14 +764,14 @@
     {
      "id": "fanta-0",
      "user": "Luca F.",
-     "aid": "",
+     "aid": "u3d6f20c7acbdb0fc",
      "txt": "Chi schierate questo weekend?",
      "t": 1791363480000
     },
     {
      "id": "fanta-1",
      "user": "Anna P.",
-     "aid": "",
+     "aid": "uac3e6162d43798e1",
      "txt": "Sto pensando di cambiare P3, non mi convince il passo",
      "t": 1791363540000
     }
@@ -782,14 +782,14 @@
     {
      "id": "radio-0",
      "user": "Fabio C.",
-     "aid": "",
+     "aid": "ud123b556a0b05a83",
      "txt": "Avete sentito la radio dopo il pit stop? 😅",
      "t": 1791363480000
     },
     {
      "id": "radio-1",
      "user": "Giulia R.",
-     "aid": "",
+     "aid": "ude93fa8ff88d140c",
      "txt": "Team radio più belle della stagione finora",
      "t": 1791363540000
     }
@@ -800,7 +800,7 @@
     {
      "id": "paddock-0",
      "user": "Davide S.",
-     "aid": "",
+     "aid": "u069d49787878f9f7",
      "txt": "Prossimo weekend si cambia circuito, non vedo l'ora",
      "t": 1791363540000
     }
