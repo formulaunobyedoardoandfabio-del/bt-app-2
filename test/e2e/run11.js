@@ -62,7 +62,7 @@ async function tapSel(p, sel, timeout = 4000) {
 async function login(p) {
   await p.fill('#authEmail', 'a@b.it'); await p.fill('#authPw', 'x');
   await p.evaluate(() => { const bs = [...document.querySelectorAll('button')].filter(b => b.textContent.replace(/\s+/g, ' ').trim() === 'ACCEDI'); bs[bs.length - 1].click(); });
-  await w(p, 2500); await tapText(p, 'ACCETTO', { timeout: 1500 }).catch(() => {}); await w(p, 400);
+  await w(p, 2500); await p.waitForFunction(() => !document.querySelector('[data-splash]'), null, { timeout: 8000 }).catch(() => {}); await w(p, 400);   // Task 9: si aspetta la fine dello splash (i Termini li ha già accettati il Firebase finto)
 }
 const openArticle = async (p, t) => { await p.evaluate(t => [...document.querySelectorAll('h3')].find(h => h.textContent.trim() === t).closest('button').click(), t); await w(p, 400); };
 const openShare = async p => { await tapSel(p, '[aria-label="Condividi articolo"]'); await w(p, 300); };
@@ -176,7 +176,7 @@ const tests = {
   },
   async 'condividi: anche da ospite, dal fondo dell\'articolo'(b) {
     const { ctx, p } = await open(b);
-    await tapText(p, 'ENTRA SENZA ACCOUNT'); await w(p, 400); await tapText(p, 'ACCETTO'); await w(p, 300);
+    await tapText(p, 'ENTRA SENZA ACCOUNT'); await w(p, 700);   // Task 9: i Termini sono già accettati (primo avvio)
     await openArticle(p, HADJAR);
     await tapText(p, 'CONDIVIDI', { exact: true }); await w(p, 400);
     const t = await text(p); await ctx.close();

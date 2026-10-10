@@ -18,6 +18,9 @@ import AppData from "./services/appdata";
 import Compat from "./services/compat";
 import { createAccount, MESSAGES as ACCOUNT_MSG, messageOf } from "./services/account";
 import { createChat, CHAT_MSG, ROOM_IDS } from "./services/chat";
+import { createFeedback, FEEDBACK_CATS, FEEDBACK_MSG } from "./services/feedback";
+import { local } from "./services/firebase";
+import LOGO from "./data/logo";
 
 /* ── DESIGN TOKENS (matches the B&T concept style) ─────────────────── */
 const C = {
@@ -42,9 +45,11 @@ const SITE_URL = "https://formulaunobyedoardoandfabio-del.github.io/bt-app-flutt
 const PRIVACY_URL = SITE_URL + "/privacy.html";
 const CONTACT_EMAIL = "bt.formula1@gmail.com";
 const F1_DISCLAIMER = "B&T App è un'app non ufficiale e non è associata in alcun modo alle società di Formula 1. F1, FORMULA ONE, FORMULA 1, FIA FORMULA ONE WORLD CHAMPIONSHIP, GRAND PRIX e i marchi correlati sono marchi di Formula One Licensing B.V.";
-// Premium di prova: nell'anteprima si attiva con un tocco, senza pagare.
-// Sul Play Store un abbonamento va venduto con Google Play Billing: lì questa prova va spenta.
-const PAYMENTS_ENABLED = true;
+// Pagamenti veri (abbonamento con Google Play Billing): spenti, come nell'app di oggi. Finché sono spenti la §4 dei
+// Termini dice che il Premium non è ancora disponibile.
+const PAYMENTS_ENABLED = false;
+// Prova del Premium dell'anteprima 2.0: si attiva con un tocco, senza pagare. La toglie il Task 11 (D44, Premium come oggi).
+const PREMIUM_DEMO = true;
 // Prova gratuita di 2 settimane, una sola volta per account (sul Play Store si imposta come offerta dell'abbonamento).
 const TRIAL_DAYS = 14;
 const premiumOffer = ({ trialUsed, isPremium }) => isPremium ? "premium" : trialUsed ? "subscribe" : "trial";
@@ -58,6 +63,37 @@ const openUrl = url => {
 // Moderazione chat (richiesta da Google Play): i messaggi degli utenti bloccati non si vedono.
 // Messaggio di un utente bloccato? Con l'ID autore se c'è, altrimenti col nome (messaggi vecchi), come l'app di oggi.
 const isBlockedMsg = (blocked, m) => !m.mine && blocked.some(b => (b.aid && m.aid ? b.aid === m.aid : !b.aid && !m.aid && b.name === m.from));
+
+/* ── TELEFONO: tasto indietro di Android, barra di stato, avvio ─────── */
+// Plugin di Capacitor dall'APK (@capacitor/app e SystemBars di @capacitor/core), senza import come gli altri;
+// nel browser non ci sono e non succede niente.
+const capPlugin = name => { try { return (window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins[name]) || null; } catch (e) { return null; } };
+// Barra di stato del telefono (ora, batteria, Wi-Fi) nascosta: all'avvio e ogni volta che si torna nell'app.
+const hideStatusBar = () => { const SB = capPlugin("SystemBars"); if (SB && SB.hide) Promise.resolve().then(() => SB.hide({ bar: "StatusBar" })).catch(() => {}); };
+// Tasto indietro: chiude per prima la finestra o la pagina interna aperta per ultima. Chi apre qualcosa che il tasto
+// deve chiudere lo registra con useBack(aperto, chiudi); quando non c'è niente da chiudere decide l'App.
+const BACK_STACK = [];
+function useBack(active, onBack) {
+  const ref = useRef(onBack);
+  ref.current = onBack;
+  useEffect(() => {
+    if (!active) return undefined;
+    const h = () => ref.current();
+    BACK_STACK.push(h);
+    return () => { const i = BACK_STACK.lastIndexOf(h); if (i >= 0) BACK_STACK.splice(i, 1); };
+  }, [!!active]);
+}
+// Dalla Home (o dall'accesso) il tasto indietro manda l'app in secondo piano, come fa Android 12 e successivi:
+// riaprendola si torna dove si era, senza rifare l'avvio.
+const leaveApp = () => { const A = capPlugin("App"); if (!A) return; Promise.resolve().then(() => (A.minimizeApp ? A.minimizeApp() : A.exitApp())).catch(() => { try { A.exitApp(); } catch (e) {} }); };
+// Splash con i video di Edoardo (public/splash, WebM VP9 senza audio): apertura (7 s); se i dati non sono ancora
+// arrivati, il video d'attesa (2,8 s) che si ripete; poi il finale (3,2 s), dove le lettere B e T si aprono sull'app vera:
+// da OUTRO_REVEAL_S il video è trasparente (fatto da tools/splash/outro.py) e i tocchi passano all'app sotto.
+const SPLASH_VIDEO = { intro: "splash/intro.webm", loop: "splash/loop.webm", outro: "splash/outro.webm" };
+const OUTRO_REVEAL_S = 40 / 24;
+const SPLASH_VIDEO_START_MS = 3000;   // il primo video non parte (file mancante, formato non supportato): splash fisso
+const SPLASH_MS = 1800, SPLASH_FADE_MS = 600;   // splash fisso come l'app di oggi: logo e "Caricamento…"
+const LOAD_MAX_MS = 15000;   // Firebase che non risponde: dopo 15 secondi l'app si apre lo stesso con i contenuti di serie
 
 /* ── ICONS ──────────────────────────────────────────────────────────── */
 function Icon({ name, size = 18, color = C.text, sw = 2 }) {
@@ -745,6 +781,7 @@ function FanTypePicker({ value, onChange }) {
 function AboutCard({ about, onSave }) {
   const a = about || ABOUT_INIT;
   const [edit, setEdit] = useState(false);
+  useBack(edit, () => setEdit(false));
   const [draft, setDraft] = useState(a);
   const row = (key, label, value, first) => (
     <div key={key} data-about-row={key} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, padding: "14px 16px", borderTop: first ? "none" : `1px solid ${C.divider}` }}>
@@ -807,6 +844,7 @@ function LoginScreen({ auth, onDone, onGuest, onBack, reason }) {
   const [follow, setFollow] = useState(ABOUT_INIT.follow);
   const [fan, setFan] = useState(null);
   const isLogin = mode === "login";
+  useBack(!isLogin, () => setMode("login"));   // da REGISTRATI il tasto indietro torna ad ACCEDI
 
   const submit = async () => {
     if (busy) return;
@@ -1139,6 +1177,7 @@ function HomeScreen({ ig, onOpenIg, highlights = [], articles, tagFilter, onTag,
 
 function ArticleScreen({ article, onBack, isPremium, onPremium, onTag, saved = false, onToggleSave, onShare, vote = null, onVote }) {
   const [zoomed, setZoomed] = useState(false);   // foto a tutto schermo, con lo zoom
+  useBack(zoomed, () => setZoomed(false));
   const locked = article.premium && !isPremium;
   const tags = articleTags(article);
   const round = { width: 38, height: 38, borderRadius: "50%", background: C.card, border: `1px solid ${C.border}`, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 };
@@ -1740,6 +1779,7 @@ const WX_WORD = v => v === "rain" ? "Pioggia" : "Asciutto";
 // Si cambia fino alla fine della sessione di due prima (FP2: fine FP1; FP1: fino all'inizio), mai durante una sessione.
 function WeatherGuess({ s, guess, result, lock, onGuess }) {
   const [asking, setAsking] = useState(false);
+  useBack(asking, () => setAsking(false));
   const small = { display: "inline-flex", alignItems: "center", gap: 6, padding: "7px 11px", borderRadius: 9, background: "rgba(255,255,255,.07)", border: `1px solid ${C.border}`, fontFamily: F_HEAD, fontWeight: 800, fontSize: 12, color: C.text };
   const line = { margin: 0, fontFamily: F_BODY, fontSize: 12, color: C.muted, lineHeight: 1.5 };
   if (result) return (
@@ -2601,6 +2641,10 @@ function SecondScreen({ race, live, st, standings, layout, setLayout, prefs, set
   const [picker, setPicker] = useState(null);     // elenco aperto: "gomme", "settori", "telemetria", "vote-driver", "vote-team"
   const [pickMsg, setPickMsg] = useState(null);
   const [sheet, setSheet] = useState(null);       // scheda aperta di una grafica
+  useBack(edit, () => setEdit(false));
+  useBack(!!pick, () => setPick(null));
+  useBack(!!picker, () => setPicker(null));
+  useBack(!!sheet, () => setSheet(null));
   const [drag, setDrag] = useState(null);         // grafica di cui si sta trascinando la maniglietta
   const [hint, setHint] = useState(null);         // avviso breve (per esempio: non entra alta 2 posti)
   const layoutRef = useRef(layout); layoutRef.current = layout;   // l'ultima disposizione, anche tra due tasti premuti in fretta
@@ -2847,6 +2891,7 @@ function dotdResults(st, kind, mine, seed) {
 }
 function DotdVote({ st, race, vote = {}, onVote, onOpenPicker, compact = false }) {
   const [choosing, setChoosing] = useState(null);   // elenco aperto qui sotto (pagina RACE)
+  useBack(!!choosing, () => setChoosing(null));
   const open = dotdOpen(st), seed = (race && race.round) || 1;
   const info = (kind, id) => { const x = kind === "driver" ? driverById(id) : teamById(id); return { name: x ? (kind === "driver" ? x.full || x.name : x.name) : id, color: x ? x.color : C.dim }; };
   const options = kind => kind === "driver" ? st.cars.map(c => c.id) : TEAMS.map(t => t.id);
@@ -3155,6 +3200,7 @@ const sillyRenewPct = i => { const x = Math.sin((i + 3) * 12.9898 + 78.233) * 43
 function SillySeason({ preds, onPredict, official, onBack }) {
   const [tab, setTab] = useState("sedili");
   const [openSeat, setOpenSeat] = useState(null);
+  useBack(!!openSeat, () => setOpenSeat(null));
   const [draft, setDraft] = useState({});
   const current = Object.fromEntries(SILLY_SEATS.map(s => [s.id, s.id]));
   const board = BtLogic.sillyBoard({ official, current, mine: preds, seed: 27 });
@@ -3855,6 +3901,7 @@ function BluffTool({ races, live, onBack }) {
 function GarageScreen({ races, pitBest, onPitResult, sillyPreds, onPredict, sillyOfficial, live, stratPreds = {}, onStrat }) {
   const [game, setGame] = useState(null);
   const back = () => setGame(null);
+  useBack(!!game, back);   // tasto indietro: dallo strumento si torna al Garage
   if (game === "pitstop") return <PitStopGame best={pitBest} onResult={onPitResult} onBack={back} />;
   if (game === "silly") return <SillySeason preds={sillyPreds} onPredict={onPredict} official={sillyOfficial} onBack={back} />;
   if (game === "aero") return <AeroCalc races={races} onBack={back} />;
@@ -4445,6 +4492,7 @@ function ChatListScreen({ chats, onOpen, blocked = [], unreadOf = () => 0 }) {
 function ChatThreadScreen({ chat, onBack, onSend, isPremium, blocked = [], onReport, onBlock, liveRace = null }) {
   const [draft, setDraft] = useState("");
   const [menu, setMenu] = useState(null); // messaggio su cui ho aperto le opzioni
+  useBack(!!menu, () => setMenu(null));
   const endRef = useRef(null);
   useEffect(() => { endRef.current?.scrollIntoView({ block: "end" }); }, [chat.messages.length]);
   const shown = chat.messages.filter(m => !isBlockedMsg(blocked, m));
@@ -4719,6 +4767,8 @@ function FantaPicker({ kind, slot, squad, stats, budget, onPick, onClose }) {
 function FantaSquadCard({ squad, setSquad, base, freeTransfers, budget, stats, race, lock, onToast, needAccount }) {
   const [picking, setPicking] = useState(null);   // { kind, slot }
   const [naming, setNaming] = useState(false);
+  useBack(!!picking, () => setPicking(null));
+  useBack(naming, () => setNaming(false));
   const [nameDraft, setNameDraft] = useState(squad.name);
   const value = BtLogic.squadValue(squad, stats);
   const left = Math.round((budget - value) * 10) / 10;
@@ -4892,6 +4942,8 @@ function NumPad({ value, onChange, onOk, okLabel = "Invia", onCancel, max = 3 })
 function PredictionCard({ q, answer, lock, onAnswer }) {
   const [picking, setPicking] = useState(false);
   const [pad, setPad] = useState(null);   // numero che si sta scrivendo (null = tastierino chiuso)
+  useBack(picking, () => setPicking(false));
+  useBack(pad != null, () => setPad(null));
   const res = BtLogic.predictionCorrect(q, answer);
   const history = q.kind === "history";
   const choice = q.kind === "poll" || history;
@@ -4991,6 +5043,8 @@ function FantaScreen({ squad, setSquad, base, freeTransfers, budget, stats, race
   const [activeLeague, setActiveLeague] = useState(leagues[0] ? leagues[0].id : null);
   const [editing, setEditing] = useState(false);
   const [creating, setCreating] = useState(false);
+  useBack(editing, () => setEditing(false));
+  useBack(creating, () => setCreating(false));
   const [nameDraft, setNameDraft] = useState("");
   const [addDraft, setAddDraft] = useState("");
   const [newDraft, setNewDraft] = useState("");
@@ -5191,6 +5245,8 @@ function ProfiloScreen({ ig, onOpenIg, trial = null, trialUsed = false, onBack, 
   ];
   const [editing, setEditing] = useState(false);
   const [confirmDel, setConfirmDel] = useState(false);
+  useBack(editing, () => setEditing(false));
+  useBack(confirmDel, () => { if (!delBusy) { setConfirmDel(false); setDelPw(""); setDelErr(""); } });
   // Nome ed email dell'account (Firebase): il nome si modifica, l'email no.
   const email = account ? account.email : "";
   const [name, setName] = useState(account ? account.name : "");
@@ -5341,7 +5397,7 @@ function ProfiloScreen({ ig, onOpenIg, trial = null, trialUsed = false, onBack, 
           <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 20, padding: "26px 22px 18px", maxWidth: 330, width: "100%", textAlign: "center" }}>
             <Icon name="trash" size={30} color={C.accent} />
             <h2 style={{ fontFamily: F_HEAD, fontWeight: 900, fontStyle: "italic", fontSize: 19, color: C.text, margin: "12px 0 8px" }}>Eliminare l'account?</h2>
-            <p style={{ fontFamily: F_BODY, fontSize: 13, color: C.muted, lineHeight: 1.6, margin: "0 0 14px" }}>Cancelleremo il tuo profilo, i messaggi che hai scritto in chat e le segnalazioni che hai inviato. L'operazione non si può annullare.</p>
+            <p style={{ fontFamily: F_BODY, fontSize: 13, color: C.muted, lineHeight: 1.6, margin: "0 0 14px" }}>Cancelleremo il tuo profilo, i messaggi che hai scritto in chat, le segnalazioni e i feedback che hai inviato. L'operazione non si può annullare.</p>
             <label htmlFor="delPw" style={{ display: "block", textAlign: "left", fontFamily: F_BODY, fontWeight: 600, fontSize: 12, color: C.muted, marginBottom: 6 }}>Per confermare scrivi la tua password</label>
             <input id="delPw" type="password" value={delPw} onChange={e => { setDelPw(e.target.value); setDelErr(""); }} placeholder="••••••••" style={{ width: "100%", padding: "11px 13px", borderRadius: 12, background: C.bg, border: `1px solid ${C.border}`, fontFamily: F_BODY, fontSize: 14, color: C.text, marginBottom: 10 }} />
             {delErr && <p role="alert" style={{ margin: "0 0 10px", fontFamily: F_BODY, fontSize: 12, color: "#ff6b6b", lineHeight: 1.45 }}>{delErr}</p>}
@@ -5735,6 +5791,8 @@ function AdminPredictionsTab({ predictions, setPredictions, answers, races, onTo
   const [about, setAbout] = useState("QUALI");
   const [picking, setPicking] = useState(null);   // domanda di cui si sceglie la risposta esatta (piloti, scuderie)
   const [pad, setPad] = useState(null);           // { id, v } numero esatto che si sta scrivendo
+  useBack(!!picking, () => setPicking(null));
+  useBack(!!pad, () => setPad(null));
   const next = races.find(r => r.status === "IN ARRIVO") || races[races.length - 1];
   const setAnswer = (q, v) => { setPredictions(ps => ps.map(x => x.id === q.id ? { ...x, answer: v } : x)).then(ok => ok && onToast(v == null ? "Risposta esatta tolta" : "Risposta esatta segnata: chi ha indovinato prende +1 punto")); };
   const needsOptions = kind === "poll" || kind === "history";
@@ -6200,7 +6258,7 @@ function PremiumModal({ onClose, isPremium, plan, setPlan, onSubscribe, subscrib
                 </button>
               </div>
 
-              {!PAYMENTS_ENABLED ? (
+              {!PREMIUM_DEMO ? (
                 <>
                   <button className="press" disabled style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8, width: "100%", marginTop: 16, padding: "16px 0", borderRadius: 14, background: "rgba(255,255,255,.08)", fontFamily: F_HEAD, fontWeight: 900, fontStyle: "italic", fontSize: 15, color: C.text, letterSpacing: .3 }}><Icon name="stopwatch" size={16} /> PREMIUM IN ARRIVO</button>
                   <p style={{ textAlign: "center", fontFamily: F_BODY, fontSize: 10.5, color: C.dim, lineHeight: 1.7, margin: "14px 0 0" }}>Gli abbonamenti arriveranno presto, tramite Google Play.</p>
@@ -6230,43 +6288,201 @@ function PremiumModal({ onClose, isPremium, plan, setPlan, onSubscribe, subscrib
   );
 }
 
+// Termini e Condizioni come nell'app di oggi (TermsModal): al primo avvio, prima dell'accesso, il tasto resta spento
+// ("Scorri per continuare…") finché non si arriva in fondo; dal Profilo si rileggono e si chiudono con CHIUDI.
 function TermsSheet({ review, onAccept, onClose }) {
+  const [scrolled, setScrolled] = useState(!!review);
+  const bodyRef = useRef(null);
+  const atEnd = el => el.scrollTop + el.clientHeight >= el.scrollHeight - 20;
+  // Su uno schermo così alto che il testo non scorre, il tasto si accende da solo. Si ricontrolla quando cambiano le
+  // misure (i caratteri arrivano dopo, il telefono si gira): a volte il testo diventa più corto dello spazio.
+  useEffect(() => {
+    const el = bodyRef.current;
+    if (!el) return undefined;
+    const check = () => { if (atEnd(el)) setScrolled(true); };
+    check();
+    const ro = typeof ResizeObserver !== "undefined" ? new ResizeObserver(check) : null;
+    if (ro) { ro.observe(el); if (el.firstElementChild) ro.observe(el.firstElementChild); }
+    window.addEventListener("resize", check);
+    return () => { if (ro) ro.disconnect(); window.removeEventListener("resize", check); };
+  }, []);
   const S = [
-    ["1. Accettazione dei Termini", "Utilizzando l'app B&T App (\u201cl'App\u201d), l'utente accetta di essere vincolato ai presenti Termini e Condizioni. Se non si accettano questi termini, si prega di non utilizzare l'App."],
+    ["1. Accettazione dei Termini", "Utilizzando l'app B&T App (“l'App”), l'utente accetta di essere vincolato ai presenti Termini e Condizioni. Se non si accettano questi termini, si prega di non utilizzare l'App."],
     ["2. Descrizione del Servizio", "B&T App è un'app di informazione e intrattenimento dedicata alla Formula 1. Offre notizie, classifiche, dati live delle gare tramite OpenF1 API, una sezione community (chat) e funzionalità Fanta F1."],
     ["3. Account Utente", "Per accedere a tutte le funzionalità è necessario creare un account. L'utente è responsabile della riservatezza delle proprie credenziali. Ogni attività effettuata dall'account è responsabilità dell'utente."],
-    ["4. Abbonamento Premium", PAYMENTS_ENABLED ? "L'abbonamento Premium (2,99€/mese o 24,99€/anno) sblocca funzionalità avanzate e rimuove la pubblicità. Il rinnovo è automatico e può essere annullato in qualsiasi momento dal profilo." : "L'abbonamento Premium non è ancora disponibile. Quando verrà attivato, prezzi, rinnovo e modalità di disdetta saranno indicati in questa sezione e nella schermata di acquisto."],
-    ["5. Contenuti e Proprietà Intellettuale", "Tutti i contenuti pubblicati dal Team B&T (articoli, immagini, video) sono di proprietà di B&T App. I dati di gara sono forniti da OpenF1 API. I loghi e i marchi di Formula 1, FIA e team sono di proprietà dei rispettivi titolari."],
+    ["4. Abbonamento Premium", PAYMENTS_ENABLED ? "L'abbonamento Premium (2,99€/mese o 24,99€/anno) sblocca funzionalità avanzate e rimuove la pubblicità. Il rinnovo è automatico e può essere annullato in qualsiasi momento dal profilo. Non sono previsti rimborsi per il periodo in corso." : "L'abbonamento Premium non è ancora disponibile. Quando verrà attivato, prezzi, rinnovo e modalità di disdetta saranno indicati in questa sezione e nella schermata di acquisto."],
+    ["5. Contenuti e Proprietà Intellettuale", "Tutti i contenuti pubblicati dal Team B&T (articoli, immagini, video) sono di proprietà di B&T App. I dati di gara sono forniti da OpenF1 API. I loghi e i marchi di Formula 1, FIA e team sono di proprietà dei rispettivi titolari.", `${F1_DISCLAIMER} B&T App non è associata nemmeno alla FIA, alle scuderie o ai piloti.`],
     ["6. Condotta degli Utenti", "Nella chat community è vietato pubblicare contenuti offensivi, discriminatori, sessualmente espliciti, spam, materiale illegale o informazioni personali altrui. Con il tasto ⋯ su ogni messaggio puoi segnalarlo o bloccare chi l'ha scritto: i messaggi segnalati vengono controllati dai moderatori e rimossi se violano queste regole. Le violazioni possono comportare la sospensione dalla chat o dell'account."],
     ["7. Pubblicità", "Gli utenti non abbonati visualizzeranno annunci pubblicitari forniti tramite Google AdMob. Nell'Unione Europea ti chiediamo il consenso con il messaggio di Google e puoi cambiare le tue scelte in qualsiasi momento da Profilo → Preferenze privacy annunci."],
     ["8. Privacy e Cookie", null],
-    ["9. Limitazione di Responsabilità", "B&T App non garantisce l'accuratezza assoluta dei dati live di gara. L'App è fornita \u201ccosì com'è\u201d. Non siamo responsabili per interruzioni del servizio, perdita di dati o danni derivanti dall'uso dell'App."],
+    ["9. Limitazione di Responsabilità", "B&T App non garantisce l'accuratezza assoluta dei dati live di gara. L'App è fornita “così com'è”. Non siamo responsabili per interruzioni del servizio, perdita di dati o danni derivanti dall'uso dell'App."],
     ["10. Modifiche ai Termini", "Ci riserviamo il diritto di modificare questi termini. Gli utenti saranno notificati tramite l'App. L'uso continuato dopo le modifiche costituisce accettazione dei nuovi termini."],
     ["11. Legge Applicabile", `I presenti Termini sono regolati dalla legge italiana. Per qualsiasi controversia è competente il Foro di Milano. Per contatti: ${CONTACT_EMAIL}`],
   ];
   const pStyle = { fontFamily: F_BODY, fontSize: 13, color: "#D8D8DA", lineHeight: 1.65, margin: "0 0 14px" };
   return (
-    <div style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,.8)", zIndex: 700, display: "flex", alignItems: "flex-end" }}>
-      <div style={{ background: C.card, borderRadius: "24px 24px 0 0", width: "100%", maxHeight: "94%", display: "flex", flexDirection: "column" }}>
+    <div data-terms="" role="dialog" aria-modal="true" aria-label="Termini e Condizioni" style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,.92)", zIndex: 900, display: "flex", alignItems: "flex-end" }}>
+      <div style={{ background: C.card, borderRadius: "24px 24px 0 0", width: "100%", height: "88%", display: "flex", flexDirection: "column" }}>
         <div style={{ padding: "22px 22px 8px", flexShrink: 0 }}>
           <h2 style={{ fontFamily: F_HEAD, fontWeight: 900, fontStyle: "italic", fontSize: 19, color: C.text, margin: "0 0 4px" }}>TERMINI E CONDIZIONI</h2>
-          {!review && <p style={{ fontFamily: F_BODY, fontSize: 12, color: C.muted, margin: 0 }}>Leggili e accettali per usare B&amp;T App.</p>}
+          {!review && <p style={{ fontFamily: F_BODY, fontSize: 12, color: C.muted, margin: 0 }}>Leggili fino in fondo e accettali per usare B&amp;T App.</p>}
         </div>
-        <div className="scrollcol" style={{ flex: 1, minHeight: 0, padding: "8px 22px 6px" }}>
-          {S.map(([h, b]) => (
+        <div ref={bodyRef} data-terms-body="" className="scrollcol" onScroll={e => { if (atEnd(e.currentTarget)) setScrolled(true); }} style={{ flex: 1, minHeight: 0, padding: "8px 22px 6px" }}>
+          <div>{S.map(([h, b, b2]) => (
             <div key={h}>
               <h3 style={{ fontFamily: F_HEAD, fontWeight: 800, fontStyle: "italic", fontSize: 14, color: C.accent, margin: "4px 0 6px" }}>{h}</h3>
               {b !== null ? <p style={pStyle}>{b}</p> : (
                 <p style={pStyle}>Raccogliamo solo i dati necessari al funzionamento del servizio (email, nome, messaggi in chat, preferenze) e li conserviamo su Firebase (Google). Non vendiamo i dati a terzi. Puoi eliminare l'account e i tuoi dati in qualsiasi momento da Profilo → Elimina account. Tutti i dettagli sono nella <button className="press" onClick={() => openUrl(PRIVACY_URL)} aria-label="Apri la Privacy Policy" style={{ font: "inherit", color: C.accent, textDecoration: "underline", padding: 0 }}>Privacy Policy</button>.</p>
               )}
+              {b2 && <p style={pStyle}>{b2}</p>}
             </div>
-          ))}
+          ))}</div>
         </div>
         <div style={{ padding: "12px 22px 22px", borderTop: `1px solid ${C.border}`, flexShrink: 0 }}>
-          <button className="press" onClick={review ? onClose : onAccept} style={{ display: "block", width: "100%", padding: "15px 0", borderRadius: 14, background: C.accent, fontFamily: F_HEAD, fontWeight: 900, fontStyle: "italic", fontSize: 14, color: "#fff" }}>{review ? "CHIUDI" : "ACCETTO"}</button>
+          {!scrolled && <p style={{ fontFamily: F_BODY, fontSize: 11.5, color: C.dim, textAlign: "center", margin: "0 0 10px" }}>↓ Scorri fino in fondo per accettare</p>}
+          <button className="press" data-terms-accept="" disabled={!scrolled} onClick={review ? onClose : onAccept} style={{ display: "block", width: "100%", padding: "15px 0", borderRadius: 14, background: scrolled ? C.accent : "rgba(255,255,255,.1)", fontFamily: F_HEAD, fontWeight: 900, fontStyle: "italic", fontSize: 14, color: scrolled ? "#fff" : C.dim, transition: "background .3s, color .3s" }}>{!scrolled ? "Scorri per continuare…" : review ? "CHIUDI" : "✓ ACCETTO I TERMINI E CONDIZIONI"}</button>
         </div>
       </div>
     </div>
+  );
+}
+
+// Avvio: i video dello splash (SPLASH_VIDEO). ready = contenuti di Firebase letti e account noto (o LOAD_MAX_MS passati).
+// Il primo video si vede tutto; se a quel punto i dati non ci sono ancora parte quello d'attesa, che si ripete; appena
+// i dati arrivano parte il finale. Se i video non si possono vedere (file mancante, formato) o il telefono chiede meno
+// animazioni, c'è lo splash fisso dell'app di oggi: logo e "Caricamento…" per almeno 1,8 s, poi 0,6 s di dissolvenza.
+// Lo splash sta sopra l'app, che intanto si carica sotto.
+function SplashScreen({ ready, onDone }) {
+  const reduce = useRef((() => { try { return !!(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches); } catch (e) { return false; } })()).current;
+  const [phase, setPhase] = useState(reduce ? "static" : "intro");   // intro | loop | outro | static
+  const [loops, setLoops] = useState(0);              // quante volte è partito il video d'attesa
+  const [outroShown, setOutroShown] = useState(false); // il finale è partito: via lo sfondo nero e gli altri video
+  const [revealed, setRevealed] = useState(false);     // le lettere si aprono: i tocchi passano all'app
+  const [minDone, setMinDone] = useState(false);
+  const [maxDone, setMaxDone] = useState(false);
+  const [fading, setFading] = useState(false);
+  const vids = { intro: useRef(null), loop: useRef(null), outro: useRef(null) };
+  const go = ready || maxDone;
+  const goRef = useRef(go);
+  goRef.current = go;
+  const started = useRef(false);
+  const finish = () => setFading(true);
+  const play = key => {
+    const v = vids[key].current;
+    if (!v) return;
+    try { v.muted = true; v.currentTime = 0; } catch (e) {}
+    Promise.resolve().then(() => v.play()).catch(() => { if (key === "outro") finish(); else setPhase(ph => (ph === "outro" ? ph : "static")); });
+  };
+  useEffect(() => {
+    const a = setTimeout(() => setMinDone(true), SPLASH_MS), b = setTimeout(() => setMaxDone(true), LOAD_MAX_MS);
+    const c = setTimeout(() => { if (!started.current) setPhase(ph => (ph === "intro" ? "static" : ph)); }, SPLASH_VIDEO_START_MS);
+    return () => { clearTimeout(a); clearTimeout(b); clearTimeout(c); };
+  }, []);
+  useEffect(() => {
+    if (phase === "intro" || phase === "outro") play(phase);
+    else if (phase === "loop") { setLoops(n => n + 1); play("loop"); }
+    else if (phase === "static") Object.values(vids).forEach(r => { try { if (r.current) r.current.pause(); } catch (e) {} });
+  }, [phase]);
+  useEffect(() => { if (phase === "loop" && go) setPhase("outro"); }, [phase, go]);   // dati arrivati: subito il finale
+  useEffect(() => {   // finale partito: gli altri due video si fermano; se il finale si inceppa, lo splash va via lo stesso
+    if (!outroShown) return undefined;
+    ["intro", "loop"].forEach(k => { try { if (vids[k].current) vids[k].current.pause(); } catch (e) {} });
+    const t = setTimeout(onDone, 6000);
+    return () => clearTimeout(t);
+  }, [outroShown]);
+  useEffect(() => { if (phase === "static" && minDone && go) finish(); }, [phase, minDone, go]);
+  useEffect(() => { if (!fading) return undefined; const t = setTimeout(onDone, SPLASH_FADE_MS); return () => clearTimeout(t); }, [fading]);
+  const onEnded = key => {
+    if (key === "intro") setPhase(goRef.current ? "outro" : "loop");
+    else if (key === "loop") { if (goRef.current) setPhase("outro"); else { setLoops(n => n + 1); play("loop"); } }
+    else onDone();
+  };
+  const onError = key => { if (key === "outro") finish(); else setPhase(ph => (ph === "outro" ? ph : "static")); };
+  const video = key => (
+    <video key={key} ref={vids[key]} src={SPLASH_VIDEO[key]} muted playsInline preload="auto" aria-hidden="true"
+      onPlaying={() => { started.current = true; if (key === "outro") setOutroShown(true); }}
+      onTimeUpdate={key === "outro" ? e => { if (e.currentTarget.currentTime >= OUTRO_REVEAL_S) setRevealed(true); } : undefined}
+      onEnded={() => onEnded(key)} onError={() => onError(key)}
+      style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover", opacity: phase === "static" ? 0 : key === "outro" ? 1 : outroShown ? 0 : 1, pointerEvents: "none" }} />
+  );
+  const clear = phase === "outro" && outroShown;
+  return (
+    <div data-splash="" data-splash-phase={phase} data-splash-loops={loops} data-splash-revealed={revealed ? "1" : undefined}
+      style={{ position: "fixed", inset: 0, background: clear ? "transparent" : "#000", zIndex: 9999, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 14, transition: `opacity ${SPLASH_FADE_MS}ms ease`, opacity: fading ? 0 : 1, pointerEvents: revealed || fading ? "none" : "auto" }}>
+      {!reduce && ["intro", "loop", "outro"].map(video)}
+      {phase === "static" && (
+        <>
+          <div style={{ background: C.accent, borderRadius: 16, padding: "18px 24px", boxShadow: `0 0 50px ${C.accent}55`, display: "flex", alignItems: "center", justifyContent: "center" }}>
+            <img src={LOGO} alt="B&T" style={{ height: 38, filter: "brightness(0) invert(1)" }} />
+          </div>
+          <p style={{ fontFamily: F_BODY, fontSize: 13, color: C.dim, margin: 0 }}>Caricamento…</p>
+        </>
+      )}
+    </div>
+  );
+}
+
+// Feedback come l'app di oggi (FeedbackModal): da 1 a 5 stelle (obbligatorie), una categoria e un testo facoltativo;
+// si salva in shared/bt-feedback-<id> (src/services/feedback.js).
+function FeedbackModal({ onClose, onSend }) {
+  const [stars, setStars] = useState(0);
+  const [msg, setMsg] = useState("");
+  const [category, setCategory] = useState("generale");
+  const [sent, setSent] = useState(false);
+  const [sending, setSending] = useState(false);
+  const [err, setErr] = useState("");
+  const buzz = ms => { try { if (navigator.vibrate) navigator.vibrate(ms); } catch (e) {} };
+  useEffect(() => { if (!sent) return undefined; const t = setTimeout(onClose, 2000); return () => clearTimeout(t); }, [sent]);
+  const send = async () => {
+    if (!stars || sending) return;
+    setSending(true); setErr("");
+    try { await onSend({ stars, category, msg }); setSent(true); }
+    catch (e) { setErr(FEEDBACK_MSG.offline); }
+    setSending(false);
+  };
+  const LABELS = ["", "😤 Molto male", "😕 Migliorabile", "😐 Nella media", "😊 Bene!", "🔥 Ottimo!"];
+  return (
+    <div data-feedback="" role="dialog" aria-modal="true" aria-label="Invia feedback" style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,.8)", zIndex: 760, display: "flex", alignItems: "flex-end" }} onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
+      <div style={{ background: C.card, borderRadius: "24px 24px 0 0", width: "100%", padding: "20px 20px 26px" }}>
+        <div style={{ width: 36, height: 4, borderRadius: 2, background: "rgba(255,255,255,.14)", margin: "0 auto 16px" }} />
+        {sent ? (
+          <div style={{ textAlign: "center", padding: "18px 0" }}>
+            <div style={{ fontSize: 46, marginBottom: 10 }}>🏁</div>
+            <div style={{ fontFamily: F_HEAD, fontWeight: 900, fontStyle: "italic", fontSize: 18, color: C.text }}>Grazie per il feedback!</div>
+            <p style={{ fontFamily: F_BODY, color: C.muted, fontSize: 13, margin: "8px 0 0" }}>Lo leggiamo tutti. Aiuti B&amp;T a migliorare!</p>
+          </div>
+        ) : (
+          <>
+            <div style={{ fontFamily: F_HEAD, fontWeight: 900, fontStyle: "italic", fontSize: 17, color: C.text, marginBottom: 4 }}>📣 Invia Feedback</div>
+            <p style={{ fontFamily: F_BODY, color: C.muted, fontSize: 12, margin: "0 0 16px" }}>Bastano 30 secondi. La tua opinione conta davvero.</p>
+            <div style={{ display: "flex", justifyContent: "center", gap: 8, marginBottom: 12 }}>
+              {[1, 2, 3, 4, 5].map(n => (
+                <button key={n} className="press" data-feedback-star={n} aria-label={`${n} stell${n === 1 ? "a" : "e"}`} aria-pressed={n <= stars ? "true" : "false"} onClick={() => { setStars(n); buzz(40); }}
+                  style={{ fontSize: 34, lineHeight: 1, transition: "transform .15s", transform: n <= stars ? "scale(1.15)" : "scale(1)", filter: n <= stars ? "none" : "grayscale(1) opacity(.4)" }}>⭐</button>
+              ))}
+            </div>
+            <p style={{ textAlign: "center", fontFamily: F_BODY, fontSize: 12, color: C.muted, margin: "0 0 14px", minHeight: 16 }}>{LABELS[stars]}</p>
+            <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 14 }}>
+              {FEEDBACK_CATS.map(c => {
+                const on = category === c.id;
+                return <button key={c.id} className="press" data-feedback-cat={c.id} aria-pressed={on ? "true" : "false"} onClick={() => { setCategory(c.id); buzz(30); }} style={{ padding: "6px 12px", borderRadius: 20, background: on ? "rgba(232,18,29,.14)" : "rgba(255,255,255,.05)", border: `1px solid ${on ? C.accent : C.border}`, fontFamily: F_BODY, fontWeight: 600, fontSize: 11.5, color: on ? C.accent : C.muted }}>{c.label}</button>;
+              })}
+            </div>
+            <textarea data-feedback-msg="" aria-label="Il tuo feedback" placeholder="Scrivi qui (opzionale)… cosa ti piace? Cosa manca?" value={msg} onChange={e => setMsg(e.target.value)} rows={3}
+              style={{ width: "100%", background: C.bg, border: `1px solid ${C.border}`, borderRadius: 12, padding: "11px 13px", color: C.text, fontFamily: F_BODY, fontSize: 13, outline: "none", resize: "none", marginBottom: 12 }} />
+            {err && <p role="alert" style={{ background: "#E1060018", border: `1px solid ${C.accent}`, borderRadius: 10, padding: "9px 14px", margin: "0 0 12px", color: "#ff6b6b", fontFamily: F_BODY, fontSize: 12, lineHeight: 1.5 }}>{err}</p>}
+            <button className="press" onClick={send} disabled={!stars || sending} style={{ display: "block", width: "100%", padding: "15px 0", borderRadius: 14, background: stars && !sending ? C.accent : "rgba(255,255,255,.1)", fontFamily: F_HEAD, fontWeight: 900, fontStyle: "italic", fontSize: 14, color: stars ? "#fff" : C.dim }}>{sending ? "Invio…" : "INVIA FEEDBACK"}</button>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// Pulsante del feedback (FeedbackFAB di oggi): in basso a destra, sopra la barra delle schede quando c'è.
+function FeedbackFAB({ onClick, bottom }) {
+  return (
+    <button className="press" aria-label="Invia feedback" onClick={onClick} style={{ position: "absolute", right: 16, bottom, width: 44, height: 44, borderRadius: "50%", background: C.accent, boxShadow: "0 4px 16px rgba(232,18,29,.5)", zIndex: 100, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18 }}>💬</button>
   );
 }
 
@@ -6409,6 +6625,11 @@ const Account = createAccount({ cleanups: ACCOUNT_CLEANUPS });
 // Chat dei tifosi su Firebase (src/services/chat.js); eliminando l'account si tolgono i suoi messaggi e segnalazioni.
 const Chat = createChat({ now: nowMs });
 ACCOUNT_CLEANUPS.push(u => Chat.cleanupFor(u));
+// Feedback (src/services/feedback.js): eliminando l'account si cancellano anche quelli che ha mandato.
+const Feedback = createFeedback({ now: nowMs });
+ACCOUNT_CLEANUPS.push(u => Feedback.cleanupFor(u));
+const TERMS_KEY = "bt-terms-accepted";   // Termini accettati: solo su questo telefono, {ts}, come oggi
+const FAB_OVER_NAV = 92;   // pulsante del feedback: sopra la barra delle schede (alta 78 px) con un po' di stacco
 const CHAT_LIST_MS = 6000, CHAT_ROOM_MS = 4000;   // come l'app di oggi: elenco ogni 6 s, stanza aperta ogni 4 s
 
 // Dati personali di chi entra con un account (users/<email>.app2, src/services/appdata.js): valori di partenza.
@@ -6430,7 +6651,10 @@ function App() {
   useEffect(() => {
     const off = Account.onChange(u => setAccount(u));
     Account.start().then(u => setAccount(u || null), () => setAccount(null));
-    return off;
+    // Authentication che non risponde (rete lentissima): finito lo splash si vede l'accesso (si può entrare da ospite);
+    // se la sessione salvata arriva dopo, si entra da soli.
+    const t = setTimeout(() => setAccount(a => (a === undefined ? null : a)), LOAD_MAX_MS);
+    return () => { off(); clearTimeout(t); };
   }, []);
   const [tab, setTab] = useState("home");
   const [view, setView] = useState("tab");
@@ -6451,8 +6675,12 @@ function App() {
   // segnalarlo ed eliminarlo (moderazione).
   const [chatMsgs, setChatMsgs] = useState({});
   const chats = CHAT_ROOMS.map(r => ({ ...r, messages: chatMsgs[r.id] || [] }));
-  const [termsAccepted, setTermsAccepted] = useState(false); // Termini accettati al primo ingresso
+  const [termsAccepted, setTermsAccepted] = useState(() => !!local.get(TERMS_KEY));   // al primo avvio no: Termini prima di tutto
   const [termsOpen, setTermsOpen] = useState(false);         // rilettura dal profilo
+  const acceptTerms = () => { local.set(TERMS_KEY, { ts: Date.now() }); setTermsAccepted(true); setTermsOpen(false); };
+  const [splash, setSplash] = useState(true);                // avvio: logo e "Caricamento…"
+  const [sharedReady, setSharedReady] = useState(false);     // prima lettura dei contenuti di Firebase finita (anche senza rete)
+  const [feedbackOpen, setFeedbackOpen] = useState(false);
   const [reports, setReports] = useState([]);   // segnalazioni per il moderatore (shared/bt-chat-reports)
   const [banned, setBanned] = useState([]);     // utenti sospesi dalla chat (shared/bt-chat-banned)
   const [blocked, setBlocked] = useState(() => Chat.blocked());   // utenti che ho bloccato (solo su questo telefono)
@@ -6669,7 +6897,7 @@ function App() {
   // All'avvio si legge tutto; poi ogni minuto bt-races (una gara messa LIVE arriva da sola), quello che non si era
   // potuto leggere e i dati personali non ancora letti o non ancora salvati.
   useEffect(() => {
-    refreshShared();
+    refreshShared().catch(() => {}).then(() => setSharedReady(true));
     const iv = setInterval(() => {
       refreshShared(["races", ...AppData.staleKinds().filter(k => k !== "races")]);
       if (userEmailRef.current && !userReady.current) loadUser(userEmailRef.current);
@@ -6879,27 +7107,81 @@ function App() {
   };
   const closePremium = () => { setPremiumOpen(false); setTimeout(() => setSubscribed(false), 300); };
 
-  if (account === undefined && !guest) {   // si aspetta Authentication: forse c'è già una sessione
-    return (
-      <div id="phone-shell">
-        <div data-auth-wait="" style={{ height: "100%", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: F_BODY, fontSize: 13, color: C.muted }}>Caricamento…</div>
+  // ── Tasto indietro di Android e barra di stato (nell'APK) ──────────────
+  // Pagine interne: il tasto indietro fa come la freccia in alto a sinistra.
+  const viewBack = {
+    article: () => setView("tab"), circuit: () => setView("tab"), ghost: () => setView("tab"), chats: () => setView("tab"),
+    profilo: () => setView("tab"), notifiche: () => setView("tab"), instagram: () => setView(igFrom),
+    adminLock: () => setView("profilo"), admin: () => setView("profilo"), chatThread: () => goTab("race"),
+  };
+  const closeLogin = () => { setLoginOpen(false); setLoginReason(null); };
+  const inApp = authed || guest;
+  useBack(inApp && view !== "tab", () => (viewBack[view] || (() => setView("tab")))());
+  useBack(loginOpen && !authed, closeLogin);
+  useBack(premiumOpen, () => closePremium());
+  useBack(!!selectedDriver, () => setSelectedDriver(null));
+  useBack(liveTrackOpen, () => setLiveTrackOpen(false));
+  useBack(ssOpen, () => setSsOpen(false));
+  useBack(!!lapList, () => setLapList(null));
+  useBack(!!telemetry, () => setTelemetry(null));
+  useBack(!!infoModal, () => setInfoModal(null));
+  useBack(!!picker, () => setPicker(null));
+  useBack(shareId != null, () => setShareId(null));
+  useBack(termsOpen, () => setTermsOpen(false));
+  useBack(feedbackOpen, () => setFeedbackOpen(false));
+  const onBackButton = () => {
+    if (splash) return;                                   // durante l'avvio non fa niente
+    if (!termsAccepted) { leaveApp(); return; }           // Termini del primo avvio: senza accettarli si esce
+    const top = BACK_STACK[BACK_STACK.length - 1];
+    if (top) { top(); return; }
+    if (!inApp) { leaveApp(); return; }                   // schermata di accesso
+    if (view !== "tab") { setView("tab"); return; }
+    if (tab !== "home") { goTab("home"); return; }
+    if (tagFilter || savedOnly) { setTagFilter(null); setSavedOnly(false); return; }   // Home filtrata: si toglie il filtro
+    leaveApp();
+  };
+  const backRef = useRef(onBackButton);
+  backRef.current = onBackButton;
+  useEffect(() => {
+    hideStatusBar();
+    const A = capPlugin("App");
+    if (!A || !A.addListener) return undefined;
+    const subs = [
+      A.addListener("backButton", () => backRef.current()),
+      A.addListener("appStateChange", st => { if (st && st.isActive) hideStatusBar(); }),
+    ];
+    return () => subs.forEach(h => Promise.resolve(h).then(x => x && x.remove && x.remove()).catch(() => {}));
+  }, []);
+
+  // Telefono: lo spazio delle barre del sistema sta in #phone-shell (App.css). Sopra l'app, in ogni schermata (anche
+  // prima dell'accesso), i Termini del primo avvio e lo splash: restano montati quando cambia la schermata sotto.
+  const shell = content => (
+    <div id="phone-shell">
+      <div className="shell-in">
+        {content}
+        {!termsAccepted && <TermsSheet onAccept={acceptTerms} />}
       </div>
+      {splash && <SplashScreen ready={sharedReady && account !== undefined} onDone={() => setSplash(false)} />}
+    </div>
+  );
+
+  if (account === undefined && !guest) {   // si aspetta Authentication: forse c'è già una sessione
+    return shell(
+      <div data-auth-wait="" style={{ height: "100%", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: F_BODY, fontSize: 13, color: C.muted }}>Caricamento…</div>
     );
   }
   if (!authed && !guest) {
-    return (
-      <div id="phone-shell">
-        <LoginScreen auth={Account} onGuest={() => { setGuest(true); showToast("Stai navigando come ospite"); }} />
-      </div>
+    return shell(
+      <LoginScreen auth={Account} onGuest={() => { setGuest(true); showToast("Stai navigando come ospite"); }} />
     );
   }
   if (loginOpen && !authed) {
-    return (
-      <div id="phone-shell">
-        <LoginScreen auth={Account} reason={loginReason} onBack={() => { setLoginOpen(false); setLoginReason(null); }}
+    return shell(
+      <>
+        <LoginScreen auth={Account} reason={loginReason} onBack={closeLogin}
           onDone={r => { setGuest(false); setLoginOpen(false); setLoginReason(null); showToast(r && r.created ? "Account creato" : "Accesso effettuato"); }} />
         {toast && <div className="toast">{toast}</div>}
-      </div>
+      </>
     );
   }
 
@@ -6945,16 +7227,16 @@ function App() {
   };
 
   let body;
-  if (view === "article" && activeArticle) body = <ArticleScreen article={activeArticle} onBack={() => setView("tab")} isPremium={isPremium} onPremium={() => setPremiumOpen(true)} onTag={filterByTag} saved={saved.includes(activeArticle.id)} onToggleSave={() => toggleSave(activeArticle.id)} onShare={() => setShareId(activeArticle.id)} vote={votes["art-" + activeArticle.id] || null} onVote={castVote} />;
-  else if (view === "circuit" && circuitId) body = <CircuitScreen circuitId={circuitId} races={races} articles={articles} onBack={() => setView("tab")} onTag={filterByTag} onOpenArticle={openArticle} />;
-  else if (view === "adminLock") body = <AdminKeypad onOk={() => { setAdminUnlocked(true); setView("admin"); }} onCancel={() => setView("profilo")} />;
-  else if (view === "admin" && adminUnlocked) body = <AdminScreen silly={sillyOfficial} onSilly={officialSeat} highlights={highlights} setHighlights={adminSet.highlights} onBack={() => setView("profilo")} onPublish={publishArticle} articles={articles} setArticles={adminSet.articles} fantaStats={fantaStats} setFantaStats={adminSet.fantaStats} standings={standings} setStandings={adminSet.standings} races={races} setRaces={adminSet.races} extraRaces={racesDoc.extra} setExtraRaces={adminSet.extraRaces} ig={ig} setIg={adminSet.ig} sentNotifs={sentNotifs} onSendNotif={sendNotif} onDeleteNotif={deleteNotif} onToast={showToast} tab={adminTab} setTab={setAdminTab} chats={chats} reports={reports} banned={banned} onDeleteMsg={deleteChatMsg} onSuspend={suspendUser} onUnsuspend={unsuspendUser} onIgnoreReport={ignoreReport} liveProps={liveProps} polls={allPolls} votes={votes} onPollAnswer={setPollAnswer} predictions={predictions} setPredictions={adminSet.predictions} predAnswers={predAnswers} />;
-  else if (view === "chatThread" && activeChat) body = <ChatThreadScreen chat={activeChat} onBack={() => goTab("race")} onSend={guest ? () => needLogin("Per scrivere in chat serve un account.") : sendMessage} isPremium={isPremium} blocked={blocked} onReport={guest ? () => needLogin("Per segnalare un messaggio serve un account.") : reportMessage} onBlock={blockUser} liveRace={races.find(r => r.status === "LIVE") || null} />;
-  else if (view === "instagram") body = <InstagramView ig={ig} onToast={showToast} onBack={() => setView(igFrom)} />;
-  else if (view === "ghost") body = <GhostLap onBack={() => setView("tab")} />;
-  else if (view === "chats") body = <ChatsView chats={chats} onOpen={openChat} blocked={blocked} onBack={() => setView("tab")} unreadOf={(id, ms) => Chat.unread(id, ms)} />;
-  else if (view === "profilo") body = <ProfiloScreen ig={ig} onOpenIg={() => { setIgFrom("profilo"); setView("instagram"); }} aboutMe={aboutMe} onSaveAboutMe={a => Account.updateAbout(a).catch(() => showToast(NOT_SAVED))} account={account} onSaveName={n => Account.updateName(n)} isAdmin={Account.isAdmin()} trial={trialActive ? trial : null} trialUsed={!!trial} onBack={() => setView("tab")} onNotifiche={() => setView("notifiche")} onPremium={() => setPremiumOpen(true)} onAdmin={() => guest ? needLogin("Accedi per usare il pannello admin.") : setView(adminUnlocked ? "admin" : "adminLock")} onLogout={() => { leaveAccount(); Account.logout(); setGuest(false); setAdminUnlocked(false); setView("tab"); goTab("home"); }} isPremium={isPremium} onAbout={() => setInfoModal({ title: "Info su B&T", body: ABOUT_TEXT })} onHelp={() => setInfoModal({ title: "Assistenza", body: HELP_TEXT })} favTeam={favTeam} favDriver={favDriver} onPickTeam={() => guest ? needLogin("Per scegliere scuderia e pilota del cuore serve un account.") : setPicker("team")} onPickDriver={() => guest ? needLogin("Per scegliere scuderia e pilota del cuore serve un account.") : setPicker("driver")} guest={guest} onLogin={() => needLogin(null)} onTerms={() => setTermsOpen(true)} blocked={blocked} onUnblock={unblockUser} onDeleteAccount={deleteAccount} savedCount={saved.length} onOpenSaved={openSaved} />;
-  else if (view === "notifiche") body = <NotificheScreen onBack={() => setView("tab")} notifs={notifs} onReadAll={readAll} isPremium={isPremium} onPremium={() => setPremiumOpen(true)} favTeam={favTeam} favDriver={favDriver} prefs={notifPrefs} onPrefs={setNotifPrefs} onGoProfilo={() => setView("profilo")} />;
+  if (view === "article" && activeArticle) body = <ArticleScreen article={activeArticle} onBack={viewBack.article} isPremium={isPremium} onPremium={() => setPremiumOpen(true)} onTag={filterByTag} saved={saved.includes(activeArticle.id)} onToggleSave={() => toggleSave(activeArticle.id)} onShare={() => setShareId(activeArticle.id)} vote={votes["art-" + activeArticle.id] || null} onVote={castVote} />;
+  else if (view === "circuit" && circuitId) body = <CircuitScreen circuitId={circuitId} races={races} articles={articles} onBack={viewBack.circuit} onTag={filterByTag} onOpenArticle={openArticle} />;
+  else if (view === "adminLock") body = <AdminKeypad onOk={() => { setAdminUnlocked(true); setView("admin"); }} onCancel={viewBack.adminLock} />;
+  else if (view === "admin" && adminUnlocked) body = <AdminScreen silly={sillyOfficial} onSilly={officialSeat} highlights={highlights} setHighlights={adminSet.highlights} onBack={viewBack.admin} onPublish={publishArticle} articles={articles} setArticles={adminSet.articles} fantaStats={fantaStats} setFantaStats={adminSet.fantaStats} standings={standings} setStandings={adminSet.standings} races={races} setRaces={adminSet.races} extraRaces={racesDoc.extra} setExtraRaces={adminSet.extraRaces} ig={ig} setIg={adminSet.ig} sentNotifs={sentNotifs} onSendNotif={sendNotif} onDeleteNotif={deleteNotif} onToast={showToast} tab={adminTab} setTab={setAdminTab} chats={chats} reports={reports} banned={banned} onDeleteMsg={deleteChatMsg} onSuspend={suspendUser} onUnsuspend={unsuspendUser} onIgnoreReport={ignoreReport} liveProps={liveProps} polls={allPolls} votes={votes} onPollAnswer={setPollAnswer} predictions={predictions} setPredictions={adminSet.predictions} predAnswers={predAnswers} />;
+  else if (view === "chatThread" && activeChat) body = <ChatThreadScreen chat={activeChat} onBack={viewBack.chatThread} onSend={guest ? () => needLogin("Per scrivere in chat serve un account.") : sendMessage} isPremium={isPremium} blocked={blocked} onReport={guest ? () => needLogin("Per segnalare un messaggio serve un account.") : reportMessage} onBlock={blockUser} liveRace={races.find(r => r.status === "LIVE") || null} />;
+  else if (view === "instagram") body = <InstagramView ig={ig} onToast={showToast} onBack={viewBack.instagram} />;
+  else if (view === "ghost") body = <GhostLap onBack={viewBack.ghost} />;
+  else if (view === "chats") body = <ChatsView chats={chats} onOpen={openChat} blocked={blocked} onBack={viewBack.chats} unreadOf={(id, ms) => Chat.unread(id, ms)} />;
+  else if (view === "profilo") body = <ProfiloScreen ig={ig} onOpenIg={() => { setIgFrom("profilo"); setView("instagram"); }} aboutMe={aboutMe} onSaveAboutMe={a => Account.updateAbout(a).catch(() => showToast(NOT_SAVED))} account={account} onSaveName={n => Account.updateName(n)} isAdmin={Account.isAdmin()} trial={trialActive ? trial : null} trialUsed={!!trial} onBack={viewBack.profilo} onNotifiche={() => setView("notifiche")} onPremium={() => setPremiumOpen(true)} onAdmin={() => guest ? needLogin("Accedi per usare il pannello admin.") : setView(adminUnlocked ? "admin" : "adminLock")} onLogout={() => { leaveAccount(); Account.logout(); setGuest(false); setAdminUnlocked(false); setView("tab"); goTab("home"); }} isPremium={isPremium} onAbout={() => setInfoModal({ title: "Info su B&T", body: ABOUT_TEXT })} onHelp={() => setInfoModal({ title: "Assistenza", body: HELP_TEXT })} favTeam={favTeam} favDriver={favDriver} onPickTeam={() => guest ? needLogin("Per scegliere scuderia e pilota del cuore serve un account.") : setPicker("team")} onPickDriver={() => guest ? needLogin("Per scegliere scuderia e pilota del cuore serve un account.") : setPicker("driver")} guest={guest} onLogin={() => needLogin(null)} onTerms={() => setTermsOpen(true)} blocked={blocked} onUnblock={unblockUser} onDeleteAccount={deleteAccount} savedCount={saved.length} onOpenSaved={openSaved} />;
+  else if (view === "notifiche") body = <NotificheScreen onBack={viewBack.notifiche} notifs={notifs} onReadAll={readAll} isPremium={isPremium} onPremium={() => setPremiumOpen(true)} favTeam={favTeam} favDriver={favDriver} prefs={notifPrefs} onPrefs={setNotifPrefs} onGoProfilo={() => setView("profilo")} />;
   else {
     if (tab === "home") body = <HomeScreen ig={ig} highlights={highlights} onOpenIg={() => { setIgFrom("tab"); setView("instagram"); }} articles={articles} tagFilter={tagFilter} onTag={filterByTag} onClearTag={() => setTagFilter(null)} onOpenArticle={openArticle} isPremium={isPremium} onPremium={() => setPremiumOpen(true)} onToast={showToast} onLiveTrack={() => setLiveTrackOpen(true)} onGoFanta={() => goTab("fanta")}  saved={saved} onToggleSave={toggleSave} savedOnly={savedOnly} setSavedOnly={setSavedOnly} onOpenCircuit={openCircuit} homePoll={homePoll} homeVote={votes.home || null} onVote={castVote} />;
     else if (tab === "race") body = <RaceScreen dotdVote={live ? dotd[live.raceId] : null} onDotdVote={(k, id) => live && voteDotd(live.raceId, k, id)} ratings={ratings} onRate={rateDriver} onOpenChats={() => setView("chats")} onOpenGhost={() => setView("ghost")} races={races} standings={standings} isPremium={isPremium} onPremium={() => setPremiumOpen(true)} onSelectDriver={setSelectedDriver} live={live} liveSt={liveSt} onExpandMap={() => setLiveTrackOpen(true)} onTelemetry={(carId, lapNo, sector) => setTelemetry({ carId, lapNo, sector })} onOpenCircuit={openCircuit} wxGuess={wxGuess} wxResult={wxResult} onGuessWeather={guessWeather} onLapTimes={setLapList} onSecondScreen={() => setSsOpen(true)} lastRace={lastRace} />;
@@ -6964,9 +7246,10 @@ function App() {
 
   const showTopHeader = view === "tab";
   const showBottomNav = view === "tab";
+  // Pulsante del feedback come oggi: non durante l'avvio e i Termini, non nella chat (né nel Pannello Admin).
+  const showFab = termsAccepted && !splash && !["chats", "chatThread", "admin", "adminLock"].includes(view) && !(ssOpen && isPremium);
 
-  return (
-    <div id="phone-shell">
+  return shell(
       <div data-bg={pageBg || undefined} style={{ height: "100%", display: "flex", flexDirection: "column", position: "relative", background: pageBg && PAGE_BG[pageBg] ? PAGE_BG[pageBg] : undefined, transition: "background .3s" }}>
         {showTopHeader && <TopHeader trialDays={trialActive ? trialDaysLeft(trial) : 0} isPremium={isPremium} unread={unreadCount} onPremium={() => setPremiumOpen(true)} onBell={() => setView("notifiche")} onProfile={() => setView("profilo")} />}
         {showTopHeader && offline && <div role="status" data-offline="" style={{ margin: "-6px 16px 10px", padding: "8px 12px", borderRadius: 10, background: "rgba(231,179,76,.12)", border: "1px solid rgba(231,179,76,.35)", fontFamily: F_BODY, fontSize: 12, color: C.text, lineHeight: 1.4, flexShrink: 0 }}>{OFFLINE_LINE}</div>}
@@ -6984,11 +7267,12 @@ function App() {
         {picker === "driver" && <PickerModal title="PILOTA DEL CUORE" selected={favDriver} onPick={setFavDriver} onClose={() => setPicker(null)}
           options={DRIVERS.map(d => ({ id: d.id, label: d.full, color: d.color, sub: d.team, driver: d }))} />}
         {shareArticle && view === "article" && <ShareSheet article={shareArticle} locked={!!shareArticle.premium && !isPremium} handle={ig.handle} onClose={() => setShareId(null)} onToast={showToast} />}
-        {(!termsAccepted || termsOpen) && <TermsSheet review={termsAccepted} onAccept={() => { setTermsAccepted(true); setTermsOpen(false); }} onClose={() => setTermsOpen(false)} />}
+        {termsAccepted && termsOpen && <TermsSheet review onClose={() => setTermsOpen(false)} />}
+        {showFab && <FeedbackFAB bottom={showBottomNav ? FAB_OVER_NAV : 18} onClick={() => setFeedbackOpen(true)} />}
+        {feedbackOpen && <FeedbackModal onClose={() => setFeedbackOpen(false)} onSend={f => Feedback.send({ ...f, email: account ? account.email : "" })} />}
         {toast && <div className="toast">{toast}</div>}
         {notice && !(ssOpen && isPremium) && <LiveNotice n={notice} onClose={nextNotice} />}
       </div>
-    </div>
   );
 }
 

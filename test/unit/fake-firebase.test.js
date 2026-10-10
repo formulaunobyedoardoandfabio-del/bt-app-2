@@ -153,6 +153,24 @@ t('FieldValue.delete(): con set merge e con update toglie il campo; set senza me
   await assert.rejects(ref.set({ pw: FV.delete() }), e => e.code === 'invalid-argument');
 });
 
+t('holdReads (caricamento lento): le letture aspettano finché non si rilasciano; le scritture no', async () => {
+  const { firebase } = setupWindow({ seed: { holdReads: true } });
+  firebase.initializeApp({ projectId: 'prova' });
+  const db = firebase.firestore();
+  assert.strictEqual(firebase.__fake.holdReads, true);
+  await db.collection('shared').doc('bt-x').set({ a: 1 });
+  let got = null, list = null;
+  db.collection('shared').doc('bt-x').get().then(s => { got = s.data(); });
+  db.collection('shared').where('a', '==', 1).get().then(q => { list = q.size; });
+  await new Promise(r => setTimeout(r, 30));
+  assert.strictEqual(got, null, 'la lettura doveva aspettare');
+  assert.strictEqual(list, null, 'la ricerca doveva aspettare');
+  firebase.__fake.holdReads = false;
+  await new Promise(r => setTimeout(r, 0));
+  assert.deepStrictEqual(got, { a: 1 });
+  assert.strictEqual(list, 1);
+});
+
 t('dati di partenza: addDocs si aggiunge ai documenti di serie (account di prova compreso)', async () => {
   const { firebase } = setupWindow({ seed: { addDocs: { 'shared/bt-news': { __arr: [{ id: 'n9', title: 'Prova' }] } } } });
   assert.deepStrictEqual(firebase.__fake.doc('shared/bt-news'), { __arr: [{ id: 'n9', title: 'Prova' }] });
