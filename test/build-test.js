@@ -90,4 +90,10 @@ const html = `<!DOCTYPE html>
 fs.mkdirSync(OUT, { recursive: true });
 fs.writeFileSync(path.join(OUT, 'app.js'), runtime);
 fs.writeFileSync(path.join(OUT, 'test.html'), html);
+// Pagina con i video dello splash (public/splash): test.html non li trova e usa lo splash fisso (le prove restano
+// veloci); video/index.html li ha accanto, come l'APK, e serve alle prove dei video.
+const VIDEO = path.join(OUT, 'video');
+fs.mkdirSync(path.join(VIDEO, 'splash'), { recursive: true });
+for (const f of fs.readdirSync(path.join(ROOT, 'public', 'splash'))) fs.copyFileSync(path.join(ROOT, 'public', 'splash', f), path.join(VIDEO, 'splash', f));
+fs.writeFileSync(path.join(VIDEO, 'index.html'), html.replace('src="../fake/', 'src="../../fake/').replace('src="../vendor/', 'src="../../vendor/').replace('src="app.js"', 'src="../app.js"'));
 console.log(`pagina delle prove: ${modules.length} moduli, ${Math.round(runtime.length / 1024)} KB`);

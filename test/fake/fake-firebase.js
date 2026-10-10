@@ -1,10 +1,11 @@
 // Firebase finto per le prove: la parte dell'API compat 10 (Firestore + Authentication) usata dai servizi dell'app.
 // Si carica prima dell'app: i servizi trovano window.firebase e non scaricano niente da gstatic.
 // Salva nel localStorage (chiavi bt-fake-fs e bt-fake-auth), quindi i dati restano ricaricando la pagina.
-// Dati di partenza: window.__btSeed = { docs, addDocs, users, freshInstall, requireRecentLogin } (vedi seedDefaults):
-// docs sostituisce i documenti di serie, addDocs si aggiunge a quelli (l'account di prova a@b.it resta).
+// Dati di partenza: window.__btSeed = { docs, addDocs, users, freshInstall, requireRecentLogin, holdReads } (vedi
+// seedDefaults): docs sostituisce i documenti di serie, addDocs si aggiunge a quelli (l'account di prova a@b.it resta).
 // Comandi per le prove: firebase.__fake.offline = true (niente rete: le letture falliscono, le scritture restano in
-// sospeso finché la rete torna, come in Firestore), .failWrites = true (scritture rifiutate dalle regole: permission-denied).
+// sospeso finché la rete torna, come in Firestore), .failWrites = true (scritture rifiutate dalle regole: permission-denied),
+// .holdReads = true (rete lentissima: le letture aspettano finché si rimette a false; holdReads nel seed parte così).
 (function (root) {
   if (root.location && /(^|[?&])nofake(&|$)/.test((root.location.search || '').slice(1))) return;
 
@@ -46,6 +47,14 @@
     set: v => { offline = !!v; if (!offline) waiters.splice(0).forEach(r => r()); },
   });
   const whenOnline = () => (offline ? new Promise(r => waiters.push(r)) : Promise.resolve());
+  let holdReads = !!(root.__btSeed && root.__btSeed.holdReads);
+  const readWaiters = [];
+  Object.defineProperty(fake, 'holdReads', {
+    enumerable: true,
+    get: () => holdReads,
+    set: v => { holdReads = !!v; if (!holdReads) readWaiters.splice(0).forEach(r => r()); },
+  });
+  const whenReadable = () => (holdReads ? new Promise(r => readWaiters.push(r)) : Promise.resolve());
   const net = () => { if (offline) throw err('unavailable', 'Failed to get document because the client is offline.'); };
   const netAuth = () => { if (offline) throw err('auth/network-request-failed'); };
   // Come Firestore: senza rete la scrittura aspetta la rete; le regole la rifiutano con permission-denied.
@@ -132,7 +141,7 @@
   function docRef(path) {
     return {
       id: path.split('/').pop(), path,
-      async get() { net(); return snap(path, allDocs()[path]); },
+      async get() { await whenReadable(); net(); return snap(path, allDocs()[path]); },
       async set(data, opts) { const all0 = allDocs(); applySet(all0, path, data, opts); await canWrite(); const all = allDocs(); applySet(all, path, data, opts); save(FS_KEY, all); },
       async update(data) { validate(data, path); await canWrite(); const all = allDocs(); applyUpdate(all, path, data); save(FS_KEY, all); },
       async delete() { await canWrite(); const all = allDocs(); delete all[path]; save(FS_KEY, all); },
@@ -143,6 +152,7 @@
       where: (f, op, v) => query(col, [...conds, [f, op, v]], lim),
       limit: n => query(col, conds, n),
       async get() {
+        await whenReadable();
         net();
         let rows = Object.entries(allDocs()).filter(([p]) => p.startsWith(col + '/') && p.split('/').length === 2);
         rows = rows.filter(([, d]) => conds.every(([f, op, v]) => {
