@@ -51,7 +51,7 @@ const assert = (c, m) => { if (!c) throw new Error(m); };
 const weatherBox = async (p, key) => { await tapSel(p, `[data-weather-box="${key}"]`); await w(p, 250); };
 const podium = (p, root) => p.evaluate(root => {
   const r = document.querySelector(root); if (!r) return null;
-  return [...r.querySelectorAll('[data-podium-place]')].map(e => ({ place: +e.getAttribute('data-podium-place'), text: e.innerText.replace(/\s+/g, ' ').trim(), h: e.querySelector('[data-podium-step]').offsetHeight, photo: (e.querySelector('[data-podium-photo]') || {}).getAttribute ? e.querySelector('[data-podium-photo]').getAttribute('data-podium-photo') : null }));
+  return [...r.querySelectorAll('[data-podium-place]')].map(e => ({ place: +e.getAttribute('data-podium-place'), text: e.innerText.replace(/\s+/g, ' ').trim(), who: (e.innerText.match(/[A-Z]\. \S+/) || [''])[0], h: e.querySelector('[data-podium-step]').offsetHeight, photo: (e.querySelector('[data-podium-photo]') || {}).getAttribute ? e.querySelector('[data-podium-photo]').getAttribute('data-podium-photo') : null }));
 }, root);
 
 const tests = {
@@ -95,7 +95,7 @@ const tests = {
     assert(/Pronostico chiuso: si poteva fare fino alla fine delle FP2/.test(quali), 'finite le FP2 il pronostico delle qualifiche deve chiudersi');
   },
   // ── Podi ──────────────────────────────────────────────────────────────
-  async 'SKIP foto tolte (Task 14): mondiale: podio col 1° al centro più alto, il 2° a sinistra e il 3° a destra più basso (piloti e costruttori)'(b) {
+  async 'mondiale: podio col 1° al centro più alto, il 2° a sinistra e il 3° a destra più basso (piloti e costruttori)'(b) {
     const { ctx, p, errs } = await open(b); await login(p); await goTab(p, 'RACE'); await tapText(p, 'Mondiale', { exact: true }); await w(p, 400);
     const pd = await podium(p, '[data-champ-podium="piloti"]');
     await tapText(p, 'Costruttori', { exact: true }); await w(p, 300);
@@ -103,7 +103,6 @@ const tests = {
     assert(pd && pd.map(x => x.place).join() === '2,1,3', 'ordine del podio piloti: ' + JSON.stringify(pd));
     assert(pd[1].h > pd[0].h && pd[0].h > pd[2].h, 'altezze dei gradini: ' + pd.map(x => x.h));
     assert(/K\. Antonelli/.test(pd[1].text) && /302 pt/.test(pd[1].text) && /G\. Russell/.test(pd[0].text) && /L\. Hamilton/.test(pd[2].text), 'piloti sul podio: ' + JSON.stringify(pd));
-    assert(pd.every(x => x.photo), 'mancano le foto dei piloti sul podio');
     assert(pt && /Mercedes/.test(pt[1].text) && /Ferrari/.test(pt[0].text) && /McLaren/.test(pt[2].text), 'podio costruttori: ' + JSON.stringify(pt));
     assert(!errs.length, errs.join(' | '));
   },
@@ -115,12 +114,12 @@ const tests = {
     assert(/G\. Russell\s*236 pt/.test(t), 'punti di Russell (2° sul podio) sbagliati');
     assert(/Lando Norris\s*McLaren\s*186/.test(t.replace(/pt/g, '')), 'punti di Norris (4°, primo della lista) sbagliati');
   },
-  async 'SKIP foto tolte (Task 14): ultima gara: podio con le foto di Russell, Verstappen e Hadjar (Baku) e sotto la classifica dal 4°'(b) {
+  async 'ultima gara: podio con Russell, Verstappen e Hadjar (Baku) e sotto la classifica dal 4°'(b) {
     const { ctx, p } = await open(b); await login(p); await goTab(p, 'RACE');
     const pd = await podium(p, '[data-last-race="real"]');
     const rows = await p.evaluate(() => document.querySelectorAll('[data-result-row]').length);
     const t = await text(p); await ctx.close();
-    assert(pd && pd.map(x => x.photo).join() === 'verstappen,russell,hadjar', 'podio ultima gara: ' + JSON.stringify(pd));
+    assert(pd && pd.map(x => x.who).join() === 'M. Verstappen,G. Russell,I. Hadjar', 'podio ultima gara: ' + JSON.stringify(pd));
     assert(rows === 19, 'righe della classifica (dal 4° in giù): ' + rows);
     assert(/GP dell'Azerbaigian/.test(t) && /\+14\.136s/.test(t) && /RIT/.test(t), 'classifica di Baku incompleta');
   },
@@ -130,7 +129,7 @@ const tests = {
     const pod = await has(p, '[data-champ-podium]'); await ctx.close();
     assert(!pod, 'il podio del mondiale compare anche con la gara in corso');
   },
-  async 'SKIP foto tolte (Task 14): fine gara: podio con le foto dei primi tre, che poi diventa l\'ultima gara'(b) {
+  async 'fine gara: podio coi primi tre, che poi diventa l\'ultima gara'(b) {
     const { ctx, p, errs } = await open(b); await login(p); await startLive(p, 'GARA');
     await openAdmin(p, 'GARA LIVE'); await tapText(p, 'ULTIMO GIRO', { exact: true }); await w(p, 300); await backHome(p); await goTab(p, 'RACE');
     for (let i = 0; i < 40 && !(await has(p, '[data-finish-podium]')); i++) { await advance(p, 20); await w(p, 120); }
@@ -139,8 +138,8 @@ const tests = {
     await stopLive(p); await goTab(p, 'RACE');
     const last = await podium(p, '[data-last-race="demo"]'); await ctx.close();
     assert(pd, 'a fine gara non compare il podio');
-    assert(pd.map(x => x.place).join() === '2,1,3' && pd.every(x => x.photo), 'podio di fine gara: ' + JSON.stringify(pd));
-    assert(last && last.map(x => x.photo).join() === pd.map(x => x.photo).join(), 'l\'ultima gara non mostra lo stesso podio: ' + JSON.stringify(last));
+    assert(pd.map(x => x.place).join() === '2,1,3' && pd.every(x => x.who), 'podio di fine gara: ' + JSON.stringify(pd));
+    assert(last && last.map(x => x.who).join() === pd.map(x => x.who).join(), 'l\'ultima gara non mostra lo stesso podio: ' + JSON.stringify(last));
     assert(!errs.length, errs.join(' | '));
   },
   // ── FantaF1 ───────────────────────────────────────────────────────────

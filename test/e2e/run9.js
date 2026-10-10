@@ -1,4 +1,4 @@
-// Giro completo della 2.0: tutte le schermate senza errori + screenshot delle parti nuove.
+// Giro completo della 2.0: tutte le schermate senza errori + screenshot delle parti nuove (fallisce con un errore JS).
 const { chromium } = require('/opt/node-tools/node_modules/playwright');
 (async () => {
   const b = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium-1194/chrome-linux/chrome' });
@@ -29,4 +29,7 @@ const { chromium } = require('/opt/node-tools/node_modules/playwright');
   await p.screenshot({ path: 'n8-admin-chat.png' });
   console.log('errori JS:', errs.length ? errs.join(' | ') : 'nessuno');
   await b.close();
-})();
+  // Un errore JS in una schermata qualsiasi fa fallire il giro (test/all.sh guarda l'uscita e questa riga).
+  console.log(`\n${errs.length ? 0 : 1} passati, ${errs.length ? 1 : 0} falliti`);
+  process.exit(errs.length ? 1 : 0);
+})().catch(e => { console.log('FAIL  giro completo: ' + String(e.message).split('\n')[0] + '\n\n0 passati, 1 falliti'); process.exit(1); });

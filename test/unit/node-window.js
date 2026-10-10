@@ -1,5 +1,6 @@
 // Finestra finta per le prove Node: localStorage in memoria e il Firebase finto appena caricato.
 // setupWindow({ seed }) azzera tutto e restituisce { window, firebase, localStorage }.
+// setupWindow({ storage }) riusa un localStorage: è come ricaricare la pagina (il Firebase finto riparte da lì).
 const path = require('path');
 
 function memoryStorage() {
@@ -14,8 +15,8 @@ function memoryStorage() {
   };
 }
 
-function setupWindow({ seed } = {}) {
-  const localStorage = memoryStorage();
+function setupWindow({ seed, storage } = {}) {
+  const localStorage = storage || memoryStorage();
   const win = { localStorage, location: { search: '' }, __btSeed: seed };
   global.window = win;
   global.localStorage = localStorage;
