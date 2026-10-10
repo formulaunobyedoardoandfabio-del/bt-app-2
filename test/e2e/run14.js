@@ -308,7 +308,7 @@ const tests = {
     const art = norm(await text(p)); await ctx.close();
     assert(pts1 === pts0 + 2, `i punti non salgono di 2 (${pts0} → ${pts1})`);
     assert(/Sondaggio/.test(fanta), 'nel FantaF1 non si vede il bonus del sondaggio');
-    assert(/Hai indovinato/.test(art) && /Risposta esatta/.test(art), 'nella notizia non si vede la risposta esatta');
+    assert(/Hai indovinato/.test(art) && /RISPOSTA ESATTA/.test(art), 'nella notizia non si vede la risposta esatta');   // l'etichetta della notizia, non l'avviso dell'admin (dura 2,2 s)
   },
   async 'sondaggi: anche il sondaggio della Home vale +2 punti se esatto'(b) {
     const { ctx, p } = await open(b); await login(p);
