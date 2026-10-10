@@ -7,9 +7,10 @@ const { chromium } = require('/opt/node-tools/node_modules/playwright');
 const SEED_20 = require('../fixtures/seed-2.0.json');
 const EXE = '/opt/pw-browsers/chromium-1194/chrome-linux/chrome';
 
-async function open(b) {
+// fresh: primo avvio dell'app (Termini ancora da accettare, Task 9); di serie il Firebase finto li dà già accettati.
+async function open(b, { fresh = false } = {}) {
   const ctx = await b.newContext({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true });
-  await ctx.addInitScript(seed => { window.__btSeed = seed; }, SEED_20);
+  await ctx.addInitScript(seed => { window.__btSeed = seed; }, fresh ? { ...SEED_20, freshInstall: true } : SEED_20);
   await ctx.addInitScript(() => { window.__opened = []; window.open = u => { window.__opened.push(String(u)); return null; }; });
   const p = await ctx.newPage(); const errs = []; p.on('pageerror', e => errs.push(e.message));
   await p.goto('file://' + __dirname + '/' + (process.env.PAGE || 'test.html')); await p.waitForTimeout(400);
@@ -41,8 +42,12 @@ async function login(p) {
   await p.evaluate(() => { const bs = [...document.querySelectorAll('button')].filter(b => b.textContent.replace(/\s+/g, ' ').trim() === 'ACCEDI'); bs[bs.length - 1].click(); });
   await w(p, 2500);
 }
-async function acceptTerms(p) { await tapText(p, 'ACCETTO'); await w(p, 500); }
-async function enter(p) { await login(p); await acceptTerms(p); }
+// Termini del primo avvio (Task 9): ACCETTO si accende solo dopo averli scorsi fino in fondo.
+async function acceptTerms(p) {
+  await p.evaluate(() => { const e = document.querySelector('[data-terms-body]'); if (e) { e.scrollTop = e.scrollHeight; e.dispatchEvent(new Event('scroll')); } });
+  await w(p, 200); await tapText(p, 'ACCETTO'); await w(p, 500);
+}
+async function enter(p) { await login(p); }   // i Termini li ha già accettati il Firebase finto
 // Dalla versione 22 la chat non è più una scheda in basso: si apre dalla pagina RACE.
 async function openChat(p, name = 'Chat Generale') { await tapText(p, 'RACE', { exact: true }); await w(p); await tapSel(p, '[data-race-chat]'); await w(p); await tapText(p, name); await w(p, 500); }
 async function openAdminChat(p) { await tapSel(p, '[aria-label="Profilo"]'); await w(p); await tapText(p, 'Pannello Admin'); await w(p); for (const d of '080824') { await tapText(p, d, { exact: true }); await w(p, 60); } await w(p, 900); await tapText(p, 'CHAT', { exact: true }); await w(p, 400); }
@@ -50,13 +55,15 @@ const assert = (c, m) => { if (!c) throw new Error(m); };
 
 const tests = {
   async 'Termini: al primo ingresso vanno accettati, poi si entra'(b) {
-    const { ctx, p, errs } = await open(b);
-    await login(p);
+    const { ctx, p, errs } = await open(b, { fresh: true });   // Task 9: al primo avvio, prima dell'accesso
+    await w(p, 2600);
     const t1 = await text(p);
     assert(/Accettazione dei Termini/.test(t1), 'i Termini non compaiono al primo ingresso');
     await acceptTerms(p);
+    await login(p);
     const t2 = await text(p); await ctx.close();
     assert(!/Accettazione dei Termini/.test(t2), 'i Termini restano aperti dopo ACCETTO');
+    assert(/HOME/.test(t2), 'dopo i Termini e l\'accesso non si entra nell\'app');
     assert(!errs.length, 'errori JS: ' + errs.join(' | '));
   },
   async 'chat: segnalare un messaggio lo manda al pannello admin'(b) {
@@ -117,15 +124,14 @@ const tests = {
     await p.fill('#delPw', 'x'); await tapText(p, 'ELIMINA DEFINITIVAMENTE'); await w(p, 600);   // Task 7: la password conferma l'eliminazione
     const t2 = await text(p);
     assert(/ENTRA SENZA ACCOUNT/.test(t2), 'dopo l\'eliminazione non torna alla schermata di accesso');
-    await tapText(p, 'ENTRA SENZA ACCOUNT'); await w(p, 400);
-    await tapText(p, 'ACCETTO').catch(() => {}); await w(p, 300);
+    await tapText(p, 'ENTRA SENZA ACCOUNT'); await w(p, 700);   // i Termini restano accettati su questo telefono, come oggi
     await openChat(p);
     const t3 = await text(p); await ctx.close();
     assert(!/messaggio da cancellare/.test(t3), 'i miei messaggi restano in chat dopo l\'eliminazione');
   },
   async 'privacy: link nel profilo (anche da ospite) e nei Termini'(b) {
     const { ctx, p } = await open(b);
-    await tapText(p, 'ENTRA SENZA ACCOUNT'); await w(p, 400); await acceptTerms(p);
+    await w(p, 2600); await tapText(p, 'ENTRA SENZA ACCOUNT'); await w(p, 700);
     await tapSel(p, '[aria-label="Profilo"]'); await w(p);
     await tapText(p, 'Privacy Policy'); await w(p);
     let op = await p.evaluate(() => window.__opened.slice());

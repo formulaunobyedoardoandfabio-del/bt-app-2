@@ -69,6 +69,13 @@ t('dbSet con remove: toglie i campi nella stessa scrittura (la vecchia password 
   assert.deepStrictEqual(firebase.__fake.doc('users/v@b.it'), { name: 'V', uid: 'u1' });
 });
 
+t('dbQuery: {id, data} con il nome vero del documento, anche se nei dati c\'è un campo id', async () => {
+  const { firebase } = setupWindow();
+  firebase.__fake.setDoc('shared/bt-feedback-k1', { id: 'k1', user: 'v@b.it', stars: 4 });
+  firebase.__fake.setDoc('shared/bt-feedback-k2', { id: 'k2', user: 'altro@b.it', stars: 2 });
+  assert.deepStrictEqual(await F.dbQuery('shared', 'user', 'v@b.it'), [{ id: 'bt-feedback-k1', data: { id: 'k1', user: 'v@b.it', stars: 4 } }]);
+});
+
 t('dati solo del telefono con prefisso bt_', async () => {
   const { localStorage } = setupWindow();
   F.local.set('bt-blocked', [{ aid: 'u1', name: 'Marco' }]);

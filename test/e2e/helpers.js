@@ -8,7 +8,8 @@ const PAGE = 'file://' + path.join(__dirname, process.env.PAGE || 'test.html');
 // Ora fissa (mercoledì prima del GP di Singapore): così chiusure e orari non dipendono dal giorno delle prove.
 const NOW = '2026-10-07T10:00:00Z';
 
-async function open(b, { now = NOW, width = 390, height = 844, seed, query = '', routes = {}, capacitor, waitSplash = true } = {}) {
+// page: un'altra pagina di test/e2e (video/index.html ha i video dello splash, test.html no e usa lo splash fisso).
+async function open(b, { now = NOW, width = 390, height = 844, seed, query = '', routes = {}, capacitor, waitSplash = true, waitUntil = 'load', page } = {}) {
   const ctx = await b.newContext({ viewport: { width, height }, hasTouch: true, isMobile: true });
   await ctx.addInitScript(({ now, seed }) => {
     window.__btNow = Date.parse(now);
@@ -21,7 +22,7 @@ async function open(b, { now = NOW, width = 390, height = 844, seed, query = '',
   const p = await ctx.newPage();
   const errs = [];
   p.on('pageerror', e => errs.push(e.message));
-  await p.goto(PAGE + query);
+  await p.goto((page ? 'file://' + path.join(__dirname, page) : PAGE) + query, { waitUntil });   // 'domcontentloaded' quando uno script (Firebase) non arriva mai
   await p.waitForTimeout(400);
   if (waitSplash) await p.waitForFunction(() => !document.querySelector('[data-splash]'), null, { timeout: 8000 }).catch(() => {});
   return { ctx, p, errs };

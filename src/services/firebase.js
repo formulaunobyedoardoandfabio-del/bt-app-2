@@ -157,13 +157,14 @@ async function dbDelete(col, id) {
   const d = await needDb();
   await track(withTimeout(d.collection(col).doc(id).delete(), WRITE_TIMEOUT));
 }
-// Documenti di una raccolta con field == value: [{id, ...dati}] (serve a cancellare i feedback di un account).
+// Documenti di una raccolta con field == value: [{id: nome del documento, data}] (serve a cancellare i feedback di un
+// account). I dati stanno a parte: anche un feedback ha un campo id, che non è il nome del documento.
 async function dbQuery(col, field, value, limit) {
   const d = await needDb();
   let q = d.collection(col).where(field, "==", value);
   if (limit) q = q.limit(limit);
   const snap = await track(q.get());
-  return snap.docs.map(x => ({ id: x.id, ...x.data() }));
+  return snap.docs.map(x => ({ id: x.id, data: x.data() }));
 }
 
 // ── Foto (notizie, copertine, piloti): una per documento shared/img-<id> {data, ts} ──

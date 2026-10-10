@@ -39,7 +39,7 @@ const attrs = (p, sel, a) => p.evaluate(([s, a]) => [...document.querySelectorAl
 async function login(p) {
   await p.fill('#authEmail', 'a@b.it'); await p.fill('#authPw', 'x');
   await p.evaluate(() => { const bs = [...document.querySelectorAll('button')].filter(b => b.textContent.replace(/\s+/g, ' ').trim() === 'ACCEDI'); bs[bs.length - 1].click(); });
-  await w(p, 2500); await tapText(p, 'ACCETTO', { timeout: 1500 }).catch(() => {}); await w(p, 400);
+  await w(p, 2500); await p.waitForFunction(() => !document.querySelector('[data-splash]'), null, { timeout: 8000 }).catch(() => {}); await w(p, 400);   // Task 9: si aspetta la fine dello splash (i Termini li ha già accettati il Firebase finto)
 }
 const goTab = async (p, t) => { await tapText(p, t, { exact: true }); await w(p, 400); };
 async function openAdmin(p, tab) {
@@ -227,7 +227,7 @@ const tests = {
     await p.focus('#regFollow'); await p.keyboard.press('ArrowRight'); await p.keyboard.press('ArrowRight'); await w(p, 200);
     const lbl = await inner(p, '[data-follow-label]');
     await tapSel(p, '[data-fan-option="vroom"]'); await w(p, 150);
-    await tapText(p, 'CREA ACCOUNT', { exact: true }); await w(p, 2500); await tapText(p, 'ACCETTO', { timeout: 1500 }).catch(() => {}); await w(p, 400);
+    await tapText(p, 'CREA ACCOUNT', { exact: true }); await w(p, 2900);   // Task 9: i Termini si accettano al primo avvio, non dopo l'accesso
     await tapSel(p, '[aria-label="Profilo"]'); await w(p, 400);
     const follow = await inner(p, '[data-about-row="follow"]'), fan = await inner(p, '[data-about-row="fan"]'), birth = await inner(p, '[data-about-row="birth"]');
     await ctx.close();

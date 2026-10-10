@@ -32,7 +32,7 @@ async function tapSel(p, sel, timeout = 4000) {
 async function login(p) {
   await p.fill('#authEmail', 'a@b.it'); await p.fill('#authPw', 'x');
   await p.evaluate(() => { const bs = [...document.querySelectorAll('button')].filter(b => b.textContent.replace(/\s+/g, ' ').trim() === 'ACCEDI'); bs[bs.length - 1].click(); });
-  await w(p, 2500); await tapText(p, 'ACCETTO', { timeout: 1500 }).catch(() => {}); await w(p, 400);
+  await w(p, 2500); await p.waitForFunction(() => !document.querySelector('[data-splash]'), null, { timeout: 8000 }).catch(() => {}); await w(p, 400);   // Task 9: si aspetta la fine dello splash (i Termini li ha già accettati il Firebase finto)
 }
 const goRace = async p => { await tapText(p, 'RACE', { exact: true }); await w(p, 400); };
 const openDriver = async (p, short) => { await tapText(p, short); await w(p, 400); };

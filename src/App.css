@@ -15,6 +15,7 @@
   button:focus-visible, a:focus-visible, input:focus-visible{outline:2px solid #E8121D;outline-offset:2px;}
   input::placeholder{color:#86858C;}
   html, body{ overflow-x:hidden; }
+  /* Colonna dell'app: larga al massimo 430 px e alta quanto lo schermo (niente cornice da telefono). */
   #phone-shell{
     width:100%;
     min-width:0;
@@ -25,16 +26,14 @@
     position:relative;
     overflow:hidden;
     box-shadow:0 0 0 1px rgba(255,255,255,.06);
+    /* Bordi del telefono: lo spazio della barra di stato, della barra di navigazione e della fotocamera. Nell'APK
+       Capacitor 8 (SystemBars) mette i valori veri in --safe-area-inset-*; env() vale per il browser. */
+    padding-top:var(--safe-area-inset-top, env(safe-area-inset-top, 0px));
+    padding-bottom:var(--safe-area-inset-bottom, env(safe-area-inset-bottom, 0px));
+    padding-left:var(--safe-area-inset-left, env(safe-area-inset-left, 0px));
+    padding-right:var(--safe-area-inset-right, env(safe-area-inset-right, 0px));
   }
-  @media (min-width:460px){
-    body{ padding:28px 16px; }
-    #phone-shell{
-      height:844px;
-      max-height:calc(100vh - 56px);
-      border-radius:36px;
-      box-shadow:0 30px 70px -20px rgba(0,0,0,.8), 0 0 0 1px rgba(255,255,255,.08);
-    }
-  }
+  .shell-in{ position:relative; height:100%; }
   .scrollcol{ overflow-y:auto; -webkit-overflow-scrolling:touch; scrollbar-width:thin; }
   .scrollcol::-webkit-scrollbar{ width:6px; }
   .scrollcol::-webkit-scrollbar-thumb{ background:rgba(255,255,255,.12); border-radius:6px; }
