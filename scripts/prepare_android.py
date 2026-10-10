@@ -3,7 +3,7 @@
 - aggiunge l'App ID di AdMob al manifest
 - imposta versionCode dal numero di build di Codemagic
 - se c'è un keystore (build di release), configura la firma
-- copia l'icona dell'app (immagine B&T) al posto di quella di default
+- copia l'icona dell'app (logo BT con la monoposto, "Sector 4") al posto di quella di default
 - con BT_ADMOB_TEST=1 (solo "B&T - APK di prova") accende gli annunci di prova di Google
 """
 import os
@@ -31,7 +31,7 @@ if os.environ.get("BT_ADMOB_TEST") == "1":
         open(WEB_INDEX, "w", encoding="utf-8").write(page)
     print("Annunci di prova di Google attivi (APK di prova)")
 
-# ── ICONA APP (immagine B&T su sfondo blu al posto del robottino di default Capacitor) ──
+# ── ICONA APP (logo BT con la monoposto su sfondo nero al posto del robottino di default Capacitor) ──
 ICON_SRC = "resources/icons"
 RES_DIR = "android/app/src/main/res"
 if os.path.isdir(ICON_SRC):
@@ -45,17 +45,17 @@ if os.path.isdir(ICON_SRC):
         for fname in os.listdir(src_dir):
             shutil.copyfile(os.path.join(src_dir, fname), os.path.join(dst_dir, fname))
             copied += 1
-    # Sfondo blu dell'icona adattiva (Android 8+), lo stesso del bordo della nuova icona
+    # Sfondo nero dell'icona adattiva (Android 8+), come lo sfondo dell'icona (tools/icon/make-icons.py)
     values_dir = os.path.join(RES_DIR, "values")
     os.makedirs(values_dir, exist_ok=True)
     with open(os.path.join(values_dir, "ic_launcher_background.xml"), "w") as f:
         f.write(
             '<?xml version="1.0" encoding="utf-8"?>\n'
             "<resources>\n"
-            '    <color name="ic_launcher_background">#02184A</color>\n'
+            '    <color name="ic_launcher_background">#000000</color>\n'
             "</resources>\n"
         )
-    print(f"Icona B&T applicata ({copied} file copiati)")
+    print(f"Icona di Sector 4 applicata ({copied} file copiati)")
 
 manifest = open(MANIFEST).read()
 if "com.google.android.gms.ads.APPLICATION_ID" not in manifest:

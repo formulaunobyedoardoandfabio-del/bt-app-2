@@ -142,7 +142,7 @@ const tests = {
     assert(f.w === 1080 && f.h > 1350, 'dimensioni sbagliate: ' + f.w + '×' + f.h);
     const marks = texts.filter(x => x === 'B&T · @bt_formula1').length;
     assert(marks === 0, 'sull\'immagine c\'è ancora la filigrana "B&T · @bt_formula1" (' + marks + ' volte)');
-    assert(texts.includes('Letto su B&T App') && texts.includes('Seguici su Instagram @bt_formula1'), 'in fondo all\'immagine mancano il logo B&T e il nostro Instagram');
+    assert(texts.includes('Letto su Sector 4') && texts.includes('Seguici su Instagram @bt_formula1'), 'in fondo all\'immagine mancano il nome dell\'app e il nostro Instagram');   // Task 21: l'app si chiama Sector 4
     const all = texts.join(' ');
     assert(all.includes('Vicecampione') && all.includes('Hadjar'), 'nell\'immagine manca il testo dell\'articolo');
     assert(/Immagine scaricata/.test(t), 'manca la conferma "Immagine scaricata"');

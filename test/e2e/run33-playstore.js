@@ -86,13 +86,28 @@ run({
     assert(!errs.length, errs.join(' | '));
   },
 
+  async 'il nome dell\'app è Sector 4: Termini, accesso e dicitura non ufficiale nel Profilo'(b) {
+    const { ctx, p, errs } = await open(b, { seed: FRESH });
+    const t = await terms(p);
+    await scrollTerms(p); await w(p, 200); await tapSel(p, '[data-terms-accept]'); await w(p, 300);
+    const loginText = await text(p);
+    await login(p);
+    await tapSel(p, '[aria-label="Profilo"]'); await w(p, 400);
+    const prof = await text(p); await ctx.close();
+    assert(/Utilizzando l'app Sector 4/.test(t) && /Sector 4 non garantisce/.test(t) && /per usare Sector 4/.test(t), 'Termini senza il nome Sector 4');
+    assert(!/B&T App/.test(t + loginText + prof), 'c\'è ancora il nome vecchio "B&T App"');
+    assert(/Bentornato su Sector 4/.test(loginText), 'accesso senza il nome Sector 4');
+    assert(/Sector 4 è un'app non ufficiale/.test(prof), 'dicitura non ufficiale senza il nome Sector 4');
+    assert(!errs.length, errs.join(' | '));
+  },
+
   async '§5 dei termini con la dicitura sui marchi F1'(b) {
     const { ctx, p, errs } = await open(b, { seed: FRESH });
     const t = await terms(p); await ctx.close();
     const s5 = t.slice(t.indexOf('5. Contenuti e Proprietà Intellettuale'), t.indexOf('6. Condotta degli Utenti'));
-    assert(/B&T App è un'app non ufficiale e non è associata in alcun modo alle società di Formula 1/.test(s5), '§5 senza la dicitura non ufficiale: ' + s5.slice(0, 300));
+    assert(/Sector 4 è un'app non ufficiale e non è associata in alcun modo alle società di Formula 1/.test(s5), '§5 senza la dicitura non ufficiale: ' + s5.slice(0, 300));
     assert(/marchi di Formula One Licensing B\.V\./.test(s5), '§5 senza i marchi di Formula One Licensing');
-    assert(/B&T App non è associata nemmeno alla FIA, alle scuderie o ai piloti/.test(s5), '§5 senza FIA, scuderie e piloti');
+    assert(/Sector 4 non è associata nemmeno alla FIA, alle scuderie o ai piloti/.test(s5), '§5 senza FIA, scuderie e piloti');
     assert(!errs.length, errs.join(' | '));
   },
 
@@ -305,7 +320,7 @@ run({
     const home = await p.evaluate(() => !!document.querySelector('[data-featured]'));
     const calls = await cap(p); await ctx.close();
     assert(onTerms.includes('minimizeApp') && termsStill, 'sui Termini del primo avvio il tasto indietro deve uscire e lasciarli aperti: ' + onTerms.join(', '));
-    assert(reg && !reg2 && /Bentornato su B&T/.test(loginText), 'da REGISTRATI il tasto indietro non torna ad ACCEDI');
+    assert(reg && !reg2 && /Bentornato su Sector 4/.test(loginText), 'da REGISTRATI il tasto indietro non torna ad ACCEDI');
     assert(fb && !fb2 && inProfile, 'il tasto indietro deve chiudere il feedback e lasciare il Profilo aperto');
     assert(/PIT STOP CHALLENGE/.test(game) && garage, 'dallo strumento il tasto indietro non torna al Garage');
     assert(home && calls.filter(c => c === 'minimizeApp').length === 1, 'dal Garage il tasto indietro non torna alla Home: ' + calls.join(', '));

@@ -1,6 +1,6 @@
 {
   "appId": "it.btapp.app",
-  "appName": "B&T App",
+  "appName": "Sector 4",
   "webDir": "build",
   "server": {
     "androidScheme": "https"

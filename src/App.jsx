@@ -1,4 +1,4 @@
-// B&T App 2.0. Generato una volta da tools/port-2.0.js (anteprima 2.0, app-preview/index.html, versione 25);
+// Sector 4 (la B&T App 2.0). Generato una volta da tools/port-2.0.js (anteprima 2.0, app-preview/index.html, versione 25);
 // da qui in avanti è il sorgente vero e si modifica a mano.
 import React, { useState, useRef, useEffect } from "react";
 import "./App.css";
@@ -44,7 +44,8 @@ const F_BODY = "'Work Sans', sans-serif";
 const SITE_URL = "https://formulaunobyedoardoandfabio-del.github.io/bt-app-flutter";
 const PRIVACY_URL = SITE_URL + "/privacy.html";
 const CONTACT_EMAIL = "bt.formula1@gmail.com";
-const F1_DISCLAIMER = "B&T App è un'app non ufficiale e non è associata in alcun modo alle società di Formula 1. F1, FORMULA ONE, FORMULA 1, FIA FORMULA ONE WORLD CHAMPIONSHIP, GRAND PRIX e i marchi correlati sono marchi di Formula One Licensing B.V.";
+const APP_NAME = "Sector 4";   // nome dell'app (dal 10/10/2026); B&T resta il nome della squadra di Edoardo e Fabio
+const F1_DISCLAIMER = APP_NAME + " è un'app non ufficiale e non è associata in alcun modo alle società di Formula 1. F1, FORMULA ONE, FORMULA 1, FIA FORMULA ONE WORLD CHAMPIONSHIP, GRAND PRIX e i marchi correlati sono marchi di Formula One Licensing B.V.";
 // Pagamenti veri (abbonamento con Google Play Billing): spenti, come nell'app di oggi. Finché sono spenti la §4 dei
 // Termini dice che il Premium non è ancora disponibile.
 const PAYMENTS_ENABLED = false;
@@ -471,7 +472,7 @@ const articleText = a => normText([a.title, a.excerpt, a.body, a.cat, a.author,
 /* ── CONDIVIDI E SCARICA GLI ARTICOLI (immagine della notizia, senza filigrana) ── */
 // Link condiviso: la pagina pubblica dell'app. Quando l'app sarà sul Play Store, qui andrà il link della scheda.
 const SHARE_URL = SITE_URL + "/";
-const shareMessage = (a, handle) => `${a.title}\n${a.excerpt || ""}\n\nLeggilo su B&T App e seguici su Instagram${handle ? " @" + handle : ""}`;
+const shareMessage = (a, handle) => `${a.title}\n${a.excerpt || ""}\n\nLeggilo su ${APP_NAME} e seguici su Instagram${handle ? " @" + handle : ""}`;
 const shareTargets = (a, handle) => {
   const enc = encodeURIComponent, msg = shareMessage(a, handle);
   return [
@@ -635,7 +636,7 @@ function drawArticle(ctx, paint, a, { locked, handle, photo }) {
     ctx.fillStyle = C.card; roundRect(ctx, IMG_PAD, y, IMG_TW, 164, 32); ctx.fill();
     ctx.strokeStyle = "rgba(255,255,255,.08)"; ctx.lineWidth = 2; ctx.stroke();
     paintBadge(ctx, IMG_PAD + 34, y + 36, 92);
-    ctx.fillStyle = C.text; ctx.font = `italic 900 38px ${CF_HEAD}`; ctx.fillText("Letto su B&T App", IMG_PAD + 152, y + 76);
+    ctx.fillStyle = C.text; ctx.font = `italic 900 38px ${CF_HEAD}`; ctx.fillText("Letto su " + APP_NAME, IMG_PAD + 152, y + 76);
     ctx.fillStyle = C.gold; ctx.font = `600 28px ${CF_BODY}`; ctx.fillText(handle ? "Seguici su Instagram @" + handle : "La community B&T di Formula 1", IMG_PAD + 152, y + 120);
   }
   y += 164 + 14;
@@ -883,7 +884,7 @@ function LoginScreen({ auth, onDone, onGuest, onBack, reason }) {
           <span style={{ fontFamily: F_HEAD, fontWeight: 900, fontStyle: "italic", fontSize: 24, color: "#fff" }}>B&amp;T</span>
         </div>
         <h1 style={{ fontFamily: F_HEAD, fontWeight: 900, fontStyle: "italic", fontSize: 21, color: C.text, margin: "18px 0 6px", textAlign: "center" }}>
-          {isLogin ? "Bentornato su B&T" : "Crea il tuo account"}
+          {isLogin ? `Bentornato su ${APP_NAME}` : "Crea il tuo account"}
         </h1>
         <p style={{ fontFamily: F_BODY, fontSize: 13, color: C.muted, textAlign: "center", lineHeight: 1.5, margin: 0 }}>
           Notizie, classifiche live, FantaF1 e la community B&amp;T, tutto in un'app.
@@ -6311,15 +6312,15 @@ function TermsSheet({ review, onAccept, onClose }) {
     return () => { if (ro) ro.disconnect(); window.removeEventListener("resize", check); };
   }, []);
   const S = [
-    ["1. Accettazione dei Termini", "Utilizzando l'app B&T App (“l'App”), l'utente accetta di essere vincolato ai presenti Termini e Condizioni. Se non si accettano questi termini, si prega di non utilizzare l'App."],
-    ["2. Descrizione del Servizio", "B&T App è un'app di informazione e intrattenimento dedicata alla Formula 1. Offre notizie, classifiche, dati live delle gare tramite OpenF1 API, una sezione community (chat) e funzionalità Fanta F1."],
+    ["1. Accettazione dei Termini", `Utilizzando l'app ${APP_NAME} (“l'App”), l'utente accetta di essere vincolato ai presenti Termini e Condizioni. Se non si accettano questi termini, si prega di non utilizzare l'App.`],
+    ["2. Descrizione del Servizio", `${APP_NAME} è un'app di informazione e intrattenimento dedicata alla Formula 1. Offre notizie, classifiche, dati live delle gare tramite OpenF1 API, una sezione community (chat) e funzionalità Fanta F1.`],
     ["3. Account Utente", "Per accedere a tutte le funzionalità è necessario creare un account. L'utente è responsabile della riservatezza delle proprie credenziali. Ogni attività effettuata dall'account è responsabilità dell'utente."],
     ["4. Abbonamento Premium", PAYMENTS_ENABLED ? "L'abbonamento Premium (2,99€/mese o 24,99€/anno) sblocca funzionalità avanzate e rimuove la pubblicità. Il rinnovo è automatico e può essere annullato in qualsiasi momento dal profilo. Non sono previsti rimborsi per il periodo in corso." : "L'abbonamento Premium non è ancora disponibile. Quando verrà attivato, prezzi, rinnovo e modalità di disdetta saranno indicati in questa sezione e nella schermata di acquisto."],
-    ["5. Contenuti e Proprietà Intellettuale", "Tutti i contenuti pubblicati dal Team B&T (articoli, immagini, video) sono di proprietà di B&T App. I dati di gara sono forniti da OpenF1 API. I loghi e i marchi di Formula 1, FIA e team sono di proprietà dei rispettivi titolari.", `${F1_DISCLAIMER} B&T App non è associata nemmeno alla FIA, alle scuderie o ai piloti.`],
+    ["5. Contenuti e Proprietà Intellettuale", "Tutti i contenuti pubblicati dal Team B&T (articoli, immagini, video) sono di proprietà del Team B&T. I dati di gara sono forniti da OpenF1 API. I loghi e i marchi di Formula 1, FIA e team sono di proprietà dei rispettivi titolari.", `${F1_DISCLAIMER} ${APP_NAME} non è associata nemmeno alla FIA, alle scuderie o ai piloti.`],
     ["6. Condotta degli Utenti", "Nella chat community è vietato pubblicare contenuti offensivi, discriminatori, sessualmente espliciti, spam, materiale illegale o informazioni personali altrui. Con il tasto ⋯ su ogni messaggio puoi segnalarlo o bloccare chi l'ha scritto: i messaggi segnalati vengono controllati dai moderatori e rimossi se violano queste regole. Le violazioni possono comportare la sospensione dalla chat o dell'account."],
     ["7. Pubblicità", "Gli utenti non abbonati visualizzeranno annunci pubblicitari forniti tramite Google AdMob. Nell'Unione Europea ti chiediamo il consenso con il messaggio di Google e puoi cambiare le tue scelte in qualsiasi momento da Profilo → Preferenze privacy annunci."],
     ["8. Privacy e Cookie", null],
-    ["9. Limitazione di Responsabilità", "B&T App non garantisce l'accuratezza assoluta dei dati live di gara. L'App è fornita “così com'è”. Non siamo responsabili per interruzioni del servizio, perdita di dati o danni derivanti dall'uso dell'App."],
+    ["9. Limitazione di Responsabilità", `${APP_NAME} non garantisce l'accuratezza assoluta dei dati live di gara. L'App è fornita “così com'è”. Non siamo responsabili per interruzioni del servizio, perdita di dati o danni derivanti dall'uso dell'App.`],
     ["10. Modifiche ai Termini", "Ci riserviamo il diritto di modificare questi termini. Gli utenti saranno notificati tramite l'App. L'uso continuato dopo le modifiche costituisce accettazione dei nuovi termini."],
     ["11. Legge Applicabile", `I presenti Termini sono regolati dalla legge italiana. Per qualsiasi controversia è competente il Foro di Milano. Per contatti: ${CONTACT_EMAIL}`],
   ];
@@ -6329,7 +6330,7 @@ function TermsSheet({ review, onAccept, onClose }) {
       <div style={{ background: C.card, borderRadius: "24px 24px 0 0", width: "100%", height: "88%", display: "flex", flexDirection: "column" }}>
         <div style={{ padding: "22px 22px 8px", flexShrink: 0 }}>
           <h2 style={{ fontFamily: F_HEAD, fontWeight: 900, fontStyle: "italic", fontSize: 19, color: C.text, margin: "0 0 4px" }}>TERMINI E CONDIZIONI</h2>
-          {!review && <p style={{ fontFamily: F_BODY, fontSize: 12, color: C.muted, margin: 0 }}>Leggili fino in fondo e accettali per usare B&amp;T App.</p>}
+          {!review && <p style={{ fontFamily: F_BODY, fontSize: 12, color: C.muted, margin: 0 }}>Leggili fino in fondo e accettali per usare {APP_NAME}.</p>}
         </div>
         <div ref={bodyRef} data-terms-body="" className="scrollcol" onScroll={e => { if (atEnd(e.currentTarget)) setScrolled(true); }} style={{ flex: 1, minHeight: 0, padding: "8px 22px 6px" }}>
           <div>{S.map(([h, b, b2]) => (
@@ -6970,7 +6971,7 @@ function App() {
     });
   };
 
-  const ABOUT_TEXT = "B&T nasce dalla passione di un gruppo di amici per la Formula 1: un posto solo nostro per seguire le gare, parlarne insieme e tenere traccia di come va la nostra lega FantaF1.\n\nQui trovi le news, la diretta gara, la nostra chat e il nostro Instagram, tutto in un'unica app.\n\nTracciati dei circuiti: f1-circuits di Tomislav Bacinger, licenza MIT.\n\nVersione anteprima — 2026.";
+  const ABOUT_TEXT = APP_NAME + " è l'app di B&T, nata dalla passione di un gruppo di amici per la Formula 1: un posto solo nostro per seguire le gare, parlarne insieme e tenere traccia di come va la nostra lega FantaF1.\n\nQui trovi le news, la diretta gara, la nostra chat e il nostro Instagram, tutto in un'unica app.\n\nTracciati dei circuiti: f1-circuits di Tomislav Bacinger, licenza MIT.\n\nVersione 2.0 — 2026.";
   const HELP_TEXT = "Hai domande o hai trovato un problema nell'app? Scrivici, ti rispondiamo il prima possibile.\n\nEmail: bt.formula1@gmail.com\n\nOppure passa dalla Chat Generale: la community è sempre pronta a dare una mano.";
 
   const showToast = (msg) => {
