@@ -146,9 +146,12 @@ async function dbGet(col, id) {
   const snap = await track(d.collection(col).doc(id).get());
   return snap.exists ? snap.data() : null;
 }
-async function dbSet(col, id, data) {
+// remove: campi da togliere dal documento nella stessa scrittura (FieldValue.delete), per esempio la vecchia pw.
+async function dbSet(col, id, data, { remove = [] } = {}) {
   const d = await needDb();
-  await track(withTimeout(d.collection(col).doc(id).set(clone(data), { merge: true }), WRITE_TIMEOUT));
+  const payload = clone(data);
+  if (remove.length) { const FieldValue = W().firebase.firestore.FieldValue; remove.forEach(f => { payload[f] = FieldValue.delete(); }); }
+  await track(withTimeout(d.collection(col).doc(id).set(payload, { merge: true }), WRITE_TIMEOUT));
 }
 async function dbDelete(col, id) {
   const d = await needDb();

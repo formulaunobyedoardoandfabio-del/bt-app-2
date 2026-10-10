@@ -114,7 +114,7 @@ const tests = {
     await tapText(p, 'Elimina account'); await w(p);
     const t1 = await text(p);
     assert(/Eliminare l'account\?/.test(t1), 'nessuna richiesta di conferma');
-    await tapText(p, 'ELIMINA DEFINITIVAMENTE'); await w(p, 600);
+    await p.fill('#delPw', 'x'); await tapText(p, 'ELIMINA DEFINITIVAMENTE'); await w(p, 600);   // Task 7: la password conferma l'eliminazione
     const t2 = await text(p);
     assert(/ENTRA SENZA ACCOUNT/.test(t2), 'dopo l\'eliminazione non torna alla schermata di accesso');
     await tapText(p, 'ENTRA SENZA ACCOUNT'); await w(p, 400);
@@ -156,11 +156,17 @@ const tests = {
     assert(/non ufficiale/.test(prof), 'manca la dicitura nel Profilo');
     assert(/bt\.formula1@gmail\.com/.test(help) && !/supporto@bt-app\.demo/.test(help), 'email di assistenza sbagliata');
   },
+  // Task 7: "Password dimenticata?" chiede l'email e fa mandare da Firebase l'email per la nuova password
+  // (prima indicava l'indirizzo bt.formula1@gmail.com da scrivere a mano).
   async 'accesso: "Password dimenticata?" dice come fare'(b) {
     const { ctx, p } = await open(b);
     await tapText(p, 'Password dimenticata?'); await w(p);
-    const t = await text(p); await ctx.close();
-    assert(/bt\.formula1@gmail\.com/.test(t), 'nessuna indicazione per recuperare la password');
+    const t = await text(p);
+    await p.fill('#authEmail', 'a@b.it');
+    await tapText(p, 'Password dimenticata?'); await w(p, 600);
+    const t2 = await text(p); await ctx.close();
+    assert(/Inserisci la tua email/.test(t), 'senza email non dice di scriverla');
+    assert(/Ti abbiamo mandato un'email per scegliere una nuova password/.test(t2), 'nessuna indicazione per recuperare la password');
   },
 };
 

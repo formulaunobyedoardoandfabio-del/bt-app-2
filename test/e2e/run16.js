@@ -223,7 +223,7 @@ const tests = {
     await tapText(p, 'REGISTRATI', { exact: true }); await w(p, 300);
     const lbl0 = await inner(p, '[data-follow-label]');
     const fans = await p.evaluate(() => [...document.querySelectorAll('[data-fan-option]')].map(e => e.textContent.replace(/\s+/g, ' ').trim()));
-    await p.fill('#regName', 'Gino'); await p.fill('#authEmail', 'g@b.it'); await p.fill('#authPw', 'x'); await p.fill('#regPw2', 'x');
+    await p.fill('#regName', 'Gino'); await p.fill('#authEmail', 'g@b.it'); await p.fill('#authPw', 'abcdef'); await p.fill('#regPw2', 'abcdef');   // Task 7: almeno 6 caratteri
     await p.focus('#regFollow'); await p.keyboard.press('ArrowRight'); await p.keyboard.press('ArrowRight'); await w(p, 200);
     const lbl = await inner(p, '[data-follow-label]');
     await tapSel(p, '[data-fan-option="vroom"]'); await w(p, 150);

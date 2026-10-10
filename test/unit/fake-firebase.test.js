@@ -141,6 +141,18 @@ t('email non valida e password mancante: auth/invalid-email e auth/missing-passw
   assert.strictEqual(r.user.email, 'a@b.it');
 });
 
+t('FieldValue.delete(): con set merge e con update toglie il campo; set senza merge lo rifiuta', async () => {
+  const { firebase } = setupWindow();
+  const FV = firebase.firestore.FieldValue;
+  const ref = firebase.firestore().collection('users').doc('v@b.it');
+  await ref.set({ name: 'V', pw: 'vecchia', about: { fan: 'vivo', birth: 2001 } });
+  await ref.set({ uid: 'u1', pw: FV.delete() }, { merge: true });
+  assert.deepStrictEqual((await ref.get()).data(), { name: 'V', about: { fan: 'vivo', birth: 2001 }, uid: 'u1' });
+  await ref.update({ 'about.birth': FV.delete() });
+  assert.deepStrictEqual((await ref.get()).data().about, { fan: 'vivo' });
+  await assert.rejects(ref.set({ pw: FV.delete() }), e => e.code === 'invalid-argument');
+});
+
 t('dati di partenza: addDocs si aggiunge ai documenti di serie (account di prova compreso)', async () => {
   const { firebase } = setupWindow({ seed: { addDocs: { 'shared/bt-news': { __arr: [{ id: 'n9', title: 'Prova' }] } } } });
   assert.deepStrictEqual(firebase.__fake.doc('shared/bt-news'), { __arr: [{ id: 'n9', title: 'Prova' }] });

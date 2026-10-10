@@ -51,9 +51,11 @@
   // Come Firestore: senza rete la scrittura aspetta la rete; le regole la rifiutano con permission-denied.
   async function canWrite() { await whenOnline(); if (fake.failWrites) throw err('permission-denied', 'Missing or insufficient permissions. (prova)'); }
 
-  // ── FieldValue.arrayUnion ─────────────────────────────────────────────
-  const UNION = '__fakeArrayUnion__';
-  const FieldValue = { arrayUnion: (...items) => ({ [UNION]: clone(items) }) };
+  // ── FieldValue.arrayUnion e FieldValue.delete ──────────────────────────
+  const UNION = '__fakeArrayUnion__', DELETE = '__fakeDelete__';
+  const FieldValue = { arrayUnion: (...items) => ({ [UNION]: clone(items) }), delete: () => ({ [DELETE]: true }) };
+  const isDel = v => !!v && typeof v === 'object' && v[DELETE] === true;
+  const hasDel = v => isDel(v) || (!!v && typeof v === 'object' && !Array.isArray(v) && Object.values(v).some(hasDel));
   // Applica i FieldValue dentro data rispetto al documento attuale (solo arrayUnion, come serve all'app).
   function applyFieldValues(data, cur) {
     if (!data || typeof data !== 'object' || Array.isArray(data)) return data;
@@ -72,11 +74,18 @@
   // quella che c'era (come Firestore, che la mette nella maschera dei campi).
   const isMap = v => v && typeof v === 'object' && !Array.isArray(v);
   function mergeDeep(cur, val) {
-    if (!isMap(cur)) return val;
+    if (!isMap(cur)) return dropDeletes(val);
     const out = clone(cur);
     for (const [k, v] of Object.entries(val)) {
-      out[k] = isMap(v) && Object.keys(v).length && isMap(cur[k]) ? mergeDeep(cur[k], v) : v;
+      if (isDel(v)) { delete out[k]; continue; }    // FieldValue.delete(): il campo sparisce
+      out[k] = isMap(v) && Object.keys(v).length && isMap(cur[k]) ? mergeDeep(cur[k], v) : dropDeletes(v);
     }
+    return out;
+  }
+  function dropDeletes(v) {
+    if (!isMap(v)) return v;
+    const out = {};
+    for (const [k, x] of Object.entries(v)) if (!isDel(x)) out[k] = dropDeletes(x);
     return out;
   }
   // Firestore rifiuta undefined, gli array dentro gli array e i documenti oltre 1 MiB (invalid-argument).
@@ -86,6 +95,7 @@
       if (Array.isArray(v)) { if (inArray) throw err('invalid-argument', `Nested arrays are not supported (${where})`); v.forEach(x => walk(x, true)); return; }
       if (v && typeof v === 'object') {
         if (UNION in v) { v[UNION].forEach(x => walk(x, true)); return; }
+        if (isDel(v)) return;
         Object.values(v).forEach(x => walk(x, false));
       }
     };
@@ -95,6 +105,8 @@
   }
   // Le scritture lavorano su una copia di tutti i documenti (all): una transazione la salva una volta sola alla fine.
   function applySet(all, path, data, opts) {
+    // Come Firestore: FieldValue.delete() solo con set({...}, {merge: true}) o con update.
+    if (!(opts && opts.merge) && hasDel(data)) throw err('invalid-argument', 'FieldValue.delete() cannot be used with set() unless you pass {merge:true} (' + path + ')');
     const cur = all[path], val = validate(data, path);
     all[path] = opts && opts.merge && cur !== undefined ? mergeDeep(cur, applyFieldValues(val, cur)) : applyFieldValues(val, {});
   }
@@ -106,6 +118,7 @@
       let node = doc;
       for (const p of parts.slice(0, -1)) { if (!isMap(node[p])) node[p] = {}; node = node[p]; }
       const last = parts[parts.length - 1];
+      if (isDel(v)) { delete node[last]; continue; }
       node[last] = applyFieldValues({ x: v }, { x: node[last] }).x;
     }
     all[path] = doc;

@@ -111,8 +111,12 @@ const tests = {
     const { ctx, p } = await open(b); await login(p);
     await tapSel(p, saveBtn(HADJAR)); await w(p);
     await tapSel(p, '[aria-label="Profilo"]'); await w(p);
-    await tapText(p, 'Elimina account'); await w(p); await tapText(p, 'ELIMINA DEFINITIVAMENTE'); await w(p, 600);
-    await login(p);
+    await tapText(p, 'Elimina account'); await w(p); await p.fill('#delPw', 'x'); await tapText(p, 'ELIMINA DEFINITIVAMENTE'); await w(p, 600);   // Task 7: la password conferma l'eliminazione
+    // Task 7: l'account è eliminato davvero, quindi si rientra con un account nuovo con la stessa email.
+    await tapText(p, 'REGISTRATI', { exact: true }); await w(p, 300);
+    await p.fill('#regName', 'Tester'); await p.fill('#authEmail', 'a@b.it'); await p.fill('#authPw', 'abcdef'); await p.fill('#regPw2', 'abcdef');
+    await tapSel(p, '[data-fan-option="vivo"]'); await w(p, 150);
+    await tapText(p, 'CREA ACCOUNT', { exact: true }); await w(p, 1500);
     await tapText(p, 'Salvati'); await w(p);
     const t = await text(p); await ctx.close();
     assert(/Non hai ancora salvato articoli/.test(t), 'dopo l\'eliminazione dell\'account restano articoli salvati');

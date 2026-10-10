@@ -62,6 +62,13 @@ t('sgStrict: null se il documento manca, errore se non c\'è rete (sg invece dà
   await assert.rejects(F.sgStrict('bt-x'), e => e.code === 'offline');
 });
 
+t('dbSet con remove: toglie i campi nella stessa scrittura (la vecchia password in chiaro)', async () => {
+  const { firebase } = setupWindow();
+  firebase.__fake.setDoc('users/v@b.it', { name: 'V', pw: 'vecchia' });
+  await F.dbSet('users', 'v@b.it', { uid: 'u1' }, { remove: ['pw'] });
+  assert.deepStrictEqual(firebase.__fake.doc('users/v@b.it'), { name: 'V', uid: 'u1' });
+});
+
 t('dati solo del telefono con prefisso bt_', async () => {
   const { localStorage } = setupWindow();
   F.local.set('bt-blocked', [{ aid: 'u1', name: 'Marco' }]);

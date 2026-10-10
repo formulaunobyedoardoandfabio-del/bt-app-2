@@ -7,7 +7,8 @@ const NOT_SAVED = 'Non salvato: controlla la connessione e riprova.';
 const doc = (p, path) => p.evaluate(x => window.firebase.__fake.doc(x), path);
 const toast = p => p.evaluate(() => { const t = document.querySelector('.toast'); return t ? t.innerText : ''; });
 const value = (p, sel) => p.evaluate(s => { const e = document.querySelector(s); return e ? e.value : null; }, sel);
-async function reloadAndLogin(p) { await p.reload(); await w(p, 600); await login(p); }
+// Riaprendo l'app la sessione resta (Firebase Authentication, Task 7): non serve rifare l'accesso.
+async function reloadApp(p) { await p.reload(); await w(p, 1000); }
 async function publish(p, title) {
   await openAdmin(p, 'NEWS');
   await p.fill('#adTitle', title);
@@ -22,7 +23,7 @@ run({
     await publish(p, 'Leclerc in pole a Singapore');
     const home = await text(p);
     const news = (await doc(p, 'shared/bt-news')).__arr;
-    await reloadAndLogin(p);
+    await reloadApp(p);
     const after = await text(p); await ctx.close();
     assert(/Leclerc in pole a Singapore/.test(home), 'dopo PUBBLICA la notizia non è in Home');
     const n = news[0];
@@ -40,7 +41,7 @@ run({
     await p.selectOption('select[aria-label="Stato GP di Singapore"]', 'LIVE'); await w(p, 600);
     const races = (await doc(p, 'shared/bt-races')).__arr;
     const demo = await p.evaluate(() => !!window.__btLive);   // la diretta simulata lascia window.__btLive
-    await reloadAndLogin(p);
+    await reloadApp(p);
     await openAdmin(p, 'GARA LIVE');
     const after = await value(p, 'select[aria-label="Stato GP di Singapore"]'); await ctx.close();
     const sg = races.find(r => r.circuitId === 'sg-2008');
@@ -92,7 +93,8 @@ run({
 
   async 'offline: l\'app si apre con le notizie di serie e "Sei offline"'(b) {
     const { ctx, p, errs } = await open(b, { query: '?nofake', routes: { 'https://www.gstatic.com/**': r => r.abort() } });
-    await login(p); await w(p, 600);
+    // Senza rete non si può accedere (Task 7: "Errore di connessione"), ma da ospite si legge.
+    await tapText(p, 'ENTRA SENZA ACCOUNT'); await w(p, 600);
     const t = await text(p);
     await goTab(p, 'RACE');
     const race = await text(p); await ctx.close();

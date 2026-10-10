@@ -16,6 +16,7 @@ import BtWk from "./logic/bt-weekend";
 import F1 from "./data/f1-2026";
 import AppData from "./services/appdata";
 import Compat from "./services/compat";
+import { createAccount, MESSAGES as ACCOUNT_MSG, messageOf } from "./services/account";
 
 /* ── DESIGN TOKENS (matches the B&T concept style) ─────────────────── */
 const C = {
@@ -733,7 +734,7 @@ function SectionLabel({ icon, children }) {
 /* ── ABOUT YOU: da quanto segui la F1 e che tifoso sei (registrazione e profilo) ── */
 const FOLLOW_STEPS = ["Meno di 1 anno", "1 – 3 anni", "4 – 6 anni", "7 – 10 anni", "Più di 10 anni"];
 const FAN_TYPES = [["vivo", "Vivo e respiro F1!"], ["vroom", "Se fa Vroom è bello"], ["matricola", "Matricola delle 4 ruote"], ["nuovo", "Nuovo sport da seguire"]];
-const ABOUT_INIT = { birth: null, follow: 1, fan: "vivo" };   // profilo di prova (accesso senza registrazione)
+const ABOUT_INIT = { birth: null, follow: 1, fan: "vivo" };   // valori di partenza dei moduli "Su di te"
 const BIRTH_YEARS = Array.from({ length: 2016 - 1935 + 1 }, (_, i) => 2016 - i);
 const fanLabel = id => (FAN_TYPES.find(f => f[0] === id) || [null, "—"])[1];
 function FollowSlider({ id, value, onChange }) {
@@ -775,7 +776,7 @@ function AboutCard({ about, onSave }) {
       <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8, padding: "0 2px" }}>
         <span style={{ fontFamily: F_BODY, fontWeight: 600, fontSize: 15, color: C.muted }}>About You</span>
         <div style={{ flex: 1 }} />
-        {!edit && <button className="press" aria-label="Modifica About You" onClick={() => { setDraft(a); setEdit(true); }} style={{ display: "flex", alignItems: "center", gap: 6, fontFamily: F_HEAD, fontWeight: 800, fontSize: 14, color: C.gold }}><Icon name="edit" size={14} color={C.gold} sw={2.2} />Modifica</button>}
+        {!edit && <button className="press" aria-label="Modifica About You" onClick={() => { setDraft({ ...a, follow: a.follow == null ? ABOUT_INIT.follow : a.follow }); setEdit(true); }} style={{ display: "flex", alignItems: "center", gap: 6, fontFamily: F_HEAD, fontWeight: 800, fontSize: 14, color: C.gold }}><Icon name="edit" size={14} color={C.gold} sw={2.2} />Modifica</button>}
       </div>
       <div style={{ borderRadius: 18, background: C.card, border: `1px solid ${C.border}`, overflow: "hidden" }}>
         {edit ? (
@@ -809,7 +810,9 @@ function AboutCard({ about, onSave }) {
   );
 }
 
-function LoginScreen({ onDone, onGuest, onBack, reason }) {
+// Accesso e registrazione con Firebase Authentication (src/services/account.js); i messaggi sono quelli dell'app di oggi.
+// auth = { login(email, pw), register({ name, email, pw, pw2, about }), resetPassword(email) }.
+function LoginScreen({ auth, onDone, onGuest, onBack, reason }) {
   const [mode, setMode] = useState("login");
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -817,17 +820,31 @@ function LoginScreen({ onDone, onGuest, onBack, reason }) {
   const [pw2, setPw2] = useState("");
   const [err, setErr] = useState("");
   const [info, setInfo] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [birth, setBirth] = useState(null);
   const [follow, setFollow] = useState(ABOUT_INIT.follow);
   const [fan, setFan] = useState(null);
   const isLogin = mode === "login";
 
-  const submit = () => {
-    if (!email.trim() || !pw.trim()) { setErr("Compila email e password."); return; }
-    if (!isLogin && (!name.trim() || pw !== pw2)) { setErr(!name.trim() ? "Inserisci il tuo nome." : "Le password non coincidono."); return; }
-    if (!isLogin && !fan) { setErr("Scegli che tifoso sei."); return; }
-    setErr("");
-    // Fino al Task 7 (Firebase Authentication) l'accesso non controlla la password: serve l'email per i dati dell'account.
-    onDone({ email: email.trim().toLowerCase(), created: !isLogin, about: isLogin ? null : { birth: null, follow, fan } });
+  const submit = async () => {
+    if (busy) return;
+    if (!isLogin && name.trim() && email.trim() && pw && pw2 && pw === pw2 && pw.length >= 6 && !fan) { setErr("Scegli che tifoso sei."); return; }
+    setErr(""); setInfo(""); setBusy(true);
+    try {
+      if (isLogin) await auth.login(email, pw);
+      else await auth.register({ name, email, pw, pw2, about: { birth, follow, fan } });
+      setBusy(false);
+      onDone && onDone({ created: !isLogin });
+    } catch (e) { setBusy(false); setErr(messageOf(e)); }
+  };
+  const forgot = async () => {
+    if (busy) return;
+    setErr(""); setInfo("");
+    if (!email.trim()) { setErr(ACCOUNT_MSG["empty-email"]); return; }
+    setBusy(true);
+    try { await auth.resetPassword(email); setInfo(ACCOUNT_MSG["reset-sent"]); }
+    catch (e) { setErr(messageOf(e)); }
+    setBusy(false);
   };
 
   const fieldStyle = { display: "flex", alignItems: "center", gap: 10, padding: "13px 14px", borderRadius: 14, background: C.card, border: `1px solid ${C.border}` };
@@ -883,15 +900,20 @@ function LoginScreen({ onDone, onGuest, onBack, reason }) {
         {!isLogin && (
           <div style={{ marginBottom: 16, padding: 14, borderRadius: 14, background: "rgba(255,255,255,.03)", border: `1px solid ${C.border}` }}>
             <div style={{ fontFamily: F_HEAD, fontWeight: 800, fontSize: 13.5, color: C.text, marginBottom: 12 }}>Su di te</div>
+            <label style={labelStyle} htmlFor="regBirth">Anno di nascita</label>
+            <select id="regBirth" value={birth ? String(birth) : ""} onChange={e => setBirth(e.target.value ? Number(e.target.value) : null)} style={{ width: "100%", padding: "11px 12px", marginBottom: 16, borderRadius: 12, background: C.bg, border: `1px solid ${C.border}`, fontFamily: F_BODY, fontSize: 14, color: C.text }}>
+              <option value="">Non indicato</option>
+              {BIRTH_YEARS.map(y => <option key={y} value={String(y)}>{y}</option>)}
+            </select>
             <FollowSlider id="regFollow" value={follow} onChange={setFollow} />
             <div style={{ ...labelStyle, marginTop: 16, marginBottom: 8 }}>Che tifoso sei?</div>
             <FanTypePicker value={fan} onChange={setFan} />
           </div>
         )}
-        {isLogin && <div style={{ textAlign: "right", marginBottom: 18 }}><button className="press" onClick={() => setInfo(`Per reimpostare la password scrivici a ${CONTACT_EMAIL} dall'indirizzo con cui ti sei registrato: ti aiutiamo noi.`)} style={{ fontFamily: F_BODY, fontWeight: 600, fontSize: 12, color: C.accent, padding: "6px 0" }}>Password dimenticata?</button></div>}
+        {isLogin && <div style={{ textAlign: "right", marginBottom: 18 }}><button className="press" onClick={forgot} style={{ fontFamily: F_BODY, fontWeight: 600, fontSize: 12, color: C.accent, padding: "6px 0" }}>Password dimenticata?</button></div>}
         {info && <p style={{ background: "rgba(255,255,255,.05)", border: `1px solid ${C.border}`, borderRadius: 10, padding: "9px 14px", marginTop: 0, marginBottom: 14, color: C.text, fontSize: 12, lineHeight: 1.5 }}>{info}</p>}
         {err && <p style={{ background: "#E1060018", border: `1px solid ${C.accent}`, borderRadius: 10, padding: "9px 14px", marginTop: 0, marginBottom: 14, color: "#ff6b6b", fontSize: 12, lineHeight: 1.5 }}>{err}</p>}
-        <button className="press" onClick={submit} style={{ display: "block", width: "100%", padding: "15px 0", borderRadius: 14, background: C.accent, boxShadow: `0 10px 22px -10px ${C.accent}`, fontFamily: F_HEAD, fontWeight: 900, fontStyle: "italic", fontSize: 14, color: "#fff", letterSpacing: .3, textAlign: "center", marginBottom: 16 }}>
+        <button className="press" onClick={submit} disabled={busy} style={{ display: "block", width: "100%", padding: "15px 0", borderRadius: 14, background: busy ? "#555" : C.accent, boxShadow: busy ? "none" : `0 10px 22px -10px ${C.accent}`, fontFamily: F_HEAD, fontWeight: 900, fontStyle: "italic", fontSize: 14, color: "#fff", letterSpacing: .3, textAlign: "center", marginBottom: 16 }}>
           {isLogin ? "ACCEDI" : "CREA ACCOUNT"}
         </button>
         <p style={{ textAlign: "center", fontFamily: F_BODY, fontSize: 12, color: C.muted, margin: 0 }}>
@@ -912,8 +934,7 @@ function LoginScreen({ onDone, onGuest, onBack, reason }) {
           </>
         )}
       </div>
-      <div style={{ flexGrow: 1 }} />
-      <p style={{ textAlign: "center", fontFamily: F_BODY, fontSize: 10, color: C.dim, padding: "18px 32px 24px", margin: 0, flexShrink: 0 }}>Anteprima dimostrativa — nessun dato reale viene inviato.</p>
+      <div style={{ flexGrow: 1, minHeight: 24 }} />
     </div>
   );
 }
@@ -5171,7 +5192,7 @@ function FantaScreen({ squad, setSquad, base, freeTransfers, budget, stats, race
   );
 }
 
-function ProfiloScreen({ ig, onOpenIg, trial = null, trialUsed = false, onBack, onNotifiche, onPremium, onAdmin, onLogout, isPremium, onAbout, onHelp, aboutMe, onSaveAboutMe, favTeam, favDriver, onPickTeam, onPickDriver, guest, onLogin, onTerms, blocked = [], onUnblock, onDeleteAccount, savedCount = 0, onOpenSaved }) {
+function ProfiloScreen({ ig, onOpenIg, trial = null, trialUsed = false, onBack, onNotifiche, onPremium, onAdmin, onLogout, isPremium, onAbout, onHelp, aboutMe, onSaveAboutMe, favTeam, favDriver, onPickTeam, onPickDriver, guest, onLogin, onTerms, blocked = [], onUnblock, onDeleteAccount, savedCount = 0, onOpenSaved, account = null, onSaveName, isAdmin = false }) {
   const ft = favTeam ? teamById(favTeam) : null;
   const fd = favDriver ? driverById(favDriver) : null;
   const favRows = [
@@ -5181,18 +5202,35 @@ function ProfiloScreen({ ig, onOpenIg, trial = null, trialUsed = false, onBack, 
   ];
   const [editing, setEditing] = useState(false);
   const [confirmDel, setConfirmDel] = useState(false);
-  const [name, setName] = useState("Edoardo");
-  const [email, setEmail] = useState("edoardo@bt-app.demo");
+  // Nome ed email dell'account (Firebase): il nome si modifica, l'email no.
+  const email = account ? account.email : "";
+  const [name, setName] = useState(account ? account.name : "");
+  const [nameErr, setNameErr] = useState("");
+  const saveName = () => {
+    if (!name.trim()) { setNameErr("Scrivi il tuo nome"); return; }
+    setNameErr("");
+    Promise.resolve(onSaveName && onSaveName(name)).then(() => setEditing(false), () => setNameErr("Non salvato: controlla la connessione e riprova."));
+  };
+  // Eliminazione: si chiede la password, così Firebase la riconosce prima di cancellare qualsiasi cosa.
+  const [delPw, setDelPw] = useState("");
+  const [delErr, setDelErr] = useState("");
+  const [delBusy, setDelBusy] = useState(false);
+  const doDelete = () => {
+    if (delBusy) return;
+    if (!delPw) { setDelErr(ACCOUNT_MSG["need-password"]); return; }
+    setDelErr(""); setDelBusy(true);
+    Promise.resolve(onDeleteAccount && onDeleteAccount(delPw)).then(() => { setDelBusy(false); setConfirmDel(false); }, e => { setDelBusy(false); setDelErr(messageOf(e)); });
+  };
+  const noAbout = !!aboutMe && aboutMe.fan == null && aboutMe.follow == null;   // account di oggi senza "Su di te"
   const rows = [
     { icon: "bell", label: "Notifiche", onClick: onNotifiche, chevron: true },
-    ...(isPremium ? [{ icon: "unlock", label: "Accesso anticipato", onClick: null, badge: "BETA" }] : []),
-    { icon: "gear", label: "Pannello Admin · Pubblica notizia", onClick: onAdmin, badge: "ADMIN" },
+    ...(isAdmin ? [{ icon: "gear", label: "Pannello Admin · Pubblica notizia", onClick: onAdmin, badge: "ADMIN" }] : []),
     { icon: "help", label: "Assistenza", onClick: onHelp, chevron: true },
     { icon: "info", label: "Info su B&T", onClick: onAbout, chevron: true },
     { icon: "lock", label: "Privacy Policy", onClick: () => openUrl(PRIVACY_URL), chevron: true },
     { icon: "doc", label: "Termini e Condizioni", onClick: onTerms, chevron: true },
   ];
-  const initials = (name.trim().slice(0, 2) || "B&T").toUpperCase();
+  const initials = (((account && account.name) || "").trim().slice(0, 2) || "B&T").toUpperCase();
   return (
     <div className="scrollcol" style={{ height: "100%" }}>
       <SubHeader title="PROFILO" onBack={onBack} />
@@ -5209,7 +5247,7 @@ function ProfiloScreen({ ig, onOpenIg, trial = null, trialUsed = false, onBack, 
           <div style={{ width: 84, height: 84, borderRadius: "50%", background: C.accent, display: "flex", alignItems: "center", justifyContent: "center" }}>
             <span style={{ fontFamily: F_HEAD, fontWeight: 900, fontStyle: "italic", fontSize: 26, color: "#fff" }}>{initials}</span>
           </div>
-          <button className="press" aria-label={editing ? "Salva profilo" : "Modifica profilo"} onClick={() => setEditing(e => !e)} style={{ position: "absolute", bottom: -2, right: -2, width: 30, height: 30, borderRadius: "50%", background: editing ? C.accent : C.card, border: `2px solid ${C.bg}`, display: "flex", alignItems: "center", justifyContent: "center" }}>
+          <button className="press" aria-label={editing ? "Salva profilo" : "Modifica profilo"} onClick={() => (editing ? saveName() : (setName(account ? account.name : ""), setEditing(true)))} style={{ position: "absolute", bottom: -2, right: -2, width: 30, height: 30, borderRadius: "50%", background: editing ? C.accent : C.card, border: `2px solid ${C.bg}`, display: "flex", alignItems: "center", justifyContent: "center" }}>
             <Icon name={editing ? "check" : "edit"} size={13} color={editing ? "#fff" : C.text} sw={2.3} />
           </button>
         </div>
@@ -5217,19 +5255,22 @@ function ProfiloScreen({ ig, onOpenIg, trial = null, trialUsed = false, onBack, 
           <div style={{ width: "100%", marginTop: 18 }}>
             <label style={{ display: "block", fontFamily: F_BODY, fontWeight: 600, fontSize: 11.5, color: C.muted, marginBottom: 5 }} htmlFor="pfName">Nome</label>
             <input id="pfName" value={name} onChange={e => setName(e.target.value)} style={{ width: "100%", padding: "11px 13px", borderRadius: 12, background: C.card, border: `1px solid ${C.border}`, fontFamily: F_BODY, fontSize: 13, color: C.text, marginBottom: 10 }} />
-            <label style={{ display: "block", fontFamily: F_BODY, fontWeight: 600, fontSize: 11.5, color: C.muted, marginBottom: 5 }} htmlFor="pfEmail">Email</label>
-            <input id="pfEmail" type="email" value={email} onChange={e => setEmail(e.target.value)} style={{ width: "100%", padding: "11px 13px", borderRadius: 12, background: C.card, border: `1px solid ${C.border}`, fontFamily: F_BODY, fontSize: 13, color: C.text, marginBottom: 12 }} />
-            <button className="press" onClick={() => setEditing(false)} style={{ display: "block", width: "100%", padding: "12px 0", borderRadius: 12, background: C.accent, fontFamily: F_HEAD, fontWeight: 800, fontSize: 13, color: "#fff", textAlign: "center" }}>SALVA</button>
+            <span style={{ display: "block", fontFamily: F_BODY, fontWeight: 600, fontSize: 11.5, color: C.muted, marginBottom: 5 }}>Email</span>
+            <div style={{ padding: "11px 13px", borderRadius: 12, background: "rgba(255,255,255,.03)", border: `1px solid ${C.border}`, fontFamily: F_BODY, fontSize: 13, color: C.muted, marginBottom: 6 }}>{email}</div>
+            <p style={{ margin: "0 0 12px", fontFamily: F_BODY, fontSize: 11, color: C.dim }}>L'email è quella con cui accedi e non si può cambiare.</p>
+            {nameErr && <p role="alert" style={{ margin: "0 0 10px", fontFamily: F_BODY, fontSize: 12, color: "#ff6b6b" }}>{nameErr}</p>}
+            <button className="press" onClick={saveName} style={{ display: "block", width: "100%", padding: "12px 0", borderRadius: 12, background: C.accent, fontFamily: F_HEAD, fontWeight: 800, fontSize: 13, color: "#fff", textAlign: "center" }}>SALVA</button>
           </div>
         ) : (
           <>
-            <h2 style={{ fontFamily: F_HEAD, fontWeight: 800, fontSize: 18, color: C.text, margin: "14px 0 3px" }}>{name}</h2>
+            <h2 style={{ fontFamily: F_HEAD, fontWeight: 800, fontSize: 18, color: C.text, margin: "14px 0 3px" }}>{account ? account.name : ""}</h2>
             <span style={{ fontFamily: F_BODY, fontSize: 12, color: C.muted }}>{email}</span>
           </>
         )}
       </div>
       )}
       {ig && onOpenIg && <IgBigButton ig={ig} onOpen={onOpenIg} />}
+      {!guest && noAbout && <p data-about-missing="" style={{ margin: "0 20px 10px", padding: "10px 14px", borderRadius: 12, background: "rgba(231,179,76,.1)", border: "1px solid rgba(231,179,76,.3)", fontFamily: F_BODY, fontSize: 12.5, color: C.text, lineHeight: 1.45 }}>Completa il tuo profilo: che tifoso sei e da quanti anni segui la F1</p>}
       {!guest && <AboutCard about={aboutMe} onSave={onSaveAboutMe} />}
 
       <button className="press" onClick={onPremium} style={{ display: "block", textAlign: "left", width: "calc(100% - 40px)", margin: "0 20px 22px", padding: 16, borderRadius: 18, background: "rgba(231,179,76,.1)", border: "1px solid rgba(231,179,76,.3)" }}>
@@ -5311,9 +5352,12 @@ function ProfiloScreen({ ig, onOpenIg, trial = null, trialUsed = false, onBack, 
           <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 20, padding: "26px 22px 18px", maxWidth: 330, width: "100%", textAlign: "center" }}>
             <Icon name="trash" size={30} color={C.accent} />
             <h2 style={{ fontFamily: F_HEAD, fontWeight: 900, fontStyle: "italic", fontSize: 19, color: C.text, margin: "12px 0 8px" }}>Eliminare l'account?</h2>
-            <p style={{ fontFamily: F_BODY, fontSize: 13, color: C.muted, lineHeight: 1.6, margin: "0 0 18px" }}>Cancelleremo il tuo profilo, i messaggi che hai scritto in chat e le segnalazioni che hai inviato. L'operazione non si può annullare.</p>
-            <button className="press" onClick={() => { setConfirmDel(false); onDeleteAccount && onDeleteAccount(); }} style={{ display: "block", width: "100%", padding: "14px 0", borderRadius: 14, background: C.accent, fontFamily: F_HEAD, fontWeight: 900, fontStyle: "italic", fontSize: 13.5, color: "#fff", marginBottom: 6 }}>ELIMINA DEFINITIVAMENTE</button>
-            <button className="press" onClick={() => setConfirmDel(false)} style={{ display: "block", width: "100%", padding: "12px 0", fontFamily: F_BODY, fontWeight: 600, fontSize: 13, color: C.muted }}>Annulla</button>
+            <p style={{ fontFamily: F_BODY, fontSize: 13, color: C.muted, lineHeight: 1.6, margin: "0 0 14px" }}>Cancelleremo il tuo profilo, i messaggi che hai scritto in chat e le segnalazioni che hai inviato. L'operazione non si può annullare.</p>
+            <label htmlFor="delPw" style={{ display: "block", textAlign: "left", fontFamily: F_BODY, fontWeight: 600, fontSize: 12, color: C.muted, marginBottom: 6 }}>Per confermare scrivi la tua password</label>
+            <input id="delPw" type="password" value={delPw} onChange={e => { setDelPw(e.target.value); setDelErr(""); }} placeholder="••••••••" style={{ width: "100%", padding: "11px 13px", borderRadius: 12, background: C.bg, border: `1px solid ${C.border}`, fontFamily: F_BODY, fontSize: 14, color: C.text, marginBottom: 10 }} />
+            {delErr && <p role="alert" style={{ margin: "0 0 10px", fontFamily: F_BODY, fontSize: 12, color: "#ff6b6b", lineHeight: 1.45 }}>{delErr}</p>}
+            <button className="press" onClick={doDelete} disabled={delBusy} style={{ display: "block", width: "100%", padding: "14px 0", borderRadius: 14, background: delBusy ? "#555" : C.accent, fontFamily: F_HEAD, fontWeight: 900, fontStyle: "italic", fontSize: 13.5, color: "#fff", marginBottom: 6 }}>ELIMINA DEFINITIVAMENTE</button>
+            <button className="press" onClick={() => { setConfirmDel(false); setDelPw(""); setDelErr(""); }} style={{ display: "block", width: "100%", padding: "12px 0", fontFamily: F_BODY, fontWeight: 600, fontSize: 13, color: C.muted }}>Annulla</button>
           </div>
         </div>
       )}
@@ -6369,6 +6413,11 @@ function LiveTrackView({ onClose }) {
 }
 
 /* ── APP ROOT ───────────────────────────────────────────────────────── */
+// Account con Firebase Authentication (src/services/account.js). ACCOUNT_CLEANUPS: pulizie che l'eliminazione
+// dell'account fa prima di cancellare il profilo (chat del Task 8, feedback del Task 9).
+const ACCOUNT_CLEANUPS = [];
+const Account = createAccount({ cleanups: ACCOUNT_CLEANUPS });
+
 // Dati personali di chi entra con un account (users/<email>.app2, src/services/appdata.js): valori di partenza.
 const USER_INIT = {
   saved: [], favTeam: null, favDriver: null, notifPrefs: { team: true, driver: true }, votes: {},
@@ -6382,7 +6431,14 @@ const sameJson = (a, b) => JSON.stringify(a) === JSON.stringify(b);
 const fmtSent = iso => { const t = Compat.parseDate(iso); return isNaN(t) ? "" : new Date(t).toLocaleString("it-IT", { timeZone: "Europe/Rome", day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" }); };
 
 function App() {
-  const [authed, setAuthed] = useState(false);
+  // Account: undefined finché Authentication non dice se c'è una sessione salvata, null = nessun account.
+  const [account, setAccount] = useState(undefined);
+  const authed = !!account;
+  useEffect(() => {
+    const off = Account.onChange(u => setAccount(u));
+    Account.start().then(u => setAccount(u || null), () => setAccount(null));
+    return off;
+  }, []);
   const [tab, setTab] = useState("home");
   const [view, setView] = useState("tab");
   const [igFrom, setIgFrom] = useState("tab");   // da dove si è aperta la pagina Instagram (Home o Profilo)
@@ -6463,7 +6519,7 @@ function App() {
   const [ssLayout, setSsLayout] = useState(SS_LAYOUT_INIT);   // grafiche scelte e loro posto
   const [ssPrefs, setSsPrefs] = useState(SS_PREFS_INIT);      // piloti delle gomme, pilota della telemetria, radar
   const [dotd, setDotd] = useState({});                       // voti del pilota e della scuderia del giorno, per gara
-  const [aboutMe, setAboutMe] = useState(ABOUT_INIT);         // About You: anno di nascita, anni di F1, tipo di tifoso
+  const aboutMe = account ? account.about : null;             // "Su di te" dell'account: anno di nascita, anni di F1, tipo di tifoso
   // Pagelle della community: { "r16:RACE": { pilota: { pace, aggr, gomme, fortuna, strategia } } }; un voto per pilota.
   const [ratings, setRatings] = useState({});
   const rateDriver = (key, id, vals) => setRatings(r => { const cur = r[key] || {}; return cur[id] ? r : { ...r, [key]: { ...cur, [id]: vals } }; });
@@ -6580,6 +6636,12 @@ function App() {
   };
   const resetUser = () => { userEmailRef.current = null; userReady.current = false; setUserEmail(null); AppData.USER_KEYS.forEach(k => userSet[k](USER_INIT[k])); };
   const leaveAccount = () => { AppData.flushUserData().catch(() => {}); resetUser(); };
+  // L'account di Authentication decide di chi sono i dati personali.
+  const accountEmail = account ? account.email : null;
+  useEffect(() => {
+    if (accountEmail && accountEmail !== userEmailRef.current) enterAccount(accountEmail);
+    else if (!accountEmail && userEmailRef.current) resetUser();
+  }, [accountEmail]);
   useEffect(() => {
     if (!userEmail || !userReady.current) return;
     const patch = {};
@@ -6741,14 +6803,18 @@ function App() {
   const suspendUser = (name) => { setBanned(bs => bs.some(b => b.name === name) ? bs : [...bs, { name }]); showToast(`${name} non può più scrivere in chat`); };
   const unsuspendUser = (name) => setBanned(bs => bs.filter(b => b.name !== name));
   const ignoreReport = (id) => setReports(rs => rs.filter(r => r.id !== id));
-  // Elimina account (richiesto da Google Play): profilo, messaggi e segnalazioni inviate.
-  const deleteAccount = () => {
+  // Elimina account (richiesto da Google Play): profilo, dati personali, account Authentication e dati del telefono
+  // (src/services/account.js). Con la password sbagliata o senza rete lancia l'errore: lo mostra la finestra di conferma.
+  const deleteAccount = async pw => {
+    const em = account ? account.email : null;
+    await AppData.flushUserData().catch(() => {});
+    await Account.deleteAccount(pw);
+    if (em) AppData.cancelUserData(em);   // niente salvataggi che ricreino l'account
     setChats(cs => cs.map(c => ({ ...c, messages: c.messages.filter(m => !m.mine) })));
     setReports(rs => rs.filter(r => r.by !== "Tu"));
-    if (userEmail) AppData.clearUserData(userEmail).catch(() => {});   // via i dati personali (l'account intero lo toglie il Task 7)
     resetUser();
     setBlocked([]); setSavedOnly(false); setIsPremium(false);
-    setAuthed(false); setGuest(false); setAdminUnlocked(false); setView("tab"); setTab("home");
+    setGuest(false); setAdminUnlocked(false); setView("tab"); setTab("home");
   };
   const needAccount = () => { if (guest) { needLogin("Per creare la tua squadra FantaF1 serve un account."); return true; } return false; };
   const answerPrediction = (q, v) => {
@@ -6772,18 +6838,25 @@ function App() {
   };
   const closePremium = () => { setPremiumOpen(false); setTimeout(() => setSubscribed(false), 300); };
 
-  if (!authed && !guest) {
+  if (account === undefined && !guest) {   // si aspetta Authentication: forse c'è già una sessione
     return (
       <div id="phone-shell">
-        <LoginScreen onDone={r => { setAuthed(true); if (r && r.about) setAboutMe(r.about); enterAccount(r && r.email); }} onGuest={() => { setGuest(true); showToast("Stai navigando come ospite"); }} />
+        <div data-auth-wait="" style={{ height: "100%", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: F_BODY, fontSize: 13, color: C.muted }}>Caricamento…</div>
       </div>
     );
   }
-  if (loginOpen) {
+  if (!authed && !guest) {
     return (
       <div id="phone-shell">
-        <LoginScreen reason={loginReason} onBack={() => { setLoginOpen(false); setLoginReason(null); }}
-          onDone={r => { setAuthed(true); setGuest(false); setLoginOpen(false); setLoginReason(null); if (r && r.about) setAboutMe(r.about); enterAccount(r && r.email); showToast(r && r.created ? "Account creato" : "Accesso effettuato"); }} />
+        <LoginScreen auth={Account} onGuest={() => { setGuest(true); showToast("Stai navigando come ospite"); }} />
+      </div>
+    );
+  }
+  if (loginOpen && !authed) {
+    return (
+      <div id="phone-shell">
+        <LoginScreen auth={Account} reason={loginReason} onBack={() => { setLoginOpen(false); setLoginReason(null); }}
+          onDone={r => { setGuest(false); setLoginOpen(false); setLoginReason(null); showToast(r && r.created ? "Account creato" : "Accesso effettuato"); }} />
         {toast && <div className="toast">{toast}</div>}
       </div>
     );
@@ -6839,7 +6912,7 @@ function App() {
   else if (view === "instagram") body = <InstagramView ig={ig} onToast={showToast} onBack={() => setView(igFrom)} />;
   else if (view === "ghost") body = <GhostLap onBack={() => setView("tab")} />;
   else if (view === "chats") body = <ChatsView chats={chats} onOpen={openChat} blocked={blocked} onBack={() => setView("tab")} />;
-  else if (view === "profilo") body = <ProfiloScreen ig={ig} onOpenIg={() => { setIgFrom("profilo"); setView("instagram"); }} aboutMe={aboutMe} onSaveAboutMe={setAboutMe} trial={trialActive ? trial : null} trialUsed={!!trial} onBack={() => setView("tab")} onNotifiche={() => setView("notifiche")} onPremium={() => setPremiumOpen(true)} onAdmin={() => guest ? needLogin("Accedi per usare il pannello admin.") : setView(adminUnlocked ? "admin" : "adminLock")} onLogout={() => { leaveAccount(); setAuthed(false); setGuest(false); setAdminUnlocked(false); setView("tab"); goTab("home"); }} isPremium={isPremium} onAbout={() => setInfoModal({ title: "Info su B&T", body: ABOUT_TEXT })} onHelp={() => setInfoModal({ title: "Assistenza", body: HELP_TEXT })} favTeam={favTeam} favDriver={favDriver} onPickTeam={() => guest ? needLogin("Per scegliere scuderia e pilota del cuore serve un account.") : setPicker("team")} onPickDriver={() => guest ? needLogin("Per scegliere scuderia e pilota del cuore serve un account.") : setPicker("driver")} guest={guest} onLogin={() => needLogin(null)} onTerms={() => setTermsOpen(true)} blocked={blocked} onUnblock={unblockUser} onDeleteAccount={deleteAccount} savedCount={saved.length} onOpenSaved={openSaved} />;
+  else if (view === "profilo") body = <ProfiloScreen ig={ig} onOpenIg={() => { setIgFrom("profilo"); setView("instagram"); }} aboutMe={aboutMe} onSaveAboutMe={a => Account.updateAbout(a).catch(() => showToast(NOT_SAVED))} account={account} onSaveName={n => Account.updateName(n)} isAdmin={Account.isAdmin()} trial={trialActive ? trial : null} trialUsed={!!trial} onBack={() => setView("tab")} onNotifiche={() => setView("notifiche")} onPremium={() => setPremiumOpen(true)} onAdmin={() => guest ? needLogin("Accedi per usare il pannello admin.") : setView(adminUnlocked ? "admin" : "adminLock")} onLogout={() => { leaveAccount(); Account.logout(); setGuest(false); setAdminUnlocked(false); setView("tab"); goTab("home"); }} isPremium={isPremium} onAbout={() => setInfoModal({ title: "Info su B&T", body: ABOUT_TEXT })} onHelp={() => setInfoModal({ title: "Assistenza", body: HELP_TEXT })} favTeam={favTeam} favDriver={favDriver} onPickTeam={() => guest ? needLogin("Per scegliere scuderia e pilota del cuore serve un account.") : setPicker("team")} onPickDriver={() => guest ? needLogin("Per scegliere scuderia e pilota del cuore serve un account.") : setPicker("driver")} guest={guest} onLogin={() => needLogin(null)} onTerms={() => setTermsOpen(true)} blocked={blocked} onUnblock={unblockUser} onDeleteAccount={deleteAccount} savedCount={saved.length} onOpenSaved={openSaved} />;
   else if (view === "notifiche") body = <NotificheScreen onBack={() => setView("tab")} notifs={notifs} onReadAll={readAll} isPremium={isPremium} onPremium={() => setPremiumOpen(true)} favTeam={favTeam} favDriver={favDriver} prefs={notifPrefs} onPrefs={setNotifPrefs} onGoProfilo={() => setView("profilo")} />;
   else {
     if (tab === "home") body = <HomeScreen ig={ig} highlights={highlights} onOpenIg={() => { setIgFrom("tab"); setView("instagram"); }} articles={articles} tagFilter={tagFilter} onTag={filterByTag} onClearTag={() => setTagFilter(null)} onOpenArticle={openArticle} isPremium={isPremium} onPremium={() => setPremiumOpen(true)} onToast={showToast} onLiveTrack={() => setLiveTrackOpen(true)} onGoFanta={() => goTab("fanta")}  saved={saved} onToggleSave={toggleSave} savedOnly={savedOnly} setSavedOnly={setSavedOnly} onOpenCircuit={openCircuit} homePoll={homePoll} homeVote={votes.home || null} onVote={castVote} />;
