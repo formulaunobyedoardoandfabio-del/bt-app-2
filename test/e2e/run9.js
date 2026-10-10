@@ -1,8 +1,12 @@
 // Giro completo della 2.0: tutte le schermate senza errori + screenshot delle parti nuove (fallisce con un errore JS).
 const { chromium } = require('/opt/node-tools/node_modules/playwright');
+// Le notizie, le previsioni, i video e il calendario d'esempio della 2.0 ora stanno su Firebase (Task 6): il Firebase
+// finto parte con quei documenti, così le prove li ritrovano.
+const SEED_20 = require('../fixtures/seed-2.0.json');
 (async () => {
   const b = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium-1194/chrome-linux/chrome' });
   const ctx = await b.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 3, hasTouch: true, isMobile: true });
+  await ctx.addInitScript(seed => { window.__btSeed = seed; }, SEED_20);
   await ctx.addInitScript(() => { window.open = () => null; });
   const p = await ctx.newPage(); const errs = []; p.on('pageerror', e => errs.push(e.message));
   const w = (ms = 350) => p.waitForTimeout(ms);

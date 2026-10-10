@@ -141,6 +141,13 @@ t('email non valida e password mancante: auth/invalid-email e auth/missing-passw
   assert.strictEqual(r.user.email, 'a@b.it');
 });
 
+t('dati di partenza: addDocs si aggiunge ai documenti di serie (account di prova compreso)', async () => {
+  const { firebase } = setupWindow({ seed: { addDocs: { 'shared/bt-news': { __arr: [{ id: 'n9', title: 'Prova' }] } } } });
+  assert.deepStrictEqual(firebase.__fake.doc('shared/bt-news'), { __arr: [{ id: 'n9', title: 'Prova' }] });
+  assert.ok(firebase.__fake.doc('users/a@b.it'), 'manca l\'account di prova');
+  assert.ok(firebase.__fake.doc('admins/a@b.it'), 'manca l\'admin di prova');
+});
+
 (async () => {
   const filter = process.argv[2] ? new RegExp(process.argv[2], 'i') : null;   // node … <filtro sul nome>
   for (const [name, fn] of tests) {

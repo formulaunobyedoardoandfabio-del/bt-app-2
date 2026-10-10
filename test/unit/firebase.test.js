@@ -47,6 +47,21 @@ t('senza Firebase: letture null, scritture rifiutate con offline, isOnline falso
   assert.strictEqual(F.isOnline(), true);
 });
 
+t('sgStrict: null se il documento manca, errore se non c\'è rete (sg invece dà null in tutti e due i casi)', async () => {
+  const { firebase } = setupWindow();
+  await F.ss('bt-x', [1]);
+  assert.deepStrictEqual(await F.sgStrict('bt-x'), [1]);
+  assert.strictEqual(await F.sgStrict('bt-manca'), null);
+  firebase.__fake.offline = true;
+  await assert.rejects(F.sgStrict('bt-x'), e => e.code === 'unavailable');
+  assert.strictEqual(await F.sg('bt-x'), null);
+  assert.strictEqual(F.isOnline(), false);
+  firebase.__fake.offline = false;
+  const { window } = setupWindow();
+  delete window.firebase;
+  await assert.rejects(F.sgStrict('bt-x'), e => e.code === 'offline');
+});
+
 t('dati solo del telefono con prefisso bt_', async () => {
   const { localStorage } = setupWindow();
   F.local.set('bt-blocked', [{ aid: 'u1', name: 'Marco' }]);

@@ -1,6 +1,9 @@
 // Test della 2.0: condividere gli articoli e scaricarli come immagine (dalla versione 16 senza filigrana, col logo B&T e il nostro Instagram).
 // Uso: bash rtest/build.sh && node rtest/run11.js [filtro]
 const { chromium } = require('/opt/node-tools/node_modules/playwright');
+// Le notizie, le previsioni, i video e il calendario d'esempio della 2.0 ora stanno su Firebase (Task 6): il Firebase
+// finto parte con quei documenti, così le prove li ritrovano.
+const SEED_20 = require('../fixtures/seed-2.0.json');
 const EXE = '/opt/pw-browsers/chromium-1194/chrome-linux/chrome';
 const HADJAR = 'Hadjar, dalla Racing Bulls alla Red Bull';
 const PREMIUM = 'Dentro il muretto box: come si vive una gara';
@@ -10,6 +13,7 @@ const SITE = 'https://formulaunobyedoardoandfabio-del.github.io/bt-app-flutter';
 // share (il telefono ha la condivisione di sistema), clipboard: 'fail' (la copia non riesce).
 async function open(b, opts = {}) {
   const ctx = await b.newContext({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true });
+  await ctx.addInitScript(seed => { window.__btSeed = seed; }, SEED_20);
   await ctx.addInitScript(o => {
     window.__opened = []; window.open = u => { window.__opened.push(String(u)); return null; };
     // Registra ogni testo scritto sulle immagini generate (per controllare filigrana e contenuto).
@@ -181,6 +185,7 @@ const tests = {
   },
   async 'scarica: dentro una cornice senza la funzione "scarica" il bottone non compare'(b) {
     const ctx = await b.newContext({ viewport: { width: 390, height: 844 } });
+    await ctx.addInitScript(seed => { window.__btSeed = seed; }, SEED_20);
     await ctx.addInitScript(() => { delete Navigator.prototype.share; });
     const pg = await ctx.newPage(); const errs = []; pg.on('pageerror', e => errs.push(e.message));
     await pg.goto('file://' + __dirname + '/frame.html'); await pg.waitForTimeout(800);

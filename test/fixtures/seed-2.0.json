@@ -1,0 +1,706 @@
+{
+ "_nota": "Contenuti dimostrativi della 2.0 (ARTICLES, PREDICTIONS_INIT, HIGHLIGHTS_INIT, HOME_POLL, IG_INIT di src/App.jsx al commit 40409d4, e il calendario con gli stati della 2.0) come documenti Firebase nel formato di oggi: servono alle prove copiate dalla 2.0 (run8-run23), che li cercano. Le date delle notizie danno le stesse etichette (\"2 min fa\", \"Ieri\"...) all'ora fissa delle prove (7/10/2026 10:00 UTC). Nell'app non ci sono più.",
+ "addDocs": {
+  "shared/bt-news": {
+   "__arr": [
+    {
+     "id": "1",
+     "featured": true,
+     "title": "Weekend di gara: il programma completo B&T",
+     "circuits": [
+      "sg-2008"
+     ],
+     "premium": false,
+     "date": "2026-10-07T09:58:00.000Z",
+     "summary": "Orari, sessioni e come seguire ogni momento del weekend con noi.",
+     "category": "GARA",
+     "author": "Team B&T",
+     "image": "",
+     "content": "Un altro weekend di Formula 1 sta per iniziare, e la redazione B&T ha preparato la guida completa per non perdersi nulla: dalle prove libere alle qualifiche, fino al giorno di gara.\n\nSeguiremo ogni sessione in diretta nella sezione Gara dell'app, con classifiche aggiornate in tempo reale, tempi sul giro e tutte le informazioni utili per vivere il weekend come se foste al muretto box.\n\nCome sempre, vi terremo aggiornati anche in chat: passate a salutarci e a commentare la gara insieme alla community B&T.",
+     "published": true
+    },
+    {
+     "id": "9",
+     "title": "Hadjar, dalla Racing Bulls alla Red Bull",
+     "teams": [
+      "redbull"
+     ],
+     "drivers": [
+      "hadjar",
+      "verstappen"
+     ],
+     "premium": false,
+     "date": "2026-10-07T09:30:00.000Z",
+     "summary": "Il percorso del francese fino al sedile accanto a Verstappen.",
+     "category": "PILOTI",
+     "author": "Team B&T",
+     "image": "",
+     "content": "Vicecampione di Formula 2 nel 2024, Isack Hadjar ha debuttato in Formula 1 nel 2025 con la Racing Bulls, conquistando da rookie i primi punti e il primo podio.\n\nQuei risultati gli sono valsi la promozione nella squadra principale: nel 2026 corre per la Oracle Red Bull Racing al fianco di Max Verstappen, quattro volte campione del mondo.\n\nNella sezione Gara, tocca il suo nome in classifica per vedere bio e statistiche aggiornate.",
+     "published": true
+    },
+    {
+     "id": "10",
+     "title": "Ferrari: Leclerc e Hamilton, la coppia del Cavallino",
+     "teams": [
+      "ferrari"
+     ],
+     "drivers": [
+      "leclerc",
+      "hamilton"
+     ],
+     "premium": false,
+     "date": "2026-10-07T05:00:00.000Z",
+     "summary": "Due storie diverse sotto la stessa tuta rossa.",
+     "category": "SCUDERIE",
+     "author": "Team B&T",
+     "image": "",
+     "content": "Charles Leclerc è pilota Ferrari dal 2019 ed è il volto del Cavallino da ormai sette stagioni. Dal 2025 al suo fianco c'è Lewis Hamilton, sette volte campione del mondo.\n\nUna coppia che unisce esperienza e velocità pura: per i tifosi della Rossa, due ragioni in più per seguire ogni weekend.\n\nSe la Ferrari è la tua scuderia del cuore, attiva le notifiche dedicate dal tuo profilo.",
+     "published": true
+    },
+    {
+     "id": "12",
+     "title": "Singapore: chi vince la Sprint?",
+     "circuits": [
+      "sg-2008"
+     ],
+     "poll": {
+      "q": "Chi vince la Sprint di Singapore?",
+      "answer": null,
+      "options": [
+       {
+        "id": "norris",
+        "label": "L. Norris",
+        "base": 38
+       },
+       {
+        "id": "piastri",
+        "label": "O. Piastri",
+        "base": 24
+       },
+       {
+        "id": "verstappen",
+        "label": "M. Verstappen",
+        "base": 22
+       },
+       {
+        "id": "russell",
+        "label": "G. Russell",
+        "base": 16
+       }
+      ]
+     },
+     "premium": false,
+     "date": "2026-10-07T09:00:00.000Z",
+     "summary": "La prima Sprint di sempre a Marina Bay: vota e prendi punti nel FantaF1.",
+     "category": "FANTA",
+     "author": "Team B&T",
+     "image": "",
+     "content": "Per la prima volta Marina Bay ospita una Sprint: 21 giri sabato 10 ottobre alle 17:00 ora locale, le 11:00 in Italia. Venerdì sera, dopo le prime libere, ci sono le Qualifiche Sprint.\n\nUna gara corta sul tracciato più faticoso dell'anno: partire davanti conta tantissimo, perché a Singapore sorpassare è difficile e la Safety Car è sempre dietro l'angolo.\n\nChi la vincerà secondo te? Vota qui sotto: se indovini prendi 2 punti nel FantaF1.",
+     "published": true
+    },
+    {
+     "id": "11",
+     "title": "Monza, il giro più veloce di sempre",
+     "circuits": [
+      "it-1922"
+     ],
+     "drivers": [
+      "norris"
+     ],
+     "teams": [
+      "mclaren"
+     ],
+     "premium": false,
+     "date": "2026-09-16T10:00:00.000Z",
+     "summary": "Il record sul giro dell'Autodromo e chi l'ha firmato.",
+     "category": "ANALISI",
+     "author": "Team B&T",
+     "image": "",
+     "content": "Nel Gran Premio d'Italia 2025 Lando Norris ha girato in 1:20.901: è il giro più veloce mai fatto in gara a Monza e ha cancellato il primato di Rubens Barrichello, che resisteva dal 2004.\n\nSul Tempio della Velocità conta soprattutto la scia: lunghi rettilinei, staccate violente alla Prima Variante e alla Roggia, e la Parabolica da percorrere col piede giù per uscire forte sul traguardo.\n\nNella sezione Gara, tocca \"Mostra di più\" sulla prossima gara per scoprire numeri e segreti di ogni circuito.",
+     "published": true
+    },
+    {
+     "id": "2",
+     "title": "Cosa cambia nel regolamento tecnico",
+     "premium": false,
+     "date": "2026-10-06T04:00:00.000Z",
+     "summary": "Le nuove norme che stanno ridisegnando il modo di correre.",
+     "category": "NEWS",
+     "author": "Team B&T",
+     "image": "",
+     "content": "Le squadre si stanno adattando a un pacchetto di modifiche tecniche pensato per rendere le gare più imprevedibili e ravvicinate.\n\nI cambiamenti toccano l'aerodinamica e la gestione dell'energia, e nelle prime uscite stagionali si sono già viste differenze significative nel passo gara tra i vari team.\n\nContinueremo a seguire da vicino come ogni scuderia interpreta le nuove regole, weekend dopo weekend.",
+     "published": true
+    },
+    {
+     "id": "3",
+     "title": "Strategia gomme: chi ha rischiato di più",
+     "circuits": [
+      "az-2016"
+     ],
+     "premium": false,
+     "date": "2026-10-05T09:00:00.000Z",
+     "summary": "Un'analisi delle scelte di strategia nell'ultimo GP.",
+     "category": "ANALISI",
+     "author": "Team B&T",
+     "image": "",
+     "content": "Le scelte di strategia hanno fatto ancora una volta la differenza tra un buon risultato e un'occasione mancata.\n\nAlcuni team hanno optato per una strategia aggressiva a una sola sosta, scommettendo sulla tenuta delle gomme fino alla bandiera a scacchi, mentre altri hanno preferito il doppio pit stop per restare competitivi sul passo.\n\nNella sezione Gara trovate il dettaglio completo di pit stop e distacchi per rivivere ogni scelta strategica.",
+     "published": true
+    },
+    {
+     "id": "4",
+     "premium": true,
+     "title": "Dentro il muretto box: come si vive una gara",
+     "date": "2026-10-04T09:00:00.000Z",
+     "summary": "Uno sguardo a cosa succede sul muretto durante le 2 ore di gara.",
+     "category": "NEWS",
+     "author": "Team B&T",
+     "image": "",
+     "content": "Il muretto box è il centro nevralgico di ogni weekend di gara: è da lì che ingegneri e strateghi seguono ogni giro, pronti a reagire in tempo reale a ogni imprevisto.\n\nIn questo articolo vi raccontiamo, passo per passo, come funziona il lavoro di squadra dietro le quinte durante una gara, dalle comunicazioni radio alle decisioni sui pit stop.\n\nContenuto riservato agli abbonati B&T Premium.",
+     "published": true
+    },
+    {
+     "id": "5",
+     "title": "Griglia di partenza: tutte le posizioni",
+     "premium": false,
+     "date": "2026-10-03T09:00:00.000Z",
+     "summary": "La griglia completa dopo le qualifiche.",
+     "category": "GARA",
+     "author": "Team B&T",
+     "image": "",
+     "content": "Dopo una sessione di qualifiche combattuta, la griglia di partenza è ormai definita.\n\nTroverete la classifica completa, giro per giro, nella sezione Gara dell'app, insieme ai distacchi accumulati in ogni fase della sessione.",
+     "published": true
+    },
+    {
+     "id": "6",
+     "title": "I momenti social del weekend B&T",
+     "premium": false,
+     "date": "2026-10-02T09:00:00.000Z",
+     "summary": "I contenuti più belli condivisi dalla nostra community.",
+     "category": "COMMUNITY",
+     "author": "Team B&T",
+     "image": "",
+     "content": "Anche questo weekend la community B&T si è fatta sentire: dai commenti in diretta durante la gara alle foto dai paddock improvvisati davanti alla TV, avete reso ogni sessione ancora più divertente da seguire insieme.\n\nContinuate a taggarci nelle vostre storie: i contenuti migliori li ripubblichiamo sul nostro Instagram.",
+     "published": true
+    },
+    {
+     "id": "7",
+     "title": "FantaF1: i consigli della redazione per il prossimo GP",
+     "drivers": [
+      "leclerc",
+      "antonelli"
+     ],
+     "premium": false,
+     "date": "2026-10-01T09:00:00.000Z",
+     "summary": "Chi schierare nella prossima gara secondo noi.",
+     "category": "FANTA",
+     "author": "Team B&T",
+     "image": "",
+     "content": "Con un nuovo weekend alle porte, è il momento di ripensare la formazione della vostra squadra FantaF1.\n\nLa redazione ha analizzato passo gara, affidabilità e condizioni di pista per suggerirvi qualche idea in più prima del blocco delle formazioni. Trovate tutto nella sezione Fanta dell'app.",
+     "published": true
+    },
+    {
+     "id": "8",
+     "title": "Cronaca: come è andata la gara",
+     "circuits": [
+      "az-2016"
+     ],
+     "premium": false,
+     "date": "2026-09-30T10:00:00.000Z",
+     "summary": "Il racconto di una gara ricca di colpi di scena.",
+     "category": "NEWS",
+     "author": "Team B&T",
+     "image": "",
+     "content": "Una gara ricca di sorpassi, strategie ribaltate all'ultimo giro e un finale rimasto in bilico fino alla bandiera a scacchi.\n\nNella cronaca completa ripercorriamo i momenti chiave della gara, dal via fino al traguardo, con tutti i dettagli che potreste esservi persi in diretta.",
+     "published": true
+    }
+   ]
+  },
+  "shared/bt-races": {
+   "__arr": [
+    {
+     "id": "r1",
+     "name": "GP d'Australia",
+     "circuit": "Albert Park, Melbourne",
+     "country": "Australia",
+     "round": 1,
+     "date": "2026-03-08T15:00:00",
+     "status": "CONCLUSA",
+     "totalLaps": 58,
+     "circuitId": "au-1953"
+    },
+    {
+     "id": "r2",
+     "name": "GP di Cina",
+     "circuit": "Shanghai International Circuit",
+     "country": "Cina",
+     "round": 2,
+     "date": "2026-03-15T15:00:00",
+     "status": "CONCLUSA",
+     "totalLaps": 56,
+     "circuitId": "cn-2004"
+    },
+    {
+     "id": "r3",
+     "name": "GP del Giappone",
+     "circuit": "Suzuka",
+     "country": "Giappone",
+     "round": 3,
+     "date": "2026-03-29T15:00:00",
+     "status": "CONCLUSA",
+     "totalLaps": 53,
+     "circuitId": "jp-1962"
+    },
+    {
+     "id": "r4",
+     "name": "GP di Miami",
+     "circuit": "Miami International Autodrome",
+     "country": "USA",
+     "round": 4,
+     "date": "2026-05-03T15:00:00",
+     "status": "CONCLUSA",
+     "totalLaps": 57,
+     "circuitId": "us-2022"
+    },
+    {
+     "id": "r5",
+     "name": "GP del Canada",
+     "circuit": "Circuit Gilles Villeneuve, Montréal",
+     "country": "Canada",
+     "round": 5,
+     "date": "2026-05-24T15:00:00",
+     "status": "CONCLUSA",
+     "totalLaps": 70,
+     "circuitId": "ca-1978"
+    },
+    {
+     "id": "r6",
+     "name": "GP di Monaco",
+     "circuit": "Circuit de Monaco",
+     "country": "Monaco",
+     "round": 6,
+     "date": "2026-06-07T15:00:00",
+     "status": "CONCLUSA",
+     "totalLaps": 78,
+     "circuitId": "mc-1929"
+    },
+    {
+     "id": "r7",
+     "name": "GP di Barcellona-Catalogna",
+     "circuit": "Circuit de Barcelona-Catalunya",
+     "country": "Spagna",
+     "round": 7,
+     "date": "2026-06-14T15:00:00",
+     "status": "CONCLUSA",
+     "totalLaps": 66,
+     "circuitId": "es-1991"
+    },
+    {
+     "id": "r8",
+     "name": "GP d'Austria",
+     "circuit": "Red Bull Ring, Spielberg",
+     "country": "Austria",
+     "round": 8,
+     "date": "2026-06-28T15:00:00",
+     "status": "CONCLUSA",
+     "totalLaps": 71,
+     "circuitId": "at-1969"
+    },
+    {
+     "id": "r9",
+     "name": "GP di Gran Bretagna",
+     "circuit": "Silverstone",
+     "country": "Regno Unito",
+     "round": 9,
+     "date": "2026-07-05T15:00:00",
+     "status": "CONCLUSA",
+     "totalLaps": 52,
+     "circuitId": "gb-1948"
+    },
+    {
+     "id": "r10",
+     "name": "GP del Belgio",
+     "circuit": "Spa-Francorchamps",
+     "country": "Belgio",
+     "round": 10,
+     "date": "2026-07-19T15:00:00",
+     "status": "CONCLUSA",
+     "totalLaps": 44,
+     "circuitId": "be-1925"
+    },
+    {
+     "id": "r11",
+     "name": "GP d'Ungheria",
+     "circuit": "Hungaroring",
+     "country": "Ungheria",
+     "round": 11,
+     "date": "2026-07-26T15:00:00",
+     "status": "CONCLUSA",
+     "totalLaps": 70,
+     "circuitId": "hu-1986"
+    },
+    {
+     "id": "r12",
+     "name": "GP d'Olanda",
+     "circuit": "Zandvoort",
+     "country": "Paesi Bassi",
+     "round": 12,
+     "date": "2026-08-23T15:00:00",
+     "status": "CONCLUSA",
+     "totalLaps": 72,
+     "circuitId": "nl-1948"
+    },
+    {
+     "id": "r13",
+     "name": "GP d'Italia",
+     "circuit": "Monza",
+     "country": "Italia",
+     "round": 13,
+     "date": "2026-09-06T15:00:00",
+     "status": "CONCLUSA",
+     "totalLaps": 53,
+     "circuitId": "it-1922"
+    },
+    {
+     "id": "r14",
+     "name": "GP di Spagna",
+     "circuit": "Madring, Madrid",
+     "country": "Spagna",
+     "round": 14,
+     "date": "2026-09-13T15:00:00",
+     "status": "CONCLUSA",
+     "totalLaps": 57,
+     "circuitId": "es-2026"
+    },
+    {
+     "id": "r15",
+     "name": "GP dell'Azerbaigian",
+     "circuit": "Baku City Circuit",
+     "country": "Azerbaigian",
+     "round": 15,
+     "date": "2026-09-26T15:00:00",
+     "status": "CONCLUSA",
+     "totalLaps": 51,
+     "circuitId": "az-2016"
+    },
+    {
+     "id": "r16",
+     "name": "GP del Bahrain in Malesia",
+     "circuit": "Sepang International Circuit",
+     "country": "Malesia",
+     "round": 16,
+     "date": "2026-10-04T09:00:00",
+     "status": "IN ARRIVO",
+     "totalLaps": 56,
+     "circuitId": "my-1999"
+    },
+    {
+     "id": "r17",
+     "name": "GP di Singapore",
+     "circuit": "Marina Bay",
+     "country": "Singapore",
+     "round": 17,
+     "date": "2026-10-11T14:00:00",
+     "status": "IN ARRIVO",
+     "totalLaps": 62,
+     "circuitId": "sg-2008"
+    },
+    {
+     "id": "r18",
+     "name": "GP degli Stati Uniti",
+     "circuit": "Circuit of the Americas, Austin",
+     "country": "USA",
+     "round": 18,
+     "date": "2026-10-25T21:00:00",
+     "status": "IN ARRIVO",
+     "totalLaps": 56,
+     "circuitId": "us-2012"
+    },
+    {
+     "id": "r19",
+     "name": "GP di Città del Messico",
+     "circuit": "Autódromo Hermanos Rodríguez",
+     "country": "Messico",
+     "round": 19,
+     "date": "2026-11-01T21:00:00",
+     "status": "IN ARRIVO",
+     "totalLaps": 71,
+     "circuitId": "mx-1962"
+    },
+    {
+     "id": "r20",
+     "name": "GP di San Paolo",
+     "circuit": "Interlagos",
+     "country": "Brasile",
+     "round": 20,
+     "date": "2026-11-08T18:00:00",
+     "status": "IN ARRIVO",
+     "totalLaps": 71,
+     "circuitId": "br-1940"
+    },
+    {
+     "id": "r21",
+     "name": "GP di Las Vegas",
+     "circuit": "Las Vegas Strip Circuit",
+     "country": "USA",
+     "round": 21,
+     "date": "2026-11-22T05:00:00",
+     "status": "IN ARRIVO",
+     "totalLaps": 50,
+     "circuitId": "us-2023"
+    },
+    {
+     "id": "r22",
+     "name": "GP del Qatar",
+     "circuit": "Lusail",
+     "country": "Qatar",
+     "round": 22,
+     "date": "2026-11-29T17:00:00",
+     "status": "IN ARRIVO",
+     "totalLaps": 57,
+     "circuitId": "qa-2004"
+    },
+    {
+     "id": "r23",
+     "name": "GP di Abu Dhabi",
+     "circuit": "Yas Marina",
+     "country": "Emirati Arabi Uniti",
+     "round": 23,
+     "date": "2026-12-06T14:00:00",
+     "status": "IN ARRIVO",
+     "totalLaps": 58,
+     "circuitId": "ae-2009"
+    }
+   ]
+  },
+  "shared/bt-predictions": {
+   "__arr": [
+    {
+     "id": "p1",
+     "kind": "driver",
+     "cat": "Pilota",
+     "q": "Chi farà la pole position a Sepang?",
+     "about": "QUALI",
+     "raceId": "r16",
+     "answer": null
+    },
+    {
+     "id": "p2",
+     "kind": "number",
+     "cat": "Numero",
+     "q": "Quante volte entrerà la Safety Car durante la gara?",
+     "about": "RACE",
+     "raceId": "r16",
+     "answer": null
+    },
+    {
+     "id": "p3",
+     "kind": "driver",
+     "cat": "Pilota",
+     "q": "Chi sarà il pilota del giorno?",
+     "about": "RACE",
+     "raceId": "r16",
+     "answer": null
+    },
+    {
+     "id": "p4",
+     "kind": "team",
+     "cat": "Scuderia",
+     "q": "Quale scuderia farà il pit stop più veloce della gara?",
+     "about": "RACE",
+     "raceId": "r16",
+     "answer": null
+    },
+    {
+     "id": "h1",
+     "kind": "history",
+     "cat": "Storia",
+     "q": "Chi ha vinto l'ultimo GP della Malesia a Sepang, nel 2017?",
+     "answer": "verstappen",
+     "options": [
+      {
+       "id": "hamilton",
+       "label": "L. Hamilton"
+      },
+      {
+       "id": "verstappen",
+       "label": "M. Verstappen"
+      },
+      {
+       "id": "vettel",
+       "label": "S. Vettel"
+      },
+      {
+       "id": "ricciardo",
+       "label": "D. Ricciardo"
+      }
+     ],
+     "note": "Vinse Max Verstappen, il giorno dopo aver compiuto 20 anni."
+    },
+    {
+     "id": "h2",
+     "kind": "history",
+     "cat": "Storia",
+     "q": "Chi ha vinto più volte il GP della Malesia?",
+     "answer": "vettel",
+     "options": [
+      {
+       "id": "schumacher",
+       "label": "M. Schumacher"
+      },
+      {
+       "id": "alonso",
+       "label": "F. Alonso"
+      },
+      {
+       "id": "vettel",
+       "label": "S. Vettel"
+      },
+      {
+       "id": "hamilton",
+       "label": "L. Hamilton"
+      }
+     ],
+     "note": "Sebastian Vettel, 4 volte: 2010, 2011, 2013 e 2015."
+    },
+    {
+     "id": "h3",
+     "kind": "history",
+     "cat": "Storia",
+     "q": "In che anno si è corso il primo GP della Malesia a Sepang?",
+     "answer": "1999",
+     "options": [
+      {
+       "id": "1997",
+       "label": "1997"
+      },
+      {
+       "id": "1999",
+       "label": "1999"
+      },
+      {
+       "id": "2001",
+       "label": "2001"
+      },
+      {
+       "id": "2003",
+       "label": "2003"
+      }
+     ],
+     "note": "Vinse Eddie Irvine con la Ferrari."
+    },
+    {
+     "id": "h4",
+     "kind": "history",
+     "cat": "Storia",
+     "q": "Chi ha vinto il primo GP di Singapore, nel 2008?",
+     "answer": "alonso",
+     "options": [
+      {
+       "id": "massa",
+       "label": "F. Massa"
+      },
+      {
+       "id": "hamilton",
+       "label": "L. Hamilton"
+      },
+      {
+       "id": "alonso",
+       "label": "F. Alonso"
+      },
+      {
+       "id": "raikkonen",
+       "label": "K. Räikkönen"
+      }
+     ],
+     "note": "Fu la prima gara in notturna della storia della F1."
+    }
+   ]
+  },
+  "shared/bt-highlights": {
+   "__arr": [
+    {
+     "id": "h1",
+     "title": "Baku: il nostro commento a caldo",
+     "dur": "6:40",
+     "link": "",
+     "thumb": null
+    },
+    {
+     "id": "h2",
+     "title": "Reazioni live dal divano B&T",
+     "dur": "4:15",
+     "link": "",
+     "thumb": null
+    },
+    {
+     "id": "h3",
+     "title": "Top 5 sorpassi della stagione, spiegati da noi",
+     "dur": "8:02",
+     "link": "",
+     "thumb": null
+    }
+   ]
+  },
+  "shared/bt-home-poll": {
+   "id": "home",
+   "q": "Chi vince il prossimo GP?",
+   "answer": null,
+   "options": [
+    {
+     "id": "norris",
+     "label": "L. Norris",
+     "base": 42
+    },
+    {
+     "id": "verstappen",
+     "label": "M. Verstappen",
+     "base": 33
+    },
+    {
+     "id": "antonelli",
+     "label": "K. Antonelli",
+     "base": 25
+    }
+   ]
+  },
+  "shared/bt-ig-config": {
+   "handle": "bt_formula1",
+   "followers": 128544,
+   "posts": 312,
+   "videos": [
+    {
+     "id": "v1",
+     "title": "Il sorpasso della settimana",
+     "thumbnail": "",
+     "views": "48K",
+     "likes": "3.2K",
+     "url": ""
+    },
+    {
+     "id": "v2",
+     "title": "Reazioni live dal divano B&T",
+     "thumbnail": "",
+     "views": "31K",
+     "likes": "2.4K",
+     "url": ""
+    },
+    {
+     "id": "v3",
+     "title": "Top 5 team radio del GP",
+     "thumbnail": "",
+     "views": "27K",
+     "likes": "1.9K",
+     "url": ""
+    },
+    {
+     "id": "v4",
+     "title": "FantaF1: chi schierare?",
+     "thumbnail": "",
+     "views": "19K",
+     "likes": "1.2K",
+     "url": ""
+    }
+   ]
+  }
+ }
+}

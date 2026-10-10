@@ -1,7 +1,8 @@
 // Firebase finto per le prove: la parte dell'API compat 10 (Firestore + Authentication) usata dai servizi dell'app.
 // Si carica prima dell'app: i servizi trovano window.firebase e non scaricano niente da gstatic.
 // Salva nel localStorage (chiavi bt-fake-fs e bt-fake-auth), quindi i dati restano ricaricando la pagina.
-// Dati di partenza: window.__btSeed = { docs, users, freshInstall, requireRecentLogin } (vedi seedDefaults).
+// Dati di partenza: window.__btSeed = { docs, addDocs, users, freshInstall, requireRecentLogin } (vedi seedDefaults):
+// docs sostituisce i documenti di serie, addDocs si aggiunge a quelli (l'account di prova a@b.it resta).
 // Comandi per le prove: firebase.__fake.offline = true (niente rete: le letture falliscono, le scritture restano in
 // sospeso finché la rete torna, come in Firestore), .failWrites = true (scritture rifiutate dalle regole: permission-denied).
 (function (root) {
@@ -31,7 +32,7 @@
     const st = load(AUTH_KEY);
     if (load(FS_KEY) && st) { if (st.recent) { st.recent = false; save(AUTH_KEY, st); } return; }
     const s = root.__btSeed || {}, d = seedDefaults();
-    save(FS_KEY, clone(s.docs || d.docs));
+    save(FS_KEY, clone({ ...(s.docs || d.docs), ...(s.addDocs || {}) }));   // addDocs: in più dei documenti di serie
     save(AUTH_KEY, { users: clone(s.users || d.users), current: null, resetSent: [], requireRecentLogin: !!s.requireRecentLogin, recent: false });
     if (!s.freshInstall) ls().setItem('bt_bt-terms-accepted', JSON.stringify({ ts: 1 }));
   })();

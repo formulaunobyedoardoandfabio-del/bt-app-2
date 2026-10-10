@@ -2,11 +2,15 @@
 // 5 parametri e per ogni pilota c'è un radar con la media dei voti della community B&T.
 // Uso: bash rtest/build.sh && node rtest/run19.js [filtro]      (PAGE=real.html per React vero)
 const { chromium } = require('/opt/node-tools/node_modules/playwright');
+// Le notizie, le previsioni, i video e il calendario d'esempio della 2.0 ora stanno su Firebase (Task 6): il Firebase
+// finto parte con quei documenti, così le prove li ritrovano.
+const SEED_20 = require('../fixtures/seed-2.0.json');
 const EXE = '/opt/pw-browsers/chromium-1194/chrome-linux/chrome';
 const NOW = '2026-09-30T11:48:00Z';
 
 async function open(b, { now = NOW, width = 390, height = 844 } = {}) {
   const ctx = await b.newContext({ viewport: { width, height }, hasTouch: true });
+  await ctx.addInitScript(seed => { window.__btSeed = seed; }, SEED_20);
   await ctx.addInitScript(now => { window.open = () => null; window.__btNow = Date.parse(now); }, now);
   const p = await ctx.newPage(); const errs = []; p.on('pageerror', e => errs.push(e.message));
   await p.goto('file://' + __dirname + '/' + (process.env.PAGE || 'test.html')); await p.waitForTimeout(400);

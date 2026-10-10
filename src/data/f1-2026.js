@@ -1,5 +1,6 @@
-// Dati veri della stagione 2026 usati dall'app e dai servizi (spostati da src/App.jsx, Task 5):
-// scuderie, piloti (bio e statistiche), calendario e stati delle gare.
+// Dati veri della stagione 2026 usati dall'app e dai servizi (spostati da src/App.jsx nei Task 5 e 6):
+// scuderie, piloti (bio e statistiche), calendario e stati delle gare, e i valori di partenza dei documenti Firebase
+// che l'admin aggiorna (classifiche, prezzi del FantaF1, domande di storia: src/services/appdata.js).
 
 // Scuderie 2026 (colori indicativi, usati per pallini, hashtag e sfondi)
 const TEAMS = [
@@ -95,5 +96,48 @@ const CALENDAR = [
   ["GP di Abu Dhabi", "Yas Marina", "Emirati Arabi Uniti", "2026-12-06"],
 ];
 const RACE_STATUSES = ["IN ARRIVO", "LIVE", "CONCLUSA"];
+// Le gare del calendario come le usa l'app (lo stato arriva da Firebase o dalla data: src/services/compat.js, mergeRaces).
+const RACES = CALENDAR.map(([name, circuit, country, date], i) => ({ id: "r" + (i + 1), round: i + 1, name, circuit, country, date, circuitId: CIRCUIT_IDS[i] }));
 
-module.exports = { TEAMS, DRIVER_DATA, CIRCUIT_IDS, CALENDAR, RACE_STATUSES };
+// Classifiche reali dopo il GP dell'Azerbaigian (round 15; RacingNews365 e Total Motorsport, 30/09/2026): valori di
+// partenza finché l'admin non le aggiorna. [id, punti] in ordine di classifica. In classifica c'è anche chi ha corso
+// solo qualche gara da sostituto e non è tra i 22 titolari (guests).
+const STANDINGS = {
+  note: "Aggiornata dopo il GP dell'Azerbaigian (round 15)",
+  drivers: [
+    ["antonelli", 302], ["russell", 236], ["hamilton", 199], ["norris", 186], ["leclerc", 179], ["verstappen", 163], ["piastri", 120],
+    ["hadjar", 86], ["lawson", 59], ["gasly", 41], ["lindblad", 37], ["colapinto", 27], ["bearman", 20], ["bortoleto", 10], ["hulkenberg", 7],
+    ["ocon", 7], ["sainz", 7], ["albon", 5], ["alonso", 3], ["tsunoda", 1], ["stroll", 0], ["bottas", 0], ["perez", 0],
+  ],
+  teams: [
+    ["mercedes", 538], ["ferrari", 378], ["mclaren", 306], ["redbull", 263], ["racingbulls", 83], ["alpine", 68],
+    ["haas", 27], ["audi", 17], ["williams", 12], ["astonmartin", 3], ["cadillac", 0],
+  ],
+  guests: { tsunoda: { id: "tsunoda", name: "Y. Tsunoda", full: "Yuki Tsunoda", teamId: "racingbulls", team: "Racing Bulls", color: "#6692FF", guest: true } },
+};
+
+// FantaF1 come il gioco ufficiale F1 Fantasy: prezzi (milioni di $), variazione dopo l'ultima gara (solo dove la
+// conosciamo) e punti della stagione dopo il GP dell'Azerbaigian (round 15), letti il 30/09/2026 da BoxBox F1 Fantasy
+// e dall'app F1 Fantasy. [prezzo, variazione, punti]. Dopo ogni gara si aggiornano dal pannello admin (FANTA F1).
+const FANTASY = {
+  drivers: { antonelli: [26.9, 0.3, 622], russell: [28.1, 0.3, 413], hamilton: [24.6, -0.3, 395], verstappen: [27.6, null, 376], leclerc: [23.7, null, 351],
+    norris: [26.7, null, 328], piastri: [24.0, null, 225], lawson: [9.1, null, 184], hadjar: [15.1, null, 164], gasly: [11.4, null, 146], colapinto: [10.0, null, 138],
+    ocon: [9.1, null, 137], lindblad: [8.8, null, 104], sainz: [8.4, null, 100], bortoleto: [8.2, null, 92], bearman: [5.6, null, 69], perez: [3.0, 0, 19],
+    albon: [5.8, null, 13], alonso: [6.2, null, 9], hulkenberg: [5.4, 0.6, 4], bottas: [3.6, null, -67], stroll: [3.0, null, -142] },
+  teams: { mercedes: [33.8, null, 1269], ferrari: [27.6, null, 927], mclaren: [32.2, null, 740], redbull: [32.1, null, 712], racingbulls: [15.3, null, 435],
+    alpine: [19.4, null, 389], haas: [10.8, 0.6, 245], audi: [9.2, 0.6, 209], williams: [13.8, null, 176], cadillac: [3.6, null, -51], astonmartin: [5.7, null, -113] },
+};
+
+// Domande di storia delle previsioni del FantaF1 (fatti veri, la risposta si sa già): +1 punto a chi indovina.
+const HISTORY_QUESTIONS = [
+  { id: "h1", kind: "history", cat: "Storia", q: "Chi ha vinto l'ultimo GP della Malesia a Sepang, nel 2017?", answer: "verstappen",
+    options: [["hamilton", "L. Hamilton"], ["verstappen", "M. Verstappen"], ["vettel", "S. Vettel"], ["ricciardo", "D. Ricciardo"]], note: "Vinse Max Verstappen, il giorno dopo aver compiuto 20 anni." },
+  { id: "h2", kind: "history", cat: "Storia", q: "Chi ha vinto più volte il GP della Malesia?", answer: "vettel",
+    options: [["schumacher", "M. Schumacher"], ["alonso", "F. Alonso"], ["vettel", "S. Vettel"], ["hamilton", "L. Hamilton"]], note: "Sebastian Vettel, 4 volte: 2010, 2011, 2013 e 2015." },
+  { id: "h3", kind: "history", cat: "Storia", q: "In che anno si è corso il primo GP della Malesia a Sepang?", answer: "1999",
+    options: [["1997", "1997"], ["1999", "1999"], ["2001", "2001"], ["2003", "2003"]], note: "Vinse Eddie Irvine con la Ferrari." },
+  { id: "h4", kind: "history", cat: "Storia", q: "Chi ha vinto il primo GP di Singapore, nel 2008?", answer: "alonso",
+    options: [["massa", "F. Massa"], ["hamilton", "L. Hamilton"], ["alonso", "F. Alonso"], ["raikkonen", "K. Räikkönen"]], note: "Fu la prima gara in notturna della storia della F1." },
+];
+
+module.exports = { TEAMS, DRIVER_DATA, CIRCUIT_IDS, CALENDAR, RACE_STATUSES, RACES, STANDINGS, FANTASY, HISTORY_QUESTIONS };

@@ -1,12 +1,16 @@
 // Test della 2.0: ricerca articoli e articoli salvati tra i preferiti.
 // Uso: bash rtest/build.sh && node rtest/run10.js [filtro]
 const { chromium } = require('/opt/node-tools/node_modules/playwright');
+// Le notizie, le previsioni, i video e il calendario d'esempio della 2.0 ora stanno su Firebase (Task 6): il Firebase
+// finto parte con quei documenti, così le prove li ritrovano.
+const SEED_20 = require('../fixtures/seed-2.0.json');
 const EXE = '/opt/pw-browsers/chromium-1194/chrome-linux/chrome';
 const HADJAR = 'Hadjar, dalla Racing Bulls alla Red Bull';
 const FERRARI = 'Ferrari: Leclerc e Hamilton, la coppia del Cavallino';
 
 async function open(b) {
   const ctx = await b.newContext({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true });
+  await ctx.addInitScript(seed => { window.__btSeed = seed; }, SEED_20);
   await ctx.addInitScript(() => { window.open = () => null; });
   const p = await ctx.newPage(); const errs = []; p.on('pageerror', e => errs.push(e.message));
   await p.goto('file://' + __dirname + '/' + (process.env.PAGE || 'test.html')); await p.waitForTimeout(400);

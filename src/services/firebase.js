@@ -103,16 +103,18 @@ async function ss(k, v, shared = true) {
   const payload = Array.isArray(v) ? { __arr: v } : v;
   await track(withTimeout(d.collection("shared").doc(k).set(clone(payload), { merge: true }), WRITE_TIMEOUT));
 }
+// Come sg, ma senza rete (o senza Firebase) lancia l'errore: così chi legge distingue "il documento non c'è" (null)
+// da "non si è potuto leggere".
+async function sgStrict(k) {
+  const d = await needDb();
+  const snap = await track(d.collection("shared").doc(k).get());
+  if (!snap.exists) return null;
+  const data = snap.data();
+  return data && data.__arr !== undefined ? data.__arr : data;
+}
 async function sg(k, shared = true) {
   if (!shared) return local.get(k);
-  const d = await getDb();
-  if (!d) return null;
-  try {
-    const snap = await track(d.collection("shared").doc(k).get());
-    if (!snap.exists) return null;
-    const data = snap.data();
-    return data && data.__arr !== undefined ? data.__arr : data;
-  } catch (e) { return null; }
+  try { return await sgStrict(k); } catch (e) { return null; }
 }
 async function sd(k, shared = false) {
   if (!shared) { local.del(k); return; }
@@ -215,6 +217,6 @@ async function dropImage(ref) {
 
 module.exports = {
   FIREBASE_CONFIG, getDb, getAuth, isOnline,
-  ss, sg, sd, dbGet, dbSet, dbDelete, dbQuery, sharedAppend, sharedRemoveWhere, listOf, local,
+  ss, sg, sgStrict, sd, dbGet, dbSet, dbDelete, dbQuery, sharedAppend, sharedRemoveWhere, listOf, local,
   IMG_REF, IMG_MAX_CHARS, compressImage, uploadImage, loadImage, dropImage,
 };

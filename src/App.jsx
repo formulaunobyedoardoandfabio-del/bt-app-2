@@ -14,6 +14,8 @@ import DnfArtData from "./logic/dnf-art";
 import BtGhost from "./logic/bt-ghost";
 import BtWk from "./logic/bt-weekend";
 import F1 from "./data/f1-2026";
+import AppData from "./services/appdata";
+import Compat from "./services/compat";
 
 /* ── DESIGN TOKENS (matches the B&T concept style) ─────────────────── */
 const C = {
@@ -109,34 +111,8 @@ function Icon({ name, size = 18, color = C.text, sw = 2 }) {
   }
 }
 
-/* ── SAMPLE DATA ────────────────────────────────────────────────────── */
-const ARTICLES = [
-  { id: 1, cat: "GARA", featured: true, title: "Weekend di gara: il programma completo B&T", excerpt: "Orari, sessioni e come seguire ogni momento del weekend con noi.", time: "2 min fa", circuits: ["sg-2008"],
-    body: "Un altro weekend di Formula 1 sta per iniziare, e la redazione B&T ha preparato la guida completa per non perdersi nulla: dalle prove libere alle qualifiche, fino al giorno di gara.\n\nSeguiremo ogni sessione in diretta nella sezione Gara dell'app, con classifiche aggiornate in tempo reale, tempi sul giro e tutte le informazioni utili per vivere il weekend come se foste al muretto box.\n\nCome sempre, vi terremo aggiornati anche in chat: passate a salutarci e a commentare la gara insieme alla community B&T." },
-  { id: 9, cat: "PILOTI", title: "Hadjar, dalla Racing Bulls alla Red Bull", excerpt: "Il percorso del francese fino al sedile accanto a Verstappen.", time: "30 min fa", teams: ["redbull"], drivers: ["hadjar", "verstappen"],
-    body: "Vicecampione di Formula 2 nel 2024, Isack Hadjar ha debuttato in Formula 1 nel 2025 con la Racing Bulls, conquistando da rookie i primi punti e il primo podio.\n\nQuei risultati gli sono valsi la promozione nella squadra principale: nel 2026 corre per la Oracle Red Bull Racing al fianco di Max Verstappen, quattro volte campione del mondo.\n\nNella sezione Gara, tocca il suo nome in classifica per vedere bio e statistiche aggiornate." },
-  { id: 10, cat: "SCUDERIE", title: "Ferrari: Leclerc e Hamilton, la coppia del Cavallino", excerpt: "Due storie diverse sotto la stessa tuta rossa.", time: "5 h fa", teams: ["ferrari"], drivers: ["leclerc", "hamilton"],
-    body: "Charles Leclerc è pilota Ferrari dal 2019 ed è il volto del Cavallino da ormai sette stagioni. Dal 2025 al suo fianco c'è Lewis Hamilton, sette volte campione del mondo.\n\nUna coppia che unisce esperienza e velocità pura: per i tifosi della Rossa, due ragioni in più per seguire ogni weekend.\n\nSe la Ferrari è la tua scuderia del cuore, attiva le notifiche dedicate dal tuo profilo." },
-  { id: 12, cat: "FANTA", title: "Singapore: chi vince la Sprint?", excerpt: "La prima Sprint di sempre a Marina Bay: vota e prendi punti nel FantaF1.", time: "1 h fa", circuits: ["sg-2008"],
-    body: "Per la prima volta Marina Bay ospita una Sprint: 21 giri sabato 10 ottobre alle 17:00 ora locale, le 11:00 in Italia. Venerdì sera, dopo le prime libere, ci sono le Qualifiche Sprint.\n\nUna gara corta sul tracciato più faticoso dell'anno: partire davanti conta tantissimo, perché a Singapore sorpassare è difficile e la Safety Car è sempre dietro l'angolo.\n\nChi la vincerà secondo te? Vota qui sotto: se indovini prendi 2 punti nel FantaF1.",
-    poll: { q: "Chi vince la Sprint di Singapore?", answer: null, options: [{ id: "norris", label: "L. Norris", base: 38 }, { id: "piastri", label: "O. Piastri", base: 24 }, { id: "verstappen", label: "M. Verstappen", base: 22 }, { id: "russell", label: "G. Russell", base: 16 }] } },
-  { id: 11, cat: "ANALISI", title: "Monza, il giro più veloce di sempre", excerpt: "Il record sul giro dell'Autodromo e chi l'ha firmato.", time: "3 settimane fa", circuits: ["it-1922"], drivers: ["norris"], teams: ["mclaren"],
-    body: "Nel Gran Premio d'Italia 2025 Lando Norris ha girato in 1:20.901: è il giro più veloce mai fatto in gara a Monza e ha cancellato il primato di Rubens Barrichello, che resisteva dal 2004.\n\nSul Tempio della Velocità conta soprattutto la scia: lunghi rettilinei, staccate violente alla Prima Variante e alla Roggia, e la Parabolica da percorrere col piede giù per uscire forte sul traguardo.\n\nNella sezione Gara, tocca \"Mostra di più\" sulla prossima gara per scoprire numeri e segreti di ogni circuito." },
-  { id: 2, cat: "NEWS", title: "Cosa cambia nel regolamento tecnico", excerpt: "Le nuove norme che stanno ridisegnando il modo di correre.", time: "Ieri",
-    body: "Le squadre si stanno adattando a un pacchetto di modifiche tecniche pensato per rendere le gare più imprevedibili e ravvicinate.\n\nI cambiamenti toccano l'aerodinamica e la gestione dell'energia, e nelle prime uscite stagionali si sono già viste differenze significative nel passo gara tra i vari team.\n\nContinueremo a seguire da vicino come ogni scuderia interpreta le nuove regole, weekend dopo weekend." },
-  { id: 3, cat: "ANALISI", title: "Strategia gomme: chi ha rischiato di più", excerpt: "Un'analisi delle scelte di strategia nell'ultimo GP.", time: "2 giorni fa", circuits: ["az-2016"],
-    body: "Le scelte di strategia hanno fatto ancora una volta la differenza tra un buon risultato e un'occasione mancata.\n\nAlcuni team hanno optato per una strategia aggressiva a una sola sosta, scommettendo sulla tenuta delle gomme fino alla bandiera a scacchi, mentre altri hanno preferito il doppio pit stop per restare competitivi sul passo.\n\nNella sezione Gara trovate il dettaglio completo di pit stop e distacchi per rivivere ogni scelta strategica." },
-  { id: 4, cat: "NEWS", premium: true, title: "Dentro il muretto box: come si vive una gara", excerpt: "Uno sguardo a cosa succede sul muretto durante le 2 ore di gara.", time: "3 giorni fa",
-    body: "Il muretto box è il centro nevralgico di ogni weekend di gara: è da lì che ingegneri e strateghi seguono ogni giro, pronti a reagire in tempo reale a ogni imprevisto.\n\nIn questo articolo vi raccontiamo, passo per passo, come funziona il lavoro di squadra dietro le quinte durante una gara, dalle comunicazioni radio alle decisioni sui pit stop.\n\nContenuto riservato agli abbonati B&T Premium." },
-  { id: 5, cat: "GARA", title: "Griglia di partenza: tutte le posizioni", excerpt: "La griglia completa dopo le qualifiche.", time: "4 giorni fa",
-    body: "Dopo una sessione di qualifiche combattuta, la griglia di partenza è ormai definita.\n\nTroverete la classifica completa, giro per giro, nella sezione Gara dell'app, insieme ai distacchi accumulati in ogni fase della sessione." },
-  { id: 6, cat: "COMMUNITY", title: "I momenti social del weekend B&T", excerpt: "I contenuti più belli condivisi dalla nostra community.", time: "5 giorni fa",
-    body: "Anche questo weekend la community B&T si è fatta sentire: dai commenti in diretta durante la gara alle foto dai paddock improvvisati davanti alla TV, avete reso ogni sessione ancora più divertente da seguire insieme.\n\nContinuate a taggarci nelle vostre storie: i contenuti migliori li ripubblichiamo sul nostro Instagram." },
-  { id: 7, cat: "FANTA", title: "FantaF1: i consigli della redazione per il prossimo GP", excerpt: "Chi schierare nella prossima gara secondo noi.", time: "6 giorni fa", drivers: ["leclerc", "antonelli"],
-    body: "Con un nuovo weekend alle porte, è il momento di ripensare la formazione della vostra squadra FantaF1.\n\nLa redazione ha analizzato passo gara, affidabilità e condizioni di pista per suggerirvi qualche idea in più prima del blocco delle formazioni. Trovate tutto nella sezione Fanta dell'app." },
-  { id: 8, cat: "NEWS", title: "Cronaca: come è andata la gara", excerpt: "Il racconto di una gara ricca di colpi di scena.", time: "1 settimana fa", circuits: ["az-2016"],
-    body: "Una gara ricca di sorpassi, strategie ribaltate all'ultimo giro e un finale rimasto in bilico fino alla bandiera a scacchi.\n\nNella cronaca completa ripercorriamo i momenti chiave della gara, dal via fino al traguardo, con tutti i dettagli che potreste esservi persi in diretta." },
-];
+/* ── DATI ───────────────────────────────────────────────────────────── */
+// Le notizie stanno in shared/bt-news (src/services/appdata.js): di serie c'è solo quella di benvenuto dell'app di oggi.
 
 // Scuderie 2026: src/data/f1-2026.js
 const TEAMS = F1.TEAMS;
@@ -214,23 +190,16 @@ const FLAG_UI = {
 /* ── DATI MODIFICABILI DAL PANNELLO ADMIN ─────────────────────────── */
 // Calendario 2026 e tracciati: src/data/f1-2026.js
 const CIRCUIT_IDS = F1.CIRCUIT_IDS;
-const RACES_INIT = F1.CALENDAR.map(([name, circuit, country, date], i) => ({ id: "r" + (i + 1), round: i + 1, name, circuit, country, date, status: i < 15 ? "CONCLUSA" : "IN ARRIVO", circuitId: CIRCUIT_IDS[i] }));
+// Calendario come nella 2.0 (lo stato vero arriva da Firebase, shared/bt-races: src/services/appdata.js).
+const RACES_INIT = F1.RACES.map((r, i) => ({ ...r, status: i < 15 ? "CONCLUSA" : "IN ARRIVO" }));
 const RACE_STATUSES = F1.RACE_STATUSES;
 const fmtDate = (iso) => { if (!iso) return "—"; const [y, m, d] = iso.split("-").map(Number); const M = ["gen", "feb", "mar", "apr", "mag", "giu", "lug", "ago", "set", "ott", "nov", "dic"]; return `${d} ${M[m - 1]} ${y}`; };
 
-// Classifiche reali dopo il GP dell'Azerbaigian (round 15; RacingNews365 e Total Motorsport, 30/09/2026) — da aggiornare dall'admin
-const STANDINGS_NOTE_INIT = "Aggiornata dopo il GP dell'Azerbaigian (round 15)";
-const DRIVER_STANDINGS_INIT = [
-  ["antonelli", 302], ["russell", 236], ["hamilton", 199], ["norris", 186], ["leclerc", 179], ["verstappen", 163], ["piastri", 120],
-  ["hadjar", 86], ["lawson", 59], ["gasly", 41], ["lindblad", 37], ["colapinto", 27], ["bearman", 20], ["bortoleto", 10], ["hulkenberg", 7],
-  ["ocon", 7], ["sainz", 7], ["albon", 5], ["alonso", 3], ["tsunoda", 1], ["stroll", 0], ["bottas", 0], ["perez", 0],
-].map(([id, points], i) => ({ id, position: i + 1, points }));
-const TEAM_STANDINGS_INIT = [
-  ["mercedes", 538], ["ferrari", 378], ["mclaren", 306], ["redbull", 263], ["racingbulls", 83], ["alpine", 68],
-  ["haas", 27], ["audi", 17], ["williams", 12], ["astonmartin", 3], ["cadillac", 0],
-].map(([id, points], i) => ({ id, position: i + 1, points }));
-// In classifica c'è anche chi ha corso solo qualche gara da sostituto e non è tra i 22 titolari.
-const STANDINGS_GUESTS = { tsunoda: { id: "tsunoda", name: "Y. Tsunoda", full: "Yuki Tsunoda", teamId: "racingbulls", team: "Racing Bulls", color: "#6692FF", guest: true } };
+// Classifiche: shared/bt-piloti, bt-costruttori e bt-standings-note (valori di partenza dopo Baku in src/data/f1-2026.js).
+// In classifica c'è anche chi ha corso solo qualche gara da sostituto e non è tra i 22 titolari: gli ospiti arrivano con
+// le classifiche lette da Firebase e l'app li aggiunge qui (addStandingsGuests).
+const STANDINGS_GUESTS = { ...F1.STANDINGS.guests };
+const addStandingsGuests = guests => { Object.assign(STANDINGS_GUESTS, guests || {}); };
 const standingsDriver = id => driverById(id) || STANDINGS_GUESTS[id] || null;
 
 // Ultima gara corsa (dati reali, formula1.com): GP dell'Azerbaigian 2026, round 15. Giro più veloce: Russell.
@@ -245,19 +214,10 @@ const LAST_RACE_INIT = { raceId: "r15", name: "GP dell'Azerbaigian", type: "RACE
     ["stroll", "Ritirato", null, "motore", "Pressione dell'acqua, al giro 9"]]
     .map(([id, time, pos, dnf, why], i) => ({ id, time, pos: pos || (time === "Ritirato" ? null : i + 1), dnf: dnf || null, why: why || null })) };
 
-// FantaF1 come il gioco ufficiale F1 Fantasy: prezzi (milioni di $) e punti della stagione dopo il GP dell'Azerbaigian
-// (round 15), letti il 30/09/2026 da BoxBox F1 Fantasy e dall'app F1 Fantasy. change = variazione dopo l'ultima gara,
-// solo dove la conosciamo (dall'app). Dopo ogni gara si aggiornano dal pannello admin (FANTA F1).
+// FantaF1 come il gioco ufficiale F1 Fantasy: prezzi (milioni di $), variazione e punti della stagione. Stanno in
+// shared/bt-fanta-stats (valori di partenza dopo il GP dell'Azerbaigian in src/data/f1-2026.js); dopo ogni gara si
+// aggiornano dal pannello admin (FANTA F1).
 const FANTASY_SOURCE = "Prezzi e punti del gioco ufficiale F1 Fantasy dopo il GP dell'Azerbaigian (30/09/2026)";
-const fantasyRows = o => Object.fromEntries(Object.entries(o).map(([id, [price, change, pts]]) => [id, { price, change, pts }]));
-const FANTASY_INIT = {
-  drivers: fantasyRows({ antonelli: [26.9, 0.3, 622], russell: [28.1, 0.3, 413], hamilton: [24.6, -0.3, 395], verstappen: [27.6, null, 376], leclerc: [23.7, null, 351],
-    norris: [26.7, null, 328], piastri: [24.0, null, 225], lawson: [9.1, null, 184], hadjar: [15.1, null, 164], gasly: [11.4, null, 146], colapinto: [10.0, null, 138],
-    ocon: [9.1, null, 137], lindblad: [8.8, null, 104], sainz: [8.4, null, 100], bortoleto: [8.2, null, 92], bearman: [5.6, null, 69], perez: [3.0, 0, 19],
-    albon: [5.8, null, 13], alonso: [6.2, null, 9], hulkenberg: [5.4, 0.6, 4], bottas: [3.6, null, -67], stroll: [3.0, null, -142] }),
-  teams: fantasyRows({ mercedes: [33.8, null, 1269], ferrari: [27.6, null, 927], mclaren: [32.2, null, 740], redbull: [32.1, null, 712], racingbulls: [15.3, null, 435],
-    alpine: [19.4, null, 389], haas: [10.8, 0.6, 245], audi: [9.2, 0.6, 209], williams: [13.8, null, 176], cadillac: [3.6, null, -51], astonmartin: [5.7, null, -113] }),
-};
 const TEAM_OF = Object.fromEntries(DRIVERS.map(d => [d.id, d.teamId]));
 // La tua squadra (demo): 5 piloti, 2 scuderie e il 2X. Budget = 100 M$ di partenza più il valore guadagnato in stagione.
 const FANTA_BUDGET = 108.1;
@@ -267,33 +227,12 @@ const FANTA_SQUAD_INIT = { name: "Scuderia B&T", drivers: ["hamilton", "russell"
 // kind: "poll" (sondaggio con le sue risposte), "driver" (si sceglie tra tutti i piloti), "team" (tra tutte le scuderie),
 // "number" (un numero, col tastierino numerico), "history" (storia: la risposta si sa già).
 // about: sessione del weekend all'inizio della quale la domanda si chiude; la risposta esatta la segna l'admin.
-const PREDICTIONS_INIT = [
-  { id: "p1", kind: "driver", cat: "Pilota", q: "Chi farà la pole position a Sepang?", about: "QUALI", raceId: "r16", answer: null },
-  { id: "p2", kind: "number", cat: "Numero", q: "Quante volte entrerà la Safety Car durante la gara?", about: "RACE", raceId: "r16", answer: null },
-  { id: "p3", kind: "driver", cat: "Pilota", q: "Chi sarà il pilota del giorno?", about: "RACE", raceId: "r16", answer: null },
-  { id: "p4", kind: "team", cat: "Scuderia", q: "Quale scuderia farà il pit stop più veloce della gara?", about: "RACE", raceId: "r16", answer: null },
-  { id: "h1", kind: "history", cat: "Storia", q: "Chi ha vinto l'ultimo GP della Malesia a Sepang, nel 2017?", answer: "verstappen",
-    options: [["hamilton", "L. Hamilton"], ["verstappen", "M. Verstappen"], ["vettel", "S. Vettel"], ["ricciardo", "D. Ricciardo"]], note: "Vinse Max Verstappen, il giorno dopo aver compiuto 20 anni." },
-  { id: "h2", kind: "history", cat: "Storia", q: "Chi ha vinto più volte il GP della Malesia?", answer: "vettel",
-    options: [["schumacher", "M. Schumacher"], ["alonso", "F. Alonso"], ["vettel", "S. Vettel"], ["hamilton", "L. Hamilton"]], note: "Sebastian Vettel, 4 volte: 2010, 2011, 2013 e 2015." },
-  { id: "h3", kind: "history", cat: "Storia", q: "In che anno si è corso il primo GP della Malesia a Sepang?", answer: "1999",
-    options: [["1997", "1997"], ["1999", "1999"], ["2001", "2001"], ["2003", "2003"]], note: "Vinse Eddie Irvine con la Ferrari." },
-  { id: "h4", kind: "history", cat: "Storia", q: "Chi ha vinto il primo GP di Singapore, nel 2008?", answer: "alonso",
-    options: [["massa", "F. Massa"], ["hamilton", "L. Hamilton"], ["alonso", "F. Alonso"], ["raikkonen", "K. Räikkönen"]], note: "Fu la prima gara in notturna della storia della F1." },
-];
+// Le domande stanno in shared/bt-predictions: le scrive l'admin; di serie ci sono solo quelle di storia (src/data/f1-2026.js).
 
-const IG_INIT = {
-  handle: "bt_formula1", followers: 128544, posts: 312,
-  videos: [
-    { id: "v1", title: "Il sorpasso della settimana", views: "48K", likes: "3.2K", thumb: "" },
-    { id: "v2", title: "Reazioni live dal divano B&T", views: "31K", likes: "2.4K", thumb: "" },
-    { id: "v3", title: "Top 5 team radio del GP", views: "27K", likes: "1.9K", thumb: "" },
-    { id: "v4", title: "FantaF1: chi schierare?", views: "19K", likes: "1.2K", thumb: "" },
-  ],
-};
-const fmtK = (n) => n >= 1000 ? (n / 1000).toFixed(n >= 100000 ? 0 : 1).replace(".0", "") + "K" : String(n);
+// Instagram: shared/bt-ig-config (handle, follower, post e video li scrive l'admin; niente numeri inventati).
+const fmtK = (n) => n == null || n === "" ? "—" : n >= 1000 ? (n / 1000).toFixed(n >= 100000 ? 0 : 1).replace(".0", "") + "K" : String(n);
 // Sondaggi (Home e notizie): la risposta esatta la segna l'admin e chi ha indovinato prende +2 punti FantaF1.
-const HOME_POLL = { id: "home", q: "Chi vince il prossimo GP?", answer: null, options: [{ id: "norris", label: "L. Norris", base: 42 }, { id: "verstappen", label: "M. Verstappen", base: 33 }, { id: "antonelli", label: "K. Antonelli", base: 25 }] };
+// Il sondaggio della Home sta in shared/bt-home-poll: se non c'è, il riquadro non si vede.
 const articlePoll = a => a && a.poll ? { ...a.poll, id: "art-" + a.id } : null;
 const NEWS_CATEGORIES = ["NEWS", "GARA", "APP", "ANALISI", "FANTA", "PILOTI", "SCUDERIE"];
 const STATS_NOTE = "Statistiche carriera aggiornate a settembre 2026";
@@ -356,13 +295,7 @@ const CHATS_INIT = [
     ] },
 ];
 
-const NOTIFS = [
-  { icon: "stopwatch", bg: "#3FAE6B", stroke: "#141414", title: "Il Gran Premio è iniziato", body: "Segui la diretta ora nella sezione Gara.", time: "2 min fa", unread: true },
-  { icon: "doc", bg: "#3B6FD4", stroke: "#fff", title: "Nuovo articolo pubblicato", body: "Weekend di gara: il programma completo B&T", time: "1 h fa", unread: true },
-  { icon: "trophy", bg: "#E7B34C", stroke: "#141414", title: "Classifica FantaF1 aggiornata", body: "Sei salito al 3° posto nella tua lega.", time: "3 h fa" },
-  { icon: "chat", bg: "#2E9E8F", stroke: "#fff", title: "Nuovi messaggi in Chat Generale", body: "Davide S.: Io spero in un po' di pioggia…", time: "5 h fa" },
-  { icon: "star", bg: "gold-soft", stroke: null, title: "Offerta Premium", body: "Passa a Premium e rimuovi la pubblicità dall'app.", time: "Ieri" },
-];
+// Le notifiche dell'admin stanno in shared/bt-notifs, nel formato di oggi (src/services/appdata.js).
 
 const PREMIUM_CATEGORIES = [
   { name: "In gara", items: [
@@ -893,7 +826,8 @@ function LoginScreen({ onDone, onGuest, onBack, reason }) {
     if (!isLogin && (!name.trim() || pw !== pw2)) { setErr(!name.trim() ? "Inserisci il tuo nome." : "Le password non coincidono."); return; }
     if (!isLogin && !fan) { setErr("Scegli che tifoso sei."); return; }
     setErr("");
-    onDone(isLogin ? null : { about: { birth: null, follow, fan } });
+    // Fino al Task 7 (Firebase Authentication) l'accesso non controlla la password: serve l'email per i dati dell'account.
+    onDone({ email: email.trim().toLowerCase(), created: !isLogin, about: isLogin ? null : { birth: null, follow, fan } });
   };
 
   const fieldStyle = { display: "flex", alignItems: "center", gap: 10, padding: "13px 14px", borderRadius: 14, background: C.card, border: `1px solid ${C.border}` };
@@ -1024,7 +958,7 @@ function PollCard({ poll, vote, onVote, title = "SONDAGGIO" }) {
   );
 }
 
-function HomeScreen({ ig, onOpenIg, highlights = HIGHLIGHTS_INIT, articles, tagFilter, onTag, onClearTag, onOpenArticle, isPremium, onPremium, onToast, onLiveTrack, onGoFanta, saved = [], onToggleSave, savedOnly = false, setSavedOnly, onOpenCircuit, homePoll = HOME_POLL, homeVote = null, onVote }) {
+function HomeScreen({ ig, onOpenIg, highlights = [], articles, tagFilter, onTag, onClearTag, onOpenArticle, isPremium, onPremium, onToast, onLiveTrack, onGoFanta, saved = [], onToggleSave, savedOnly = false, setSavedOnly, onOpenCircuit, homePoll = null, homeVote = null, onVote }) {
   const [q, setQ] = useState("");
   const visible = articles.filter(a => a.published !== false);
   const byTag = tagFilter ? visible.filter(a => articleTags(a).some(t => t.key === tagFilter.key)) : visible;
@@ -1156,11 +1090,11 @@ function HomeScreen({ ig, onOpenIg, highlights = HIGHLIGHTS_INIT, articles, tagF
 
       <SectionLabel icon="star">CONTENUTI PREMIUM</SectionLabel>
       <div style={{ display: "flex", flexDirection: "column", gap: 10, padding: "0 16px 20px" }}>
-        {isPremium ? (
+        {homePoll && (isPremium ? (
           <PollCard poll={homePoll} vote={homeVote} onVote={onVote} title="SONDAGGIO DELLA REDAZIONE" />
         ) : (
           <PremiumLockCard icon="poll" title="Sondaggio della redazione" desc="Chi vincerà il prossimo GP? Vota e scopri cosa pensa la community." onPremium={onPremium} />
-        )}
+        ))}
 
         {isPremium ? (
           <div style={{ padding: 16, borderRadius: 16, background: C.card, border: `1px solid ${C.border}` }}>
@@ -3021,12 +2955,7 @@ function ImageViewer({ src, onClose }) {
 
 /* ── VIDEO HIGHLIGHTS ESCLUSIVI (Premium): archivio gestito dal Pannello Admin ── */
 // Video di B&T (commenti, reazioni, sorpassi spiegati da noi), non filmati della TV. link: indirizzo del video
-// (per esempio il post Instagram); thumb: copertina caricata dall'admin.
-const HIGHLIGHTS_INIT = [
-  { id: "h1", title: "Baku: il nostro commento a caldo", dur: "6:40", link: "", thumb: null },
-  { id: "h2", title: "Reazioni live dal divano B&T", dur: "4:15", link: "", thumb: null },
-  { id: "h3", title: "Top 5 sorpassi della stagione, spiegati da noi", dur: "8:02", link: "", thumb: null },
-];
+// (per esempio il post Instagram); thumb: copertina caricata dall'admin. L'archivio sta in shared/bt-highlights.
 const HL_BG = ["#3a0a0c", "#1a1a2e", "#241505", "#0d2a24"];
 function HighlightsStrip({ items, onToast }) {
   return (
@@ -3054,9 +2983,9 @@ function AdminHighlightsTab({ items = [], setItems, onToast }) {
     const v = { title: f.title.trim(), dur: f.dur.trim(), link: f.link.trim(), thumb: f.thumb };
     if (!v.title) { onToast("Scrivi il titolo del video"); return; }
     if (v.link && !/^https:\/\//.test(v.link)) { onToast("Il link deve iniziare con https://"); return; }
-    if (edit) { setItems(xs => xs.map(x => x.id === edit ? { ...x, ...v } : x)); onToast("Video aggiornato"); }
-    else { setItems(xs => [{ id: "h" + Date.now(), ...v }, ...xs]); onToast("Video aggiunto all'archivio"); }
-    setF(empty); setEdit(null);
+    const done = msg => ok => { if (!ok) return; onToast(msg); setF(empty); setEdit(null); };
+    if (edit) setItems(xs => xs.map(x => x.id === edit ? { ...x, ...v } : x)).then(done("Video aggiornato"));
+    else setItems(xs => [{ id: "h" + Date.now(), ...v }, ...xs]).then(done("Video aggiunto all'archivio"));
   };
   return (
     <div style={{ padding: "0 16px 20px" }}>
@@ -3082,7 +3011,7 @@ function AdminHighlightsTab({ items = [], setItems, onToast }) {
               <span style={{ fontFamily: F_BODY, fontSize: 11, color: C.dim }}>{h.dur || "durata —"} · {h.link ? "con link" : "senza link"}{h.thumb ? " · copertina" : ""}</span>
             </span>
             <button className="press" data-hl-edit={h.id} onClick={() => { setEdit(h.id); setF({ title: h.title, dur: h.dur || "", link: h.link || "", thumb: h.thumb || null }); }} style={{ padding: "6px 10px", borderRadius: 9, background: "rgba(255,255,255,.07)", border: `1px solid ${C.border}`, fontFamily: F_BODY, fontWeight: 700, fontSize: 11, color: C.text }}>Modifica</button>
-            <button className="press" data-hl-delete={h.id} onClick={() => { setItems(xs => xs.filter(x => x.id !== h.id)); if (edit === h.id) { setEdit(null); setF(empty); } onToast("Video eliminato"); }} style={{ padding: "6px 10px", borderRadius: 9, background: "rgba(232,18,29,.14)", border: "1px solid rgba(232,18,29,.4)", fontFamily: F_BODY, fontWeight: 700, fontSize: 11, color: "#FF8A8F" }}>Elimina</button>
+            <button className="press" data-hl-delete={h.id} onClick={() => { setItems(xs => xs.filter(x => x.id !== h.id)).then(ok => { if (!ok) return; if (edit === h.id) { setEdit(null); setF(empty); } onToast("Video eliminato"); }); }} style={{ padding: "6px 10px", borderRadius: 9, background: "rgba(232,18,29,.14)", border: "1px solid rgba(232,18,29,.4)", fontFamily: F_BODY, fontWeight: 700, fontSize: 11, color: "#FF8A8F" }}>Elimina</button>
           </div>
         ))}
       </div>
@@ -3999,7 +3928,7 @@ function AdminSillyTab({ official = {}, onOfficial, onToast }) {
       <select id="sillyDriver" value={drv} onChange={e => setDrv(e.target.value)} style={box}>{[...SILLY_SEATS.map(s => s.id), "altro"].map(id => <option key={id} value={id}>{sillyName(id)}</option>)}</select>
       <label htmlFor="sillyDate" style={lab}>Data del comunicato</label>
       <input id="sillyDate" type="date" value={date} onChange={e => setDate(e.target.value)} style={box} />
-      <button className="press" onClick={() => { const at = Date.parse(date + "T12:00:00Z"); if (isNaN(at)) { onToast("Data non valida"); return; } onOfficial(seat, { driver: drv, at }); onToast("Comunicato registrato: punti assegnati"); }} style={{ width: "100%", padding: "12px 0", borderRadius: 12, background: C.accent, fontFamily: F_HEAD, fontWeight: 800, fontSize: 13, color: "#fff" }}>REGISTRA IL COMUNICATO</button>
+      <button className="press" onClick={() => { const at = Date.parse(date + "T12:00:00Z"); if (isNaN(at)) { onToast("Data non valida"); return; } onOfficial(seat, { driver: drv, at }).then(ok => ok && onToast("Comunicato registrato: punti assegnati")); }} style={{ width: "100%", padding: "12px 0", borderRadius: 12, background: C.accent, fontFamily: F_HEAD, fontWeight: 800, fontSize: 13, color: "#fff" }}>REGISTRA IL COMUNICATO</button>
       {list.length > 0 && <div style={{ marginTop: 16 }}>{list.map(([id, o]) => <div key={id} style={{ padding: "8px 0", borderTop: `1px solid ${C.divider}`, fontFamily: F_BODY, fontSize: 12, color: C.muted }}>Sedile di {sillyName(id)} → <b style={{ color: C.text }}>{sillyName(o.driver)}</b> · {fmtDMY(o.at)}</div>)}</div>}
     </div>
   );
@@ -5613,8 +5542,11 @@ function AdminNewsTab({ articles, setArticles, onPublish, onToast }) {
     const opts = pollOpts.map(o => o.trim()).filter(Boolean);
     if (pollOn && (!pollQ.trim() || opts.length < 2)) { setError("Per il sondaggio servono la domanda e almeno 2 risposte."); return; }
     const poll = pollOn ? { q: pollQ.trim(), answer: null, options: opts.map((label, k) => ({ id: "o" + (k + 1), label, base: 0 })) } : undefined;
-    onPublish({ title: f.title.trim(), excerpt: (f.summary.trim() || body.split("\n")[0]).slice(0, 140), cat: f.cat.trim().toUpperCase(), premium: customCat, author: f.author.trim(), image: f.image, body, published: f.published, teams, drivers, circuits, ...(poll ? { poll } : {}) });
-    setF(empty); setCustomCat(false); setTeams([]); setDrivers([]); setCircuits([]); setPollOn(false); setPollQ(""); setPollOpts(["", "", "", ""]);
+    // Il modulo si svuota solo se la notizia è salvata su Firebase; altrimenti resta per riprovare.
+    Promise.resolve(onPublish({ title: f.title.trim(), excerpt: (f.summary.trim() || body.split("\n")[0]).slice(0, 140), cat: f.cat.trim().toUpperCase(), premium: customCat, author: f.author.trim(), image: f.image, body, published: f.published, teams, drivers, circuits, ...(poll ? { poll } : {}) })).then(ok => {
+      if (ok === false) return;
+      setF(empty); setCustomCat(false); setTeams([]); setDrivers([]); setCircuits([]); setPollOn(false); setPollQ(""); setPollOpts(["", "", "", ""]);
+    });
   };
   return (
     <div>
@@ -5691,8 +5623,8 @@ function AdminNewsTab({ articles, setArticles, onPublish, onToast }) {
             </div>
             <div style={{ fontFamily: F_BODY, fontWeight: 600, fontSize: 12.5, color: C.text, lineHeight: 1.3 }}>{a.title}</div>
           </div>
-          <Toggle on={a.published !== false} onChange={v => { setArticles(list => list.map(x => x.id === a.id ? { ...x, published: v } : x)); onToast(v ? "Articolo pubblicato" : "Spostato in bozze"); }} label={"Pubblica " + a.title} />
-          <TrashBtn label={"Elimina " + a.title} onClick={() => { setArticles(list => list.filter(x => x.id !== a.id)); onToast("Articolo eliminato"); }} />
+          <Toggle on={a.published !== false} onChange={v => { setArticles(list => list.map(x => x.id === a.id ? { ...x, published: v } : x)).then(ok => ok && onToast(v ? "Articolo pubblicato" : "Spostato in bozze")); }} label={"Pubblica " + a.title} />
+          <TrashBtn label={"Elimina " + a.title} onClick={() => { setArticles(list => list.filter(x => x.id !== a.id)).then(ok => ok && onToast("Articolo eliminato")); }} />
         </div>
       ))}
     </div>
@@ -5728,7 +5660,7 @@ function AdminFantaTab({ fantaStats, setFantaStats, onToast }) {
   const [draft, setDraft] = useState(() => ({ drivers: toDraft(fantaStats.drivers), teams: toDraft(fantaStats.teams) }));
   const set = (id, k, v) => setDraft(d => ({ ...d, [kind]: { ...d[kind], [id]: { ...d[kind][id], [k]: v } } }));
   const conv = o => Object.fromEntries(Object.entries(o).map(([k, v]) => [k, { price: parseFloat(v.price) || 0, change: v.change === "" ? null : parseFloat(v.change) || 0, pts: parseInt(v.pts, 10) || 0 }]));
-  const save = () => { setFantaStats({ drivers: conv(draft.drivers), teams: conv(draft.teams) }); onToast("Prezzi e punti FantaF1 salvati"); };
+  const save = () => { setFantaStats({ drivers: conv(draft.drivers), teams: conv(draft.teams) }).then(ok => ok && onToast("Prezzi e punti FantaF1 salvati")); };
   const ids = Object.keys(draft[kind]);
   return (
     <div>
@@ -5771,7 +5703,7 @@ function AdminPredictionsTab({ predictions, setPredictions, answers, races, onTo
   const [picking, setPicking] = useState(null);   // domanda di cui si sceglie la risposta esatta (piloti, scuderie)
   const [pad, setPad] = useState(null);           // { id, v } numero esatto che si sta scrivendo
   const next = races.find(r => r.status === "IN ARRIVO") || races[races.length - 1];
-  const setAnswer = (q, v) => { setPredictions(ps => ps.map(x => x.id === q.id ? { ...x, answer: v } : x)); onToast(v == null ? "Risposta esatta tolta" : "Risposta esatta segnata: chi ha indovinato prende +1 punto"); };
+  const setAnswer = (q, v) => { setPredictions(ps => ps.map(x => x.id === q.id ? { ...x, answer: v } : x)).then(ok => ok && onToast(v == null ? "Risposta esatta tolta" : "Risposta esatta segnata: chi ha indovinato prende +1 punto")); };
   const needsOptions = kind === "poll" || kind === "history";
   const add = () => {
     const q = text.trim(); if (!q) return;
@@ -5780,9 +5712,11 @@ function AdminPredictionsTab({ predictions, setPredictions, answers, races, onTo
     const item = { id: "p" + Date.now(), kind, cat: (PRED_KINDS.find(k => k[0] === kind) || [0, "Domanda"])[1], q, answer: kind === "history" ? (options[Math.min(histAns, options.length - 1)] || [])[0] : null };
     if (options.length) item.options = options;
     if (kind !== "history") { item.about = about; item.raceId = next.id; }
-    setPredictions(ps => [...ps, item]);
-    setText(""); setOpts(["", "", "", ""]); setHistAns(0);
-    onToast("Previsione aggiunta nel FantaF1");
+    setPredictions(ps => [...ps, item]).then(ok => {
+      if (!ok) return;
+      setText(""); setOpts(["", "", "", ""]); setHistAns(0);
+      onToast("Previsione aggiunta nel FantaF1");
+    });
   };
   const open = predictions.filter(q => q.kind !== "history");
   const pickQ = picking ? predictions.find(q => q.id === picking) : null;
@@ -5856,9 +5790,8 @@ function AdminStandingsTab({ standings, setStandings, onToast }) {
   const set = (id, k, v) => setDraft(d => ({ ...d, [which]: d[which].map(r => r.id === id ? { ...r, [k]: v } : r) }));
   const reorder = () => setDraft(d => ({ ...d, [which]: d[which].slice().sort((a, b) => (parseInt(b.points) || 0) - (parseInt(a.points) || 0)).map((r, i) => ({ ...r, position: String(i + 1) })) }));
   const save = () => {
-    const conv = list => list.map(r => ({ id: r.id, position: parseInt(r.position) || 99, points: parseInt(r.points) || 0 }));
-    setStandings({ note: draft.note, drivers: conv(draft.drivers), teams: conv(draft.teams) });
-    onToast("Classifiche salvate");
+    const conv = list => list.map(r => ({ ...r, position: parseInt(r.position) || 99, points: parseInt(r.points) || 0 }));   // ...r: resta l'id di oggi (oldId)
+    setStandings({ note: draft.note, drivers: conv(draft.drivers), teams: conv(draft.teams) }).then(ok => ok && onToast("Classifiche salvate"));
   };
   return (
     <div>
@@ -5873,7 +5806,7 @@ function AdminStandingsTab({ standings, setStandings, onToast }) {
       <div style={{ ...aCard, padding: 0 }}>
         {rows.slice().sort((a, b) => (parseInt(a.position) || 99) - (parseInt(b.position) || 99)).map((r, i) => {
           const d = which === "drivers" ? standingsDriver(r.id) : null;
-          const t = d ? teamById(d.teamId) : teamById(r.id);
+          const t = (d ? teamById(d.teamId) : teamById(r.id)) || { color: C.dim, name: d ? d.team || "" : r.id };   // ospite senza scuderia nota
           return (
             <div key={r.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 12px", borderTop: i ? `1px solid ${C.divider}` : "none" }}>
               <input aria-label={"Posizione " + (d ? d.full : t.name)} type="number" value={r.position} onChange={e => set(r.id, "position", e.target.value)} style={{ ...aNum, width: 48 }} />
@@ -5961,19 +5894,20 @@ function AdminLiveCard({ races, live, liveSt, onStart, onStop, onFlag, onLastLap
   );
 }
 
-function AdminRacesTab({ races, setRaces, onToast, live, liveSt, onStartLive, onStopLive, onFlag, onLastLap, onRetire, liveSpeed, setLiveSpeed }) {
+// Calendario e stato delle gare (shared/bt-races). Le 23 gare del 2026 ci sono già; il menu dello stato scrive solo
+// bt-races (LIVE non fa partire la diretta simulata: quella è nella "Diretta demo"). Le gare aggiunte a mano restano
+// nel documento per l'app di oggi, fuori dal calendario della nuova app.
+function AdminRacesTab({ races, setRaces, extra = [], setExtra, onToast, live, liveSt, onStartLive, onStopLive, onFlag, onLastLap, onRetire, liveSpeed, setLiveSpeed }) {
   const empty = { name: "", circuit: "", country: "", round: "", date: "" };
   const [g, setG] = useState(empty);
   const add = () => {
     if (!g.name.trim()) { onToast("Scrivi il nome del GP"); return; }
-    setRaces(list => [...list, { id: "r" + Date.now(), name: g.name.trim(), circuit: g.circuit.trim(), country: g.country.trim(), round: parseInt(g.round) || list.length + 1, date: g.date, status: "IN ARRIVO" }].sort((a, b) => a.round - b.round));
-    setG(empty); onToast("Gara aggiunta");
+    const race = { id: "r" + Date.now(), name: g.name.trim(), circuit: g.circuit.trim(), country: g.country.trim(), round: parseInt(g.round) || 0, date: g.date ? g.date + "T15:00:00" : "", status: "IN ARRIVO", totalLaps: 57 };
+    setExtra(list => [...list, race]).then(ok => { if (!ok) return; setG(empty); onToast("Gara aggiunta"); });
   };
   const setStatus = (id, status) => {
-    if (status === "LIVE" && onStartLive) { onStartLive(id, "RACE"); return; }       // LIVE = parte la gara demo
-    if (live && live.raceId === id && onStopLive) onStopLive();
-    setRaces(list => list.map(r => r.id === id ? { ...r, status } : (status === "LIVE" && r.status === "LIVE" ? { ...r, status: "CONCLUSA" } : r)));
-    onToast(status === "LIVE" ? "Gara impostata IN DIRETTA" : "Stato aggiornato: " + status);
+    setRaces(list => list.map(r => r.id === id ? { ...r, status } : (status === "LIVE" && r.status === "LIVE" ? { ...r, status: "CONCLUSA" } : r)))
+      .then(ok => ok && onToast(status === "LIVE" ? "Gara impostata IN DIRETTA" : "Stato aggiornato: " + status));
   };
   const statusColor = s => s === "LIVE" ? C.accent : s === "CONCLUSA" ? "rgba(255,255,255,.08)" : "rgba(231,179,76,.18)";
   return (
@@ -6004,17 +5938,30 @@ function AdminRacesTab({ races, setRaces, onToast, live, liveSt, onStartLive, on
           <select aria-label={"Stato " + r.name} value={r.status} onChange={e => setStatus(r.id, e.target.value)} style={{ padding: "6px 8px", borderRadius: 8, background: statusColor(r.status), border: `1px solid ${C.border}`, color: "#fff", fontFamily: F_BODY, fontWeight: 700, fontSize: 10.5, colorScheme: "dark" }}>
             {RACE_STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
           </select>
-          <TrashBtn label={"Elimina " + r.name} onClick={() => { setRaces(list => list.filter(x => x.id !== r.id)); onToast("Gara eliminata"); }} />
         </div>
       ))}
+      {extra.length > 0 && (<>
+        <div style={aTitle}>FUORI CALENDARIO ({extra.length})</div>
+        <p style={{ margin: "-4px 0 10px", fontFamily: F_BODY, fontSize: 11, color: C.dim, lineHeight: 1.45 }}>Gare aggiunte a mano: le vede solo l'app di oggi. Nel calendario della nuova app ci sono già tutte le gare del 2026.</p>
+        {extra.map(r => (
+          <div key={r.id} data-extra-race={r.id} style={{ ...aCard, padding: "10px 12px", marginBottom: 8, display: "flex", alignItems: "center", gap: 10 }}>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontFamily: F_BODY, fontWeight: 600, fontSize: 12.5, color: C.text }}>{r.name || "—"}</div>
+              <div style={{ fontFamily: F_BODY, fontSize: 10.5, color: C.dim }}>{r.circuit || "—"} · {Compat.fmtDate(r.date)} · {r.status || ""}</div>
+            </div>
+            <TrashBtn label={"Elimina " + (r.name || "gara")} onClick={() => { setExtra(list => list.filter(x => x !== r)).then(ok => ok && onToast("Gara eliminata")); }} />
+          </div>
+        ))}
+      </>)}
     </div>
   );
 }
 
 function AdminInstagramTab({ ig, setIg, onToast }) {
-  const [d, setD] = useState(() => ({ ...ig, followers: String(ig.followers), posts: String(ig.posts), videos: ig.videos.map(v => ({ ...v })) }));
+  const [d, setD] = useState(() => ({ ...ig, followers: ig.followers == null ? "" : String(ig.followers), posts: ig.posts == null ? "" : String(ig.posts), videos: ig.videos.map(v => ({ ...v })) }));
   const setV = (id, k, val) => setD(p => ({ ...p, videos: p.videos.map(v => v.id === id ? { ...v, [k]: val } : v) }));
-  const save = () => { setIg({ ...d, followers: parseInt(d.followers) || 0, posts: parseInt(d.posts) || 0 }); onToast("Instagram aggiornato"); };
+  const count = v => (String(v).trim() === "" ? null : parseInt(v) || 0);   // campo vuoto = numero non indicato
+  const save = () => { setIg({ ...d, followers: count(d.followers), posts: count(d.posts) }).then(ok => ok && onToast("Instagram aggiornato")); };
   return (
     <div>
       <div style={aTitle}>PROFILO</div>
@@ -6057,7 +6004,7 @@ function AdminNotifTab({ sent, onSend, onDelete }) {
   const [title, setTitle] = useState("");
   const [text, setText] = useState("");
   const [ok, setOk] = useState(false);
-  const send = () => { onSend(title.trim(), text.trim()); setTitle(""); setText(""); setOk(true); setTimeout(() => setOk(false), 2500); };
+  const send = () => { onSend(title.trim(), text.trim()).then(sent => { if (!sent) return; setTitle(""); setText(""); setOk(true); setTimeout(() => setOk(false), 2500); }); };
   return (
     <div>
       <div style={aTitle}>INVIA NOTIFICA A TUTTI</div>
@@ -6137,7 +6084,7 @@ function AdminChatTab({ chats, reports, banned, onDeleteMsg, onSuspend, onUnsusp
   );
 }
 
-function AdminScreen({ silly = {}, onSilly, highlights = [], setHighlights, onBack, onPublish, articles, setArticles, fantaStats, setFantaStats, standings, setStandings, races, setRaces, ig, setIg, sentNotifs, onSendNotif, onDeleteNotif, onToast, tab, setTab, chats, reports, banned, onDeleteMsg, onSuspend, onUnsuspend, onIgnoreReport, liveProps = {}, polls = [], votes = {}, onPollAnswer, predictions = [], setPredictions, predAnswers = {} }) {
+function AdminScreen({ silly = {}, onSilly, highlights = [], setHighlights, onBack, onPublish, articles, setArticles, fantaStats, setFantaStats, standings, setStandings, races, setRaces, extraRaces = [], setExtraRaces, ig, setIg, sentNotifs, onSendNotif, onDeleteNotif, onToast, tab, setTab, chats, reports, banned, onDeleteMsg, onSuspend, onUnsuspend, onIgnoreReport, liveProps = {}, polls = [], votes = {}, onPollAnswer, predictions = [], setPredictions, predAnswers = {} }) {
   return (
     <div className="scrollcol" style={{ height: "100%" }}>
       <SubHeader title="PANNELLO ADMIN" onBack={onBack} />
@@ -6150,7 +6097,7 @@ function AdminScreen({ silly = {}, onSilly, highlights = [], setHighlights, onBa
         {tab === "FANTA F1" && <AdminFantaTab fantaStats={fantaStats} setFantaStats={setFantaStats} onToast={onToast} />}
         {tab === "PREVISIONI" && <AdminPredictionsTab predictions={predictions} setPredictions={setPredictions} answers={predAnswers} races={races} onToast={onToast} />}
         {tab === "CLASSIFICHE" && <AdminStandingsTab standings={standings} setStandings={setStandings} onToast={onToast} />}
-        {tab === "GARA LIVE" && <AdminRacesTab races={races} setRaces={setRaces} onToast={onToast} {...liveProps} />}
+        {tab === "GARA LIVE" && <AdminRacesTab races={races} setRaces={setRaces} extra={extraRaces} setExtra={setExtraRaces} onToast={onToast} {...liveProps} />}
         {tab === "INSTAGRAM" && <AdminInstagramTab ig={ig} setIg={setIg} onToast={onToast} />}
         {tab === "MERCATO" && <AdminSillyTab official={silly} onOfficial={onSilly} onToast={onToast} />}
         {tab === "VIDEO" && <AdminHighlightsTab items={highlights} setItems={setHighlights} onToast={onToast} />}
@@ -6422,18 +6369,33 @@ function LiveTrackView({ onClose }) {
 }
 
 /* ── APP ROOT ───────────────────────────────────────────────────────── */
+// Dati personali di chi entra con un account (users/<email>.app2, src/services/appdata.js): valori di partenza.
+const USER_INIT = {
+  saved: [], favTeam: null, favDriver: null, notifPrefs: { team: true, driver: true }, votes: {},
+  squad: FANTA_SQUAD_INIT, squadBase: { drivers: FANTA_SQUAD_INIT.drivers.slice(), teams: FANTA_SQUAD_INIT.teams.slice() }, freeTransfers: 3,
+  predAnswers: {}, sillyPreds: {}, stratPreds: {}, pitBest: null, wxGuess: {}, ratings: {}, dotd: {}, notifSeenAt: 0,
+};
+const NOT_SAVED = "Non salvato: controlla la connessione e riprova.";
+const OFFLINE_LINE = "Sei offline: alcuni contenuti potrebbero non essere aggiornati.";
+const SHARED_REFRESH_MS = 60000;   // ogni minuto si rilegge bt-races: una gara messa LIVE arriva senza riavviare
+const sameJson = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+const fmtSent = iso => { const t = Compat.parseDate(iso); return isNaN(t) ? "" : new Date(t).toLocaleString("it-IT", { timeZone: "Europe/Rome", day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" }); };
+
 function App() {
   const [authed, setAuthed] = useState(false);
   const [tab, setTab] = useState("home");
   const [view, setView] = useState("tab");
   const [igFrom, setIgFrom] = useState("tab");   // da dove si è aperta la pagina Instagram (Home o Profilo)
-  const [pitBest, setPitBest] = useState(null);
-  const [highlights, setHighlights] = useState(HIGHLIGHTS_INIT);   // archivio "Video HIGHLIGHTS esclusivi" (Premium)  // Garage: miglior tempo del Pit Stop Challenge
-  const [sillyPreds, setSillyPreds] = useState({});       // Silly Season: { sedile: { pick, renew, at } }
-  const [stratPreds, setStratPreds] = useState({});       // Tire Strategy Predictor: { gara: { stints, at } }
-  const [sillyOfficial, setSillyOfficial] = useState({}); // comunicati ufficiali registrati dall'admin
+  // Contenuti condivisi (Firebase, shared/*): valori di serie finché Firebase non risponde (src/services/appdata.js).
+  const [shared0] = useState(() => { const v = AppData.sharedDefaults(nowMs()); addStandingsGuests(v.standings.guests); return v; });
+  const [offline, setOffline] = useState(false);   // all'avvio qualcosa non si è potuto leggere: riga "Sei offline"
+  const [pitBest, setPitBest] = useState(USER_INIT.pitBest);   // Garage: miglior tempo del Pit Stop Challenge
+  const [highlights, setHighlights] = useState(shared0.highlights);   // archivio "Video HIGHLIGHTS esclusivi" (Premium)
+  const [sillyPreds, setSillyPreds] = useState(USER_INIT.sillyPreds);       // Silly Season: { sedile: { pick, renew, at } }
+  const [stratPreds, setStratPreds] = useState(USER_INIT.stratPreds);       // Tire Strategy Predictor: { gara: { stints, at } }
+  const [sillyOfficial, setSillyOfficial] = useState(shared0.silly);       // comunicati ufficiali registrati dall'admin
+  const [driverPhotos, setDriverPhotos] = useState(shared0.driverPhotos);  // foto dei piloti caricate dall'admin (Task 14)
   const predictSeat = (id, pr) => setSillyPreds(x => x[id] ? x : { ...x, [id]: pr });
-  const officialSeat = (id, o) => setSillyOfficial(x => ({ ...x, [id]: o })); // 'tab' | 'article' | 'chatThread' | 'profilo' | 'notifiche'
   const [articleId, setArticleId] = useState(null);
   const [chatId, setChatId] = useState(null);
   // Ogni messaggio ha un id: serve a segnalarlo ed eliminarlo (moderazione).
@@ -6443,21 +6405,23 @@ function App() {
   const [reports, setReports] = useState([]);   // segnalazioni per il moderatore
   const [banned, setBanned] = useState([]);     // utenti sospesi dalla chat
   const [blocked, setBlocked] = useState([]);   // utenti che ho bloccato
-  const [saved, setSaved] = useState([]);       // articoli salvati tra i preferiti (id)
+  const [saved, setSaved] = useState(USER_INIT.saved);       // articoli salvati tra i preferiti (id)
   const [savedOnly, setSavedOnly] = useState(false); // Home: mostra solo i salvati
   // FantaF1 come F1 Fantasy: la squadra, quella dell'ultima chiusura (per contare i cambi) e i cambi gratis.
-  const [squad, setSquad] = useState(FANTA_SQUAD_INIT);
-  const [squadBase, setSquadBase] = useState({ drivers: FANTA_SQUAD_INIT.drivers.slice(), teams: FANTA_SQUAD_INIT.teams.slice() });
-  const [freeTransfers, setFreeTransfers] = useState(3);
+  const [squad, setSquad] = useState(USER_INIT.squad);
+  const [squadBase, setSquadBase] = useState(USER_INIT.squadBase);
+  const [freeTransfers, setFreeTransfers] = useState(USER_INIT.freeTransfers);
   const [fantaWeekends, setFantaWeekends] = useState([]);   // punti delle sessioni già corse: { id, raceId, type, total, lines }
   const [demoLock, setDemoLock] = useState({});             // { idGara: true } squadra bloccata dalla diretta demo
-  const [predictions, setPredictions] = useState(PREDICTIONS_INIT);   // previsioni avanzate (+1 punto)
-  const [predAnswers, setPredAnswers] = useState({});                 // { idDomanda: risposta }
+  const [predictions, setPredictions] = useState(shared0.predictions);   // previsioni avanzate (+1 punto), dell'admin
+  const [predAnswers, setPredAnswers] = useState(USER_INIT.predAnswers);   // { idDomanda: risposta }
   const [lastRace, setLastRace] = useState(LAST_RACE_INIT);           // ultima gara: podio e classifica
   const [leagues, setLeagues] = useState(LEAGUES_INIT);   // leghe FantaF1 (quella creata da te si modifica)
-  const [homePoll, setHomePoll] = useState(HOME_POLL);    // sondaggio della Home (Premium)
-  const [votes, setVotes] = useState({});                 // { idSondaggio: idRisposta }
-  const [notifs, setNotifs] = useState(NOTIFS);
+  const [homePoll, setHomePoll] = useState(shared0.homePoll);    // sondaggio della Home (Premium); null = nessuno
+  const [votes, setVotes] = useState(USER_INIT.votes);           // { idSondaggio: idRisposta }
+  const [notifsRaw, setNotifsRaw] = useState(shared0.notifs);    // shared/bt-notifs come sono salvate
+  const [localNotifs, setLocalNotifs] = useState([]);            // avvisi di questo telefono (notizia sul tuo preferito)
+  const [notifSeenAt, setNotifSeenAt] = useState(USER_INIT.notifSeenAt);   // ora dell'ultima "Segna tutte come lette"
   const [premiumOpen, setPremiumOpen] = useState(false);
   const [isPremium, setIsPremium] = useState(false);
   const [plan, setPlan] = useState("annual");
@@ -6469,11 +6433,11 @@ function App() {
   const [selectedDriver, setSelectedDriver] = useState(null);
   const [liveTrackOpen, setLiveTrackOpen] = useState(false);
   const [infoModal, setInfoModal] = useState(null);
-  const [articles, setArticles] = useState(ARTICLES);
+  const [articles, setArticles] = useState(shared0.news);
   const [tagFilter, setTagFilter] = useState(null);
-  const [favTeam, setFavTeam] = useState(null);
-  const [favDriver, setFavDriver] = useState(null);
-  const [notifPrefs, setNotifPrefs] = useState({ team: true, driver: true });
+  const [favTeam, setFavTeam] = useState(USER_INIT.favTeam);
+  const [favDriver, setFavDriver] = useState(USER_INIT.favDriver);
+  const [notifPrefs, setNotifPrefs] = useState(USER_INIT.notifPrefs);
   const [picker, setPicker] = useState(null); // 'team' | 'driver'
   const [adminUnlocked, setAdminUnlocked] = useState(false);
   const [guest, setGuest] = useState(false);
@@ -6481,10 +6445,12 @@ function App() {
   const [loginReason, setLoginReason] = useState(null);
   const needLogin = (reason) => { setLoginReason(reason); setLoginOpen(true); };
   const [adminTab, setAdminTab] = useState("NEWS");
-  const [fantaStats, setFantaStats] = useState(FANTASY_INIT);
-  const [standings, setStandings] = useState({ note: STANDINGS_NOTE_INIT, drivers: DRIVER_STANDINGS_INIT, teams: TEAM_STANDINGS_INIT });
-  const [races, setRaces] = useState(RACES_INIT);
-  const [ig, setIg] = useState(IG_INIT);
+  const [fantaStats, setFantaStats] = useState(shared0.fantaStats);
+  const [standings, setStandings] = useState(shared0.standings);   // { note, drivers, teams, guests }
+  // Calendario 2026 con lo stato di shared/bt-races; extra = gare salvate fuori calendario, che restano nel documento.
+  const [racesDoc, setRacesDoc] = useState(shared0.races);
+  const races = racesDoc.races;
+  const [ig, setIg] = useState(shared0.ig);
   const [shareId, setShareId] = useState(null);   // articolo aperto nel foglio "Condividi"
   const [circuitId, setCircuitId] = useState(null); // pagina "Mostra di più" del circuito
   // Diretta demo: sessione simulata (prove, qualifiche, gara) che avanza 4 volte al secondo.
@@ -6553,14 +6519,97 @@ function App() {
     const iv = setInterval(() => { live.sim.advance(0.25 * liveSpeed); if (liveShown.current) setLiveTick(n => n + 1); }, 250);
     return () => clearInterval(iv);
   }, [live, liveSpeed]);
-  const [sentNotifs, setSentNotifs] = useState([]);
-  const sendNotif = (title, body) => {
-    const id = "n" + Date.now();
-    const now = new Date();
-    setSentNotifs(l => [{ id, title, body, sentAt: now.toLocaleString("it-IT", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" }) }, ...l]);
-    setNotifs(ns => [{ id, icon: "bell", bg: C.accent, stroke: "#fff", title, body, time: "Adesso", unread: true }, ...ns]);
+  // ── Contenuti condivisi su Firebase (src/services/appdata.js) ──────────
+  // Un nuovo valore uguale a quello che c'è già non cambia lo stato (niente ridisegni inutili a ogni rilettura).
+  const keep = set => v => set(cur => (sameJson(cur, v) ? cur : v));
+  const sharedSet = {
+    news: keep(setArticles), races: keep(setRacesDoc), notifs: keep(setNotifsRaw), ig: keep(setIg),
+    standings: v => { addStandingsGuests(v.guests); keep(setStandings)(v); },
+    highlights: keep(setHighlights), silly: keep(setSillyOfficial), predictions: keep(setPredictions),
+    homePoll: keep(setHomePoll), fantaStats: keep(setFantaStats), driverPhotos: keep(setDriverPhotos),
   };
-  const deleteNotif = (id) => { setSentNotifs(l => l.filter(n => n.id !== id)); setNotifs(ns => ns.filter(n => n.id !== id)); };
+  // Rilegge i contenuti indicati (tutti, all'avvio) e mette nello stato quelli letti davvero.
+  const refreshShared = kinds => AppData.loadShared(nowMs(), kinds ? { kinds } : undefined).then(r => {
+    (kinds ? r.fresh : Object.keys(r.values)).forEach(k => sharedSet[k](r.values[k]));
+    setOffline(r.offline);
+  });
+  // Salvataggio dell'Admin: prima Firebase, poi lo schermo. Se non riesce, l'avviso e lo schermo come prima (si può
+  // riprovare); se il contenuto non era ancora stato letto da Firebase, intanto lo si rilegge.
+  const commitShared = (kind, value) => AppData.saveShared(kind, value, nowMs()).then(v => { sharedSet[kind](v); return true; }, e => {
+    showToast(NOT_SAVED);
+    if (e && e.code === "stale") refreshShared(AppData.staleKinds());
+    return false;
+  });
+  const updOf = (cur, u) => (typeof u === "function" ? u(cur) : u);
+  const adminSet = {
+    articles: u => commitShared("news", updOf(articles, u)),
+    races: u => commitShared("races", { races: updOf(races, u), extra: racesDoc.extra }),
+    extraRaces: u => commitShared("races", { races, extra: updOf(racesDoc.extra, u) }),
+    standings: u => commitShared("standings", { ...standings, ...updOf(standings, u) }),   // gli ospiti restano
+    fantaStats: u => commitShared("fantaStats", updOf(fantaStats, u)),
+    ig: u => commitShared("ig", updOf(ig, u)),
+    highlights: u => commitShared("highlights", updOf(highlights, u)),
+    predictions: u => commitShared("predictions", updOf(predictions, u)),
+  };
+  const officialSeat = (id, o) => commitShared("silly", { ...sillyOfficial, [id]: o });
+
+  // ── Dati personali dell'account: si leggono all'accesso e si salvano 800 ms dopo ogni modifica ──
+  // (users/<email>.app2). Per l'ospite restano in memoria.
+  const [userEmail, setUserEmail] = useState(null);
+  const userEmailRef = useRef(null);
+  const userReady = useRef(false);   // dati dell'account letti: da qui in poi le modifiche si salvano
+  const userSnap = useRef({});       // ultimo valore letto o salvato di ogni dato (JSON): si manda solo quello che cambia
+  const userVals = { saved, favTeam, favDriver, notifPrefs, votes, squad, squadBase, freeTransfers, predAnswers, sillyPreds, stratPreds, pitBest, wxGuess, ratings, dotd, notifSeenAt };
+  const userValsRef = useRef(userVals);
+  userValsRef.current = userVals;
+  const userSet = { saved: setSaved, favTeam: setFavTeam, favDriver: setFavDriver, notifPrefs: setNotifPrefs, votes: setVotes, squad: setSquad, squadBase: setSquadBase,
+    freeTransfers: setFreeTransfers, predAnswers: setPredAnswers, sillyPreds: setSillyPreds, stratPreds: setStratPreds, pitBest: setPitBest, wxGuess: setWxGuess,
+    ratings: setRatings, dotd: setDotd, notifSeenAt: setNotifSeenAt };
+  const loadUser = em => AppData.loadUserData(em).then(data => {
+    if (userEmailRef.current !== em) return;   // intanto si è usciti, o è entrato un altro account
+    const cur = userValsRef.current;
+    AppData.USER_KEYS.forEach(k => { if (data[k] !== undefined) userSet[k](data[k]); });
+    userSnap.current = Object.fromEntries(AppData.USER_KEYS.map(k => [k, JSON.stringify(data[k] !== undefined ? data[k] : cur[k])]));
+    userReady.current = true;
+  }, () => {});   // senza rete i dati restano in memoria: si riprova alla prossima rilettura
+  const enterAccount = email => {
+    const em = String(email || "").trim().toLowerCase();
+    if (!em) return;
+    userEmailRef.current = em; userReady.current = false; setUserEmail(em);
+    loadUser(em);
+  };
+  const resetUser = () => { userEmailRef.current = null; userReady.current = false; setUserEmail(null); AppData.USER_KEYS.forEach(k => userSet[k](USER_INIT[k])); };
+  const leaveAccount = () => { AppData.flushUserData().catch(() => {}); resetUser(); };
+  useEffect(() => {
+    if (!userEmail || !userReady.current) return;
+    const patch = {};
+    AppData.USER_KEYS.forEach(k => { const j = JSON.stringify(userVals[k]); if (j !== userSnap.current[k]) { patch[k] = userVals[k]; userSnap.current[k] = j; } });
+    if (Object.keys(patch).length) AppData.saveUserData(userEmail, patch).catch(() => {});   // se non riesce resta in attesa
+  }, [userEmail, ...AppData.USER_KEYS.map(k => userVals[k])]);
+
+  // All'avvio si legge tutto; poi ogni minuto bt-races (una gara messa LIVE arriva da sola), quello che non si era
+  // potuto leggere e i dati personali non ancora letti o non ancora salvati.
+  useEffect(() => {
+    refreshShared();
+    const iv = setInterval(() => {
+      refreshShared(["races", ...AppData.staleKinds().filter(k => k !== "races")]);
+      if (userEmailRef.current && !userReady.current) loadUser(userEmailRef.current);
+      AppData.flushUserData().catch(() => {});
+    }, SHARED_REFRESH_MS);
+    return () => clearInterval(iv);
+  }, []);
+
+  // Notifiche: quelle dell'admin (shared/bt-notifs) più gli avvisi di questo telefono. Sono da leggere quelle più nuove
+  // dell'ultima "Segna tutte come lette" (notifSeenAt, nell'account).
+  const notifs = [
+    ...localNotifs,
+    ...Compat.notifsFromStore(notifsRaw, notifSeenAt, nowMs()).map(n => ({ icon: "bell", bg: C.accent, stroke: "#fff", ...n })),
+  ];
+  const sentNotifs = Compat.notifsFromStore(notifsRaw, 0, nowMs()).map(n => ({ id: n.id, title: n.title, body: n.body, sentAt: fmtSent(n.date) }));
+  const sendNotif = (title, body) => AppData.appendNotif({ title, body }, nowMs())
+    .then(n => { setNotifsRaw(l => [...l, n]); return true; }, () => { showToast(NOT_SAVED); return false; });
+  const deleteNotif = id => AppData.removeNotif(id)
+    .then(() => { setNotifsRaw(l => l.filter(n => String(n.id) !== String(id))); return true; }, () => { showToast(NOT_SAVED); return false; });
 
   const filterByTag = (t) => { setTagFilter(t); setSavedOnly(false); setTab("home"); setView("tab"); };
   const SAVE_NEEDS_ACCOUNT = "Per salvare gli articoli tra i preferiti serve un account.";
@@ -6572,23 +6621,28 @@ function App() {
   };
   const openSaved = () => { if (guest) { needLogin(SAVE_NEEDS_ACCOUNT); return; } setTagFilter(null); setSavedOnly(true); setTab("home"); setView("tab"); };
 
+  // Pubblica (o salva in bozza) una notizia in shared/bt-news. Restituisce true se è salvata: solo allora il modulo
+  // dell'admin si svuota e si torna alla Home.
   const publishArticle = (a) => {
-    const art = { ...a, id: Date.now(), time: "Adesso" };
-    setArticles(list => [art, ...list]);
-    if (a.published === false) { showToast("Bozza salvata"); return; }
-    const hits = [];
-    if (favTeam && notifPrefs.team && a.teams.includes(favTeam)) hits.push(teamById(favTeam));
-    if (favDriver && notifPrefs.driver && a.drivers.includes(favDriver)) hits.push(driverById(favDriver));
-    if (hits.length) {
-      const h = hits[0];
-      setNotifs(ns => [{ icon: "doc", bg: h.color, stroke: "#141414", title: `Nuova notizia ${hits.map(x => x.tag).join(" ")}`, body: a.title, time: "Adesso", unread: true }, ...ns]);
-      showToast(`Notifica inviata: ${hits.map(x => x.tag).join(" ")}`);
-    } else {
-      showToast("Notizia pubblicata");
-    }
-    setTagFilter(null);
-    setTab("home");
-    setView("tab");
+    const art = { ...a, id: Compat.uid(), date: new Date(nowMs()).toISOString() };
+    return commitShared("news", [art, ...articles]).then(ok => {
+      if (!ok) return false;
+      if (a.published === false) { showToast("Bozza salvata"); return true; }
+      const hits = [];
+      if (favTeam && notifPrefs.team && (a.teams || []).includes(favTeam)) hits.push(teamById(favTeam));
+      if (favDriver && notifPrefs.driver && (a.drivers || []).includes(favDriver)) hits.push(driverById(favDriver));
+      if (hits.length) {
+        const h = hits[0];
+        setLocalNotifs(ns => [{ id: "l-" + art.id, icon: "doc", bg: h.color, stroke: "#141414", title: `Nuova notizia ${hits.map(x => x.tag).join(" ")}`, body: a.title, time: "Adesso", unread: true }, ...ns]);
+        showToast(`Notifica inviata: ${hits.map(x => x.tag).join(" ")}`);
+      } else {
+        showToast("Notizia pubblicata");
+      }
+      setTagFilter(null);
+      setTab("home");
+      setView("tab");
+      return true;
+    });
   };
 
   const ABOUT_TEXT = "B&T nasce dalla passione di un gruppo di amici per la Formula 1: un posto solo nostro per seguire le gare, parlarne insieme e tenere traccia di come va la nostra lega FantaF1.\n\nQui trovi le news, la diretta gara, la nostra chat e il nostro Instagram, tutto in un'unica app.\n\nTracciati dei circuiti: f1-circuits di Tomislav Bacinger, licenza MIT.\n\nVersione anteprima — 2026.";
@@ -6608,9 +6662,10 @@ function App() {
     setVotes(v => ({ ...v, [pollId]: optionId }));
   };
   const setPollAnswer = (pollId, optionId) => {
-    if (pollId === "home") setHomePoll(pl => ({ ...pl, answer: optionId }));
-    else setArticles(list => list.map(a => a.poll && "art-" + a.id === pollId ? { ...a, poll: { ...a.poll, answer: optionId } } : a));
-    showToast(optionId ? "Risposta esatta segnata: chi l'ha votata prende +2 punti" : "Risposta esatta tolta");
+    const save = pollId === "home"
+      ? commitShared("homePoll", { ...homePoll, answer: optionId })
+      : commitShared("news", articles.map(a => a.poll && "art-" + a.id === pollId ? { ...a, poll: { ...a.poll, answer: optionId } } : a));
+    return save.then(ok => { if (ok) showToast(optionId ? "Risposta esatta segnata: chi l'ha votata prende +2 punti" : "Risposta esatta tolta"); return ok; });
   };
   const openArticle = (id) => { setArticleId(id); setShareId(null); setView("article"); };
   const openCircuit = (id) => { setCircuitId(id); setView("circuit"); };
@@ -6659,13 +6714,11 @@ function App() {
     const sim = LiveSim.createSession({ track, drivers: LIVE_DRIVERS, type, seed: race.round * 97 + type.length, script: true, startClock: hh * 3600 + mm * 60 });
     setLive({ raceId, type, sim, track }); setLapList(null);
     if (["SQ", "QUALI", "SPRINT", "RACE"].includes(type)) setDemoLock(d => ({ ...d, [raceId]: true }));   // squadra bloccata fino a fine gara
-    setTelemetry(null);
-    setRaces(list => list.map(r => r.id === raceId ? { ...r, status: "LIVE" } : (r.status === "LIVE" ? { ...r, status: "CONCLUSA" } : r)));
+    setTelemetry(null);   // la prova non cambia lo stato delle gare: quello lo vedono tutti (shared/bt-races, D23)
     showToast(`${sessionName(type)} in diretta (demo)`);
   };
   const stopLive = () => {
     if (live) closeSession(live);
-    if (live) setRaces(list => list.map(r => r.id === live.raceId ? { ...r, status: "IN ARRIVO" } : r));
     setLive(null); setTelemetry(null); setLapList(null); showToast("Diretta terminata");
   };
   const liveFlag = (kind, sector) => { if (live) { live.sim.setFlag(kind, sector); setLiveTick(n => n + 1); } };
@@ -6692,7 +6745,9 @@ function App() {
   const deleteAccount = () => {
     setChats(cs => cs.map(c => ({ ...c, messages: c.messages.filter(m => !m.mine) })));
     setReports(rs => rs.filter(r => r.by !== "Tu"));
-    setBlocked([]); setSaved([]); setSavedOnly(false); setFavTeam(null); setFavDriver(null); setIsPremium(false);
+    if (userEmail) AppData.clearUserData(userEmail).catch(() => {});   // via i dati personali (l'account intero lo toglie il Task 7)
+    resetUser();
+    setBlocked([]); setSavedOnly(false); setIsPremium(false);
     setAuthed(false); setGuest(false); setAdminUnlocked(false); setView("tab"); setTab("home");
   };
   const needAccount = () => { if (guest) { needLogin("Per creare la tua squadra FantaF1 serve un account."); return true; } return false; };
@@ -6702,7 +6757,7 @@ function App() {
     setPredAnswers(a => ({ ...a, [q.id]: v }));
     showToast(q.kind === "history" ? (BtLogic.predictionCorrect(q, v) ? "Giusto! +1 punto FantaF1" : "Risposta sbagliata") : "Previsione salvata");
   };
-  const readAll = () => setNotifs(ns => ns.map(n => ({ ...n, unread: false })));
+  const readAll = () => { setNotifSeenAt(nowMs()); setLocalNotifs(ns => ns.map(n => ({ ...n, unread: false }))); };
 
   const doSubscribe = () => {
     if (guest) { setPremiumOpen(false); needLogin("Per abbonarti a B&T Premium serve un account."); return; }
@@ -6720,7 +6775,7 @@ function App() {
   if (!authed && !guest) {
     return (
       <div id="phone-shell">
-        <LoginScreen onDone={r => { setAuthed(true); if (r && r.about) setAboutMe(r.about); }} onGuest={() => { setGuest(true); showToast("Stai navigando come ospite"); }} />
+        <LoginScreen onDone={r => { setAuthed(true); if (r && r.about) setAboutMe(r.about); enterAccount(r && r.email); }} onGuest={() => { setGuest(true); showToast("Stai navigando come ospite"); }} />
       </div>
     );
   }
@@ -6728,7 +6783,7 @@ function App() {
     return (
       <div id="phone-shell">
         <LoginScreen reason={loginReason} onBack={() => { setLoginOpen(false); setLoginReason(null); }}
-          onDone={r => { setAuthed(true); setGuest(false); setLoginOpen(false); setLoginReason(null); if (r && r.about) setAboutMe(r.about); showToast(r ? "Account creato" : "Accesso effettuato"); }} />
+          onDone={r => { setAuthed(true); setGuest(false); setLoginOpen(false); setLoginReason(null); if (r && r.about) setAboutMe(r.about); enterAccount(r && r.email); showToast(r && r.created ? "Account creato" : "Accesso effettuato"); }} />
         {toast && <div className="toast">{toast}</div>}
       </div>
     );
@@ -6740,7 +6795,7 @@ function App() {
   const liveSt = live ? live.sim.state() : null;
   const trialActive = isPremium && !!trial && !trial.converted;
   // Punti bonus del FantaF1: pronostici meteo indovinati (+2 ciascuno).
-  const allPolls = [{ ...homePoll, where: "Home" }, ...articles.filter(a => a.poll).map(a => ({ ...articlePoll(a), where: a.title }))];
+  const allPolls = [...(homePoll ? [{ ...homePoll, where: "Home" }] : []), ...articles.filter(a => a.poll).map(a => ({ ...articlePoll(a), where: a.title }))];
   const bonus = [
     ...Object.keys(wxResult).filter(k => wxGuess[k] && wxGuess[k] === wxResult[k]).map(k => {
       const [rid, key] = k.split(":"), r = races.find(x => x.id === rid);
@@ -6779,12 +6834,12 @@ function App() {
   if (view === "article" && activeArticle) body = <ArticleScreen article={activeArticle} onBack={() => setView("tab")} isPremium={isPremium} onPremium={() => setPremiumOpen(true)} onTag={filterByTag} saved={saved.includes(activeArticle.id)} onToggleSave={() => toggleSave(activeArticle.id)} onShare={() => setShareId(activeArticle.id)} vote={votes["art-" + activeArticle.id] || null} onVote={castVote} />;
   else if (view === "circuit" && circuitId) body = <CircuitScreen circuitId={circuitId} races={races} articles={articles} onBack={() => setView("tab")} onTag={filterByTag} onOpenArticle={openArticle} />;
   else if (view === "adminLock") body = <AdminKeypad onOk={() => { setAdminUnlocked(true); setView("admin"); }} onCancel={() => setView("profilo")} />;
-  else if (view === "admin" && adminUnlocked) body = <AdminScreen silly={sillyOfficial} onSilly={officialSeat} highlights={highlights} setHighlights={setHighlights} onBack={() => setView("profilo")} onPublish={publishArticle} articles={articles} setArticles={setArticles} fantaStats={fantaStats} setFantaStats={setFantaStats} standings={standings} setStandings={setStandings} races={races} setRaces={setRaces} ig={ig} setIg={setIg} sentNotifs={sentNotifs} onSendNotif={sendNotif} onDeleteNotif={deleteNotif} onToast={showToast} tab={adminTab} setTab={setAdminTab} chats={chats} reports={reports} banned={banned} onDeleteMsg={deleteChatMsg} onSuspend={suspendUser} onUnsuspend={unsuspendUser} onIgnoreReport={ignoreReport} liveProps={liveProps} polls={allPolls} votes={votes} onPollAnswer={setPollAnswer} predictions={predictions} setPredictions={setPredictions} predAnswers={predAnswers} />;
+  else if (view === "admin" && adminUnlocked) body = <AdminScreen silly={sillyOfficial} onSilly={officialSeat} highlights={highlights} setHighlights={adminSet.highlights} onBack={() => setView("profilo")} onPublish={publishArticle} articles={articles} setArticles={adminSet.articles} fantaStats={fantaStats} setFantaStats={adminSet.fantaStats} standings={standings} setStandings={adminSet.standings} races={races} setRaces={adminSet.races} extraRaces={racesDoc.extra} setExtraRaces={adminSet.extraRaces} ig={ig} setIg={adminSet.ig} sentNotifs={sentNotifs} onSendNotif={sendNotif} onDeleteNotif={deleteNotif} onToast={showToast} tab={adminTab} setTab={setAdminTab} chats={chats} reports={reports} banned={banned} onDeleteMsg={deleteChatMsg} onSuspend={suspendUser} onUnsuspend={unsuspendUser} onIgnoreReport={ignoreReport} liveProps={liveProps} polls={allPolls} votes={votes} onPollAnswer={setPollAnswer} predictions={predictions} setPredictions={adminSet.predictions} predAnswers={predAnswers} />;
   else if (view === "chatThread" && activeChat) body = <ChatThreadScreen chat={activeChat} onBack={() => goTab("race")} onSend={guest ? () => needLogin("Per scrivere in chat serve un account.") : sendMessage} isPremium={isPremium} blocked={blocked} onReport={guest ? () => needLogin("Per segnalare un messaggio serve un account.") : reportMessage} onBlock={blockUser} />;
   else if (view === "instagram") body = <InstagramView ig={ig} onToast={showToast} onBack={() => setView(igFrom)} />;
   else if (view === "ghost") body = <GhostLap onBack={() => setView("tab")} />;
   else if (view === "chats") body = <ChatsView chats={chats} onOpen={openChat} blocked={blocked} onBack={() => setView("tab")} />;
-  else if (view === "profilo") body = <ProfiloScreen ig={ig} onOpenIg={() => { setIgFrom("profilo"); setView("instagram"); }} aboutMe={aboutMe} onSaveAboutMe={setAboutMe} trial={trialActive ? trial : null} trialUsed={!!trial} onBack={() => setView("tab")} onNotifiche={() => setView("notifiche")} onPremium={() => setPremiumOpen(true)} onAdmin={() => guest ? needLogin("Accedi per usare il pannello admin.") : setView(adminUnlocked ? "admin" : "adminLock")} onLogout={() => { setAuthed(false); setGuest(false); setAdminUnlocked(false); setView("tab"); goTab("home"); }} isPremium={isPremium} onAbout={() => setInfoModal({ title: "Info su B&T", body: ABOUT_TEXT })} onHelp={() => setInfoModal({ title: "Assistenza", body: HELP_TEXT })} favTeam={favTeam} favDriver={favDriver} onPickTeam={() => guest ? needLogin("Per scegliere scuderia e pilota del cuore serve un account.") : setPicker("team")} onPickDriver={() => guest ? needLogin("Per scegliere scuderia e pilota del cuore serve un account.") : setPicker("driver")} guest={guest} onLogin={() => needLogin(null)} onTerms={() => setTermsOpen(true)} blocked={blocked} onUnblock={unblockUser} onDeleteAccount={deleteAccount} savedCount={saved.length} onOpenSaved={openSaved} />;
+  else if (view === "profilo") body = <ProfiloScreen ig={ig} onOpenIg={() => { setIgFrom("profilo"); setView("instagram"); }} aboutMe={aboutMe} onSaveAboutMe={setAboutMe} trial={trialActive ? trial : null} trialUsed={!!trial} onBack={() => setView("tab")} onNotifiche={() => setView("notifiche")} onPremium={() => setPremiumOpen(true)} onAdmin={() => guest ? needLogin("Accedi per usare il pannello admin.") : setView(adminUnlocked ? "admin" : "adminLock")} onLogout={() => { leaveAccount(); setAuthed(false); setGuest(false); setAdminUnlocked(false); setView("tab"); goTab("home"); }} isPremium={isPremium} onAbout={() => setInfoModal({ title: "Info su B&T", body: ABOUT_TEXT })} onHelp={() => setInfoModal({ title: "Assistenza", body: HELP_TEXT })} favTeam={favTeam} favDriver={favDriver} onPickTeam={() => guest ? needLogin("Per scegliere scuderia e pilota del cuore serve un account.") : setPicker("team")} onPickDriver={() => guest ? needLogin("Per scegliere scuderia e pilota del cuore serve un account.") : setPicker("driver")} guest={guest} onLogin={() => needLogin(null)} onTerms={() => setTermsOpen(true)} blocked={blocked} onUnblock={unblockUser} onDeleteAccount={deleteAccount} savedCount={saved.length} onOpenSaved={openSaved} />;
   else if (view === "notifiche") body = <NotificheScreen onBack={() => setView("tab")} notifs={notifs} onReadAll={readAll} isPremium={isPremium} onPremium={() => setPremiumOpen(true)} favTeam={favTeam} favDriver={favDriver} prefs={notifPrefs} onPrefs={setNotifPrefs} onGoProfilo={() => setView("profilo")} />;
   else {
     if (tab === "home") body = <HomeScreen ig={ig} highlights={highlights} onOpenIg={() => { setIgFrom("tab"); setView("instagram"); }} articles={articles} tagFilter={tagFilter} onTag={filterByTag} onClearTag={() => setTagFilter(null)} onOpenArticle={openArticle} isPremium={isPremium} onPremium={() => setPremiumOpen(true)} onToast={showToast} onLiveTrack={() => setLiveTrackOpen(true)} onGoFanta={() => goTab("fanta")}  saved={saved} onToggleSave={toggleSave} savedOnly={savedOnly} setSavedOnly={setSavedOnly} onOpenCircuit={openCircuit} homePoll={homePoll} homeVote={votes.home || null} onVote={castVote} />;
@@ -6800,6 +6855,7 @@ function App() {
     <div id="phone-shell">
       <div data-bg={pageBg || undefined} style={{ height: "100%", display: "flex", flexDirection: "column", position: "relative", background: pageBg && PAGE_BG[pageBg] ? PAGE_BG[pageBg] : undefined, transition: "background .3s" }}>
         {showTopHeader && <TopHeader trialDays={trialActive ? trialDaysLeft(trial) : 0} isPremium={isPremium} unread={unreadCount} onPremium={() => setPremiumOpen(true)} onBell={() => setView("notifiche")} onProfile={() => setView("profilo")} />}
+        {showTopHeader && offline && <div role="status" data-offline="" style={{ margin: "-6px 16px 10px", padding: "8px 12px", borderRadius: 10, background: "rgba(231,179,76,.12)", border: "1px solid rgba(231,179,76,.35)", fontFamily: F_BODY, fontSize: 12, color: C.text, lineHeight: 1.4, flexShrink: 0 }}>{OFFLINE_LINE}</div>}
         <div style={{ flex: 1, minHeight: 0 }}>{body}</div>
         {showBottomNav && <BottomNav active={tab} onChange={goTab} />}
         {premiumOpen && <PremiumModal onClose={closePremium} isPremium={isPremium} plan={plan} setPlan={setPlan} onSubscribe={doSubscribe} subscribing={subscribing} subscribed={subscribed} trialUsed={!!trial} onTrial={doTrial} trial={trial} />}

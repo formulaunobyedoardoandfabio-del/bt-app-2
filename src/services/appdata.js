@@ -1,0 +1,185 @@
+// Contenuti condivisi (shared/<documento>) e dati personali (users/<email>.app2) della nuova app su Firebase.
+// I documenti restano nel formato dell'app di oggi (B2 di docs/riferimenti/confronto-app-oggi-2.0.md), che continua a
+// leggerli; le conversioni da e verso le forme della 2.0 sono in compat.js. Qui si decide cosa si legge, cosa si scrive
+// e quando:
+// - loadShared legge tutti i documenti insieme; se un documento non c'è vale il suo valore di serie (SHARED_DOCS);
+// - saveShared converte e scrive, oppure lancia l'errore (chi chiama avvisa "Non salvato");
+// - un documento che all'avvio non si è potuto leggere (senza rete) non si sovrascrive finché non si rilegge: sullo
+//   schermo c'era il valore di serie e salvarlo cancellerebbe i dati veri (errore "stale");
+// - i dati personali si salvano 800 ms dopo l'ultima modifica, tutti insieme, nel campo app2 dell'account.
+const FB = require("./firebase");
+const C = require("./compat");
+const F1 = require("../data/f1-2026");
+
+const isObj = v => v && typeof v === "object" && !Array.isArray(v);
+const list = v => (Array.isArray(v) ? v.filter(isObj) : []);
+const obj = v => (isObj(v) ? v : {});
+const clone = v => JSON.parse(JSON.stringify(v));
+const mkErr = (code, message) => Object.assign(new Error(message || code), { code });
+
+// Notizia di benvenuto dell'app di oggi (D_NEWS di bt-app-flutter/src/App.jsx): si vede finché l'admin non salva bt-news.
+const D_NEWS = [{ id: "n1", title: "Vi presentiamo l'app B&T!!", summary: "Introduzione all'app ufficiale", category: "APP", author: "Team B&T", image: "", published: true, date: "2026-09-01T10:00:00",
+  content: "Benvenuti nell'app ufficiale B&T Formula1!\n\nQui troverete tutte le ultime notizie, classifiche mondiali in tempo reale, live race tracking con dati dalle gomme ai distacchi, e presto anche il Fanta F1.\n\nRestate sintonizzati per tutti gli aggiornamenti della stagione 2026!" }];
+
+// Previsioni: nella 2.0 le risposte sono [id, testo]; Firestore non accetta array dentro array, quindi si salvano {id, label}.
+const predictionsToStore = qs => list(qs).map(q => (Array.isArray(q.options) ? { ...q, options: q.options.map(o => (Array.isArray(o) ? { id: o[0], label: o[1] } : o)) } : q));
+const predictionsFromStore = qs => list(qs).map(q => (Array.isArray(q.options) ? { ...q, options: q.options.map(o => (isObj(o) ? [o.id, o.label] : o)) } : q));
+
+// FantaF1: { drivers: { id: { price, change, pts } }, teams: {…} } (documento nuovo, già nella forma della 2.0).
+const fantaRows = o => Object.fromEntries(Object.entries(o).map(([id, [price, change, pts]]) => [id, { price, change, pts }]));
+const FANTA_DEFAULT = { drivers: fantaRows(F1.FANTASY.drivers), teams: fantaRows(F1.FANTASY.teams) };
+const fantaOf = d => (isObj(d) && isObj(d.drivers) && isObj(d.teams) ? { drivers: d.drivers, teams: d.teams } : clone(FANTA_DEFAULT));
+
+// Classifiche della 2.0 (R02) nel formato di oggi.
+const ST = F1.STANDINGS;
+const ST_STORE = C.standingsToStore({
+  drivers: ST.drivers.map(([id, points], i) => ({ id, position: i + 1, points })),
+  teams: ST.teams.map(([id, points], i) => ({ id, position: i + 1, points })),
+  guests: ST.guests,
+});
+const noteOf = d => (isObj(d) && typeof d.text === "string" ? d.text : "");
+
+// Documento → valore di serie se manca, nel formato in cui sta su Firebase. bt-fanta-pilots (FantaF1 dell'app di oggi)
+// non si tocca.
+const SHARED_DOCS = {
+  "bt-news": D_NEWS,
+  "bt-races": null,                       // niente di salvato: calendario 2026 con lo stato dalla data (mergeRaces)
+  "bt-piloti": ST_STORE.piloti,
+  "bt-costruttori": ST_STORE.costruttori,
+  "bt-standings-note": { text: ST.note },
+  "bt-notifs": [],
+  "bt-ig-config": { handle: "bt_formula1", followers: null, posts: null, videos: [] },
+  "bt-highlights": [],
+  "bt-silly-official": {},
+  "bt-predictions": predictionsToStore(F1.HISTORY_QUESTIONS),   // solo le domande di storia h1-h4
+  "bt-home-poll": null,                   // riquadro del sondaggio nascosto
+  "bt-fanta-stats": FANTA_DEFAULT,
+  "bt-driver-photos": {},
+};
+
+// Ogni contenuto dell'app (nome dello stato della 2.0) → i suoi documenti e le conversioni.
+// from(documenti, ora) dà il valore per l'app; to(valore) dà i documenti da scrivere (null = documento da cancellare).
+const KINDS = {
+  news: { docs: ["bt-news"], from: (d, now) => C.newsFromStore(d["bt-news"], now), to: v => ({ "bt-news": C.newsToStore(v) }) },
+  // { races: le 23 gare della 2.0 con lo stato salvato, extra: gare salvate fuori calendario, che restano nel documento }
+  races: { docs: ["bt-races"], from: (d, now) => C.mergeRaces(F1.RACES, d["bt-races"], now), to: v => ({ "bt-races": C.racesToStore(v.races, v.extra) }) },
+  standings: {
+    docs: ["bt-piloti", "bt-costruttori", "bt-standings-note"],
+    from: d => ({ ...C.standingsFromStore({ piloti: d["bt-piloti"], costruttori: d["bt-costruttori"] }), note: noteOf(d["bt-standings-note"]) }),
+    to: st => { const s = C.standingsToStore(st); return { "bt-piloti": s.piloti, "bt-costruttori": s.costruttori, "bt-standings-note": { text: st.note || "" } }; },
+  },
+  // Notifiche come sono salvate: l'app le converte con l'ora dell'ultima lettura (compat.notifsFromStore). Si aggiungono
+  // e si tolgono una alla volta (appendNotif, removeNotif), come oggi.
+  notifs: { docs: ["bt-notifs"], from: d => list(d["bt-notifs"]) },
+  ig: { docs: ["bt-ig-config"], from: d => C.igFromStore(d["bt-ig-config"]), to: v => ({ "bt-ig-config": C.igToStore(v) }) },
+  highlights: { docs: ["bt-highlights"], from: d => list(d["bt-highlights"]), to: v => ({ "bt-highlights": list(v) }) },
+  silly: { docs: ["bt-silly-official"], from: d => obj(d["bt-silly-official"]), to: v => ({ "bt-silly-official": obj(v) }) },
+  predictions: { docs: ["bt-predictions"], from: d => predictionsFromStore(d["bt-predictions"]), to: v => ({ "bt-predictions": predictionsToStore(v) }) },
+  homePoll: { docs: ["bt-home-poll"], from: d => (isObj(d["bt-home-poll"]) && Array.isArray(d["bt-home-poll"].options) ? d["bt-home-poll"] : null), to: v => ({ "bt-home-poll": isObj(v) ? v : null }) },
+  fantaStats: { docs: ["bt-fanta-stats"], from: d => fantaOf(d["bt-fanta-stats"]), to: v => ({ "bt-fanta-stats": fantaOf(v) }) },
+  driverPhotos: { docs: ["bt-driver-photos"], from: d => obj(d["bt-driver-photos"]), to: v => ({ "bt-driver-photos": obj(v) }) },
+};
+
+// Dati personali dell'account (users/<email>.app2): ognuno vede e modifica solo i suoi.
+const USER_KEYS = ["saved", "favTeam", "favDriver", "notifPrefs", "votes", "squad", "squadBase", "freeTransfers", "predAnswers", "sillyPreds", "stratPreds", "pitBest", "wxGuess", "ratings", "dotd", "notifSeenAt"];
+const USER_SAVE_MS = 800;
+const pickUser = v => { const out = {}; if (isObj(v)) USER_KEYS.forEach(k => { if (v[k] !== undefined) out[k] = v[k]; }); return out; };
+
+function createAppData({ fb = FB } = {}) {
+  const fresh = new Set();          // documenti letti da Firebase (o appena scritti): solo questi si possono riscrivere
+  const pending = new Map();        // email → { patch, timer, waiters }
+  const docsOf = kinds => [...new Set(kinds.flatMap(k => KINDS[k].docs))];
+  const isFresh = kind => KINDS[kind].docs.every(d => fresh.has(d));
+
+  // Legge i documenti dei contenuti richiesti (tutti, se non si dice). values: un valore per ogni contenuto (quello di
+  // serie se il documento manca o non si è potuto leggere); fresh: i contenuti letti davvero; offline: qualcosa non si
+  // è potuto leggere.
+  async function loadShared(now = Date.now(), { kinds = Object.keys(KINDS) } = {}) {
+    const docs = docsOf(kinds), raw = {}, ok = new Set();
+    await Promise.all(docs.map(async k => {
+      try {
+        const v = await fb.sgStrict(k);
+        raw[k] = v == null ? SHARED_DOCS[k] : v;
+        ok.add(k); fresh.add(k);
+      } catch (e) { raw[k] = SHARED_DOCS[k]; }
+    }));
+    const values = {}, data = clone(raw);   // copie: lo stato dell'app non tocca i valori di serie
+    kinds.forEach(kind => { values[kind] = KINDS[kind].from(data, now); });
+    return { values, offline: ok.size < docs.length, fresh: kinds.filter(k => KINDS[k].docs.every(d => ok.has(d))) };
+  }
+  const staleKinds = () => Object.keys(KINDS).filter(k => !isFresh(k));
+
+  // Converte e scrive un contenuto; restituisce il valore per l'app come si rilegge da quello che si è scritto.
+  async function saveShared(kind, value, now = Date.now()) {
+    const K = KINDS[kind];
+    if (!K || !K.to) throw mkErr("unknown", "contenuto senza salvataggio: " + kind);
+    if (!isFresh(kind)) throw mkErr("stale", "non ancora letto da Firebase: " + kind);
+    const out = clone(K.to(value));   // come lo scrive ss: senza undefined, NaN → null
+    for (const [doc, v] of Object.entries(out)) {
+      if (v == null) await fb.sd(doc, true); else await fb.ss(doc, v);
+      fresh.add(doc);
+    }
+    return K.from(out, now);
+  }
+
+  // Notifiche dell'admin (shared/bt-notifs): una alla volta senza riscrivere le altre, come oggi.
+  async function appendNotif({ title, body } = {}, now = Date.now()) {
+    const n = C.notifToStore({ title, body }, now);
+    await fb.sharedAppend("bt-notifs", n);
+    return n;
+  }
+  const removeNotif = id => fb.sharedRemoveWhere("bt-notifs", x => x && String(x.id) === String(id));
+
+  async function loadUserData(email) {
+    const u = await fb.dbGet("users", email);
+    return pickUser(u && u.app2);
+  }
+  // Unisce la modifica a quelle in attesa e salva tutto delay ms dopo l'ultima. La promessa si risolve quando è salvato;
+  // se il salvataggio non riesce rifiuta, e la modifica resta in attesa per il prossimo tentativo.
+  function saveUserData(email, patch, delay = USER_SAVE_MS) {
+    const p = pending.get(email) || { patch: {}, timer: null, waiters: [] };
+    Object.assign(p.patch, pickUser(patch));
+    pending.set(email, p);
+    clearTimeout(p.timer);
+    return new Promise((res, rej) => { p.waiters.push({ res, rej }); p.timer = setTimeout(() => { writeUser(email); }, delay); });
+  }
+  async function writeUser(email) {
+    const p = pending.get(email);
+    if (!p) return;
+    pending.delete(email); clearTimeout(p.timer);
+    try {
+      await fb.dbSet("users", email, { app2: p.patch });
+      p.waiters.forEach(w => w.res());
+    } catch (e) {
+      const cur = pending.get(email);   // modifiche arrivate intanto: le più nuove valgono di più
+      if (cur) cur.patch = { ...p.patch, ...cur.patch };
+      else pending.set(email, { patch: p.patch, timer: null, waiters: [] });
+      p.waiters.forEach(w => w.rej(e));
+    }
+  }
+  // Salva subito quello che è in attesa (per esempio prima di uscire dall'account).
+  const flushUserData = () => Promise.all([...pending.keys()].map(writeUser));
+  // Butta le modifiche in attesa di un account (per esempio quando lo si elimina: non devono ricrearlo).
+  function cancelUserData(email) {
+    const p = pending.get(email);
+    if (!p) return;
+    clearTimeout(p.timer); pending.delete(email);
+    p.waiters.forEach(w => w.rej(mkErr("cancelled")));
+  }
+  // Toglie dall'account tutti i dati personali dell'app (app2 vuoto; il resto del profilo resta).
+  async function clearUserData(email) {
+    cancelUserData(email);
+    await fb.dbSet("users", email, { app2: {} });
+  }
+
+  return { loadShared, staleKinds, saveShared, appendNotif, removeNotif, loadUserData, saveUserData, flushUserData, cancelUserData, clearUserData };
+}
+
+// I valori di serie di tutti i contenuti, già convertiti per l'app: quelli che si vedono finché Firebase non risponde.
+function sharedDefaults(now = Date.now()) {
+  const data = clone(SHARED_DOCS), values = {};
+  Object.keys(KINDS).forEach(kind => { values[kind] = KINDS[kind].from(data, now); });
+  return values;
+}
+
+module.exports = { D_NEWS, SHARED_DOCS, KINDS, USER_KEYS, USER_SAVE_MS, sharedDefaults, createAppData, ...createAppData() };

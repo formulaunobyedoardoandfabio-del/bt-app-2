@@ -3,6 +3,9 @@
 // telemetria e tempi sul giro, Second Screen in orizzontale, prova Premium di 2 settimane, download senza filigrana.
 // Uso: bash rtest/build.sh && node rtest/run14.js [filtro]      (PAGE=real.html per React vero)
 const { chromium } = require('/opt/node-tools/node_modules/playwright');
+// Le notizie, le previsioni, i video e il calendario d'esempio della 2.0 ora stanno su Firebase (Task 6): il Firebase
+// finto parte con quei documenti, così le prove li ritrovano.
+const SEED_20 = require('../fixtures/seed-2.0.json');
 const EXE = '/opt/pw-browsers/chromium-1194/chrome-linux/chrome';
 
 // Ora fissa (mercoledì prima del GP della Malesia, nessuna sessione in corso): così le chiusure del meteo e del
@@ -10,6 +13,7 @@ const EXE = '/opt/pw-browsers/chromium-1194/chrome-linux/chrome';
 const NOW = '2026-09-30T11:48:00Z';
 async function open(b, { width = 390, height = 844, now = NOW } = {}) {
   const ctx = await b.newContext({ viewport: { width, height }, hasTouch: true, isMobile: true });
+  await ctx.addInitScript(seed => { window.__btSeed = seed; }, SEED_20);
   await ctx.addInitScript(now => { window.open = () => null; window.__btNow = Date.parse(now); }, now);
   const p = await ctx.newPage(); const errs = []; p.on('pageerror', e => errs.push(e.message));
   await p.goto('file://' + __dirname + '/' + (process.env.PAGE || 'test.html')); await p.waitForTimeout(400);
