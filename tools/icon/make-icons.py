@@ -4,7 +4,7 @@
 # - ic_launcher_foreground.png (icona adattiva, Android 8+): l'immagine occupa i 72 dp centrali dei 108 dp del livello,
 #   così la maschera del telefono (cerchio, quadrato arrotondato…) non taglia né le lettere né le ruote; intorno è
 #   trasparente e sotto c'è lo sfondo nero dell'icona adattiva (scripts/prepare_android.py);
-# - playstore-icon-512.png: l'immagine intera a 512 px.
+# - playstore-icon-512.png: l'immagine intera a 512 px, RGBA (PNG a 32 bit come chiede Google Play).
 # Il nero quasi nero dell'immagine (fino a 10 su 255) diventa nero vero, come lo sfondo dell'icona adattiva.
 import os, sys
 from PIL import Image, ImageDraw
@@ -41,5 +41,5 @@ for name, k in DENSITIES.items():
     scaled(launcher).save(os.path.join(d, "ic_launcher.png"), optimize=True)
     round_icon(launcher).save(os.path.join(d, "ic_launcher_round.png"), optimize=True)
     foreground(fg).save(os.path.join(d, "ic_launcher_foreground.png"), optimize=True)
-scaled(512).save(os.path.join(out, "playstore-icon-512.png"), optimize=True)
+scaled(512).convert("RGBA").save(os.path.join(out, "playstore-icon-512.png"), optimize=True)   # Google Play: PNG a 32 bit (con l'alfa)
 print("icone fatte in", out)

@@ -16,7 +16,7 @@ import BtWk from "./logic/bt-weekend";
 import F1 from "./data/f1-2026";
 import AppData from "./services/appdata";
 import Compat from "./services/compat";
-import { createAccount, MESSAGES as ACCOUNT_MSG, messageOf } from "./services/account";
+import { createAccount, MESSAGES as ACCOUNT_MSG, messageOf, MIN_AGE } from "./services/account";
 import { createChat, CHAT_MSG, ROOM_IDS } from "./services/chat";
 import { createFeedback, FEEDBACK_CATS, FEEDBACK_MSG } from "./services/feedback";
 import { local, IMG_REF, uploadImage, loadImage as loadStoredImage, dropImage } from "./services/firebase";
@@ -835,7 +835,7 @@ function AboutCard({ about, onSave }) {
               <label htmlFor="aboutBirth" style={{ ...small, display: "block", marginBottom: 6 }}>Anno di nascita</label>
               <select id="aboutBirth" value={draft.birth ? String(draft.birth) : ""} onChange={e => { const v = e.target.value; setDraft(d => ({ ...d, birth: v ? Number(v) : null })); }} style={{ width: "100%", padding: "11px 12px", borderRadius: 12, background: C.bg, border: `1px solid ${C.border}`, fontFamily: F_BODY, fontSize: 14, color: C.text }}>
                 <option value="">Non indicato</option>
-                {BIRTH_YEARS.map(y => <option key={y} value={String(y)}>{y}</option>)}
+                {BIRTH_YEARS.filter(y => y <= new Date(nowMs()).getFullYear() - MIN_AGE).map(y => <option key={y} value={String(y)}>{y}</option>)}
               </select>
             </div>
             <FollowSlider id="aboutFollow" value={draft.follow} onChange={v => setDraft(d => ({ ...d, follow: v }))} />
@@ -5313,7 +5313,9 @@ function ProfiloScreen({ ig, onOpenIg, trial = null, trialUsed = false, onBack, 
     setDelErr(""); setDelBusy(true);
     Promise.resolve(onDeleteAccount && onDeleteAccount(delPw)).then(() => { setDelBusy(false); setConfirmDel(false); }, e => { setDelBusy(false); setDelErr(messageOf(e)); });
   };
-  const noAbout = !!aboutMe && aboutMe.fan == null && aboutMe.follow == null;   // account di oggi senza "Su di te"
+  // Profilo non ancora letto da Firebase (avvio senza rete): niente nome né "Su di te" da mostrare o modificare.
+  const waiting = !!account && account.loaded === false;
+  const noAbout = !waiting && !!aboutMe && aboutMe.fan == null && aboutMe.follow == null;   // account di oggi senza "Su di te"
   const rows = [
     { icon: "bell", label: "Notifiche", onClick: onNotifiche, chevron: true },
     ...(isAdmin ? [{ icon: "gear", label: "Pannello Admin · Pubblica notizia", onClick: onAdmin, badge: "ADMIN" }] : []),
@@ -5340,9 +5342,9 @@ function ProfiloScreen({ ig, onOpenIg, trial = null, trialUsed = false, onBack, 
           <div style={{ width: 84, height: 84, borderRadius: "50%", background: C.accent, display: "flex", alignItems: "center", justifyContent: "center" }}>
             <span style={{ fontFamily: F_HEAD, fontWeight: 900, fontStyle: "italic", fontSize: 26, color: "#fff" }}>{initials}</span>
           </div>
-          <button className="press" aria-label={editing ? "Salva profilo" : "Modifica profilo"} onClick={() => (editing ? saveName() : (setName(account ? account.name : ""), setEditing(true)))} style={{ position: "absolute", bottom: -2, right: -2, width: 30, height: 30, borderRadius: "50%", background: editing ? C.accent : C.card, border: `2px solid ${C.bg}`, display: "flex", alignItems: "center", justifyContent: "center" }}>
+          {!waiting && <button className="press" aria-label={editing ? "Salva profilo" : "Modifica profilo"} onClick={() => (editing ? saveName() : (setName(account ? account.name : ""), setEditing(true)))} style={{ position: "absolute", bottom: -2, right: -2, width: 30, height: 30, borderRadius: "50%", background: editing ? C.accent : C.card, border: `2px solid ${C.bg}`, display: "flex", alignItems: "center", justifyContent: "center" }}>
             <Icon name={editing ? "check" : "edit"} size={13} color={editing ? "#fff" : C.text} sw={2.3} />
-          </button>
+          </button>}
         </div>
         {editing ? (
           <div style={{ width: "100%", marginTop: 18 }}>
@@ -5356,7 +5358,7 @@ function ProfiloScreen({ ig, onOpenIg, trial = null, trialUsed = false, onBack, 
           </div>
         ) : (
           <>
-            <h2 style={{ fontFamily: F_HEAD, fontWeight: 800, fontSize: 18, color: C.text, margin: "14px 0 3px" }}>{account ? account.name : ""}</h2>
+            <h2 data-profile-name={waiting ? "waiting" : ""} style={{ fontFamily: F_HEAD, fontWeight: 800, fontSize: 18, color: waiting ? C.muted : C.text, margin: "14px 0 3px" }}>{waiting ? "Profilo in caricamento…" : account ? account.name : ""}</h2>
             <span style={{ fontFamily: F_BODY, fontSize: 12, color: C.muted }}>{email}</span>
           </>
         )}
@@ -5364,7 +5366,8 @@ function ProfiloScreen({ ig, onOpenIg, trial = null, trialUsed = false, onBack, 
       )}
       {ig && onOpenIg && <IgBigButton ig={ig} onOpen={onOpenIg} />}
       {!guest && noAbout && <p data-about-missing="" style={{ margin: "0 20px 10px", padding: "10px 14px", borderRadius: 12, background: "rgba(231,179,76,.1)", border: "1px solid rgba(231,179,76,.3)", fontFamily: F_BODY, fontSize: 12.5, color: C.text, lineHeight: 1.45 }}>Completa il tuo profilo: che tifoso sei e da quanti anni segui la F1</p>}
-      {!guest && <AboutCard about={aboutMe} onSave={onSaveAboutMe} />}
+      {!guest && waiting && <p data-profile-waiting="" role="status" style={{ margin: "0 20px 14px", padding: "10px 14px", borderRadius: 12, background: "rgba(255,255,255,.04)", border: `1px solid ${C.border}`, fontFamily: F_BODY, fontSize: 12.5, color: C.muted, lineHeight: 1.45 }}>{ACCOUNT_MSG["not-loaded"]}</p>}
+      {!guest && !waiting && <AboutCard about={aboutMe} onSave={onSaveAboutMe} />}
 
       <button className="press" onClick={onPremium} style={{ display: "block", textAlign: "left", width: "calc(100% - 40px)", margin: "0 20px 22px", padding: 16, borderRadius: 18, background: "rgba(231,179,76,.1)", border: "1px solid rgba(231,179,76,.3)" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 9, marginBottom: 6 }}>
@@ -5654,12 +5657,16 @@ function AdminNewsTab({ articles, setArticles, onPublish, onToast }) {
     generateArticle({ title: f.title, summary: f.summary, category: f.cat })
       .then(text => { setGen({ busy: false, err: null }); set("body", text); }, e => setGen({ busy: false, err: e.message }));
   };
-  // Eliminando una notizia si cancella anche la sua foto, se nessun'altra notizia la usa (come l'app di oggi).
-  const remove = a => setArticles(list => list.filter(x => x.id !== a.id)).then(ok => {
-    if (!ok) return;
-    onToast("Articolo eliminato");
-    if (!articles.some(x => x.id !== a.id && x.image === a.image)) dropStoredImage(a.image);
-  });
+  // Eliminando una notizia si cancella anche la sua foto, se nessun'altra notizia la usa (come l'app di oggi): si
+  // guarda nell'elenco appena riletto da Firebase, dove ci sono anche quelle scritte intanto dagli altri.
+  const remove = a => {
+    let used = true;
+    setArticles(list => { const next = list.filter(x => x.id !== a.id); used = next.some(x => x.image === a.image); return next; }).then(ok => {
+      if (!ok) return;
+      onToast("Articolo eliminato");
+      if (!used) dropStoredImage(a.image);
+    });
+  };
   const toggle = (list, setList, id) => setList(list.includes(id) ? list.filter(x => x !== id) : [...list, id]);
   const preview = articleTags({ teams, drivers });
   const publish = () => {
@@ -6033,6 +6040,8 @@ function AdminLiveCard({ races, live, liveSt, onStart, onStop, onFlag, onLastLap
 // Calendario e stato delle gare (shared/bt-races). Le 23 gare del 2026 ci sono già; il menu dello stato scrive solo
 // bt-races (LIVE non fa partire la diretta simulata: quella è nella "Prova diretta (DEMO)"). Le gare aggiunte a mano
 // restano nel documento per l'app di oggi, fuori dal calendario della nuova app.
+// La stessa gara fuori calendario nell'elenco appena riletto da Firebase: per id (per nome e data se manca).
+const sameExtraRace = (x, r) => (r.id != null ? x.id === r.id : x.name === r.name && x.date === r.date);
 function AdminRacesTab({ races, setRaces, extra = [], setExtra, onToast, live, liveSt, onStartLive, onStopLive, onFlag, onLastLap, onRetire, liveSpeed, setLiveSpeed }) {
   const empty = { name: "", circuit: "", country: "", round: "", date: "" };
   const [g, setG] = useState(empty);
@@ -6085,7 +6094,7 @@ function AdminRacesTab({ races, setRaces, extra = [], setExtra, onToast, live, l
               <div style={{ fontFamily: F_BODY, fontWeight: 600, fontSize: 12.5, color: C.text }}>{r.name || "—"}</div>
               <div style={{ fontFamily: F_BODY, fontSize: 10.5, color: C.dim }}>{r.circuit || "—"} · {Compat.fmtDate(r.date)} · {r.status || ""}</div>
             </div>
-            <TrashBtn label={"Elimina " + (r.name || "gara")} onClick={() => { setExtra(list => list.filter(x => x !== r)).then(ok => ok && onToast("Gara eliminata")); }} />
+            <TrashBtn label={"Elimina " + (r.name || "gara")} onClick={() => { setExtra(list => list.filter(x => !sameExtraRace(x, r))).then(ok => ok && onToast("Gara eliminata")); }} />
           </div>
         ))}
       </>)}
@@ -6238,6 +6247,9 @@ function AdminChatTab({ chats, reports, banned, onDeleteMsg, onSuspend, onUnsusp
   );
 }
 
+// Impronta di un valore: le schede con la bozza (classifiche, prezzi FantaF1, Instagram) si rifanno da capo quando i
+// dati sotto cambiano (riletti da Firebase o appena salvati), così SALVA non riscrive valori vecchi (revisione Fase B, C2).
+const versionOf = v => { const s = JSON.stringify(v) || ""; let h = 5381; for (let i = 0; i < s.length; i++) h = (Math.imul(h, 33) + s.charCodeAt(i)) | 0; return (h >>> 0).toString(36) + "." + s.length; };
 function AdminScreen({ silly = {}, onSilly, highlights = [], setHighlights, onBack, onPublish, articles, setArticles, fantaStats, setFantaStats, standings, setStandings, races, setRaces, extraRaces = [], setExtraRaces, ig, setIg, sentNotifs, onSendNotif, onDeleteNotif, onToast, tab, setTab, chats, reports, banned, onDeleteMsg, onSuspend, onUnsuspend, onIgnoreReport, liveProps = {}, polls = [], votes = {}, onPollAnswer, predictions = [], setPredictions, predAnswers = {} }) {
   return (
     <div className="scrollcol" style={{ height: "100%" }}>
@@ -6248,11 +6260,11 @@ function AdminScreen({ silly = {}, onSilly, highlights = [], setHighlights, onBa
       <div style={{ padding: "0 16px 28px" }}>
         {tab === "NEWS" && <AdminNewsTab articles={articles} setArticles={setArticles} onPublish={onPublish} onToast={onToast} />}
         {tab === "SONDAGGI" && <AdminPollsTab polls={polls} votes={votes} onAnswer={onPollAnswer} />}
-        {tab === "FANTA F1" && <AdminFantaTab fantaStats={fantaStats} setFantaStats={setFantaStats} onToast={onToast} />}
+        {tab === "FANTA F1" && <AdminFantaTab key={"fs:" + versionOf(fantaStats)} fantaStats={fantaStats} setFantaStats={setFantaStats} onToast={onToast} />}
         {tab === "PREVISIONI" && <AdminPredictionsTab predictions={predictions} setPredictions={setPredictions} answers={predAnswers} races={races} onToast={onToast} />}
-        {tab === "CLASSIFICHE" && <AdminStandingsTab standings={standings} setStandings={setStandings} onToast={onToast} />}
+        {tab === "CLASSIFICHE" && <AdminStandingsTab key={"st:" + versionOf(standings)} standings={standings} setStandings={setStandings} onToast={onToast} />}
         {tab === "GARA LIVE" && <AdminRacesTab races={races} setRaces={setRaces} extra={extraRaces} setExtra={setExtraRaces} onToast={onToast} {...liveProps} />}
-        {tab === "INSTAGRAM" && <AdminInstagramTab ig={ig} setIg={setIg} onToast={onToast} />}
+        {tab === "INSTAGRAM" && <AdminInstagramTab key={"ig:" + versionOf(ig)} ig={ig} setIg={setIg} onToast={onToast} />}
         {tab === "MERCATO" && <AdminSillyTab official={silly} onOfficial={onSilly} onToast={onToast} />}
         {tab === "VIDEO" && <AdminHighlightsTab items={highlights} setItems={setHighlights} onToast={onToast} />}
         {tab === "NOTIFICHE" && <AdminNotifTab sent={sentNotifs} onSend={onSendNotif} onDelete={onDeleteNotif} />}
@@ -6395,7 +6407,7 @@ function TermsSheet({ review, onAccept, onClose }) {
             <div key={h}>
               <h3 style={{ fontFamily: F_HEAD, fontWeight: 800, fontStyle: "italic", fontSize: 14, color: C.accent, margin: "4px 0 6px" }}>{h}</h3>
               {b !== null ? <p style={pStyle}>{b}</p> : (
-                <p style={pStyle}>Raccogliamo solo i dati necessari al funzionamento del servizio (email, nome, messaggi in chat, preferenze) e li conserviamo su Firebase (Google). Non vendiamo i dati a terzi. Puoi eliminare l'account e i tuoi dati in qualsiasi momento da Profilo → Elimina account. Tutti i dettagli sono nella <button className="press" onClick={() => openUrl(PRIVACY_URL)} aria-label="Apri la Privacy Policy" style={{ font: "inherit", color: C.accent, textDecoration: "underline", padding: 0 }}>Privacy Policy</button>.</p>
+                <p style={pStyle}>Raccogliamo solo i dati necessari al funzionamento del servizio (email, nome, "Su di te" cioè anno di nascita, da quanti anni segui la F1 e che tifoso sei, messaggi in chat, segnalazioni, feedback con la tua email, preferenze) e li conserviamo su Firebase (Google). Non vendiamo i dati a terzi. Puoi eliminare l'account e i tuoi dati in qualsiasi momento da Profilo → Elimina account. Tutti i dettagli sono nella <button className="press" onClick={() => openUrl(PRIVACY_URL)} aria-label="Apri la Privacy Policy" style={{ font: "inherit", color: C.accent, textDecoration: "underline", padding: 0 }}>Privacy Policy</button>.</p>
               )}
               {b2 && <p style={pStyle}>{b2}</p>}
             </div>
@@ -6706,6 +6718,8 @@ const USER_INIT = {
   predAnswers: {}, sillyPreds: {}, stratPreds: {}, pitBest: null, wxGuess: {}, ratings: {}, dotd: {}, notifSeenAt: 0,
 };
 const NOT_SAVED = "Non salvato: controlla la connessione e riprova.";
+const USER_WAIT = "I tuoi dati non sono ancora arrivati: controlla la connessione e riprova tra poco.";
+const DATA_CHANGED = "Non salvato: nel frattempo i dati sono stati cambiati. Ora vedi quelli aggiornati: rifai la modifica e salva di nuovo.";
 const OFFLINE_LINE = "Sei offline: alcuni contenuti potrebbero non essere aggiornati.";
 const SHARED_REFRESH_MS = 60000;   // ogni minuto si rilegge bt-races: una gara messa LIVE arriva senza riavviare
 const sameJson = (a, b) => JSON.stringify(a) === JSON.stringify(b);
@@ -6735,7 +6749,7 @@ function App() {
   const [stratPreds, setStratPreds] = useState(USER_INIT.stratPreds);       // Tire Strategy Predictor: { gara: { stints, at } }
   const [sillyOfficial, setSillyOfficial] = useState(shared0.silly);       // comunicati ufficiali registrati dall'admin
   const [driverPhotos, setDriverPhotos] = useState(shared0.driverPhotos);  // foto dei piloti caricate dall'admin (Task 14)
-  const predictSeat = (id, pr) => setSillyPreds(x => x[id] ? x : { ...x, [id]: pr });
+  const predictSeat = (id, pr) => { if (userDataWait()) return; setSillyPreds(x => x[id] ? x : { ...x, [id]: pr }); };
   const [articleId, setArticleId] = useState(null);
   const [chatId, setChatId] = useState(null);
   // Messaggi delle stanze (Firebase): { stanza: [{ id, from, text, at, aid, mine }] }. Ogni messaggio ha un id: serve a
@@ -6828,11 +6842,11 @@ function App() {
   const votesNow = demoOn ? demoVotes : { ratings, dotd };
   const rateDriver = (key, id, vals) => {
     const add = r => { const cur = r[key] || {}; return cur[id] ? r : { ...r, [key]: { ...cur, [id]: vals } }; };
-    if (demoOn) setDemoVotes(v => ({ ...v, ratings: add(v.ratings) })); else setRatings(add);
+    if (demoOn) setDemoVotes(v => ({ ...v, ratings: add(v.ratings) })); else if (!userDataWait()) setRatings(add);
   };
   const voteDotd = (raceId, kind, id) => {
     const add = v => { const cur = v[raceId] || {}; return cur[kind] ? v : { ...v, [raceId]: { ...cur, [kind]: id } }; };
-    if (demoOn) setDemoVotes(v => ({ ...v, dotd: add(v.dotd) })); else setDotd(add);
+    if (demoOn) setDemoVotes(v => ({ ...v, dotd: add(v.dotd) })); else if (!userDataWait()) setDotd(add);
   };
   // Pronostici meteo (pioggia sì o no) e loro esito a fine sessione: danno i punti bonus del FantaF1.
   const [wxGuess, setWxGuess] = useState({});     // { "r16:FP1": "rain" | "dry" }
@@ -6899,25 +6913,27 @@ function App() {
     (kinds ? r.fresh : Object.keys(r.values)).forEach(k => sharedSet[k](r.values[k]));
     setOffline(r.offline);
   });
-  // Salvataggio dell'Admin: prima Firebase, poi lo schermo. Se non riesce, l'avviso e lo schermo come prima (si può
-  // riprovare); se il contenuto non era ancora stato letto da Firebase, intanto lo si rilegge.
-  const commitShared = (kind, value) => AppData.saveShared(kind, value, nowMs()).then(v => { sharedSet[kind](v); return true; }, e => {
+  // Salvataggio dell'Admin: prima Firebase, poi lo schermo (src/services/appdata.js rilegge i documenti prima di
+  // scrivere). update funzione: si applica ai dati appena riletti, così non si cancella quello che intanto hanno
+  // scritto l'app di oggi o un altro admin. update valore (bozza delle schede CLASSIFICHE, FANTA F1, INSTAGRAM): se
+  // intanto i dati sono cambiati non si scrive, lo schermo passa ai dati nuovi e l'admin rifà la modifica.
+  const commitShared = (kind, update) => AppData.saveShared(kind, update, nowMs()).then(v => { sharedSet[kind](v); return true; }, e => {
+    if (e && (e.code === "changed" || e.code === "stale") && e.value !== undefined) { sharedSet[kind](e.value); showToast(DATA_CHANGED); return false; }
     showToast(NOT_SAVED);
-    if (e && e.code === "stale") refreshShared(AppData.staleKinds());
     return false;
   });
   const updOf = (cur, u) => (typeof u === "function" ? u(cur) : u);
   const adminSet = {
-    articles: u => commitShared("news", updOf(articles, u)),
-    races: u => commitShared("races", { races: updOf(races, u), extra: racesDoc.extra }),
-    extraRaces: u => commitShared("races", { races, extra: updOf(racesDoc.extra, u) }),
-    standings: u => commitShared("standings", { ...standings, ...updOf(standings, u) }),   // gli ospiti restano
-    fantaStats: u => commitShared("fantaStats", updOf(fantaStats, u)),
-    ig: u => commitShared("ig", updOf(ig, u)),
-    highlights: u => commitShared("highlights", updOf(highlights, u)),
-    predictions: u => commitShared("predictions", updOf(predictions, u)),
+    articles: u => commitShared("news", u),
+    races: u => commitShared("races", d => ({ races: updOf(d.races, u), extra: d.extra })),
+    extraRaces: u => commitShared("races", d => ({ races: d.races, extra: updOf(d.extra, u) })),
+    standings: u => commitShared("standings", typeof u === "function" ? d => ({ ...d, ...u(d) }) : { ...standings, ...u }),   // gli ospiti restano
+    fantaStats: u => commitShared("fantaStats", u),
+    ig: u => commitShared("ig", u),
+    highlights: u => commitShared("highlights", u),
+    predictions: u => commitShared("predictions", u),
   };
-  const officialSeat = (id, o) => commitShared("silly", { ...sillyOfficial, [id]: o });
+  const officialSeat = (id, o) => commitShared("silly", s => ({ ...s, [id]: o }));
 
   // ── Dati personali dell'account: si leggono all'accesso e si salvano 800 ms dopo ogni modifica ──
   // (users/<email>.app2). Per l'ospite restano in memoria.
@@ -6945,12 +6961,36 @@ function App() {
     loadUser(em);
   };
   const resetUser = () => { userEmailRef.current = null; userReady.current = false; setUserEmail(null); AppData.USER_KEYS.forEach(k => userSet[k](USER_INIT[k])); };
+  // Dati personali non ancora letti da Firebase (avvio senza rete): finché non arrivano non si cambiano, altrimenti la
+  // modifica, fatta sopra i valori di serie, andrebbe persa o cancellerebbe quelli veri (revisione della Fase B, I1).
+  // Intanto si riprova a leggerli.
+  const userDataWait = () => {
+    if (!userEmailRef.current || userReady.current) return false;
+    showToast(USER_WAIT);
+    loadUser(userEmailRef.current);
+    return true;
+  };
   const leaveAccount = () => { AppData.flushUserData().catch(() => {}); resetUser(); };
+  // Esci: prima si salvano i dati personali in attesa (al massimo 3 secondi), poi si esce da Authentication: dopo il
+  // cambio di account Firestore non manderebbe più le scritture rimaste in coda (revisione Fase B, minore 4).
+  const logout = () => {
+    Promise.race([AppData.flushUserData().catch(() => {}), new Promise(r => setTimeout(r, 3000))]).then(() => {
+      resetUser();
+      return Account.logout();
+    });
+    setGuest(false); setAdminUnlocked(false); setView("tab"); goTab("home");
+  };
   // L'account di Authentication decide di chi sono i dati personali.
   const accountEmail = account ? account.email : null;
   useEffect(() => {
     if (accountEmail && accountEmail !== userEmailRef.current) enterAccount(accountEmail);
     else if (!accountEmail && userEmailRef.current) resetUser();
+    // Entrato come ospite mentre la sessione salvata arrivava (rete lenta): ora è il suo account (revisione Fase B, I3).
+    if (accountEmail) { setGuest(false); setLoginOpen(false); }
+    // Cambia l'account (anche per un'uscita decisa da Firebase): il Pannello Admin si richiude e chiede di nuovo il
+    // codice (revisione Fase B, minore 7).
+    setAdminUnlocked(false);
+    setView(v => (v === "admin" || v === "adminLock" ? "tab" : v));
   }, [accountEmail]);
 
   // ── Chat (Firebase, src/services/chat.js): si leggono solo le stanze che si vedono, come l'app di oggi ──
@@ -6983,15 +7023,27 @@ function App() {
 
   // All'avvio si legge tutto; poi ogni minuto bt-races (una gara messa LIVE arriva da sola), quello che non si era
   // potuto leggere e i dati personali non ancora letti o non ancora salvati.
+  // Lo stesso succede subito quando torna la rete (evento "online" del telefono) e quando si torna nell'app: si
+  // rileggono anche profilo e admin, se all'avvio non erano arrivati (Account.retry, revisione della Fase B).
+  const reconnectRef = useRef(null);
+  reconnectRef.current = () => {
+    refreshShared(["races", ...AppData.staleKinds().filter(k => k !== "races")]);
+    Account.retry().catch(() => {});
+    if (userEmailRef.current && !userReady.current) loadUser(userEmailRef.current);
+    AppData.flushUserData().catch(() => {});
+  };
   useEffect(() => {
     refreshShared().catch(() => {}).then(() => setSharedReady(true));
-    const iv = setInterval(() => {
-      refreshShared(["races", ...AppData.staleKinds().filter(k => k !== "races")]);
-      if (userEmailRef.current && !userReady.current) loadUser(userEmailRef.current);
-      AppData.flushUserData().catch(() => {});
-    }, SHARED_REFRESH_MS);
-    return () => clearInterval(iv);
+    const iv = setInterval(() => reconnectRef.current(), SHARED_REFRESH_MS);
+    const online = () => reconnectRef.current();
+    window.addEventListener("online", online);
+    return () => { clearInterval(iv); window.removeEventListener("online", online); };
   }, []);
+  // Finito lo splash con le letture di Firebase ancora in corso (rete lentissima) si vedono i contenuti di serie: lo dice
+  // la riga "Sei offline", finché non arrivano (revisione Fase B, minore 10).
+  useEffect(() => { if (!splash && !sharedReady) setOffline(true); }, [splash, sharedReady]);
+  // Aprendo il Profilo con il profilo non ancora arrivato si riprova subito.
+  useEffect(() => { if (view === "profilo" && account && account.loaded === false) Account.retry().catch(() => {}); }, [view]);
 
   // Notifiche: quelle dell'admin (shared/bt-notifs) più gli avvisi di questo telefono. Sono da leggere quelle più nuove
   // dell'ultima "Segna tutte come lette" (notifSeenAt, nell'account).
@@ -7011,6 +7063,7 @@ function App() {
   const SAVE_NEEDS_ACCOUNT = "Per salvare gli articoli tra i preferiti serve un account.";
   const toggleSave = (id) => {
     if (guest) { needLogin(SAVE_NEEDS_ACCOUNT); return; }
+    if (userDataWait()) return;
     const was = saved.includes(id);
     setSaved(s => was ? s.filter(x => x !== id) : [id, ...s]);
     showToast(was ? "Tolto dai preferiti" : "Salvato tra i preferiti");
@@ -7021,7 +7074,7 @@ function App() {
   // dell'admin si svuota e si torna alla Home.
   const publishArticle = (a) => {
     const art = { ...a, id: Compat.uid(), date: new Date(nowMs()).toISOString() };
-    return commitShared("news", [art, ...articles]).then(ok => {
+    return commitShared("news", list => [art, ...list]).then(ok => {
       if (!ok) return false;
       if (a.published === false) { showToast("Bozza salvata"); return true; }
       const hits = [];
@@ -7055,12 +7108,13 @@ function App() {
 
   const castVote = (pollId, optionId) => {
     if (guest) { needLogin("Per votare nei sondaggi serve un account."); return; }
+    if (userDataWait()) return;
     setVotes(v => ({ ...v, [pollId]: optionId }));
   };
   const setPollAnswer = (pollId, optionId) => {
     const save = pollId === "home"
-      ? commitShared("homePoll", { ...homePoll, answer: optionId })
-      : commitShared("news", articles.map(a => a.poll && "art-" + a.id === pollId ? { ...a, poll: { ...a.poll, answer: optionId } } : a));
+      ? commitShared("homePoll", pl => (pl ? { ...pl, answer: optionId } : pl))
+      : commitShared("news", list => list.map(a => a.poll && "art-" + a.id === pollId ? { ...a, poll: { ...a.poll, answer: optionId } } : a));
     return save.then(ok => { if (ok) showToast(optionId ? "Risposta esatta segnata: chi l'ha votata prende +2 punti" : "Risposta esatta tolta"); return ok; });
   };
   const openArticle = (id) => { setArticleId(id); setShareId(null); setView("article"); };
@@ -7096,6 +7150,7 @@ function App() {
   closeSessionRef.current = closeSession;
   const guessWeather = (race, key, v) => {
     if (guest) { needLogin("Per fare i pronostici serve un account."); return; }
+    if (userDataWait()) return;
     setWxGuess(g => ({ ...g, [race.id + ":" + key]: v }));
     showToast(`Pronostico salvato: ${WX_WORD(v)}`);
   };
@@ -7126,10 +7181,23 @@ function App() {
   };
   const liveLastLap = () => { if (live) { live.sim.jumpToLastLap(); live.sim.advance(0.5); setLiveTick(n => n + 1); showToast(isRaceType(live.type) ? "Ultimo giro" : "Ultimo minuto"); } };
   const openChat = (id) => { setChatId(id); setView("chatThread"); };
+  // Profilo non ancora letto (avvio senza rete): prima di scrivere in chat lo si rilegge; finché non arriva il nome non
+  // si conosce, e il messaggio non parte (revisione della Fase B, C1).
+  const withProfile = then => {
+    if (!account || account.loaded !== false) return then();
+    return Account.retry().then(u => u, () => null).then(u => {
+      if (u && u.loaded !== false) return then();
+      showToast(ACCOUNT_MSG["not-loaded"]);
+      return false;
+    });
+  };
   // Il messaggio si vede subito; se l'invio non riesce si toglie e la stanza rimette il testo nel campo (risponde false).
   const sendMessage = (id, text) => {
-    const me = chatMe();
-    if (!me) { needLogin("Per scrivere in chat serve un account."); return Promise.resolve(false); }
+    if (!chatMe()) { needLogin("Per scrivere in chat serve un account."); return Promise.resolve(false); }
+    return Promise.resolve(withProfile(() => postChat(id, text)));
+  };
+  const postChat = (id, text) => {
+    const u = Account.current(), me = u ? { name: u.name, aid: u.aid } : chatMe();
     const temp = { id: "invio-" + Date.now(), from: me.name, text: text.trim(), at: nowMs(), aid: me.aid, mine: true };
     setChatMsgs(x => ({ ...x, [id]: [...(x[id] || []), temp] }));
     return Chat.send(id, text, me).then(m => {
@@ -7143,8 +7211,8 @@ function App() {
   };
   // Moderazione chat, come nell'app di oggi.
   const reportMessage = (chatId, m) => {
-    const me = chatMe(); if (!me) return;
-    Chat.report(chatId, m, me).then(() => showToast(CHAT_MSG.reported), () => showToast(CHAT_MSG["report-failed"]));
+    if (!chatMe()) return;
+    withProfile(() => { const u = Account.current(); return Chat.report(chatId, m, { name: u.name, aid: u.aid }).then(() => showToast(CHAT_MSG.reported), () => showToast(CHAT_MSG["report-failed"])); });
   };
   const blockUser = (m) => {
     Chat.block(m);
@@ -7160,7 +7228,7 @@ function App() {
     setReports(rs => rs.filter(r => r.msgId !== msgId));
     showToast("Messaggio eliminato");
   }, () => showToast(NOT_SAVED));
-  const suspendUser = (who) => Chat.suspend(who).then(() => { reloadModeration(); showToast(`${who.name} non può più scrivere in chat`); }, () => showToast(NOT_SAVED));
+  const suspendUser = (who) => Chat.suspend(who).then(() => { reloadModeration(); showToast(`${who.name} non può più scrivere in chat`); }, e => showToast(e && e.code === "no-aid" ? CHAT_MSG["no-aid"] : NOT_SAVED));
   const unsuspendUser = (entry) => Chat.unsuspend(entry).then(reloadModeration, () => showToast(NOT_SAVED));
   const ignoreReport = (id) => Chat.ignoreReport(id).then(() => setReports(rs => rs.filter(r => r.id !== id)), () => showToast(NOT_SAVED));
   // Elimina account (richiesto da Google Play): profilo, dati personali, account Authentication e dati del telefono
@@ -7175,14 +7243,16 @@ function App() {
     setBlocked([]); setSavedOnly(false); setIsPremium(false);
     setGuest(false); setAdminUnlocked(false); setView("tab"); setTab("home");
   };
-  const needAccount = () => { if (guest) { needLogin("Per creare la tua squadra FantaF1 serve un account."); return true; } return false; };
+  const needAccount = () => { if (guest) { needLogin("Per creare la tua squadra FantaF1 serve un account."); return true; } return userDataWait(); };
   const answerPrediction = (q, v) => {
     if (guest) { needLogin("Per rispondere alle previsioni serve un account."); return; }
+    if (userDataWait()) return;
     if (q.kind === "history" && predAnswers[q.id] != null) return;
     setPredAnswers(a => ({ ...a, [q.id]: v }));
     showToast(q.kind === "history" ? (BtLogic.predictionCorrect(q, v) ? "Giusto! +1 punto FantaF1" : "Risposta sbagliata") : "Previsione salvata");
   };
   const readAll = () => {
+    if (userDataWait()) return;
     setNotifSeenAt(nowMs()); setLocalNotifs(ns => ns.map(n => ({ ...n, unread: false })));
     if (feedbackAsk && !feedbackAsk.read) saveAsk({ ...feedbackAsk, read: true });
   };
@@ -7245,6 +7315,7 @@ function App() {
         if (!st) return;
         if (!st.isActive) { local.set(OPENS_KEY, { ...(local.get(OPENS_KEY) || {}), away: Date.now() }); return; }
         hideStatusBar();
+        reconnectRef.current();   // di ritorno nell'app: si rilegge quello che manca
         const o = local.get(OPENS_KEY) || {};
         if (o.away && Date.now() - o.away >= NEW_VISIT_AWAY_MS) { const ask = countVisit(); if (ask) setFeedbackAsk(ask); }
         else if (o.away) local.set(OPENS_KEY, { ...o, away: null });
@@ -7330,17 +7401,17 @@ function App() {
   if (view === "article" && activeArticle) body = <ArticleScreen article={activeArticle} onBack={viewBack.article} isPremium={isPremium} onPremium={() => setPremiumOpen(true)} onTag={filterByTag} saved={saved.includes(activeArticle.id)} onToggleSave={() => toggleSave(activeArticle.id)} onShare={() => setShareId(activeArticle.id)} vote={votes["art-" + activeArticle.id] || null} onVote={castVote} />;
   else if (view === "circuit" && circuitId) body = <CircuitScreen circuitId={circuitId} races={races} articles={articles} onBack={viewBack.circuit} onTag={filterByTag} onOpenArticle={openArticle} />;
   else if (view === "adminLock") body = <AdminKeypad onOk={() => { setAdminUnlocked(true); setView("admin"); }} onCancel={viewBack.adminLock} />;
-  else if (view === "admin" && adminUnlocked) body = <AdminScreen silly={sillyOfficial} onSilly={officialSeat} highlights={highlights} setHighlights={adminSet.highlights} onBack={viewBack.admin} onPublish={publishArticle} articles={articles} setArticles={adminSet.articles} fantaStats={fantaStats} setFantaStats={adminSet.fantaStats} standings={standings} setStandings={adminSet.standings} races={races} setRaces={adminSet.races} extraRaces={racesDoc.extra} setExtraRaces={adminSet.extraRaces} ig={ig} setIg={adminSet.ig} sentNotifs={sentNotifs} onSendNotif={sendNotif} onDeleteNotif={deleteNotif} onToast={showToast} tab={adminTab} setTab={setAdminTab} chats={chats} reports={reports} banned={banned} onDeleteMsg={deleteChatMsg} onSuspend={suspendUser} onUnsuspend={unsuspendUser} onIgnoreReport={ignoreReport} liveProps={liveProps} polls={allPolls} votes={votes} onPollAnswer={setPollAnswer} predictions={predictions} setPredictions={adminSet.predictions} predAnswers={predAnswers} />;
+  else if (view === "admin" && adminUnlocked && Account.isAdmin()) body = <AdminScreen silly={sillyOfficial} onSilly={officialSeat} highlights={highlights} setHighlights={adminSet.highlights} onBack={viewBack.admin} onPublish={publishArticle} articles={articles} setArticles={adminSet.articles} fantaStats={fantaStats} setFantaStats={adminSet.fantaStats} standings={standings} setStandings={adminSet.standings} races={races} setRaces={adminSet.races} extraRaces={racesDoc.extra} setExtraRaces={adminSet.extraRaces} ig={ig} setIg={adminSet.ig} sentNotifs={sentNotifs} onSendNotif={sendNotif} onDeleteNotif={deleteNotif} onToast={showToast} tab={adminTab} setTab={setAdminTab} chats={chats} reports={reports} banned={banned} onDeleteMsg={deleteChatMsg} onSuspend={suspendUser} onUnsuspend={unsuspendUser} onIgnoreReport={ignoreReport} liveProps={liveProps} polls={allPolls} votes={votes} onPollAnswer={setPollAnswer} predictions={predictions} setPredictions={adminSet.predictions} predAnswers={predAnswers} />;
   else if (view === "chatThread" && activeChat) body = <ChatThreadScreen chat={activeChat} onBack={viewBack.chatThread} onSend={guest ? () => needLogin("Per scrivere in chat serve un account.") : sendMessage} isPremium={isPremium} blocked={blocked} onReport={guest ? () => needLogin("Per segnalare un messaggio serve un account.") : reportMessage} onBlock={blockUser} liveRace={races.find(r => r.status === "LIVE") || null} />;
   else if (view === "instagram") body = <InstagramView ig={ig} onToast={showToast} onBack={viewBack.instagram} />;
   else if (view === "ghost") body = <GhostLap onBack={viewBack.ghost} />;
   else if (view === "chats") body = <ChatsView chats={chats} onOpen={openChat} blocked={blocked} onBack={viewBack.chats} unreadOf={(id, ms) => Chat.unread(id, ms)} />;
-  else if (view === "profilo") body = <ProfiloScreen ig={ig} onOpenIg={() => { setIgFrom("profilo"); setView("instagram"); }} aboutMe={aboutMe} onSaveAboutMe={a => Account.updateAbout(a).catch(() => showToast(NOT_SAVED))} account={account} onSaveName={n => Account.updateName(n)} isAdmin={Account.isAdmin()} trial={trialActive ? trial : null} trialUsed={!!trial} onBack={viewBack.profilo} onNotifiche={() => setView("notifiche")} onPremium={() => setPremiumOpen(true)} onAdmin={() => guest ? needLogin("Accedi per usare il pannello admin.") : setView(adminUnlocked ? "admin" : "adminLock")} onLogout={() => { leaveAccount(); Account.logout(); setGuest(false); setAdminUnlocked(false); setView("tab"); goTab("home"); }} isPremium={isPremium} onAbout={() => setInfoModal({ title: "Info su B&T", body: ABOUT_TEXT })} onFeedback={() => setFeedbackOpen(true)} onHelp={() => setInfoModal({ title: "Assistenza", body: HELP_TEXT })} favTeam={favTeam} favDriver={favDriver} onPickTeam={() => guest ? needLogin("Per scegliere scuderia e pilota del cuore serve un account.") : setPicker("team")} onPickDriver={() => guest ? needLogin("Per scegliere scuderia e pilota del cuore serve un account.") : setPicker("driver")} guest={guest} onLogin={() => needLogin(null)} onTerms={() => setTermsOpen(true)} blocked={blocked} onUnblock={unblockUser} onDeleteAccount={deleteAccount} savedCount={saved.length} onOpenSaved={openSaved} />;
-  else if (view === "notifiche") body = <NotificheScreen onBack={viewBack.notifiche} onAction={a => { if (a === "feedback") { if (feedbackAsk && !feedbackAsk.read) saveAsk({ ...feedbackAsk, read: true }); setFeedbackOpen(true); } }} notifs={notifs} onReadAll={readAll} isPremium={isPremium} onPremium={() => setPremiumOpen(true)} favTeam={favTeam} favDriver={favDriver} prefs={notifPrefs} onPrefs={setNotifPrefs} onGoProfilo={() => setView("profilo")} />;
+  else if (view === "profilo") body = <ProfiloScreen ig={ig} onOpenIg={() => { setIgFrom("profilo"); setView("instagram"); }} aboutMe={aboutMe} onSaveAboutMe={a => Account.updateAbout(a).catch(e => showToast(e && (e.code === "too-young" || e.code === "not-loaded") ? messageOf(e) : NOT_SAVED))} account={account} onSaveName={n => Account.updateName(n)} isAdmin={Account.isAdmin()} trial={trialActive ? trial : null} trialUsed={!!trial} onBack={viewBack.profilo} onNotifiche={() => setView("notifiche")} onPremium={() => setPremiumOpen(true)} onAdmin={() => guest ? needLogin("Accedi per usare il pannello admin.") : setView(adminUnlocked ? "admin" : "adminLock")} onLogout={logout} isPremium={isPremium} onAbout={() => setInfoModal({ title: "Info su B&T", body: ABOUT_TEXT })} onFeedback={() => setFeedbackOpen(true)} onHelp={() => setInfoModal({ title: "Assistenza", body: HELP_TEXT })} favTeam={favTeam} favDriver={favDriver} onPickTeam={() => guest ? needLogin("Per scegliere scuderia e pilota del cuore serve un account.") : setPicker("team")} onPickDriver={() => guest ? needLogin("Per scegliere scuderia e pilota del cuore serve un account.") : setPicker("driver")} guest={guest} onLogin={() => needLogin(null)} onTerms={() => setTermsOpen(true)} blocked={blocked} onUnblock={unblockUser} onDeleteAccount={deleteAccount} savedCount={saved.length} onOpenSaved={openSaved} />;
+  else if (view === "notifiche") body = <NotificheScreen onBack={viewBack.notifiche} onAction={a => { if (a === "feedback") { if (feedbackAsk && !feedbackAsk.read) saveAsk({ ...feedbackAsk, read: true }); setFeedbackOpen(true); } }} notifs={notifs} onReadAll={readAll} isPremium={isPremium} onPremium={() => setPremiumOpen(true)} favTeam={favTeam} favDriver={favDriver} prefs={notifPrefs} onPrefs={v => { if (!userDataWait()) setNotifPrefs(v); }} onGoProfilo={() => setView("profilo")} />;
   else {
     if (tab === "home") body = <HomeScreen ig={ig} highlights={highlights} onOpenIg={() => { setIgFrom("tab"); setView("instagram"); }} articles={articles} tagFilter={tagFilter} onTag={filterByTag} onClearTag={() => setTagFilter(null)} onOpenArticle={openArticle} isPremium={isPremium} onPremium={() => setPremiumOpen(true)} onToast={showToast} onLiveTrack={() => setLiveTrackOpen(true)} onGoFanta={() => goTab("fanta")}  saved={saved} onToggleSave={toggleSave} savedOnly={savedOnly} setSavedOnly={setSavedOnly} onOpenCircuit={openCircuit} homePoll={homePoll} homeVote={votes.home || null} onVote={castVote} />;
     else if (tab === "race") body = <RaceScreen dotdVote={live ? votesNow.dotd[live.raceId] : null} onDotdVote={(k, id) => live && voteDotd(live.raceId, k, id)} ratings={votesNow.ratings} onRate={rateDriver} onOpenChats={() => setView("chats")} onOpenGhost={() => setView("ghost")} races={races} standings={standings} isPremium={isPremium} onPremium={() => setPremiumOpen(true)} onSelectDriver={setSelectedDriver} live={live} liveSt={liveSt} onExpandMap={() => setLiveTrackOpen(true)} onTelemetry={(carId, lapNo, sector) => setTelemetry({ carId, lapNo, sector })} onOpenCircuit={openCircuit} wxGuess={wxGuess} wxResult={wxResult} onGuessWeather={guessWeather} onLapTimes={setLapList} onSecondScreen={() => setSsOpen(true)} lastRace={lastRace} />;
-    else if (tab === "garage") body = <GarageScreen races={races} pitBest={pitBest} onPitResult={t => setPitBest(b => b == null || t < b ? t : b)} sillyPreds={sillyPreds} onPredict={predictSeat} sillyOfficial={sillyOfficial} live={live} stratPreds={stratPreds} onStrat={(id, st) => setStratPreds(x => ({ ...x, [id]: { stints: st, at: nowMs() } }))} />;
+    else if (tab === "garage") body = <GarageScreen races={races} pitBest={pitBest} onPitResult={t => { if (!userDataWait()) setPitBest(b => b == null || t < b ? t : b); }} sillyPreds={sillyPreds} onPredict={predictSeat} sillyOfficial={sillyOfficial} live={live} stratPreds={stratPreds} onStrat={(id, st) => { if (!userDataWait()) setStratPreds(x => ({ ...x, [id]: { stints: st, at: nowMs() } })); }} />;
     else if (tab === "fanta") body = <FantaScreen squad={squad} setSquad={setSquad} base={squadBase} freeTransfers={freeTransfers} budget={FANTA_BUDGET} stats={fantaStats} race={fantaRace} lock={teamLockInfo} weekends={fantaWeekends} isPremium={isPremium} onPremium={() => setPremiumOpen(true)} onToast={showToast} bonus={bonus} leagues={leagues} setLeagues={setLeagues} needAccount={needAccount} predictions={predictions} predAnswers={predAnswers} predLockOf={predLockOf} onAnswerPrediction={answerPrediction} />;
   }
 
@@ -7360,9 +7431,9 @@ function App() {
         {lapList && live && liveSt && <LapTimesModal live={live} st={liveSt} carId={lapList} onOpenLap={n => setTelemetry({ carId: lapList, lapNo: n, sector: 0 })} onClose={() => setLapList(null)} />}
         {telemetry && live && liveSt && <TelemetryModal live={live} st={liveSt} carId={telemetry.carId} lapNo={telemetry.lapNo} sector={telemetry.sector} onClose={() => setTelemetry(null)} />}
         {infoModal && <InfoModal title={infoModal.title} body={infoModal.body} onClose={() => setInfoModal(null)} />}
-        {picker === "team" && <PickerModal title="SCUDERIA DEL CUORE" selected={favTeam} onPick={setFavTeam} onClose={() => setPicker(null)}
+        {picker === "team" && <PickerModal title="SCUDERIA DEL CUORE" selected={favTeam} onPick={v => { if (!userDataWait()) setFavTeam(v); }} onClose={() => setPicker(null)}
           options={TEAMS.map(t => ({ id: t.id, label: t.name, color: t.color, sub: t.tag }))} />}
-        {picker === "driver" && <PickerModal title="PILOTA DEL CUORE" selected={favDriver} onPick={setFavDriver} onClose={() => setPicker(null)}
+        {picker === "driver" && <PickerModal title="PILOTA DEL CUORE" selected={favDriver} onPick={v => { if (!userDataWait()) setFavDriver(v); }} onClose={() => setPicker(null)}
           options={DRIVERS.map(d => ({ id: d.id, label: d.full, color: d.color, sub: d.team, driver: d }))} />}
         {shareArticle && view === "article" && <ShareSheet article={shareArticle} locked={!!shareArticle.premium && !isPremium} handle={ig.handle} onClose={() => setShareId(null)} onToast={showToast} />}
         {termsAccepted && termsOpen && <TermsSheet review onClose={() => setTermsOpen(false)} />}

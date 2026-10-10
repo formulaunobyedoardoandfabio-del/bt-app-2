@@ -12,6 +12,7 @@ const CHAT_MSG = {
   reported: "Segnalazione inviata: la controlleremo al più presto. Grazie!",
   "report-failed": "Segnalazione non inviata: controlla la connessione e riprova.",
   empty: "Nessun messaggio: scrivi tu il primo!",
+  "no-aid": "Non riesco a identificare con certezza chi ha scritto questo messaggio (è vecchio, senza l'ID dell'autore): sospendilo da un suo messaggio più recente.",
 };
 const REPORTS_KEY = "bt-chat-reports", BANNED_KEY = "bt-chat-banned", BLOCKED_KEY = "bt-blocked", LEGACY_KEY = "bt-chat";
 const ROOM_IDS = Object.keys(C.CHAT_DB_KEY);
@@ -35,14 +36,19 @@ function createChat({ sg = FB.sg, sgStrict = FB.sgStrict, ss = FB.ss, sharedAppe
     const bl = blocked();
     return C.chatFromStore((await read(keyOf(roomId))).filter(m => !isBlocked(m, bl)), me);
   }
+  // Un invio non riuscito può arrivare lo stesso più tardi (tempo scaduto): rimandando lo stesso testo si rimanda lo
+  // stesso messaggio, che arrayUnion non aggiunge due volte (revisione della Fase B, minore 2).
+  const failedSends = new Map();   // stanza → messaggio non partito
   async function send(roomId, text, me) {
     const txt = String(text || "").trim();
     if (!txt) throw mkErr("empty");
     const key = keyOf(roomId);
     const banned = await read(BANNED_KEY);
     if (banned.some(b => sameWho(b, { aid: me.aid, name: me.name }))) throw mkErr("banned");
-    const m = C.chatMsgToStore(txt, me, now());
-    try { await sharedAppend(key, m); } catch (e) { throw mkErr("offline"); }
+    const prev = failedSends.get(key);
+    const m = prev && prev.txt === txt && prev.aid === (me.aid || "") && prev.user === me.name ? prev : C.chatMsgToStore(txt, me, now());
+    try { await sharedAppend(key, m); } catch (e) { failedSends.set(key, m); throw mkErr("offline"); }
+    failedSends.delete(key);
     return C.chatFromStore([m], me)[0];
   }
 
@@ -58,8 +64,11 @@ function createChat({ sg = FB.sg, sgStrict = FB.sgStrict, ss = FB.ss, sharedAppe
     await sharedRemoveWhere(keyOf(roomId), m => m && m.id === msgId);
     await sharedRemoveWhere(REPORTS_KEY, r => r && r.msgId === msgId);
   }
+  // Si sospende per aid: un messaggio vecchio senza aid non dice chi l'ha scritto (lo stesso nome lo può avere chiunque,
+  // e qui non si possono cercare gli account per nome come faceva l'app di oggi). Errore "no-aid": lo si dice all'admin.
   async function suspend({ aid = "", name = "" } = {}) {
-    const entry = { aid: aid || "", name: name || "", t: now() };
+    if (!aid) throw mkErr("no-aid");
+    const entry = { aid, name: name || "", t: now() };
     const banned = await read(BANNED_KEY);
     const old = banned.find(b => sameWho(b, entry));
     if (old) return old;

@@ -9,7 +9,9 @@ const PAGE = 'file://' + path.join(__dirname, process.env.PAGE || 'test.html');
 const NOW = '2026-10-07T10:00:00Z';
 
 // page: un'altra pagina di test/e2e (video/index.html ha i video dello splash, test.html no e usa lo splash fisso).
-async function open(b, { now = NOW, width = 390, height = 844, seed, query = '', routes = {}, capacitor, waitSplash = true, waitUntil = 'load', page } = {}) {
+// acceptTerms: Termini già accettati su questo telefono. Il Firebase finto lo fa da sé (tranne con freshInstall); senza
+// il finto (?nofake) lo fa questa opzione, così le prove non toccano i tasti sotto il foglio dei Termini.
+async function open(b, { now = NOW, width = 390, height = 844, seed, query = '', routes = {}, capacitor, waitSplash = true, waitUntil = 'load', page, acceptTerms = /(^|[?&])nofake\b/.test(query) } = {}) {
   const ctx = await b.newContext({ viewport: { width, height }, hasTouch: true, isMobile: true });
   await ctx.addInitScript(({ now, seed }) => {
     window.__btNow = Date.parse(now);
@@ -17,6 +19,7 @@ async function open(b, { now = NOW, width = 390, height = 844, seed, query = '',
     window.open = url => { window.__opened.push(String(url)); return null; };
     if (seed) window.__btSeed = seed;
   }, { now, seed });
+  if (acceptTerms) await ctx.addInitScript(() => { try { if (!localStorage.getItem('bt_bt-terms-accepted')) localStorage.setItem('bt_bt-terms-accepted', JSON.stringify({ ts: 1 })); } catch (e) {} });
   if (capacitor) await ctx.addInitScript(capacitor);   // funzione che crea window.Capacitor con plugin finti
   for (const [glob, handler] of Object.entries(routes)) await ctx.route(glob, handler);
   const p = await ctx.newPage();

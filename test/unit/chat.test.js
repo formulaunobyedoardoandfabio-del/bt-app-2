@@ -37,7 +37,7 @@ t('invio: formato {id,user,aid,txt,t} in bt-chat-generale', async () => {
   await assert.rejects(c.chat.send('generale', '   ', ME), e => e.code === 'empty');
 });
 
-t('utente sospeso: send rifiuta con banned (anche i messaggi vecchi senza aid, per nome)', async () => {
+t('utente sospeso (con il suo aid): send rifiuta con banned', async () => {
   const c = ctx({ 'shared/bt-chat-banned': { __arr: [{ aid: ME.aid, name: 'Tester', t: 1 }] } });
   await assert.rejects(c.chat.send('generale', 'ciao', ME), e => e.code === 'banned');
   assert.strictEqual(c.fs('shared/bt-chat-generale'), undefined);
@@ -50,6 +50,27 @@ t('utente sospeso: send rifiuta con banned (anche i messaggi vecchi senza aid, p
   assert.strictEqual(CHAT_MSG.offline, 'Messaggio non inviato: controlla la connessione e riprova.');
 });
 
+// Revisione della Fase B (I5): un messaggio vecchio senza aid non dice chi l'ha scritto (il nome lo può avere chiunque).
+// Come l'app di oggi quando non riesce a ricavare l'aid: non si sospende e lo si dice all'admin.
+t('sospendere l\'autore di un messaggio vecchio senza aid: rifiuta "no-aid" e non scrive niente', async () => {
+  const c = ctx();
+  await assert.rejects(c.chat.suspend({ aid: '', name: 'Marco' }), e => e.code === 'no-aid');
+  assert.strictEqual(c.fs('shared/bt-chat-banned'), undefined);
+  const e = await c.chat.suspend({ aid: OTHER.aid, name: OTHER.name });   // con l'aid sì
+  assert.strictEqual(e.aid, OTHER.aid);
+  await assert.rejects(c.chat.send('generale', 'ciao', OTHER), x => x.code === 'banned');
+});
+t('messaggio rimandato dopo un invio andato male (ma arrivato lo stesso): uno solo nella stanza', async () => {
+  const c = ctx();
+  const F = require('../../src/services/firebase');
+  let calls = 0;
+  const chat = createChat({ ...F, now: () => NOW, sharedAppend: async (k, item) => { calls++; await F.sharedAppend(k, item); if (calls === 1) throw Object.assign(new Error('timeout'), { code: 'timeout' }); } });
+  await assert.rejects(chat.send('generale', 'Forza!', ME), e => e.code === 'offline');
+  await chat.send('generale', 'Forza!', ME);
+  assert.strictEqual(c.fs('shared/bt-chat-generale').__arr.length, 1, JSON.stringify(c.fs('shared/bt-chat-generale')));
+  await chat.send('generale', 'Forza!', ME);   // riscritto dopo un invio riuscito: è un messaggio nuovo
+  assert.strictEqual(c.fs('shared/bt-chat-generale').__arr.length, 2);
+});
 t('segnalazione una sola volta per messaggio e utente', async () => {
   const c = ctx();
   await c.chat.send('fanta', 'messaggio brutto', OTHER);

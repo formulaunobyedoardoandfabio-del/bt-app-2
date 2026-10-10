@@ -134,13 +134,83 @@ t('senza rete all\'avvio: offline vero, valori di serie, e niente salvataggi sop
   assert.deepStrictEqual(first.values.news.map(a => a.title), ["Vi presentiamo l'app B&T!!"]);
   assert.deepStrictEqual(first.fresh, []);
   firebase.__fake.offline = false;
-  // La rete è tornata ma le notizie sullo schermo sono quelle di serie: salvarle cancellerebbe quelle vere.
-  await assert.rejects(A.saveShared('news', first.values.news, NOW), e => e.code === 'stale');
+  // La rete è tornata ma le notizie sullo schermo sono quelle di serie: salvarle cancellerebbe quelle vere. Il rifiuto
+  // porta le notizie vere (revisione della Fase B: si rileggono prima di ogni salvataggio).
+  let err = null;
+  await A.saveShared('news', first.values.news, NOW).catch(e => { err = e; });
+  assert.ok(err && err.code === 'stale', 'errore: ' + (err && err.code));
+  assert.deepStrictEqual(err.value.map(a => a.id), S.news.map(n => n.id));
   assert.deepStrictEqual(firebase.__fake.doc('shared/bt-news').__arr.map(n => n.id), S.news.map(n => n.id));
+  assert.ok(!A.staleKinds().includes('news'), 'dopo il rifiuto le notizie vere sono quelle sullo schermo');
   const again = await A.loadShared(NOW, { kinds: A.staleKinds() });
   assert.strictEqual(again.offline, false);
-  assert.ok(again.fresh.includes('news'));
-  await A.saveShared('news', again.values.news, NOW);   // ora sì
+  assert.deepStrictEqual(A.staleKinds(), []);
+  await A.saveShared('news', err.value, NOW);   // ora sì
+});
+
+// Revisione della Fase B (C2, I4): due telefoni (o l'app di oggi) scrivono gli stessi documenti.
+t('saveShared con una funzione: si applica ai documenti riletti (una notizia aggiunta intanto dall\'app di oggi resta)', async () => {
+  const { firebase } = seed({ 'shared/bt-news': { __arr: S.news } });
+  const A = D.createAppData();
+  await A.loadShared(NOW);
+  const other = { id: 'oggi-1', title: 'Scritta con l\'app di oggi', summary: '', category: 'NEWS', author: 'Team B&T', image: '', content: 'x', published: true, date: '2026-10-07T09:00:00' };
+  firebase.__fake.setDoc('shared/bt-news', { __arr: [other, ...S.news] });   // intanto, da un altro telefono
+  const mine = { id: 'mia-1', title: 'Mia', excerpt: '', cat: 'NEWS', author: 'Team B&T', image: '', body: 'y', published: true, date: '2026-10-07T10:00:00.000Z' };
+  const back = await A.saveShared('news', list => [mine, ...list], NOW);
+  const ids = firebase.__fake.doc('shared/bt-news').__arr.map(n => n.id);
+  assert.deepStrictEqual(ids, ['mia-1', 'oggi-1', ...S.news.map(n => n.id)]);
+  assert.deepStrictEqual(back.map(a => a.id), ids);
+});
+
+t('saveShared con una funzione anche se all\'avvio il documento non si era letto (si rilegge prima di scrivere)', async () => {
+  const { firebase } = seed({ 'shared/bt-news': { __arr: S.news } });
+  const A = D.createAppData();
+  firebase.__fake.offline = true;
+  await A.loadShared(NOW);
+  firebase.__fake.offline = false;
+  await A.saveShared('news', list => list.filter(a => a.id !== S.news[0].id), NOW);
+  assert.deepStrictEqual(firebase.__fake.doc('shared/bt-news').__arr.map(n => n.id), S.news.slice(1).map(n => n.id));
+});
+
+t('saveShared con un valore (bozza del Pannello): se i documenti sono cambiati rifiuta "changed" col valore nuovo e non scrive', async () => {
+  const { firebase } = seed({ 'shared/bt-ig-config': { handle: 'bt_formula1', followers: 1500, posts: 12, videos: [] } });
+  const A = D.createAppData();
+  const { values } = await A.loadShared(NOW);
+  firebase.__fake.setDoc('shared/bt-ig-config', { handle: 'bt_formula1', followers: 2000, posts: 12, videos: [] });   // l'app di oggi
+  let err = null;
+  await A.saveShared('ig', { ...values.ig, posts: 13 }, NOW).catch(e => { err = e; });
+  assert.ok(err && err.code === 'changed', 'errore: ' + (err && err.code));
+  assert.strictEqual(err.value.followers, 2000);
+  assert.strictEqual(firebase.__fake.doc('shared/bt-ig-config').posts, 12, 'non doveva scrivere');
+  const back = await A.saveShared('ig', { ...err.value, posts: 13 }, NOW);   // rifatta sopra i dati nuovi: si salva
+  assert.deepStrictEqual([back.followers, back.posts], [2000, 13]);
+  assert.deepStrictEqual([firebase.__fake.doc('shared/bt-ig-config').followers, firebase.__fake.doc('shared/bt-ig-config').posts], [2000, 13]);
+});
+
+t('saveShared con un valore mai letto (avvio senza rete): rifiuta "stale" col valore vero e non scrive sopra i dati veri', async () => {
+  const piloti = [{ id: 'p1', name: 'Andrea Kimi Antonelli', team: 'MERCEDES', position: 1, points: 333 }];
+  const { firebase } = seed({ 'shared/bt-piloti': { __arr: piloti } });
+  const A = D.createAppData();
+  firebase.__fake.offline = true;
+  const first = await A.loadShared(NOW);
+  firebase.__fake.offline = false;
+  let err = null;
+  await A.saveShared('standings', first.values.standings, NOW).catch(e => { err = e; });
+  assert.ok(err && err.code === 'stale', 'errore: ' + (err && err.code));
+  assert.deepStrictEqual(err.value.drivers.map(r => [r.id, r.points]), [['antonelli', 333]]);
+  assert.deepStrictEqual(firebase.__fake.doc('shared/bt-piloti').__arr, piloti);
+  await A.saveShared('standings', err.value, NOW);   // la bozza rifatta sui dati veri: ora sì
+  assert.deepStrictEqual(firebase.__fake.doc('shared/bt-piloti').__arr.map(r => [r.id, r.points]), [['p1', 333]]);
+});
+
+t('saveShared con un valore: i campi in più che scrive l\'app di oggi non contano come un cambiamento', async () => {
+  const { firebase } = seed({ 'shared/bt-ig-config': { followers: 1500, videos: [] } });
+  const A = D.createAppData();
+  const { values } = await A.loadShared(NOW);
+  await A.saveShared('ig', { ...values.ig, posts: 3 }, NOW);
+  firebase.__fake.setDoc('shared/bt-ig-config', { ...firebase.__fake.doc('shared/bt-ig-config'), campoDiOggi: true });
+  const back = await A.saveShared('ig', { ...values.ig, posts: 4 }, NOW);
+  assert.strictEqual(back.posts, 4);
 });
 
 t('scrittura rifiutata: saveShared lancia l\'errore e il documento resta com\'era', async () => {
@@ -165,6 +235,23 @@ t('notifiche dell\'admin: aggiunte con sharedAppend e tolte con sharedRemoveWher
   await A.removeNotif('nt1');
   doc = firebase.__fake.doc('shared/bt-notifs').__arr;
   assert.deepStrictEqual(doc.map(x => x.id), ['nt2', n.id]);
+});
+
+// Revisione della Fase B (minore 2): un invio che va in tempo scaduto può arrivare lo stesso più tardi; riprovando con
+// lo stesso titolo e testo si rimanda la stessa notifica, che arrayUnion non aggiunge due volte.
+t('notifica rimandata dopo un invio in tempo scaduto (che poi arriva): una sola notifica', async () => {
+  const { firebase } = setupWindow();
+  const F = require('../../src/services/firebase');
+  let calls = 0;
+  const A = D.createAppData({ fb: { ...F, sharedAppend: async (k, item) => { calls++; await F.sharedAppend(k, item); if (calls === 1) throw Object.assign(new Error('timeout'), { code: 'timeout' }); } } });
+  await assert.rejects(A.appendNotif({ title: 'Gara rinviata', body: 'Pioggia' }, NOW), e => e.code === 'timeout');
+  const n = await A.appendNotif({ title: 'Gara rinviata', body: 'Pioggia' }, NOW + 5000);
+  const doc = firebase.__fake.doc('shared/bt-notifs').__arr;
+  assert.strictEqual(doc.length, 1, 'notifiche: ' + JSON.stringify(doc));
+  assert.strictEqual(doc[0].id, n.id);
+  const other = await A.appendNotif({ title: 'Altra', body: 'x' }, NOW + 9000);   // un'altra notifica è nuova
+  assert.notStrictEqual(other.id, n.id);
+  assert.strictEqual(firebase.__fake.doc('shared/bt-notifs').__arr.length, 2);
 });
 
 // ── Dati personali (users/<email>.app2) ─────────────────────────────────

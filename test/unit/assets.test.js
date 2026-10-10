@@ -48,6 +48,7 @@ t('icone di Android: tutte le misure (48-192 px e 108-432 px per l\'icona adatti
   }
   const ps = probe(path.join(ICONS, 'playstore-icon-512.png'), []);
   assert.deepStrictEqual([ps.w, ps.h], [512, 512]);
+  assert.strictEqual(ps.mode, 'RGBA', 'Google Play vuole un PNG a 32 bit con l\'alfa (revisione Fase B, minore 9): ' + ps.mode);
 });
 
 t('icona nuova (logo BT con la monoposto): angoli neri e i LED rossi al centro', () => {

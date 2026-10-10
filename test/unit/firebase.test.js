@@ -47,6 +47,52 @@ t('senza Firebase: letture null, scritture rifiutate con offline, isOnline falso
   assert.strictEqual(F.isOnline(), true);
 });
 
+// Revisione della Fase B (I2 e minore 3): una pagina finta con <head>, dove gli script non arrivano finché la prova
+// non chiama onload o onerror.
+function fakeDocument(window) {
+  const head = { kids: [], appendChild(s) { this.kids.push(s); } };
+  window.document = {
+    head,
+    createElement: () => { const s = { dataset: {}, remove() { const i = head.kids.indexOf(s); if (i >= 0) head.kids.splice(i, 1); } }; return s; },
+    querySelector: sel => head.kids.find(s => sel === `script[src="${s.src}"]`) || null,
+  };
+  return head;
+}
+t('script di Firebase che non arriva mai (rete bloccata): dopo il tempo massimo rifiuta "offline" e lo toglie', async () => {
+  const { window } = setupWindow();
+  const head = fakeDocument(window);
+  const t0 = Date.now();
+  await assert.rejects(F.loadScript('https://x.test/a.js', 60), e => e.code === 'offline');
+  assert.ok(Date.now() - t0 < 1500, 'ha aspettato troppo');
+  assert.strictEqual(head.kids.length, 0, 'lo script in attesa è rimasto nella pagina');
+  delete window.document;
+});
+t('lo stesso script chiesto più volte insieme: una sola richiesta, e chi chiede dopo il caricamento non riscarica', async () => {
+  const { window } = setupWindow();
+  const head = fakeDocument(window);
+  const p1 = F.loadScript('https://x.test/b.js', 5000), p2 = F.loadScript('https://x.test/b.js', 5000);
+  assert.strictEqual(head.kids.length, 1, 'script nella pagina: ' + head.kids.length);
+  head.kids[0].onload();
+  await Promise.all([p1, p2]);
+  await F.loadScript('https://x.test/b.js', 5000);
+  assert.strictEqual(head.kids.length, 1);
+  assert.strictEqual(head.kids[0].dataset.ok, '1');
+  delete window.document;
+});
+t('script che fallisce: rifiuta "offline" e al tentativo dopo si riprova da capo', async () => {
+  const { window } = setupWindow();
+  const head = fakeDocument(window);
+  const p1 = F.loadScript('https://x.test/c.js', 5000);
+  head.kids[0].onerror();
+  await assert.rejects(p1, e => e.code === 'offline');
+  assert.strictEqual(head.kids.length, 0);
+  const p2 = F.loadScript('https://x.test/c.js', 5000);
+  assert.strictEqual(head.kids.length, 1);
+  head.kids[0].onload();
+  await p2;
+  delete window.document;
+});
+
 t('sgStrict: null se il documento manca, errore se non c\'è rete (sg invece dà null in tutti e due i casi)', async () => {
   const { firebase } = setupWindow();
   await F.ss('bt-x', [1]);

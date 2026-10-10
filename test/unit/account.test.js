@@ -180,6 +180,78 @@ t('sessione: ricaricando la pagina l\'account torna da Authentication (dopo il p
   assert.strictEqual(A.isAdmin(), true);
 });
 
+// Revisione della Fase B (C1): sessione salvata, SDK nella memoria del telefono ma Firestore irraggiungibile.
+async function offlineStart() {
+  const first = setupWindow();
+  await make().login('a@b.it', 'x');
+  const again = setupWindow({ storage: first.localStorage });   // l'app riaperta senza rete
+  again.firebase.__fake.offline = true;
+  const A = make();
+  await A.start();
+  return { A, fake: again.firebase.__fake };
+}
+t('sessione senza rete: profilo "non letto", nessun nome preso dall\'email; retry lo legge quando torna la rete', async () => {
+  const { A, fake } = await offlineStart();
+  const u = A.current();
+  assert.strictEqual(u.email, 'a@b.it');
+  assert.strictEqual(u.loaded, false);
+  assert.strictEqual(u.name, '', 'il nome non deve venire dall\'email: ' + u.name);
+  assert.ok(/^u[0-9a-f]{16}$/.test(u.aid));
+  assert.strictEqual(A.isAdmin(), false);
+  await A.retry();                       // ancora senza rete: resta non letto
+  assert.strictEqual(A.current().loaded, false);
+  fake.offline = false;
+  const seen = [];
+  A.onChange(x => seen.push(x && x.name));
+  await A.retry();
+  assert.strictEqual(A.current().loaded, true);
+  assert.strictEqual(A.current().name, 'Tester');
+  assert.strictEqual(A.isAdmin(), true);
+  assert.deepStrictEqual(seen, ['Tester']);
+  await A.retry();                       // già letto: non fa niente
+  assert.deepStrictEqual(seen, ['Tester']);
+});
+t('profilo non letto: nome e "Su di te" non si possono cambiare (non si sovrascrivono quelli veri)', async () => {
+  const { A, fake } = await offlineStart();
+  await assert.rejects(A.updateAbout({ birth: 2000, follow: 1, fan: 'x' }), e => e.code === 'not-loaded' && e.message === MESSAGES['not-loaded']);
+  await assert.rejects(A.updateName('Nuovo'), e => e.code === 'not-loaded');
+  fake.offline = false;
+  assert.deepStrictEqual(fake.doc('users/a@b.it').about, { birth: null, follow: 2, fan: 'vivo' });
+  assert.strictEqual(fake.doc('users/a@b.it').name, 'Tester');
+});
+t('profilo che manca: nome "Tifoso XXXX", mai la parte dell\'email prima della @', async () => {
+  const c = ctx({ users: { 'a@b.it': { pw: 'x', uid: 'uid-a' }, 'zeta.rossi@b.it': { pw: 'zzzzzz', uid: 'uid-z' } } });
+  const u = await make().login('zeta.rossi@b.it', 'zzzzzz');
+  assert.ok(/^Tifoso [0-9A-F]{4}$/.test(u.name), 'nome: ' + u.name);
+  assert.strictEqual(u.loaded, true);
+  assert.strictEqual(c.fs('users/zeta.rossi@b.it').name, u.name);
+  assert.ok(!/zeta/i.test(JSON.stringify(c.fs('users/zeta.rossi@b.it')).replace(/"email":"[^"]*"/, '')), 'parte dell\'email nel profilo');
+});
+t('profilo letto ma admins/<email> no: il Pannello Admin arriva al retry', async () => {
+  ctx();
+  let failAdmin = true;
+  const A = make({ dbGet: (col, id) => (col === 'admins' && failAdmin ? Promise.reject(Object.assign(new Error('rete'), { code: 'unavailable' })) : F.dbGet(col, id)) });
+  await A.login('a@b.it', 'x');
+  assert.strictEqual(A.current().name, 'Tester');
+  assert.strictEqual(A.isAdmin(), false);
+  failAdmin = false;
+  await A.retry();
+  assert.strictEqual(A.isAdmin(), true);
+});
+
+t('"Su di te" dopo l\'iscrizione: un anno di nascita sotto i 14 anni si rifiuta (minore 5 della revisione)', async () => {
+  const c = ctx();
+  const A = make();
+  await A.login('a@b.it', 'x');
+  await assert.rejects(A.updateAbout({ birth: new Date().getFullYear() - 10, follow: 1, fan: 'vivo' }), e => e.code === 'too-young');
+  assert.deepStrictEqual(c.fs('users/a@b.it').about, { birth: null, follow: 2, fan: 'vivo' });
+});
+t('account disattivato su Firebase: lo dice (non "Errore di connessione")', async () => {
+  ctx();
+  const A = make({ getAuth: async () => ({ signInWithEmailAndPassword: () => Promise.reject(Object.assign(new Error('x'), { code: 'auth/user-disabled' })) }) });
+  await assert.rejects(A.login('a@b.it', 'x'), e => e.code === 'disabled' && e.message === MESSAGES.disabled);
+  assert.ok(/disattivato/.test(MESSAGES.disabled));
+});
 t('profilo: nome e "Su di te" si modificano; account vecchio senza "Su di te" ha about vuoto', async () => {
   const c = ctx({ docs: { 'users/v@b.it': { email: 'v@b.it', name: 'Edo', pw: 'segreta' } } });
   const A = make();

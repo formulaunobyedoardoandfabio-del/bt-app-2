@@ -3,9 +3,11 @@
 // leggerli; le conversioni da e verso le forme della 2.0 sono in compat.js. Qui si decide cosa si legge, cosa si scrive
 // e quando:
 // - loadShared legge tutti i documenti insieme; se un documento non c'è vale il suo valore di serie (SHARED_DOCS);
-// - saveShared converte e scrive, oppure lancia l'errore (chi chiama avvisa "Non salvato");
-// - un documento che all'avvio non si è potuto leggere (senza rete) non si sovrascrive finché non si rilegge: sullo
-//   schermo c'era il valore di serie e salvarlo cancellerebbe i dati veri (errore "stale");
+// - saveShared rilegge i documenti, converte e scrive, oppure lancia l'errore (chi chiama avvisa "Non salvato"). Gli
+//   stessi documenti li scrivono anche l'app di oggi e gli altri telefoni degli admin (revisione della Fase B, C2 e I4):
+//   una modifica data come funzione si applica ai documenti appena riletti; un valore intero (la bozza di una scheda
+//   del Pannello) si scrive solo se i documenti sono ancora come all'ultima lettura di questo telefono, altrimenti
+//   errore "changed" (o "stale", se all'avvio non si erano potuti leggere) con il valore nuovo da rimettere sullo schermo;
 // - i dati personali si salvano 800 ms dopo l'ultima modifica, tutti insieme, nel campo app2 dell'account.
 const FB = require("./firebase");
 const C = require("./compat");
@@ -86,10 +88,18 @@ const USER_SAVE_MS = 800;
 const pickUser = v => { const out = {}; if (isObj(v)) USER_KEYS.forEach(k => { if (v[k] !== undefined) out[k] = v[k]; }); return out; };
 
 function createAppData({ fb = FB } = {}) {
-  const fresh = new Set();          // documenti letti da Firebase (o appena scritti): solo questi si possono riscrivere
+  // Ultima versione di ogni documento letta da Firebase (o scritta) da questo telefono: null = il documento non c'è.
+  // Un documento che non c'è in base non si è mai potuto leggere.
+  const base = new Map();
   const pending = new Map();        // email → { patch, timer, waiters }
   const docsOf = kinds => [...new Set(kinds.flatMap(k => KINDS[k].docs))];
-  const isFresh = kind => KINDS[kind].docs.every(d => fresh.has(d));
+  const isFresh = kind => KINDS[kind].docs.every(d => base.has(d));
+  // Valore per l'app dai documenti com'erano su Firebase (null = manca: vale quello di serie).
+  const valueOf = (kind, raw, now) => {
+    const data = {};
+    KINDS[kind].docs.forEach(d => { data[d] = clone(raw[d] == null ? SHARED_DOCS[d] : raw[d]); });
+    return KINDS[kind].from(data, now);
+  };
 
   // Legge i documenti dei contenuti richiesti (tutti, se non si dice). values: un valore per ogni contenuto (quello di
   // serie se il documento manca o non si è potuto leggere); fresh: i contenuti letti davvero; offline: qualcosa non si
@@ -99,33 +109,52 @@ function createAppData({ fb = FB } = {}) {
     await Promise.all(docs.map(async k => {
       try {
         const v = await fb.sgStrict(k);
-        raw[k] = v == null ? SHARED_DOCS[k] : v;
-        ok.add(k); fresh.add(k);
-      } catch (e) { raw[k] = SHARED_DOCS[k]; }
+        raw[k] = v == null ? null : v;
+        ok.add(k); base.set(k, clone(raw[k]));
+      } catch (e) { raw[k] = null; }
     }));
-    const values = {}, data = clone(raw);   // copie: lo stato dell'app non tocca i valori di serie
-    kinds.forEach(kind => { values[kind] = KINDS[kind].from(data, now); });
+    const values = {};
+    kinds.forEach(kind => { values[kind] = valueOf(kind, raw, now); });
     return { values, offline: ok.size < docs.length, fresh: kinds.filter(k => KINDS[k].docs.every(d => ok.has(d))) };
   }
   const staleKinds = () => Object.keys(KINDS).filter(k => !isFresh(k));
 
   // Converte e scrive un contenuto; restituisce il valore per l'app come si rilegge da quello che si è scritto.
-  async function saveShared(kind, value, now = Date.now()) {
+  // update: funzione (valore riletto → valore da scrivere) oppure il valore intero da scrivere (vedi in cima).
+  async function saveShared(kind, update, now = Date.now()) {
     const K = KINDS[kind];
     if (!K || !K.to) throw mkErr("unknown", "contenuto senza salvataggio: " + kind);
-    if (!isFresh(kind)) throw mkErr("stale", "non ancora letto da Firebase: " + kind);
-    const out = clone(K.to(value));   // come lo scrive ss: senza undefined, NaN → null
+    const latestRaw = {};
+    for (const d of K.docs) { const v = await fb.sgStrict(d); latestRaw[d] = v == null ? null : v; }   // senza rete: errore, niente scritto
+    const latest = valueOf(kind, latestRaw, now);
+    let next;
+    if (typeof update === "function") next = update(latest);
+    else {
+      const known = isFresh(kind);
+      const same = known && JSON.stringify(valueOf(kind, Object.fromEntries(K.docs.map(d => [d, base.get(d)])), now)) === JSON.stringify(latest);
+      if (!same) {
+        K.docs.forEach(d => base.set(d, clone(latestRaw[d])));   // d'ora in poi lo schermo mostra questi
+        throw Object.assign(mkErr(known ? "changed" : "stale", "documento cambiato o mai letto: " + kind), { value: latest });
+      }
+      next = update;
+    }
+    const out = clone(K.to(next));   // come lo scrive ss: senza undefined, NaN → null
     for (const [doc, v] of Object.entries(out)) {
       if (v == null) await fb.sd(doc, true); else await fb.ss(doc, v);
-      fresh.add(doc);
+      base.set(doc, v == null ? null : clone(v));
     }
-    return K.from(out, now);
+    return valueOf(kind, out, now);
   }
 
-  // Notifiche dell'admin (shared/bt-notifs): una alla volta senza riscrivere le altre, come oggi.
+  // Notifiche dell'admin (shared/bt-notifs): una alla volta senza riscrivere le altre, come oggi. Un invio andato in tempo
+  // scaduto può arrivare lo stesso più tardi: riprovando con lo stesso titolo e testo si rimanda la stessa notifica
+  // (stesso id e data), che arrayUnion non aggiunge due volte (revisione della Fase B, minore 2).
+  let failedNotif = null;
   async function appendNotif({ title, body } = {}, now = Date.now()) {
-    const n = C.notifToStore({ title, body }, now);
-    await fb.sharedAppend("bt-notifs", n);
+    const fresh = C.notifToStore({ title, body }, now);
+    const n = failedNotif && failedNotif.title === fresh.title && failedNotif.text === fresh.text ? failedNotif : fresh;
+    try { await fb.sharedAppend("bt-notifs", n); } catch (e) { failedNotif = n; throw e; }
+    failedNotif = null;
     return n;
   }
   const removeNotif = id => fb.sharedRemoveWhere("bt-notifs", x => x && String(x.id) === String(id));

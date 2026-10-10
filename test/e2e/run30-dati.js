@@ -100,6 +100,7 @@ run({
     const race = await text(p); await ctx.close();
     assert(t.includes(WELCOME), 'senza rete manca la notizia di benvenuto');
     assert(t.includes('Sei offline: alcuni contenuti potrebbero non essere aggiornati.'), 'manca la riga "Sei offline"');
+    assert(!/TERMINI E CONDIZIONI/.test(t), 'sopra l\'app c\'è ancora il foglio dei Termini (revisione Fase B: le prove toccavano i tasti sotto)');
     assert(/GP di Singapore/.test(race), 'senza rete la pagina Race non ha il calendario');
     assert(!errs.length, errs.join(' | '));
   },

@@ -36,19 +36,33 @@ function track(p) {
 }
 const isOnline = () => online;
 
-function loadScript(src) {
-  return new Promise((res, rej) => {
-    const doc = W().document;
-    if (!doc || !doc.createElement) { rej(mkErr("offline", "niente document: script non caricabile")); return; }
-    const old = doc.querySelector(`script[src="${src}"]`);
-    if (old && old.dataset.ok === "1") { res(); return; }
+// Script dell'SDK da gstatic. Revisione della Fase B (I2 e minore 3): chi chiede lo stesso script mentre arriva aspetta
+// la stessa richiesta (all'avvio lo chiedono in tanti insieme); se non arriva entro SCRIPT_TIMEOUT (rete bloccata,
+// Wi-Fi con la pagina di accesso) rifiuta "offline", così l'accesso dice "Errore di connessione" invece di restare fermo.
+const SCRIPT_TIMEOUT = 15000;
+const scriptLoads = new Map();   // indirizzo → promessa del caricamento in corso
+function loadScript(src, timeoutMs = SCRIPT_TIMEOUT) {
+  const doc = W().document;
+  if (!doc || !doc.createElement) return Promise.reject(mkErr("offline", "niente document: script non caricabile"));
+  const old = doc.querySelector(`script[src="${src}"]`);
+  if (old && old.dataset.ok === "1") return Promise.resolve();
+  if (scriptLoads.has(src)) return scriptLoads.get(src);
+  const p = new Promise((res, rej) => {
     if (old) old.remove();                       // un tentativo andato male: si riprova da capo
     const s = doc.createElement("script");
+    let timer = null;
+    const done = ok => {
+      clearTimeout(timer); s.onload = s.onerror = null; scriptLoads.delete(src);
+      if (ok) { s.dataset.ok = "1"; res(); } else { s.remove(); rej(mkErr("offline", "script non caricato: " + src)); }
+    };
+    s.onload = () => done(true);
+    s.onerror = () => done(false);
+    timer = setTimeout(() => done(false), timeoutMs);
     s.src = src;
-    s.onload = () => { s.dataset.ok = "1"; res(); };
-    s.onerror = () => { s.remove(); rej(mkErr("offline", "script non caricato: " + src)); };
     doc.head.appendChild(s);
   });
+  scriptLoads.set(src, p);
+  return p;
 }
 
 // ── Firebase ─────────────────────────────────────────────────────────
@@ -220,7 +234,7 @@ async function dropImage(ref) {
 }
 
 module.exports = {
-  FIREBASE_CONFIG, getDb, getAuth, isOnline,
+  FIREBASE_CONFIG, getDb, getAuth, isOnline, loadScript,
   ss, sg, sgStrict, sd, dbGet, dbSet, dbDelete, dbQuery, sharedAppend, sharedRemoveWhere, listOf, local,
   IMG_REF, IMG_MAX_CHARS, compressImage, uploadImage, loadImage, dropImage,
 };

@@ -25,6 +25,8 @@ const MESSAGES = {
   "not-enabled": "L'accesso con email e password non è ancora attivo su Firebase (Authentication → Metodo di accesso).",
   "need-age": "Conferma di avere almeno 14 anni.",
   "too-young": "Per iscriverti a Sector 4 devi avere almeno 14 anni.",
+  "not-loaded": "Il tuo profilo non è ancora arrivato: controlla la connessione e riprova tra poco.",
+  disabled: "Questo account è stato disattivato. Per saperne di più scrivi a bt.formula1@gmail.com.",
 };
 // Età minima per iscriversi, come dice la privacy policy (in Italia 14 anni per i servizi online, D.Lgs. 101/2018).
 const MIN_AGE = 14;
@@ -40,6 +42,7 @@ function authErr(e) {
   if (c === "auth/invalid-email") return mkErr("invalid-email");
   if (c === "auth/missing-password") return mkErr("empty");
   if (c === "auth/too-many-requests") return mkErr("too-many");
+  if (c === "auth/user-disabled") return mkErr("disabled");
   if (c === "auth/email-already-in-use") return mkErr("exists");
   if (c === "auth/weak-password") return mkErr("weak");
   if (["auth/operation-not-allowed", "auth/configuration-not-found", "auth/admin-restricted-operation"].includes(c)) return mkErr("not-enabled");
@@ -64,6 +67,7 @@ function createAccount({
   storage = () => (typeof window !== "undefined" ? window.localStorage : null),
 } = {}) {
   let current = null, admin = false, started = null, busy = 0;   // busy: accesso, uscita… in corso (li gestiscono loro)
+  let adminKnown = false, retrying = null;   // admins/<email> letto davvero; rilettura del profilo in corso
   const listeners = [];
   // Le operazioni sull'account cambiano anche lo stato di Authentication: mentre lavorano, l'ascolto di start() le lascia fare.
   const op = fn => async (...args) => { busy++; try { return await fn(...args); } finally { busy--; } };
@@ -76,21 +80,49 @@ function createAccount({
     catch (e) { if (e && e.code === "permission-denied") return { doc: null, protectedDoc: true }; throw mkErr("offline"); }
   }
 
+  async function readAdmin(email) {
+    try { admin = !!(await dbGet("admins", email)); adminKnown = true; } catch (e) { admin = false; adminKnown = false; }
+  }
   // Dopo l'accesso: profilo (users/<email>) e admin (admins/<email>). Se il profilo manca se ne crea uno minimo.
+  // Senza rete (l'account c'è, il profilo no) current ha loaded: false e nessun nome: mai la parte dell'email prima
+  // della @, che finirebbe nei messaggi della chat (revisione della Fase B, C1). retry() lo rilegge.
   async function loadProfile(email, uid) {
-    let doc = null;
-    try { doc = await dbGet("users", email); } catch (e) { doc = undefined; }   // senza rete: l'account c'è, il profilo dopo
+    let doc;
+    try { doc = await dbGet("users", email); } catch (e) { doc = undefined; }
+    const aid = C.authorId(email);
+    if (doc === undefined) {
+      admin = false; adminKnown = false;
+      current = { name: "", nick: "", email, about: cleanAbout(null), app2: {}, isPremium: false, aid, uid: uid || null, loaded: false };
+      notify();
+      return current;
+    }
     if (doc === null) {
-      doc = { name: email.split("@")[0], nick: email.split("@")[0], email, isPremium: false, premium: false, plan: "free", notif: { news: true, live: true, fanta: true }, ts: Date.now(), uid: uid || null, about: cleanAbout(null), app2: {} };
+      const nm = "Tifoso " + aid.slice(1, 5).toUpperCase();
+      doc = { name: nm, nick: nm, email, isPremium: false, premium: false, plan: "free", notif: { news: true, live: true, fanta: true }, ts: Date.now(), uid: uid || null, about: cleanAbout(null), app2: {} };
       dbSet("users", email, doc).catch(() => {});
-    } else if (doc && doc.pw != null) {
+    } else if (doc.pw != null) {
       dbSet("users", email, { migrated: Date.now() }, { remove: ["pw"] }).catch(() => {});   // passaggio rimasto a metà
     }
-    try { admin = !!(await dbGet("admins", email)); } catch (e) { admin = false; }
-    const p = C.profileFromStore(doc || { email, name: email.split("@")[0] });
-    current = { ...p, email, aid: C.authorId(email), uid: uid || (doc && doc.uid) || null };
+    await readAdmin(email);
+    current = { ...C.profileFromStore(doc), email, aid, uid: uid || doc.uid || null, loaded: true };
     notify();
     return current;
+  }
+  // Rilegge quello che non si era potuto leggere (profilo o admin), per esempio quando torna la rete.
+  function retry() {
+    if (!current || busy) return Promise.resolve(current);
+    if (current.loaded && adminKnown) return Promise.resolve(current);
+    if (!retrying) {
+      const u = current;
+      retrying = (async () => {
+        if (!u.loaded) return loadProfile(u.email, u.uid);
+        const before = admin;
+        await readAdmin(u.email);
+        if (current === u && admin !== before) { current = { ...u }; notify(); }
+        return current;
+      })().finally(() => { retrying = null; });
+    }
+    return retrying;
   }
 
   async function login(email, pw) {
@@ -165,7 +197,7 @@ function createAccount({
   async function logout() {
     const auth = await getAuth();
     if (auth) { try { await auth.signOut(); } catch (e) {} }
-    current = null; admin = false;
+    current = null; admin = false; adminKnown = false;
     notify();
   }
 
@@ -195,7 +227,7 @@ function createAccount({
       for (let i = 0; i < ls.length; i++) { const k = ls.key(i); if (k && k.startsWith("bt_bt-chat-seen-")) keys.push(k); }
       keys.forEach(k => { try { ls.removeItem(k); } catch (e) {} });
     }
-    current = null; admin = false;
+    current = null; admin = false; adminKnown = false;
     notify();
   }
 
@@ -212,7 +244,7 @@ function createAccount({
           if (busy && !first) return;
           const email = fbUser && fbUser.email ? normEmail(fbUser.email) : null;
           if (email && (!current || current.email !== email)) await loadProfile(email, fbUser.uid);
-          else if (!email && current) { current = null; admin = false; notify(); }
+          else if (!email && current) { current = null; admin = false; adminKnown = false; notify(); }
           else if (first && !email) notify();
           if (first) { first = false; res(); }
         });
@@ -222,8 +254,10 @@ function createAccount({
     return started;
   }
 
+  // Con il profilo non ancora letto (loaded: false) nome e "Su di te" non si cambiano: si scriverebbe sopra quelli veri.
   async function updateName(name) {
     const nm = String(name || "").trim();
+    if (current && current.loaded === false) throw mkErr("not-loaded");
     if (!current || !nm) throw mkErr("empty");
     await dbSet("users", current.email, { name: nm, nick: nm });
     current = { ...current, name: nm, nick: nm };
@@ -231,7 +265,9 @@ function createAccount({
   }
   async function updateAbout(about) {
     if (!current) throw mkErr("not-found");
+    if (current.loaded === false) throw mkErr("not-loaded");
     const a = cleanAbout(about);
+    if (a.birth && new Date().getFullYear() - a.birth < MIN_AGE) throw mkErr("too-young");   // come all'iscrizione
     await dbSet("users", current.email, { about: a });
     current = { ...current, about: a };
     notify();
@@ -239,7 +275,7 @@ function createAccount({
 
   return {
     login: op(login), register: op(register), resetPassword: op(resetPassword), logout: op(logout), deleteAccount: op(deleteAccount),
-    start, updateName, updateAbout,
+    start, retry, updateName, updateAbout,
     current: () => current,
     isAdmin: () => !!current && admin,
     onChange(cb) { listeners.push(cb); return () => { const i = listeners.indexOf(cb); if (i >= 0) listeners.splice(i, 1); }; },
