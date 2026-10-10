@@ -1,5 +1,5 @@
 {
- "_nota": "Contenuti dimostrativi della 2.0 (ARTICLES, PREDICTIONS_INIT, HIGHLIGHTS_INIT, HOME_POLL, IG_INIT di src/App.jsx al commit 40409d4, e il calendario con gli stati della 2.0) come documenti Firebase nel formato di oggi: servono alle prove copiate dalla 2.0 (run8-run23), che li cercano. Le date delle notizie danno le stesse etichette (\"2 min fa\", \"Ieri\"...) all'ora fissa delle prove (7/10/2026 10:00 UTC). Nell'app non ci sono più.",
+ "_nota": "Contenuti dimostrativi della 2.0 (ARTICLES, PREDICTIONS_INIT, HIGHLIGHTS_INIT, HOME_POLL, IG_INIT e i messaggi di CHATS_INIT di src/App.jsx al commit 40409d4, e il calendario con gli stati della 2.0) come documenti Firebase nel formato di oggi: servono alle prove copiate dalla 2.0 (run8-run23), che li cercano. Le date delle notizie danno le stesse etichette (\"2 min fa\", \"Ieri\"...) all'ora fissa delle prove (7/10/2026 10:00 UTC). Nell'app non ci sono più.",
  "addDocs": {
   "shared/bt-news": {
    "__arr": [
@@ -699,6 +699,110 @@
      "views": "19K",
      "likes": "1.2K",
      "url": ""
+    }
+   ]
+  },
+  "shared/bt-chat-generale": {
+   "__arr": [
+    {
+     "id": "generale-0",
+     "user": "Marco T.",
+     "aid": "",
+     "txt": "Ragazzi pronti per il weekend?",
+     "t": 1791363360000
+    },
+    {
+     "id": "generale-1",
+     "user": "Giulia R.",
+     "aid": "",
+     "txt": "Sempre! Occhio alle previsioni meteo però",
+     "t": 1791363420000
+    },
+    {
+     "id": "generale-2",
+     "user": "Davide S.",
+     "aid": "",
+     "txt": "Io spero in un po' di pioggia, gare più belle 😄",
+     "t": 1791363480000
+    },
+    {
+     "id": "generale-3",
+     "user": "Marco T.",
+     "aid": "",
+     "txt": "Vediamo cosa dice la redazione B&T",
+     "t": 1791363540000
+    }
+   ]
+  },
+  "shared/bt-chat-live-gara": {
+   "__arr": [
+    {
+     "id": "live-0",
+     "user": "Elena V.",
+     "aid": "",
+     "txt": "Bel sorpasso alla curva 3!",
+     "t": 1791363420000
+    },
+    {
+     "id": "live-1",
+     "user": "Paolo M.",
+     "aid": "",
+     "txt": "Strategia rischiosa quella gomma dura...",
+     "t": 1791363480000
+    },
+    {
+     "id": "live-2",
+     "user": "Sara B.",
+     "aid": "",
+     "txt": "Concordo, vediamo se regge fino alla fine",
+     "t": 1791363540000
+    }
+   ]
+  },
+  "shared/bt-chat-fantaf1-talk": {
+   "__arr": [
+    {
+     "id": "fanta-0",
+     "user": "Luca F.",
+     "aid": "",
+     "txt": "Chi schierate questo weekend?",
+     "t": 1791363480000
+    },
+    {
+     "id": "fanta-1",
+     "user": "Anna P.",
+     "aid": "",
+     "txt": "Sto pensando di cambiare P3, non mi convince il passo",
+     "t": 1791363540000
+    }
+   ]
+  },
+  "shared/bt-chat-boxradio": {
+   "__arr": [
+    {
+     "id": "radio-0",
+     "user": "Fabio C.",
+     "aid": "",
+     "txt": "Avete sentito la radio dopo il pit stop? 😅",
+     "t": 1791363480000
+    },
+    {
+     "id": "radio-1",
+     "user": "Giulia R.",
+     "aid": "",
+     "txt": "Team radio più belle della stagione finora",
+     "t": 1791363540000
+    }
+   ]
+  },
+  "shared/bt-chat-paddocktalk": {
+   "__arr": [
+    {
+     "id": "paddock-0",
+     "user": "Davide S.",
+     "aid": "",
+     "txt": "Prossimo weekend si cambia circuito, non vedo l'ora",
+     "t": 1791363540000
     }
    ]
   }

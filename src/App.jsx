@@ -17,6 +17,7 @@ import F1 from "./data/f1-2026";
 import AppData from "./services/appdata";
 import Compat from "./services/compat";
 import { createAccount, MESSAGES as ACCOUNT_MSG, messageOf } from "./services/account";
+import { createChat, CHAT_MSG, ROOM_IDS } from "./services/chat";
 
 /* ── DESIGN TOKENS (matches the B&T concept style) ─────────────────── */
 const C = {
@@ -55,7 +56,8 @@ const openUrl = url => {
   window.open(url, "_blank");
 };
 // Moderazione chat (richiesta da Google Play): i messaggi degli utenti bloccati non si vedono.
-const isBlockedMsg = (blocked, m) => !m.mine && blocked.some(b => b.name === m.from);
+// Messaggio di un utente bloccato? Con l'ID autore se c'è, altrimenti col nome (messaggi vecchi), come l'app di oggi.
+const isBlockedMsg = (blocked, m) => !m.mine && blocked.some(b => (b.aid && m.aid ? b.aid === m.aid : !b.aid && !m.aid && b.name === m.from));
 
 /* ── ICONS ──────────────────────────────────────────────────────────── */
 function Icon({ name, size = 18, color = C.text, sw = 2 }) {
@@ -266,34 +268,14 @@ const LEAGUE = [
   { pos: 7, name: "G. Villa", nick: "@slipstream_g", team: "Slipstream", pts: "915 pt", color: "#9AA0A6" },
 ];
 
-const CHATS_INIT = [
-  { id: "generale", name: "Chat Generale", color: "#C1121F", icon: "chat", iconColor: "#fff",
-    messages: [
-      { from: "Marco T.", text: "Ragazzi pronti per il weekend?", mine: false },
-      { from: "Giulia R.", text: "Sempre! Occhio alle previsioni meteo però", mine: false },
-      { from: "Davide S.", text: "Io spero in un po' di pioggia, gare più belle 😄", mine: false },
-      { from: "Marco T.", text: "Vediamo cosa dice la redazione B&T", mine: false },
-    ] },
-  { id: "live", name: "Live Gara", color: "#3FAE6B", icon: "stopwatch", iconColor: "#141414",
-    messages: [
-      { from: "Elena V.", text: "Bel sorpasso alla curva 3!", mine: false },
-      { from: "Paolo M.", text: "Strategia rischiosa quella gomma dura...", mine: false },
-      { from: "Sara B.", text: "Concordo, vediamo se regge fino alla fine", mine: false },
-    ] },
-  { id: "fanta", name: "FantaF1 Talk", color: "#E7B34C", icon: "trophy", iconColor: "#141414",
-    messages: [
-      { from: "Luca F.", text: "Chi schierate questo weekend?", mine: false },
-      { from: "Anna P.", text: "Sto pensando di cambiare P3, non mi convince il passo", mine: false },
-    ] },
-  { id: "radio", name: "Box Radio", color: "#2E9E8F", icon: "chat", iconColor: "#fff",
-    messages: [
-      { from: "Fabio C.", text: "Avete sentito la radio dopo il pit stop? 😅", mine: false },
-      { from: "Giulia R.", text: "Team radio più belle della stagione finora", mine: false },
-    ] },
-  { id: "paddock", name: "Paddock Talk", color: "#3B6FD4", icon: "chat", iconColor: "#fff",
-    messages: [
-      { from: "Davide S.", text: "Prossimo weekend si cambia circuito, non vedo l'ora", mine: false },
-    ] },
+// Stanze della chat dei tifosi (nome, colore e icona della 2.0). I messaggi sono su Firebase, una stanza per documento
+// (shared/bt-chat-*, come nell'app di oggi): src/services/chat.js.
+const CHAT_ROOMS = [
+  { id: "generale", name: "Chat Generale", color: "#C1121F", icon: "chat", iconColor: "#fff" },
+  { id: "live", name: "Live Gara", color: "#3FAE6B", icon: "stopwatch", iconColor: "#141414" },
+  { id: "fanta", name: "FantaF1 Talk", color: "#E7B34C", icon: "trophy", iconColor: "#141414" },
+  { id: "radio", name: "Box Radio", color: "#2E9E8F", icon: "chat", iconColor: "#fff" },
+  { id: "paddock", name: "Paddock Talk", color: "#3B6FD4", icon: "chat", iconColor: "#fff" },
 ];
 
 // Le notifiche dell'admin stanno in shared/bt-notifs, nel formato di oggi (src/services/appdata.js).
@@ -2427,7 +2409,7 @@ function SsWidget({ id, h = 2, st, live, race, standings, prefs, setPrefs, onPic
     </SsCard>;
   }
   if (id === "chat") {
-    const msgs = (chat ? chat.messages : []).filter(m => !blocked.includes(m.from)).slice(-({ 1: 2, 2: 4, 3: 6, 4: 9 }[h] || 4));
+    const msgs = (chat ? chat.messages : []).filter(m => !isBlockedMsg(blocked, m)).slice(-({ 1: 2, 2: 4, 3: 6, 4: 9 }[h] || 4));
     return <SsCard id={id} title="CHAT DEI TIFOSI"><div style={ssRows(3)}>{msgs.map(m => (
       <div key={m.id} data-ss-chat-msg="" style={{ width: "100%", flexShrink: 0, fontFamily: F_BODY, fontSize: 10.5, color: C.muted, lineHeight: 1.3 }}><b style={{ color: m.mine ? C.gold : C.text, fontFamily: F_HEAD }}>{m.from}</b> {m.text}</div>
     ))}</div></SsCard>;
@@ -2544,7 +2526,7 @@ function SsSheet({ id, st, live, race, standings, prefs, setPrefs, vote, onVote,
   }
   else if (id === "chat") body = (
     <div data-ss-chat="" style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-      {(chat ? chat.messages : []).filter(m => !blocked.includes(m.from)).slice(-40).map(m => <div key={m.id} data-ss-chat-msg="" style={{ padding: "4px 0", borderTop: `1px solid ${C.divider}`, fontFamily: F_BODY, fontSize: 12.5, color: C.muted, lineHeight: 1.4 }}><b style={{ color: m.mine ? C.gold : C.text, fontFamily: F_HEAD }}>{m.from}</b> {m.text}</div>)}
+      {(chat ? chat.messages : []).filter(m => !isBlockedMsg(blocked, m)).slice(-40).map(m => <div key={m.id} data-ss-chat-msg="" style={{ padding: "4px 0", borderTop: `1px solid ${C.divider}`, fontFamily: F_BODY, fontSize: 12.5, color: C.muted, lineHeight: 1.4 }}><b style={{ color: m.mine ? C.gold : C.text, fontFamily: F_HEAD }}>{m.from}</b> {m.text}</div>)}
       <div style={{ display: "flex", gap: 6, marginTop: 4 }}>
         <label htmlFor="ssChatInput" style={{ position: "absolute", width: 1, height: 1, overflow: "hidden" }}>Scrivi in chat</label>
         <input id="ssChatInput" value={draft} onChange={e => setDraft(e.target.value)} placeholder="Scrivi alla community…" style={{ flex: 1, minWidth: 0, padding: "9px 12px", borderRadius: 11, background: C.bg, border: `1px solid ${C.border}`, color: C.text, fontFamily: F_BODY, fontSize: 13 }} />
@@ -3066,8 +3048,8 @@ function BackBar({ title, onBack }) {
 function InstagramView({ ig, onToast, onBack }) {
   return <div data-ig-screen="" style={{ height: "100%", display: "flex", flexDirection: "column" }}><BackBar title="INSTAGRAM" onBack={onBack} /><div style={{ flex: 1, minHeight: 0 }}><InstagramScreen ig={ig} onToast={onToast} /></div></div>;
 }
-function ChatsView({ chats, onOpen, blocked, onBack }) {
-  return <div data-chats-screen="" style={{ height: "100%", display: "flex", flexDirection: "column" }}><BackBar title="CHAT DEI TIFOSI" onBack={onBack} /><div style={{ flex: 1, minHeight: 0 }}><ChatListScreen chats={chats} onOpen={onOpen} blocked={blocked} /></div></div>;
+function ChatsView({ chats, onOpen, blocked, onBack, unreadOf }) {
+  return <div data-chats-screen="" style={{ height: "100%", display: "flex", flexDirection: "column" }}><BackBar title="CHAT DEI TIFOSI" onBack={onBack} /><div style={{ flex: 1, minHeight: 0 }}><ChatListScreen chats={chats} onOpen={onOpen} blocked={blocked} unreadOf={unreadOf} /></div></div>;
 }
 
 /* ── GARAGE: giochi e strumenti B&T ────────────────────────────────────── */
@@ -4423,7 +4405,7 @@ function InstagramScreen({ ig, onToast }) {
   );
 }
 
-function ChatListScreen({ chats, onOpen, blocked = [] }) {
+function ChatListScreen({ chats, onOpen, blocked = [], unreadOf = () => 0 }) {
   const [q, setQ] = useState("");
   const filtered = chats.filter(c => c.name.toLowerCase().includes(q.toLowerCase()));
   return (
@@ -4439,7 +4421,7 @@ function ChatListScreen({ chats, onOpen, blocked = [] }) {
       {filtered.map(c => {
         const visible = c.messages.filter(m => !isBlockedMsg(blocked, m));
         const last = visible[visible.length - 1];
-        const unread = visible.filter(m => !m.mine).length > 2 ? 3 : 0;
+        const unread = unreadOf(c.id, visible);   // messaggi degli altri dopo l'ultimo visto
         return (
           <button key={c.id} className="press" onClick={() => onOpen(c.id)} style={{ display: "flex", alignItems: "center", gap: 12, width: "100%", padding: "12px 16px", textAlign: "left", borderBottom: `1px solid ${C.divider}` }}>
             <IconCircle name={c.icon} bg={c.color} stroke={c.iconColor} filled />
@@ -4449,7 +4431,7 @@ function ChatListScreen({ chats, onOpen, blocked = [] }) {
               </div>
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, marginTop: 2 }}>
                 <span style={{ fontFamily: F_BODY, fontSize: 12, color: C.muted, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{last ? (last.mine ? "Tu: " : last.from + ": ") + last.text : "Nessun messaggio"}</span>
-                {unread > 0 && <span style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", minWidth: 18, height: 18, padding: "0 5px", borderRadius: 9, background: C.accent, fontFamily: F_BODY, fontWeight: 700, fontSize: 10, color: "#fff", flexShrink: 0 }}>{unread}</span>}
+                {unread > 0 && <span data-chat-unread={c.id} style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", minWidth: 18, height: 18, padding: "0 5px", borderRadius: 9, background: C.accent, fontFamily: F_BODY, fontWeight: 700, fontSize: 10, color: "#fff", flexShrink: 0 }}>{unread}</span>}
               </div>
             </div>
           </button>
@@ -4460,17 +4442,24 @@ function ChatListScreen({ chats, onOpen, blocked = [] }) {
   );
 }
 
-function ChatThreadScreen({ chat, onBack, onSend, isPremium, blocked = [], onReport, onBlock }) {
+function ChatThreadScreen({ chat, onBack, onSend, isPremium, blocked = [], onReport, onBlock, liveRace = null }) {
   const [draft, setDraft] = useState("");
   const [menu, setMenu] = useState(null); // messaggio su cui ho aperto le opzioni
   const endRef = useRef(null);
   useEffect(() => { endRef.current?.scrollIntoView({ block: "end" }); }, [chat.messages.length]);
   const shown = chat.messages.filter(m => !isBlockedMsg(blocked, m));
-  const send = () => { if (!draft.trim()) return; onSend(chat.id, draft.trim()); setDraft(""); };
+  const send = () => {
+    const t = draft.trim();
+    if (!t) return;
+    setDraft("");
+    Promise.resolve(onSend(chat.id, t)).then(ok => { if (ok === false) setDraft(d => d || t); });   // non inviato: il testo torna
+  };
   return (
     <div style={{ height: "100%", display: "flex", flexDirection: "column" }}>
       <SubHeader title={chat.name} onBack={onBack} right={<IconCircle name={chat.icon} bg={chat.color} stroke={chat.iconColor} size={32} filled />} />
+      {chat.id === "live" && liveRace && <div data-live-band="" style={{ margin: "0 16px 8px", padding: "8px 12px", borderRadius: 10, background: "rgba(232,18,29,.14)", border: "1px solid rgba(232,18,29,.4)", fontFamily: F_HEAD, fontWeight: 800, fontSize: 12.5, color: C.text, flexShrink: 0 }}>LIVE: {liveRace.name}</div>}
       <div className="scrollcol" style={{ flex: 1, padding: "6px 16px", display: "flex", flexDirection: "column", gap: 10 }}>
+        {shown.length === 0 && <p data-chat-empty="" style={{ margin: "24px 0", textAlign: "center", fontFamily: F_BODY, fontSize: 13, color: C.muted }}>{CHAT_MSG.empty}</p>}
         {shown.map((m, i) => (
           <div key={m.id || i} style={{ display: "flex", flexDirection: "column", alignItems: m.mine ? "flex-end" : "flex-start" }}>
             {m.mine && isPremium && <span style={{ display: "flex", alignItems: "center", gap: 3, fontFamily: F_BODY, fontWeight: 700, fontSize: 10.5, color: C.gold, margin: "0 4px 3px" }}><Icon name="star" size={9} color={C.gold} />Tu</span>}
@@ -5309,11 +5298,11 @@ function ProfiloScreen({ ig, onOpenIg, trial = null, trialUsed = false, onBack, 
         <div style={{ padding: "0 24px 10px" }}><span style={{ fontFamily: F_BODY, fontWeight: 700, fontSize: 11, color: C.dim, letterSpacing: 1 }}>UTENTI BLOCCATI</span></div>
         <div style={{ margin: "0 20px 18px", borderRadius: 18, background: C.card, border: `1px solid ${C.border}`, overflow: "hidden" }}>
           {blocked.map((b, i) => (
-            <div key={b.name}>
+            <div key={(b.aid || "") + ":" + b.name}>
               <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "10px 14px" }}>
                 <div style={{ width: 36, height: 36, borderRadius: 10, background: "rgba(255,255,255,.06)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}><Icon name="no" size={16} /></div>
                 <span style={{ flex: 1, fontFamily: F_BODY, fontWeight: 600, fontSize: 14, color: C.text }}>{b.name}</span>
-                <button className="press" onClick={() => onUnblock && onUnblock(b.name)} style={{ padding: "8px 14px", borderRadius: 10, border: `1px solid ${C.border}`, fontFamily: F_BODY, fontWeight: 600, fontSize: 12, color: C.muted }}>Sblocca</button>
+                <button className="press" onClick={() => onUnblock && onUnblock(b)} style={{ padding: "8px 14px", borderRadius: 10, border: `1px solid ${C.border}`, fontFamily: F_BODY, fontWeight: 600, fontSize: 12, color: C.muted }}>Sblocca</button>
               </div>
               {i < blocked.length - 1 && <div style={{ height: 1, background: C.divider, margin: "0 14px" }} />}
             </div>
@@ -6095,7 +6084,7 @@ function AdminChatTab({ chats, reports, banned, onDeleteMsg, onSuspend, onUnsusp
             <div style={{ fontFamily: F_BODY, fontSize: 10.5, color: C.dim, marginBottom: 10 }}>Segnalato da {r.by}</div>
             <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
               <button className="press" onClick={() => onDeleteMsg(r.chatId, r.msgId)} style={small("red")}>ELIMINA MESSAGGIO</button>
-              <button className="press" onClick={() => onSuspend(r.author)} style={small()}>SOSPENDI {r.author}</button>
+              <button className="press" onClick={() => onSuspend({ aid: r.aid, name: r.author })} style={small()}>SOSPENDI {r.author}</button>
               <button className="press" onClick={() => onIgnore(r.id)} style={small("ghost")}>IGNORA</button>
             </div>
           </div>
@@ -6103,9 +6092,9 @@ function AdminChatTab({ chats, reports, banned, onDeleteMsg, onSuspend, onUnsusp
       })}
       <div style={aTitle}>UTENTI SOSPESI</div>
       {banned.length === 0 ? <div style={{ ...aCard, fontFamily: F_BODY, fontSize: 12.5, color: C.muted }}>Nessun utente sospeso.</div> : banned.map(b => (
-        <div key={b.name} style={{ ...aCard, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+        <div key={(b.aid || "") + ":" + b.name} style={{ ...aCard, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
           <span style={{ fontFamily: F_BODY, fontSize: 13.5, color: C.text }}>{b.name}</span>
-          <button className="press" onClick={() => onUnsuspend(b.name)} style={small("ghost")}>RIATTIVA</button>
+          <button className="press" onClick={() => onUnsuspend(b)} style={small("ghost")}>RIATTIVA</button>
         </div>
       ))}
       <div style={aTitle}>ULTIMI MESSAGGI</div>
@@ -6120,7 +6109,7 @@ function AdminChatTab({ chats, reports, banned, onDeleteMsg, onSuspend, onUnsusp
           </div>
           <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
             <button className="press" onClick={() => onDeleteMsg(cur.id, m.id)} style={small("red")}>ELIMINA</button>
-            <button className="press" onClick={() => onSuspend(m.from)} style={small()}>SOSPENDI</button>
+            <button className="press" onClick={() => onSuspend({ aid: m.aid, name: m.from })} style={small()}>SOSPENDI</button>
           </div>
         </div>
       ))}
@@ -6417,6 +6406,10 @@ function LiveTrackView({ onClose }) {
 // dell'account fa prima di cancellare il profilo (chat del Task 8, feedback del Task 9).
 const ACCOUNT_CLEANUPS = [];
 const Account = createAccount({ cleanups: ACCOUNT_CLEANUPS });
+// Chat dei tifosi su Firebase (src/services/chat.js); eliminando l'account si tolgono i suoi messaggi e segnalazioni.
+const Chat = createChat({ now: nowMs });
+ACCOUNT_CLEANUPS.push(u => Chat.cleanupFor(u));
+const CHAT_LIST_MS = 6000, CHAT_ROOM_MS = 4000;   // come l'app di oggi: elenco ogni 6 s, stanza aperta ogni 4 s
 
 // Dati personali di chi entra con un account (users/<email>.app2, src/services/appdata.js): valori di partenza.
 const USER_INIT = {
@@ -6454,13 +6447,15 @@ function App() {
   const predictSeat = (id, pr) => setSillyPreds(x => x[id] ? x : { ...x, [id]: pr });
   const [articleId, setArticleId] = useState(null);
   const [chatId, setChatId] = useState(null);
-  // Ogni messaggio ha un id: serve a segnalarlo ed eliminarlo (moderazione).
-  const [chats, setChats] = useState(() => CHATS_INIT.map(c => ({ ...c, messages: c.messages.map((m, i) => ({ id: c.id + "-" + i, ...m })) })));
+  // Messaggi delle stanze (Firebase): { stanza: [{ id, from, text, at, aid, mine }] }. Ogni messaggio ha un id: serve a
+  // segnalarlo ed eliminarlo (moderazione).
+  const [chatMsgs, setChatMsgs] = useState({});
+  const chats = CHAT_ROOMS.map(r => ({ ...r, messages: chatMsgs[r.id] || [] }));
   const [termsAccepted, setTermsAccepted] = useState(false); // Termini accettati al primo ingresso
   const [termsOpen, setTermsOpen] = useState(false);         // rilettura dal profilo
-  const [reports, setReports] = useState([]);   // segnalazioni per il moderatore
-  const [banned, setBanned] = useState([]);     // utenti sospesi dalla chat
-  const [blocked, setBlocked] = useState([]);   // utenti che ho bloccato
+  const [reports, setReports] = useState([]);   // segnalazioni per il moderatore (shared/bt-chat-reports)
+  const [banned, setBanned] = useState([]);     // utenti sospesi dalla chat (shared/bt-chat-banned)
+  const [blocked, setBlocked] = useState(() => Chat.blocked());   // utenti che ho bloccato (solo su questo telefono)
   const [saved, setSaved] = useState(USER_INIT.saved);       // articoli salvati tra i preferiti (id)
   const [savedOnly, setSavedOnly] = useState(false); // Home: mostra solo i salvati
   // FantaF1 come F1 Fantasy: la squadra, quella dell'ultima chiusura (per contare i cambi) e i cambi gratis.
@@ -6642,6 +6637,28 @@ function App() {
     if (accountEmail && accountEmail !== userEmailRef.current) enterAccount(accountEmail);
     else if (!accountEmail && userEmailRef.current) resetUser();
   }, [accountEmail]);
+
+  // ── Chat (Firebase, src/services/chat.js): si leggono solo le stanze che si vedono, come l'app di oggi ──
+  const [chatTick, setChatTick] = useState(0);   // per rileggere subito (blocco tolto, account eliminato)
+  const chatMeRef = useRef(null);
+  chatMeRef.current = account ? { name: account.name, aid: account.aid } : null;
+  const chatMe = () => chatMeRef.current;
+  const loadRoomMsgs = id => Chat.loadRoom(id, chatMeRef.current).then(ms => setChatMsgs(x => (sameJson(x[id], ms) ? x : { ...x, [id]: ms })), () => {});   // senza rete restano quelli di prima
+  const chatAdmin = view === "admin" && adminTab === "CHAT";
+  const chatRooms = view === "chatThread" && chatId ? [chatId] : (view === "chats" || chatAdmin) ? ROOM_IDS : ssOpen ? ["generale"] : [];
+  const chatEvery = view === "chats" || chatAdmin ? CHAT_LIST_MS : CHAT_ROOM_MS;
+  useEffect(() => {
+    if (!chatRooms.length) return;
+    const load = () => { chatRooms.forEach(loadRoomMsgs); if (chatAdmin) reloadModeration(); };
+    load();
+    const iv = setInterval(load, chatEvery);
+    return () => clearInterval(iv);
+  }, [chatRooms.join(), chatAdmin, chatEvery, accountEmail, chatTick]);
+  // Letti: la stanza aperta segna come visto il suo ultimo messaggio (bt-chat-seen-<stanza>, solo sul telefono).
+  const threadMsgs = view === "chatThread" && chatId ? chatMsgs[chatId] : null;
+  useEffect(() => { if (threadMsgs) Chat.markSeen(chatId, threadMsgs); }, [threadMsgs]);
+  // La chat di una volta (shared/bt-chat) diventa la Generale, se questa non c'è ancora.
+  useEffect(() => { if (accountEmail) Chat.migrateLegacy().catch(() => {}); }, [accountEmail]);
   useEffect(() => {
     if (!userEmail || !userReady.current) return;
     const patch = {};
@@ -6791,18 +6808,43 @@ function App() {
   };
   const liveLastLap = () => { if (live) { live.sim.jumpToLastLap(); live.sim.advance(0.5); setLiveTick(n => n + 1); showToast(isRaceType(live.type) ? "Ultimo giro" : "Ultimo minuto"); } };
   const openChat = (id) => { setChatId(id); setView("chatThread"); };
-  const sendMessage = (id, text) => setChats(cs => cs.map(c => c.id === id ? { ...c, messages: [...c.messages, { id: "m" + Date.now(), from: "Tu", text, mine: true }] } : c));
-  // Moderazione chat, come nell'app vera.
-  const reportMessage = (chatId, m) => {
-    setReports(rs => rs.some(r => r.msgId === m.id) ? rs : [{ id: "r" + Date.now(), chatId, msgId: m.id, text: m.text, author: m.from, by: "Tu" }, ...rs]);
-    showToast("Segnalazione inviata: la controlleremo al più presto. Grazie!");
+  // Il messaggio si vede subito; se l'invio non riesce si toglie e la stanza rimette il testo nel campo (risponde false).
+  const sendMessage = (id, text) => {
+    const me = chatMe();
+    if (!me) { needLogin("Per scrivere in chat serve un account."); return Promise.resolve(false); }
+    const temp = { id: "invio-" + Date.now(), from: me.name, text: text.trim(), at: nowMs(), aid: me.aid, mine: true };
+    setChatMsgs(x => ({ ...x, [id]: [...(x[id] || []), temp] }));
+    return Chat.send(id, text, me).then(m => {
+      setChatMsgs(x => ({ ...x, [id]: (x[id] || []).map(y => (y.id === temp.id ? m : y)) }));
+      return true;
+    }, e => {
+      setChatMsgs(x => ({ ...x, [id]: (x[id] || []).filter(y => y.id !== temp.id) }));
+      showToast(e && e.code === "banned" ? CHAT_MSG.banned : CHAT_MSG.offline);
+      return false;
+    });
   };
-  const blockUser = (m) => { setBlocked(bs => bs.some(b => b.name === m.from) ? bs : [...bs, { name: m.from }]); showToast(`Non vedrai più i messaggi di ${m.from}. Puoi sbloccarlo dal Profilo.`); };
-  const unblockUser = (name) => setBlocked(bs => bs.filter(b => b.name !== name));
-  const deleteChatMsg = (chatId, msgId) => { setChats(cs => cs.map(c => c.id === chatId ? { ...c, messages: c.messages.filter(m => m.id !== msgId) } : c)); setReports(rs => rs.filter(r => r.msgId !== msgId)); showToast("Messaggio eliminato"); };
-  const suspendUser = (name) => { setBanned(bs => bs.some(b => b.name === name) ? bs : [...bs, { name }]); showToast(`${name} non può più scrivere in chat`); };
-  const unsuspendUser = (name) => setBanned(bs => bs.filter(b => b.name !== name));
-  const ignoreReport = (id) => setReports(rs => rs.filter(r => r.id !== id));
+  // Moderazione chat, come nell'app di oggi.
+  const reportMessage = (chatId, m) => {
+    const me = chatMe(); if (!me) return;
+    Chat.report(chatId, m, me).then(() => showToast(CHAT_MSG.reported), () => showToast(CHAT_MSG["report-failed"]));
+  };
+  const blockUser = (m) => {
+    Chat.block(m);
+    const bl = Chat.blocked();
+    setBlocked(bl);
+    setChatMsgs(x => Object.fromEntries(Object.entries(x).map(([k, ms]) => [k, ms.filter(y => !isBlockedMsg(bl, y))])));
+    showToast(`Non vedrai più i messaggi di ${m.from}. Puoi sbloccarlo dal Profilo.`);
+  };
+  const unblockUser = (entry) => { Chat.unblock(entry); setBlocked(Chat.blocked()); setChatTick(n => n + 1); };
+  const reloadModeration = () => { Chat.loadReports().then(setReports, () => {}); Chat.loadBanned().then(setBanned, () => {}); };
+  const deleteChatMsg = (chatId, msgId) => Chat.deleteMessage(chatId, msgId).then(() => {
+    setChatMsgs(x => ({ ...x, [chatId]: (x[chatId] || []).filter(m => m.id !== msgId) }));
+    setReports(rs => rs.filter(r => r.msgId !== msgId));
+    showToast("Messaggio eliminato");
+  }, () => showToast(NOT_SAVED));
+  const suspendUser = (who) => Chat.suspend(who).then(() => { reloadModeration(); showToast(`${who.name} non può più scrivere in chat`); }, () => showToast(NOT_SAVED));
+  const unsuspendUser = (entry) => Chat.unsuspend(entry).then(reloadModeration, () => showToast(NOT_SAVED));
+  const ignoreReport = (id) => Chat.ignoreReport(id).then(() => setReports(rs => rs.filter(r => r.id !== id)), () => showToast(NOT_SAVED));
   // Elimina account (richiesto da Google Play): profilo, dati personali, account Authentication e dati del telefono
   // (src/services/account.js). Con la password sbagliata o senza rete lancia l'errore: lo mostra la finestra di conferma.
   const deleteAccount = async pw => {
@@ -6810,8 +6852,7 @@ function App() {
     await AppData.flushUserData().catch(() => {});
     await Account.deleteAccount(pw);
     if (em) AppData.cancelUserData(em);   // niente salvataggi che ricreino l'account
-    setChats(cs => cs.map(c => ({ ...c, messages: c.messages.filter(m => !m.mine) })));
-    setReports(rs => rs.filter(r => r.by !== "Tu"));
+    setChatMsgs({}); setChatTick(n => n + 1);   // i suoi messaggi li ha già tolti la pulizia della chat: si rilegge
     resetUser();
     setBlocked([]); setSavedOnly(false); setIsPremium(false);
     setGuest(false); setAdminUnlocked(false); setView("tab"); setTab("home");
@@ -6908,10 +6949,10 @@ function App() {
   else if (view === "circuit" && circuitId) body = <CircuitScreen circuitId={circuitId} races={races} articles={articles} onBack={() => setView("tab")} onTag={filterByTag} onOpenArticle={openArticle} />;
   else if (view === "adminLock") body = <AdminKeypad onOk={() => { setAdminUnlocked(true); setView("admin"); }} onCancel={() => setView("profilo")} />;
   else if (view === "admin" && adminUnlocked) body = <AdminScreen silly={sillyOfficial} onSilly={officialSeat} highlights={highlights} setHighlights={adminSet.highlights} onBack={() => setView("profilo")} onPublish={publishArticle} articles={articles} setArticles={adminSet.articles} fantaStats={fantaStats} setFantaStats={adminSet.fantaStats} standings={standings} setStandings={adminSet.standings} races={races} setRaces={adminSet.races} extraRaces={racesDoc.extra} setExtraRaces={adminSet.extraRaces} ig={ig} setIg={adminSet.ig} sentNotifs={sentNotifs} onSendNotif={sendNotif} onDeleteNotif={deleteNotif} onToast={showToast} tab={adminTab} setTab={setAdminTab} chats={chats} reports={reports} banned={banned} onDeleteMsg={deleteChatMsg} onSuspend={suspendUser} onUnsuspend={unsuspendUser} onIgnoreReport={ignoreReport} liveProps={liveProps} polls={allPolls} votes={votes} onPollAnswer={setPollAnswer} predictions={predictions} setPredictions={adminSet.predictions} predAnswers={predAnswers} />;
-  else if (view === "chatThread" && activeChat) body = <ChatThreadScreen chat={activeChat} onBack={() => goTab("race")} onSend={guest ? () => needLogin("Per scrivere in chat serve un account.") : sendMessage} isPremium={isPremium} blocked={blocked} onReport={guest ? () => needLogin("Per segnalare un messaggio serve un account.") : reportMessage} onBlock={blockUser} />;
+  else if (view === "chatThread" && activeChat) body = <ChatThreadScreen chat={activeChat} onBack={() => goTab("race")} onSend={guest ? () => needLogin("Per scrivere in chat serve un account.") : sendMessage} isPremium={isPremium} blocked={blocked} onReport={guest ? () => needLogin("Per segnalare un messaggio serve un account.") : reportMessage} onBlock={blockUser} liveRace={races.find(r => r.status === "LIVE") || null} />;
   else if (view === "instagram") body = <InstagramView ig={ig} onToast={showToast} onBack={() => setView(igFrom)} />;
   else if (view === "ghost") body = <GhostLap onBack={() => setView("tab")} />;
-  else if (view === "chats") body = <ChatsView chats={chats} onOpen={openChat} blocked={blocked} onBack={() => setView("tab")} />;
+  else if (view === "chats") body = <ChatsView chats={chats} onOpen={openChat} blocked={blocked} onBack={() => setView("tab")} unreadOf={(id, ms) => Chat.unread(id, ms)} />;
   else if (view === "profilo") body = <ProfiloScreen ig={ig} onOpenIg={() => { setIgFrom("profilo"); setView("instagram"); }} aboutMe={aboutMe} onSaveAboutMe={a => Account.updateAbout(a).catch(() => showToast(NOT_SAVED))} account={account} onSaveName={n => Account.updateName(n)} isAdmin={Account.isAdmin()} trial={trialActive ? trial : null} trialUsed={!!trial} onBack={() => setView("tab")} onNotifiche={() => setView("notifiche")} onPremium={() => setPremiumOpen(true)} onAdmin={() => guest ? needLogin("Accedi per usare il pannello admin.") : setView(adminUnlocked ? "admin" : "adminLock")} onLogout={() => { leaveAccount(); Account.logout(); setGuest(false); setAdminUnlocked(false); setView("tab"); goTab("home"); }} isPremium={isPremium} onAbout={() => setInfoModal({ title: "Info su B&T", body: ABOUT_TEXT })} onHelp={() => setInfoModal({ title: "Assistenza", body: HELP_TEXT })} favTeam={favTeam} favDriver={favDriver} onPickTeam={() => guest ? needLogin("Per scegliere scuderia e pilota del cuore serve un account.") : setPicker("team")} onPickDriver={() => guest ? needLogin("Per scegliere scuderia e pilota del cuore serve un account.") : setPicker("driver")} guest={guest} onLogin={() => needLogin(null)} onTerms={() => setTermsOpen(true)} blocked={blocked} onUnblock={unblockUser} onDeleteAccount={deleteAccount} savedCount={saved.length} onOpenSaved={openSaved} />;
   else if (view === "notifiche") body = <NotificheScreen onBack={() => setView("tab")} notifs={notifs} onReadAll={readAll} isPremium={isPremium} onPremium={() => setPremiumOpen(true)} favTeam={favTeam} favDriver={favDriver} prefs={notifPrefs} onPrefs={setNotifPrefs} onGoProfilo={() => setView("profilo")} />;
   else {
