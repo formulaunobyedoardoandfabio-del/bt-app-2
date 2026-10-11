@@ -55,7 +55,7 @@ run({
     const n1 = latest();
     await tapText(p, '↻ Aggiorna'); await w(p, 1500);
     const n2 = latest(), sim = await p.evaluate(() => !!window.__btLive); await ctx.close();
-    assert(/SESSIONE IN CORSO/.test(box) && /Posizioni, gomme, pit stop, tempi e team radio saranno disponibili qui a fine sessione\. Intanto segui la classifica mondiale e commenta in chat!/.test(box), 'riquadro della sessione bloccata: ' + box.slice(0, 300));
+    assert(/SESSIONE IN CORSO/.test(box) && /Posizioni, gomme, pit stop, tempi e team radio saranno disponibili qui circa 30 minuti dopo la fine della sessione\. Intanto segui la classifica mondiale e commenta in chat!/.test(box), 'riquadro della sessione bloccata: ' + box.slice(0, 300));
     assert(rows === 10, 'sotto il riquadro la classifica dei primi 10: ' + rows);
     assert(n1 >= 1 && n2 === n1 + 1, `"↻ Aggiorna" deve chiedere di nuovo la sessione (${n1} → ${n2})`);
     assert(!sim, 'con la sessione bloccata non deve partire nessuna diretta');
@@ -84,12 +84,15 @@ run({
     assert(/SAFETY CAR DEPLOYED/.test(rc) && /giro 31/.test(rc), 'direzione gara senza la Safety Car');
     assert(!errs.length, errs.join(' | '));
   },
-  async 'sessione appena finita: per mezz\'ora si ricarica ogni 5 minuti (dati a metà), poi basta'(b) {
+  // OpenF1 gratis tiene i dati bloccati fino a 30 minuti dopo la fine della sessione (openf1.org: "Data is considered
+  // live from 30 minutes before a session starts until 30 minutes after it ends"): il primo caricamento arriva lì.
+  async 'sessione appena finita: OpenF1 la sblocca 30 minuti dopo la fine, poi per mezz\'ora si ricarica ogni 5 minuti (dati a metà), poi basta'(b) {
     const { ctx, p, errs } = await open(b); await w(p, 200);
     const r = await p.evaluate(s => { const f = window.__req('./App').of1NeedsReload, end = Date.parse(s.date_end), m = 60000;
-      return [f(s, end, end + 2 * m), f(s, end, end + 6 * m), f(s, end + 6 * m, end + 12 * m), f(s, end + 25 * m, end + 31 * m), f(s, 0, end - 10 * m), f(s, end, end + 40 * m)]; }, FX.session);
+      return [f(s, end + 30 * m, end + 32 * m), f(s, end + 30 * m, end + 36 * m), f(s, end + 36 * m, end + 42 * m), f(s, end + 52 * m, end + 58 * m),
+        f(s, end + 55 * m, end + 61 * m), f(s, 0, end - 10 * m), f(s, end + 30 * m, end + 70 * m)]; }, FX.session);
     await ctx.close();
-    assert(JSON.stringify(r) === JSON.stringify([false, true, true, false, true, false]), 'quando ricaricare: ' + JSON.stringify(r));
+    assert(JSON.stringify(r) === JSON.stringify([false, true, true, true, false, true, false]), 'quando ricaricare: ' + JSON.stringify(r));
     assert(!errs.length, errs.join(' | '));
   },
   async '429 e poi risposta: la pagina si riprende senza errori'(b) {

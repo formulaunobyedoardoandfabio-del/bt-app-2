@@ -247,11 +247,13 @@ const OF1_LAST_RACE_KEY = "bt-of1-last-race", OF1_LAST_RACE_MS = 6 * 3600000;   
 const OF1_RETRY_MS = 5 * 60000;                                                  // senza risposta: si riprova dopo 5 minuti
 const OF1_WX_KEY = "bt-of1-wx";        // esito del meteo delle sessioni finite (non cambia più): { "r16:FP1": "rain" | "dry" }
 const OF1_SRC = "Sessione (dati OpenF1)";
-// Appena finita la sessione i dati di OpenF1 possono arrivare a metà: per 30 minuti dopo la fine si ricarica ogni 5 minuti.
-const OF1_SETTLE_MS = 30 * 60000, OF1_RELOAD_MS = 5 * 60000;
+// OpenF1 gratis tiene i dati bloccati fino a 30 minuti dopo la fine della sessione (openf1.org: "Data is considered
+// live from 30 minutes before a session starts until 30 minutes after it ends"). Appena sbloccati possono arrivare a
+// metà: per altri 30 minuti (fino a un'ora dopo la fine) si ricarica ogni 5 minuti.
+const OF1_LIVE_LAG_MS = 30 * 60000, OF1_SETTLE_MS = 30 * 60000, OF1_RELOAD_MS = 5 * 60000;
 const of1NeedsReload = (session, loadedAt, now) => {
   const end = session && Date.parse(session.date_end || session.date_start);
-  return isFinite(end) && now < end + OF1_SETTLE_MS && now - loadedAt >= OF1_RELOAD_MS;
+  return isFinite(end) && now < end + OF1_LIVE_LAG_MS + OF1_SETTLE_MS && now - loadedAt >= OF1_RELOAD_MS;
 };
 const isDemoLive = live => !!(live && live.source === "demo");
 const isOf1Live = live => !!(live && live.source === "openf1");
@@ -4384,7 +4386,7 @@ function Of1Status({ of1, standings, onRefresh }) {
     return (
       <div data-of1-locked="" style={card}>
         <Eyebrow color={C.gold}>SESSIONE IN CORSO</Eyebrow>
-        <p style={{ margin: 0, fontFamily: F_BODY, fontSize: 12.5, color: C.muted, lineHeight: 1.55 }}>Posizioni, gomme, pit stop, tempi e team radio saranno disponibili qui a fine sessione. Intanto segui la classifica mondiale e commenta in chat!</p>
+        <p style={{ margin: 0, fontFamily: F_BODY, fontSize: 12.5, color: C.muted, lineHeight: 1.55 }}>Posizioni, gomme, pit stop, tempi e team radio saranno disponibili qui circa 30 minuti dopo la fine della sessione. Intanto segui la classifica mondiale e commenta in chat!</p>
         {refresh}
         <div style={{ marginTop: 12, borderTop: `1px solid ${C.divider}` }}>
           {top.map(r => { const d = standingsDriver(r.id); return (
@@ -4402,7 +4404,7 @@ function Of1Status({ of1, standings, onRefresh }) {
   return (
     <div data-of1-status={of1.status} role="status" style={card}>
       <div style={{ fontFamily: F_HEAD, fontWeight: 800, fontSize: 13.5, color: C.text }}>{text}</div>
-      {of1.status === "empty" && <p style={{ margin: "4px 0 0", fontFamily: F_BODY, fontSize: 12, color: C.muted, lineHeight: 1.5 }}>I dati veri della sessione arrivano da OpenF1 a fine sessione.</p>}
+      {of1.status === "empty" && <p style={{ margin: "4px 0 0", fontFamily: F_BODY, fontSize: 12, color: C.muted, lineHeight: 1.5 }}>I dati veri della sessione arrivano da OpenF1 circa 30 minuti dopo la fine.</p>}
       {of1.status !== "loading" && refresh}
     </div>
   );
