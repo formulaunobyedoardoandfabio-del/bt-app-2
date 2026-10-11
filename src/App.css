@@ -22,11 +22,12 @@
   button:focus-visible, a:focus-visible, input:focus-visible{outline:2px solid #E8121D;outline-offset:2px;}
   input::placeholder{color:#86858C;}
   html, body{ overflow-x:hidden; }
-  /* Colonna dell'app: larga al massimo 430 px e alta quanto lo schermo (niente cornice da telefono). */
+  /* Colonna dell'app alta quanto lo schermo: sul telefono larga quanto lo schermo (11/10: con 430 px al massimo i
+     telefoni larghi avevano due bande nere ai lati), sul computer una colonna di 600 px al centro. */
   #phone-shell{
     width:100%;
     min-width:0;
-    max-width:min(430px, 100vw);
+    max-width:min(600px, 100vw);
     height:100vh;
     height:100svh;
     background:#0A0A0C;

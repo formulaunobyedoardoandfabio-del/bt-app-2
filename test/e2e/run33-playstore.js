@@ -277,6 +277,22 @@ run({
     assert(!errs.length, errs.join(' | '));
   },
 
+  // 11/10: sul telefono di Edoardo (largo circa 540 px) la chat e le altre pagine avevano due bande nere ai lati:
+  // la colonna dell'app era larga al massimo 430 px. Ora riempie lo schermo del telefono; solo sul computer (sito)
+  // resta una colonna al centro.
+  async 'telefono largo 540 px: l\'app occupa tutto lo schermo, senza bande nere ai lati; sul computer una colonna'(b) {
+    const a = await open(b, { width: 540, height: 1170 }); await login(a.p);
+    await tapText(a.p, 'Chat dei tifosi').catch(() => {}); await w(a.p, 400);
+    const phone = await a.p.evaluate(() => { const r = document.querySelector('#phone-shell').getBoundingClientRect(); return { left: r.left, width: r.width, vw: innerWidth }; });
+    await a.ctx.close();
+    const c = await open(b, { width: 1280, height: 900 });
+    const desk = await c.p.evaluate(() => { const r = document.querySelector('#phone-shell').getBoundingClientRect(); return { left: r.left, width: r.width, vw: innerWidth }; });
+    await c.ctx.close();
+    assert(phone.left === 0 && phone.width === phone.vw, 'sul telefono largo l\'app non riempie lo schermo: ' + JSON.stringify(phone));
+    assert(desk.width <= 600 && Math.abs(desk.left * 2 + desk.width - desk.vw) < 2, 'sul computer deve restare una colonna al centro: ' + JSON.stringify(desk));
+    assert(!a.errs.length && !c.errs.length, [...a.errs, ...c.errs].join(' | '));
+  },
+
   async 'bordi del telefono: barra in alto, schede in basso e pagine interne lasciano lo spazio delle barre del telefono'(b) {
     const { ctx, p, errs } = await open(b); await login(p);
     // Capacitor 8 (SystemBars) mette l'altezza vera delle barre del telefono in --safe-area-inset-*.
