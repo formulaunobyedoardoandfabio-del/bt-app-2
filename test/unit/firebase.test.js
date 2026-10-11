@@ -8,6 +8,13 @@ let pass = 0, fail = 0;
 const tests = [];
 const t = (name, fn) => tests.push([name, fn]);
 
+// 11/10: la chiave scritta nell'app (presa dall'app di oggi) aveva 38 caratteri, con due lettere sbagliate e una che
+// mancava. Firestore non la controlla, Authentication sì: "auth/api-key-not-valid". Edoardo l'ha copiata dalla console.
+t('chiave di Firebase come quelle di Google: "AIza" e 35 caratteri (39 in tutto)', () => {
+  assert.match(F.FIREBASE_CONFIG.apiKey, /^AIza[0-9A-Za-z_-]{35}$/);
+  assert.strictEqual(F.FIREBASE_CONFIG.projectId, 'bt-app-50703');
+});
+
 t('array salvati come {__arr} e riletti uguali', async () => {
   const { firebase } = setupWindow();
   await F.ss('bt-x', [1, 2]);

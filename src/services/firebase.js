@@ -8,7 +8,9 @@
 // - getAuth carica anche firebase-auth-compat.js.
 // I documenti restano nel formato di oggi: un array diventa {__arr: [...]}, set con {merge: true}, giro JSON in ss.
 const FIREBASE_CONFIG = {
-  apiKey: "AIzaSyBwZFyFM5fBCZCJFpLxb88suIqhSgQvN4",
+  // Copiata da Edoardo dalla console di Firebase l'11/10: quella dell'app di oggi aveva 38 caratteri (Authentication
+  // la rifiutava con "auth/api-key-not-valid"; Firestore non la controlla e per questo l'app di oggi funziona).
+  apiKey: "AIzaSyBwZFyFM5fBCZCJfPblxb88suIqhSgqvN4",
   authDomain: "bt-app-50703.firebaseapp.com",
   projectId: "bt-app-50703",
   storageBucket: "bt-app-50703.firebasestorage.app",
