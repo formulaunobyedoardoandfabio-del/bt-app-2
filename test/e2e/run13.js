@@ -141,22 +141,24 @@ const tests = {
     const t = await text(p); await ctx.close();
     for (const x of ['LIMITI DELLA PISTA', 'INVESTIGA', 'PENALITÀ', 'INCIDENTE']) assert(t.includes(x), 'manca il messaggio: ' + x);
   },
-  async 'meteo: radar e previsioni scritte di FP1, FP2, FP3, qualifiche e gara'(b) {
+  // Task 17 (D08-D10): radar e previsioni erano simulati; restano le sessioni del weekend per il pronostico e, senza
+  // sessione, la frase dello stato vuoto del meteo vero.
+  async 'meteo: niente radar né previsioni inventate; le sessioni FP1, FP2, FP3, qualifiche e gara per il pronostico'(b) {
     const { ctx, p, errs } = await open(b); await login(p); await goRace(p);
     await tapText(p, 'Meteo', { exact: true }); await w(p, 600);
-    // Dalla versione 16 le previsioni sono una fila di caselle: la descrizione completa si apre toccandole.
-    const radar = await p.evaluate(() => !!document.querySelector('canvas[aria-label="Radar meteo"]'));
-    const icons = await p.evaluate(() => [...document.querySelectorAll('[data-weather-box] svg[data-sky]')].map(s => s.getAttribute('data-sky')));
+    const radar = await p.evaluate(() => !!document.querySelector('canvas'));
+    const boxes = await p.evaluate(() => [...document.querySelectorAll('[data-weather-box]')].map(e => e.innerText));
     const emoji = await p.evaluate(() => /[☀⛅☂☁🌧]/u.test(document.body.innerText));
     const keys = await p.evaluate(() => [...document.querySelectorAll('[data-weather-box]')].map(e => e.getAttribute('data-weather-box')));
-    let t = '';
+    let t = await text(p);
     for (const k of keys) { await tapSel(p, `[data-weather-box="${k}"]`); await w(p, 200); t += await text(p); await tapSel(p, `[data-weather-box="${k}"]`); await w(p, 100); }
     await ctx.close();
-    assert(radar, 'manca il radar');
-    assert(icons.length === 5 && icons.every(Boolean), 'icone del cielo disegnate: ' + icons.length + ' su 5 (' + icons + ')');
-    assert(!emoji, 'nelle previsioni ci sono ancora le emoji');
-    for (const x of ['Prove libere 1', 'Prove libere 2', 'Prove libere 3', 'Qualifiche', 'Gara']) assert(t.includes(x), 'manca la previsione: ' + x);
-    assert((t.match(/Probabilità di pioggia/g) || []).length >= 5, 'previsioni scritte incomplete');
+    assert(!radar && !/radar/i.test(t), 'c\'è ancora il radar simulato');
+    assert(boxes.length === 5 && boxes.every(x => !/°|%/.test(x)), 'nelle caselle ci sono ancora previsioni inventate: ' + JSON.stringify(boxes));
+    assert(!emoji, 'nel meteo ci sono ancora le emoji');
+    for (const x of ['Prove libere 1', 'Prove libere 2', 'Prove libere 3', 'Qualifiche', 'Gara']) assert(t.includes(x), 'manca la sessione: ' + x);
+    assert(!/Probabilità di pioggia/.test(t), 'ci sono ancora le previsioni scritte');
+    assert(/Il meteo della sessione arriva con i dati veri a fine sessione\./.test(t), 'manca la frase del meteo vero a fine sessione');
     assert(!errs.length, 'errori JS: ' + errs.join(' | '));
   },
   async 'telemetria: toccando il tempo sul giro o un settore'(b) {

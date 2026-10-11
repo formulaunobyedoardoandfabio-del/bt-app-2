@@ -21,6 +21,9 @@ async function open(b, { now = NOW, width = 390, height = 844, seed, query = '',
   }, { now, seed });
   if (acceptTerms) await ctx.addInitScript(() => { try { if (!localStorage.getItem('bt_bt-terms-accepted')) localStorage.setItem('bt_bt-terms-accepted', JSON.stringify({ ts: 1 })); } catch (e) {} });
   if (capacitor) await ctx.addInitScript(capacitor);   // funzione che crea window.Capacitor con plugin finti
+  // OpenF1 di serie non risponde (come senza rete): le prove che lo usano mettono le loro risposte in routes, che
+  // vengono prima perché registrate dopo.
+  await ctx.route('https://api.openf1.org/**', r => r.abort());
   for (const [glob, handler] of Object.entries(routes)) await ctx.route(glob, handler);
   const p = await ctx.newPage();
   const errs = [];

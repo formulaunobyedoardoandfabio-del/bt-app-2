@@ -140,11 +140,13 @@ const tests = {
     await ctx.close();
     assert(JSON.stringify(boxes) === JSON.stringify(['FP1', 'FP2', 'FP3', 'QUALI', 'RACE']), 'caselle del meteo (Malesia): ' + boxes);
     assert(JSON.stringify(sg) === JSON.stringify(['FP1', 'SQ', 'SPRINT', 'QUALI', 'RACE']), 'caselle del meteo (Singapore, Sprint): ' + sg);
-    assert(!/Probabilità di pioggia/.test(t), 'la descrizione lunga si vede già senza toccare le caselle');
-    assert(/radar/i.test(t), 'il radar non c\'è più');
+    assert(!/Probabilità di pioggia/.test(t), 'ci sono ancora le previsioni scritte (simulate)');
+    // Task 17 (D10): niente radar simulato; senza sessione la frase del meteo vero a fine sessione.
+    assert(!/radar/i.test(t) && /Il meteo della sessione arriva con i dati veri a fine sessione\./.test(t), 'c\'è ancora il radar o manca il meteo vero');
     assert(!errs.length, 'errori JS: ' + errs.join(' | '));
   },
-  async 'meteo: toccando una casella si apre la descrizione completa col tasto "Indovina il meteo"'(b) {
+  // Task 17 (D08): la descrizione della sessione dice giorno e ora, senza la previsione simulata.
+  async 'meteo: toccando una casella si apre la sessione col tasto "Indovina il meteo"'(b) {
     const { ctx, p } = await open(b); await login(p); await goRace(p);
     await tapText(p, 'Meteo', { exact: true }); await w(p, 500);
     await tapSel(p, '[data-weather-box="FP3"]'); await w(p, 300);
@@ -152,7 +154,7 @@ const tests = {
     await tapText(p, 'Indovina il meteo'); await w(p, 200);
     await tapText(p, 'Pioggia', { exact: true }); await w(p, 300);
     const t2 = norm(await text(p)); await ctx.close();
-    assert(/Prove libere 3/.test(t1) && /Probabilità di pioggia/.test(t1) && /12:30/.test(t1), 'la descrizione completa delle FP3 non si apre');
+    assert(/Prove libere 3/.test(t1) && /12:30/.test(t1) && !/Probabilità di pioggia/.test(t1), 'la sessione delle FP3 non si apre (o c\'è ancora la previsione simulata)');
     assert(/Il tuo pronostico: Pioggia/.test(t2) && /\+2 punti/.test(t2), 'il pronostico non viene registrato');
   },
   // Task 10 (D23): la prova DEMO non dà l'esito del meteo né i +2 punti (arriveranno coi dati veri a fine sessione).

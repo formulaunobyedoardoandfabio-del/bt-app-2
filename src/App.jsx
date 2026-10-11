@@ -21,6 +21,7 @@ import { createChat, CHAT_MSG, ROOM_IDS } from "./services/chat";
 import { createFeedback, FEEDBACK_CATS, FEEDBACK_MSG } from "./services/feedback";
 import { local, IMG_REF, uploadImage, loadImage as loadStoredImage, dropImage } from "./services/firebase";
 import { generateArticle } from "./services/backend";
+import { createOpenF1, buildReplay, lastRaceFromResult, sessionType as of1SessionType } from "./services/openf1";
 import LOGO from "./data/logo";
 
 /* ── DESIGN TOKENS (matches the B&T concept style) ─────────────────── */
@@ -210,7 +211,6 @@ const DRIVERS = DRIVER_DATA.map(([id, name, full, teamId, born, nat, wins, podiu
     helmet: HELMETS[id] || null, helmetNote: HELMET_NOTES[id] || null };
 });
 const driverById = (id) => DRIVERS.find(d => d.id === id);
-const driverByName = (name) => DRIVERS.find(d => d.name === name);
 
 /* ── DIRETTA: tracciati, numeri di gara e simulatore ─────────────────── */
 // Tracciati dei circuiti: "f1-circuits" di Tomislav Bacinger (licenza MIT), lisciati e ruotati per la mappa.
@@ -239,6 +239,27 @@ const CAR_NUMBERS = { norris: 1, verstappen: 3, antonelli: 12, hadjar: 6, lecler
   gasly: 10, lawson: 30, bearman: 87, hulkenberg: 27, bortoleto: 5, ocon: 31, lindblad: 41, colapinto: 43, stroll: 18, bottas: 77, perez: 11 };
 const driverCode = d => d.full.split(" ").slice(-1)[0].normalize("NFD").replace(/[̀-ͯ]/g, "").slice(0, 3).toUpperCase();
 const LIVE_DRIVERS = DRIVERS.map(d => ({ id: d.id, code: driverCode(d), number: CAR_NUMBERS[d.id] || d.pos, color: d.color }));
+// Dati veri di OpenF1 (src/services/openf1.js): una sola coda di richieste per tutta l'app (3 al secondo, 30 al minuto).
+// Gara LIVE: ogni 30 secondi si guarda l'ultima sessione; finita (non più bloccata) si carica una volta e si rivede.
+const OF1 = createOpenF1();
+const OF1_POLL_MS = 30000;
+const OF1_LAST_RACE_KEY = "bt-of1-last-race", OF1_LAST_RACE_MS = 6 * 3600000;   // ultima gara di OpenF1: sul telefono per 6 ore
+const OF1_RETRY_MS = 5 * 60000;                                                  // senza risposta: si riprova dopo 5 minuti
+const OF1_WX_KEY = "bt-of1-wx";        // esito del meteo delle sessioni finite (non cambia più): { "r16:FP1": "rain" | "dry" }
+const OF1_SRC = "Sessione (dati OpenF1)";
+// Appena finita la sessione i dati di OpenF1 possono arrivare a metà: per 30 minuti dopo la fine si ricarica ogni 5 minuti.
+const OF1_SETTLE_MS = 30 * 60000, OF1_RELOAD_MS = 5 * 60000;
+const of1NeedsReload = (session, loadedAt, now) => {
+  const end = session && Date.parse(session.date_end || session.date_start);
+  return isFinite(end) && now < end + OF1_SETTLE_MS && now - loadedAt >= OF1_RELOAD_MS;
+};
+const isDemoLive = live => !!(live && live.source === "demo");
+const isOf1Live = live => !!(live && live.source === "openf1");
+// L'ultima sessione di OpenF1 è di questo weekend? (dai 4 giorni prima della gara al giorno dopo)
+const sessionOfWeekend = (s, race) => {
+  const at = s && Date.parse(s.date_start), day = race && Date.parse(String(race.date).slice(0, 10) + "T12:00:00Z");
+  return isFinite(at) && isFinite(day) && at >= day - 4.5 * 86400000 && at <= day + 1.5 * 86400000;
+};
 const SESSION_TYPES = [["FP1", "PROVE LIBERE 1"], ["FP2", "PROVE LIBERE 2"], ["FP3", "PROVE LIBERE 3"], ["SQ", "QUALIFICHE SPRINT"], ["SPRINT", "SPRINT"], ["QUALI", "QUALIFICHE"], ["RACE", "GARA"]];
 const isRaceType = type => type === "RACE" || type === "SPRINT";
 // Sessioni del weekend di una gara (weekend Sprint: FP1, Qualifiche Sprint, Sprint, Qualifiche, Gara).
@@ -292,6 +313,10 @@ const TEAM_OF = Object.fromEntries(DRIVERS.map(d => [d.id, d.teamId]));
 // La tua squadra (demo): 5 piloti, 2 scuderie e il 2X. Budget = 100 M$ di partenza più il valore guadagnato in stagione.
 const FANTA_BUDGET = 108.1;
 const FANTA_SQUAD_INIT = { name: "Scuderia B&T", drivers: ["hamilton", "russell", "hulkenberg", "perez", "antonelli"], teams: ["audi", "haas"], boost: "russell" };
+// Punti e cambi del FantaF1 dalle sessioni vere (OpenF1): spenti. Nell'anteprima i punti del weekend non si salvano
+// nell'account e la sessione rivista si chiude a ogni avvio: i cambi della squadra si rifarebbero ogni volta. Il FantaF1
+// apre a fine stagione, come nell'app di oggi.
+const FANTA_REAL_POINTS = false;
 
 // Previsioni avanzate del FantaF1: +1 punto per ogni risposta giusta. Tutte a risposta chiusa:
 // kind: "poll" (sondaggio con le sue risposte), "driver" (si sceglie tra tutti i piloti), "team" (tra tutte le scuderie),
@@ -306,24 +331,6 @@ const fmtK = (n) => n == null || n === "" ? "—" : n >= 1000 ? (n / 1000).toFix
 const articlePoll = a => a && a.poll ? { ...a.poll, id: "art-" + a.id } : null;
 const NEWS_CATEGORIES = ["NEWS", "GARA", "APP", "ANALISI", "FANTA", "PILOTI", "SCUDERIE"];
 const STATS_NOTE = "Statistiche carriera aggiornate a settembre 2026";
-
-const TIRES = [
-  { name: "L. Norris", compound: "Media", wear: 34 },
-  { name: "M. Verstappen", compound: "Dura", wear: 18 },
-  { name: "K. Antonelli", compound: "Media", wear: 47 },
-  { name: "I. Hadjar", compound: "Morbida", wear: 61 },
-  { name: "C. Leclerc", compound: "Media", wear: 29 },
-];
-
-// Messaggi radio d'esempio (non reali)
-const RADIOS = [
-  { driver: "L. Norris", text: "“Passo buono, la macchina risponde bene in curva 4.”", time: "Giro 32" },
-  { driver: "M. Verstappen", text: "“Gomme un po' in calo, quanto manca alla sosta?”", time: "Giro 29" },
-  { driver: "K. Antonelli", text: "“Ok box, capito, entro questo giro.”", time: "Giro 27" },
-  { driver: "C. Leclerc", text: "“Giro veloce, ottimo lavoro squadra!”", time: "Giro 41" },
-];
-
-
 
 const LEAGUE = [
   { pos: 1, name: "M. Bianchi", nick: "@bianchi_bj", team: "Scuderia BlackJack", pts: "1.284 pt", color: "#2E9E8F" },
@@ -1562,26 +1569,36 @@ function FlagBanner({ st, style }) {
 const liveCounter = st => isRaceType(st.type) ? `GIRO ${st.lap}/${st.totalLaps}` : `${st.segment ? st.segment + " · " : ""}${st.waiting ? "IN ATTESA" : st.clockText}`;
 
 // Riquadro in cima alla pagina Race durante una sessione: nome, giro o cronometro, bandiera e mappa.
-// demo: sessione della "Prova diretta" del Pannello Admin (simulata, solo sul telefono dell'admin): scritta DEMO.
-function LiveCard({ race, st, track, demo, onExpand }) {
+// source "openf1": la sessione finita, rivista con i dati veri di OpenF1 (parte dalla fine; si può rivedere dall'inizio).
+// source "demo": la "Prova diretta" del Pannello Admin (simulata, solo sul telefono dell'admin), con la scritta DEMO.
+function LiveCard({ race, st, track, source, onExpand, replay }) {
+  const demo = source === "demo", of1 = source === "openf1";
   const lastMsg = st.messages[st.messages.length - 1];
+  const rbtn = { padding: "7px 11px", borderRadius: 9, background: "rgba(255,255,255,.07)", border: `1px solid ${C.border}`, fontFamily: F_HEAD, fontWeight: 800, fontSize: 11.5, color: C.text, whiteSpace: "nowrap" };
   return (
-    <div style={{ margin: "4px 16px 14px", padding: "14px 14px 12px", borderRadius: 18, background: C.card, border: `1px solid ${C.border}` }}>
+    <div data-live-card="" data-live-source={source} style={{ margin: "4px 16px 14px", padding: "14px 14px 12px", borderRadius: 18, background: C.card, border: `1px solid ${C.border}` }}>
       <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
-        <span style={{ width: 7, height: 7, borderRadius: "50%", background: C.accent }} />
-        <span style={{ fontFamily: F_BODY, fontWeight: 700, fontSize: 11, color: C.accent, letterSpacing: 1.2 }}>IN DIRETTA · {sessionName(st.type)}</span>
+        <span style={{ width: 7, height: 7, borderRadius: "50%", background: of1 ? C.gold : C.accent }} />
+        <span style={{ fontFamily: F_BODY, fontWeight: 700, fontSize: 11, color: of1 ? C.gold : C.accent, letterSpacing: 1.2 }}>{of1 ? "SESSIONE RIVISTA" : "IN DIRETTA"} · {sessionName(st.type)}</span>
         {demo && <span data-demo="" title="Prova diretta: sessione simulata, la vedi solo tu" style={{ padding: "2px 7px", borderRadius: 6, background: C.gold, fontFamily: F_HEAD, fontWeight: 900, fontSize: 10, letterSpacing: .8, color: "#141414" }}>DEMO</span>}
         <div style={{ flexGrow: 1 }} />
         <span style={{ fontFamily: F_HEAD, fontWeight: 800, fontSize: 13, color: C.text, fontVariantNumeric: "tabular-nums" }}>{liveCounter(st)}</span>
       </div>
       <h1 style={{ fontFamily: F_HEAD, fontWeight: 900, fontStyle: "italic", fontSize: 20, color: C.text, margin: "0 0 2px" }}>{race.name}</h1>
-      <span style={{ fontFamily: F_BODY, fontSize: 12, color: C.muted }}>{race.circuit}{demo ? " · sessione simulata, la vedi solo tu" : ""}</span>
+      <span style={{ fontFamily: F_BODY, fontSize: 12, color: C.muted }}>{race.circuit}{demo ? " · sessione simulata, la vedi solo tu" : of1 ? " · " + OF1_SRC : ""}</span>
       <FlagBanner st={st} style={{ marginTop: 10 }} />
       <div data-live-card-map="" style={{ position: "relative", marginTop: 8, borderRadius: 12, background: "#0D0D10", padding: "6px 4px" }}>
         <LiveMap track={track} st={st} />
         <Watermark style={{ left: 10, right: "auto", bottom: 8 }} />
         <button className="press" onClick={onExpand} style={{ position: "absolute", top: 6, right: 6, padding: "6px 10px", borderRadius: 8, background: "rgba(24,24,28,.9)", border: `1px solid ${C.border}`, fontFamily: F_BODY, fontWeight: 700, fontSize: 11, color: C.text }}>Ingrandisci</button>
       </div>
+      {of1 && replay && (
+        <div data-replay-bar="" style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 8 }}>
+          <button className="press" data-replay="play" onClick={replay.onPlay} style={rbtn}>{replay.playing ? "↺ Di nuovo dall'inizio" : "▶ Rivedi dall'inizio"}</button>
+          <button className="press" data-replay="x10" aria-label={`Velocità ×${replay.speed}: tocca per cambiarla`} onClick={replay.onSpeed} style={rbtn}>×{replay.speed}</button>
+          <button className="press" data-replay="fine" onClick={replay.onEnd} style={{ ...rbtn, marginLeft: "auto" }}>Fine ⏭</button>
+        </div>
+      )}
       <div style={{ display: "flex", gap: 12, alignItems: "center", marginTop: 8, fontFamily: F_BODY, fontSize: 10.5, color: C.dim }}>
         {SECTOR_COLORS.map((c, i) => <span key={i} style={{ display: "inline-flex", alignItems: "center", gap: 5 }}><span style={{ width: 14, height: 3, borderRadius: 2, background: c }} />S{i + 1}</span>)}
         <span style={{ marginLeft: "auto" }}>Settori stimati</span>
@@ -1680,7 +1697,7 @@ function SectorCells({ c, onTelemetry, compact = false, tiny = false, style }) {
             </span>
             <span style={{ display: "flex", justifyContent: compact ? "flex-end" : "space-between", gap: 4, fontFamily: F_BODY, fontSize: tiny ? 9 : compact ? 9.5 : 10.5, lineHeight: tiny ? 1.1 : undefined, color: C.dim }}>
               {!compact && <span>S{si + 1}</span>}
-              <span style={{ fontWeight: 700, color: secColor(sec), opacity: cur ? 1 : .6, fontVariantNumeric: "tabular-nums" }}>{sec ? sec.t.toFixed(compact ? 2 : 3) : "—"}</span>
+              <span style={{ fontWeight: 700, color: secColor(sec), opacity: cur ? 1 : .6, fontVariantNumeric: "tabular-nums" }}>{sec && sec.t != null ? sec.t.toFixed(compact ? 2 : 3) : "—"}</span>
             </span>
           </>
         );
@@ -1742,8 +1759,9 @@ function TimingTable({ st, onTelemetry, onSelectDriver, onLapTimes }) {
 
 // Messaggi della direzione gara, dal più recente.
 function RaceControlList({ messages }) {
-  const tone = m => /RITIRATO|SQUALIFICA/.test(m.text) ? "#FF5A5F" : /ROSSA/.test(m.text) ? FLAG_UI.red.color : /GIALLA|SAFETY CAR/.test(m.text) ? FLAG_UI.yellow.color : /PENALITÀ/.test(m.text) ? "#FF8A1F"
-    : /INVESTIGA|INCIDENTE/.test(m.text) ? "#FFB35C" : /DRS|BLU/.test(m.text) ? TIMING.pit : /LIBERA|VERDE|RIPRESA/.test(m.text) ? TIMING.green : C.dim;
+  // Colori dei messaggi: quelli del simulatore in italiano, quelli veri di OpenF1 in inglese (come li scrive la FIA).
+  const tone = m => /RITIRATO|SQUALIFICA|RETIRED|DISQUALIFIED/.test(m.text) ? "#FF5A5F" : /ROSSA|RED FLAG/.test(m.text) ? FLAG_UI.red.color : /GIALLA|SAFETY CAR|YELLOW/.test(m.text) ? FLAG_UI.yellow.color : /PENALITÀ|PENALTY/.test(m.text) ? "#FF8A1F"
+    : /INVESTIGA|INCIDENTE|INCIDENT|NOTED/.test(m.text) ? "#FFB35C" : /DRS|BLU|BLUE/.test(m.text) ? TIMING.pit : /LIBERA|VERDE|RIPRESA|CLEAR|GREEN/.test(m.text) ? TIMING.green : C.dim;
   const list = messages.slice().reverse();
   return (
     <div style={{ margin: "0 16px 16px", borderRadius: 18, background: C.card, border: `1px solid ${C.border}`, overflow: "hidden" }}>
@@ -1761,43 +1779,7 @@ function RaceControlList({ messages }) {
   );
 }
 
-// Radar della pioggia sopra al circuito (celle simulate che si muovono col vento).
-function RadarCanvas({ track, cells, windDeg }) {
-  useEffect(() => {
-    let raf = 0, t0 = performance.now();
-    const still = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-    const draw = now => {
-      const cv = document.getElementById("radarCanvas");
-      if (cv && cv.getContext) {
-        const ctx = cv.getContext("2d"), W = cv.width, H = cv.height, k = (now - t0) / 1000;
-        ctx.fillStyle = "#0D1016"; ctx.fillRect(0, 0, W, H);
-        ctx.strokeStyle = "rgba(255,255,255,.05)"; ctx.lineWidth = 1;
-        for (let x = 0; x < W; x += W / 8) { ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, H); ctx.stroke(); }
-        for (let y = 0; y < H; y += H / 5) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke(); }
-        cells.forEach(c => {
-          const x = (((c.x + c.vx * k) % 1.8 + 1.8) % 1.8 - 0.4) * W, y = (((c.y + c.vy * k) % 1.4 + 1.4) % 1.4 - 0.2) * H, rad = c.r * W;
-          const g = ctx.createRadialGradient(x, y, 0, x, y, rad);
-          const col = c.i > .75 ? "232,18,29" : c.i > .5 ? "242,194,48" : c.i > .3 ? "62,214,107" : "76,141,255";
-          g.addColorStop(0, `rgba(${col},.55)`); g.addColorStop(.6, `rgba(${col},.22)`); g.addColorStop(1, `rgba(${col},0)`);
-          ctx.fillStyle = g; ctx.beginPath(); ctx.arc(x, y, rad, 0, Math.PI * 2); ctx.fill();
-        });
-        if (track && window.Path2D) {
-          ctx.save(); ctx.translate(W * .12, H * .12); ctx.scale(W * .76 / 1600, H * .76 / 900);
-          ctx.strokeStyle = "rgba(255,255,255,.85)"; ctx.lineWidth = 14; ctx.lineJoin = "round"; ctx.stroke(new Path2D(track.d)); ctx.restore();
-        }
-        // freccia del vento
-        ctx.save(); ctx.translate(W - 34, 34); ctx.rotate(((windDeg || 0) + 180) * Math.PI / 180);
-        ctx.strokeStyle = "rgba(255,255,255,.8)"; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(0, 14); ctx.lineTo(0, -14); ctx.lineTo(-7, -5); ctx.moveTo(0, -14); ctx.lineTo(7, -5); ctx.stroke(); ctx.restore();
-      }
-      if (!still) raf = requestAnimationFrame(draw);
-    };
-    raf = requestAnimationFrame(draw);
-    return () => cancelAnimationFrame(raf);
-  }, [track ? track.name : "", cells.length, windDeg]);
-  return <canvas id="radarCanvas" aria-label="Radar meteo" role="img" width={716} height={400} style={{ display: "block", width: "100%", height: "auto", borderRadius: 12 }} />;
-}
-
-// Icone del cielo per le previsioni (sole, luna, nuvole, pioggia), disegnate in SVG.
+// Icone del cielo (sole, luna, nuvole, pioggia), disegnate in SVG.
 const CLOUD_BIG = "M7 18A3.5 3.5 0 0 1 6.2 11.1A5 5 0 0 1 15.8 10.2A4 4 0 0 1 17 18Z";
 const CLOUD_LOW = "M9 20A3 3 0 0 1 8.4 14.1A4.2 4.2 0 0 1 16.4 13.3A3.4 3.4 0 0 1 17.4 20Z";
 const CLOUD_HIGH = "M7 15A3.5 3.5 0 0 1 6.2 8.1A5 5 0 0 1 15.8 7.2A4 4 0 0 1 17 15Z";
@@ -1816,6 +1798,17 @@ function SkyIcon({ kind, size = 22, mono = false, bg = C.card }) {
 }
 
 const WX_WORD = v => v === "rain" ? "Pioggia" : "Asciutto";
+// L'esito del pronostico arriva dal meteo vero di OpenF1 della sessione, quando è finita (D09).
+const WX_LATER = "Esito a fine sessione, con i dati veri.";
+const WX_EMPTY = "Il meteo della sessione arriva con i dati veri a fine sessione.";
+// Meteo di adesso della sessione che si vede: vero (OpenF1) nella sessione rivista, simulato nella prova DEMO; null senza
+// sessione o se OpenF1 non ha il meteo.
+function sessionWeather(live, st, race) {
+  if (!live || !st) return null;
+  if (isOf1Live(live)) return live.sim.weather();
+  const w = race ? weekendWeather(race, st.t, live.raceId === race.id ? live.type : null) : null;
+  return w ? w.current : null;
+}
 
 // Pronostico meteo di una sessione: si indovina se pioverà, +2 punti FantaF1 se giusto.
 // Si cambia fino alla fine della sessione di due prima (FP2: fine FP1; FP1: fino all'inizio), mai durante una sessione.
@@ -1832,8 +1825,9 @@ function WeatherGuess({ s, guess, result, lock, onGuess }) {
   const dl = lock && lock.deadline;
   const until = dl ? `${dl.when === "end" ? "fino alla fine" : "fino all'inizio"} ${SESSION_DEL[dl.key] || ""}${dl.at ? ` (${fmtRome(dl.at)}, ora italiana)` : ""}` : "";
   const mine = guess ? <> Il tuo pronostico: <b style={{ color: C.text }}>{WX_WORD(guess)}</b>.</> : "";
-  if (lock && lock.locked) return <p data-wx-state="locked" style={line}>Pronostico chiuso: si poteva fare {until}.{mine}</p>;
-  if (lock && lock.paused) return <p data-wx-state="paused" role="status" style={line}>In pausa: {sessionLabelIt(lock.liveKey).toLowerCase()} in corso. Potrai cambiarlo a fine sessione, {until}.{mine}</p>;
+  const later = guess ? <> {WX_LATER}</> : "";
+  if (lock && lock.locked) return <p data-wx-state="locked" style={line}>Pronostico chiuso: si poteva fare {until}.{mine}{later}</p>;
+  if (lock && lock.paused) return <p data-wx-state="paused" role="status" style={line}>In pausa: {sessionLabelIt(lock.liveKey).toLowerCase()} in corso. Potrai cambiarlo a fine sessione, {until}.{mine}{later}</p>;
   if (asking) return (
     <div>
       <p style={{ ...line, margin: "0 0 8px" }}>Pioverà durante la sessione?</p>
@@ -1854,6 +1848,7 @@ function WeatherGuess({ s, guess, result, lock, onGuess }) {
         <button className="press" onClick={() => setAsking(true)} style={small}>Cambia</button>
       </div>
       {hint}
+      <p style={{ ...line, fontSize: 11, color: C.dim, margin: "4px 0 0" }}>{WX_LATER}</p>
     </div>
   );
   return (
@@ -1867,73 +1862,62 @@ function WeatherGuess({ s, guess, result, lock, onGuess }) {
   );
 }
 
-// Meteo del weekend: fila grigia di caselle (una per sessione), condizioni attuali e radar.
-function WeatherPanel({ race, st, track, live, guesses = {}, results = {}, onGuess }) {
+// Meteo (D08-D10): i valori veri della sessione (OpenF1; nella prova DEMO quelli simulati) e il pronostico pioggia di ogni
+// sessione del weekend, con l'esito dal meteo vero a fine sessione. Niente previsioni né radar inventati.
+function WeatherPanel({ race, st, live, guesses = {}, results = {}, onGuess }) {
   const [sel, setSel] = useState(null);
   if (!race) return null;
-  const liveKey = live && live.raceId === race.id ? live.type : null;
-  const w = weekendWeather(race, st ? st.t : 0, liveKey);
+  const liveKey = live && live.raceId === race.id && !isOf1Live(live) ? live.type : null;   // la sessione rivista è già finita
+  const w = weekendWeather(race, 0, liveKey);   // solo le sessioni del weekend e i loro orari
   const gk = k => race.id + ":" + k;
   const ended = Object.fromEntries(w.sessions.map(x => [x.key, !!results[gk(x.key)]]));
   const lockOf = x => BtLogic.wxLock({ sessions: w.sessions, idx: w.sessions.indexOf(x), now: nowMs(), ended, liveKey, hasResult: !!results[gk(x.key)] });
   const s = sel ? w.sessions.find(x => x.key === sel) : null;
-  const rainMax = Math.max(...w.sessions.map(s => s.rainPct));
-  const cells = LiveSim.radarCells({ seed: race.round || 1, rainChance: rainMax, windDeg: w.current.windDir });
+  const now = sessionWeather(live, st, race), demo = isDemoLive(live);
   const tile = (label, value) => (
     <div style={{ padding: "10px 8px", borderRadius: 12, background: "rgba(255,255,255,.04)", textAlign: "center" }}>
       <div style={{ fontFamily: F_HEAD, fontWeight: 800, fontSize: 16, color: C.text }}>{value}</div>
       <div style={{ fontFamily: F_BODY, fontWeight: 600, fontSize: 9.5, letterSpacing: .6, color: C.dim, marginTop: 2 }}>{label}</div>
     </div>
   );
+  const num = (v, d = 0) => (v == null || !isFinite(v) ? "—" : Number(v).toFixed(d));
   return (
     <div style={{ margin: "0 16px 16px", display: "flex", flexDirection: "column", gap: 12 }}>
+      {now ? (
+        <div data-wx-now="" style={{ padding: 14, borderRadius: 18, background: C.card, border: `1px solid ${C.border}` }}>
+          <Eyebrow>{demo ? "ADESSO IN PISTA · DEMO" : "METEO DELLA SESSIONE · DATI OPENF1"}</Eyebrow>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 6 }}>
+            {tile("ARIA", num(now.air, 1) + "°")}{tile("PISTA", num(now.track, 1) + "°")}{tile("UMIDITÀ", num(now.humidity) + "%")}{tile("VENTO", num(now.wind) + " km/h")}
+          </div>
+          <p style={{ margin: "8px 2px 0", fontFamily: F_BODY, fontSize: 11.5, color: C.muted }}>{now.rain ? "Pioggia sul circuito." : "Nessuna pioggia sul circuito."}</p>
+        </div>
+      ) : (
+        <p data-wx-empty="" style={{ margin: 0, padding: 14, borderRadius: 18, background: C.card, border: `1px solid ${C.border}`, fontFamily: F_BODY, fontSize: 12.5, color: C.muted, lineHeight: 1.5 }}>{WX_EMPTY}</p>
+      )}
       <div style={{ padding: "12px 10px 10px", borderRadius: 18, background: C.card, border: `1px solid ${C.border}` }}>
-        <div style={{ padding: "0 4px" }}><Eyebrow>PREVISIONI DEL WEEKEND</Eyebrow></div>
-        <div role="group" aria-label="Previsioni per sessione" style={{ display: "flex", gap: 6 }}>
+        <div style={{ padding: "0 4px" }}><Eyebrow>PRONOSTICO METEO DEL WEEKEND</Eyebrow></div>
+        <div role="group" aria-label="Pronostico per sessione" style={{ display: "flex", gap: 6 }}>
           {w.sessions.map(x => {
             const on = sel === x.key, g = guesses[gk(x.key)], res = results[gk(x.key)];
             return (
-              <button key={x.key} data-weather-box={x.key} className="press" aria-pressed={on} aria-label={`${x.label}: ${x.air} gradi, pioggia ${x.rainPct}%`} onClick={() => setSel(on ? null : x.key)}
-                style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", alignItems: "center", gap: 3, padding: "8px 2px 7px", borderRadius: 12, background: on ? "rgba(255,255,255,.13)" : "rgba(255,255,255,.05)", border: `1px solid ${on ? "rgba(255,255,255,.32)" : C.border}`, position: "relative" }}>
+              <button key={x.key} data-weather-box={x.key} className="press" aria-pressed={on} aria-label={`${x.label}${g ? ": pronostico " + WX_WORD(g) : ""}${res ? ", com'è andata: " + WX_WORD(res) : ""}`} onClick={() => setSel(on ? null : x.key)}
+                style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", alignItems: "center", gap: 4, padding: "8px 2px 7px", borderRadius: 12, background: on ? "rgba(255,255,255,.13)" : "rgba(255,255,255,.05)", border: `1px solid ${on ? "rgba(255,255,255,.32)" : C.border}`, position: "relative" }}>
                 <span style={{ fontFamily: F_HEAD, fontWeight: 800, fontSize: 10.5, letterSpacing: .4, color: on ? C.text : C.muted }}>{WX_SHORT[x.key] || x.key}</span>
-                <SkyIcon kind={x.icon} size={18} mono bg={on ? "#37373B" : "#232327"} />
-                <span style={{ fontFamily: F_HEAD, fontWeight: 800, fontSize: 13, color: C.text }}>{x.air}°</span>
-                <span style={{ fontFamily: F_BODY, fontWeight: 600, fontSize: 10, color: C.dim }}>{x.rainPct}%</span>
+                {g ? <SkyIcon kind={g === "rain" ? "rain" : "sun"} size={18} mono bg={on ? "#37373B" : "#232327"} /> : <span aria-hidden="true" style={{ height: 18, fontFamily: F_HEAD, fontWeight: 800, fontSize: 13, color: C.dim }}>?</span>}
                 {(g || res) && <span aria-hidden="true" style={{ position: "absolute", top: 5, right: 5, width: 6, height: 6, borderRadius: "50%", background: res ? (g === res ? TIMING.green : C.dim) : C.gold }} />}
               </button>
             );
           })}
         </div>
-        {s && (
+        {s ? (
           <div style={{ marginTop: 10, padding: "12px 12px", borderRadius: 14, background: "rgba(255,255,255,.04)" }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
-              <SkyIcon kind={s.icon} size={22} bg="#1F1F23" />
+            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
               <span style={{ flex: 1, fontFamily: F_HEAD, fontWeight: 800, fontSize: 14.5, color: C.text }}>{s.label}</span>
-              <span style={{ fontFamily: F_BODY, fontSize: 11.5, color: C.dim }}>ore {s.time} locali</span>
+              <span style={{ fontFamily: F_BODY, fontSize: 11.5, color: C.dim }}>{s.day ? s.day + " · " : ""}ore {s.time} locali</span>
             </div>
-            <p style={{ margin: "0 0 10px", fontFamily: F_BODY, fontSize: 12.5, color: C.muted, lineHeight: 1.55 }}>{s.text}</p>
             <WeatherGuess key={s.key} s={s} guess={guesses[gk(s.key)]} result={results[gk(s.key)]} lock={lockOf(s)} onGuess={v => onGuess && onGuess(race, s.key, v)} />
           </div>
-        )}
-      </div>
-      {st && (
-        <div style={{ padding: 14, borderRadius: 18, background: C.card, border: `1px solid ${C.border}` }}>
-          <Eyebrow>ADESSO IN PISTA</Eyebrow>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 6 }}>
-            {tile("ARIA", w.current.air.toFixed(1) + "°")}{tile("PISTA", w.current.track.toFixed(1) + "°")}{tile("UMIDITÀ", w.current.humidity + "%")}{tile("VENTO", w.current.wind.toFixed(0) + " km/h")}
-          </div>
-          <p style={{ margin: "8px 2px 0", fontFamily: F_BODY, fontSize: 11.5, color: C.muted }}>{w.current.rain ? "Pioggia in corso sul circuito." : "Nessuna pioggia in questo momento."}</p>
-        </div>
-      )}
-      <div style={{ padding: 14, borderRadius: 18, background: C.card, border: `1px solid ${C.border}` }}>
-        <div style={{ display: "flex", alignItems: "baseline", marginBottom: 8 }}>
-          <Eyebrow>RADAR · {race.circuit.toUpperCase()}</Eyebrow>
-          <span style={{ marginLeft: "auto", fontFamily: F_BODY, fontSize: 10.5, color: C.dim }}>demo</span>
-        </div>
-        <RadarCanvas track={track} cells={cells} windDeg={w.current.windDir} />
-        <div style={{ display: "flex", gap: 12, marginTop: 8, fontFamily: F_BODY, fontSize: 10.5, color: C.dim }}>
-          {[["Debole", "#4C8DFF"], ["Moderata", "#3ED66B"], ["Forte", "#F2C230"], ["Molto forte", "#E8121D"]].map(([l, c]) => <span key={l} style={{ display: "inline-flex", alignItems: "center", gap: 5 }}><span style={{ width: 9, height: 9, borderRadius: "50%", background: c }} />{l}</span>)}
-        </div>
+        ) : <p style={{ margin: "8px 4px 0", fontFamily: F_BODY, fontSize: 11, color: C.dim }}>Tocca una sessione: pioverà? +2 punti FantaF1 se indovini.</p>}
       </div>
     </div>
   );
@@ -1980,18 +1964,54 @@ function TelChart({ label, unit, tel, cmp, field, yMin, yMax, kind, range, hover
 }
 
 // Telemetria di un giro (o di un settore): velocità, acceleratore, freno, marcia; confronto col giro più veloce.
+// Telemetria di un giro: nella prova DEMO subito (simulata); con OpenF1 si chiede car_data del giro (una volta, poi resta
+// in memoria). delay: si aspetta prima di chiederla (Second Screen: il giro cambia di continuo mentre la sessione scorre).
+function useLapTelemetry(live, carId, lapNo, { delay = 0 } = {}) {
+  const ok = !!(live && carId && lapNo);
+  const tel = ok ? live.sim.telemetry(carId, lapNo) : null;
+  const canAsk = ok && !tel && typeof live.sim.telemetryAsync === "function";
+  const key = ok ? `${live.sessionKey || live.raceId}:${carId}:${lapNo}` : null;
+  const [ask, setAsk] = useState({ key: null, done: false });
+  useEffect(() => {
+    if (!canAsk) return undefined;
+    let alive = true;
+    setAsk({ key, done: false });
+    const tm = setTimeout(() => {
+      live.sim.telemetryAsync(carId, lapNo).then(() => { if (alive) setAsk({ key, done: true }); }, () => { if (alive) setAsk({ key, done: true }); });
+    }, delay);
+    return () => { alive = false; clearTimeout(tm); };
+  }, [key, canAsk]);
+  return { tel, loading: canAsk && !(ask.key === key && ask.done), missing: ok && !tel && (!canAsk || (ask.key === key && ask.done)) };
+}
+const TEL_LOADING = "Caricamento della telemetria…", TEL_MISSING = "Telemetria non disponibile per questo giro";
 function TelemetryModal({ live, st, carId, lapNo, sector, onClose }) {
   const [zoom, setZoom] = useState(sector || 0);
   const [hover, setHover] = useState(null);
-  const tel = live.sim.telemetry(carId, lapNo);
   const d = driverById(carId);
-  if (!tel) return null;
-  const bl = st.bestLap && !(st.bestLap.id === carId && st.bestLap.lapNo === lapNo) ? live.sim.telemetry(st.bestLap.id, st.bestLap.lapNo) : null;
+  const T = useLapTelemetry(live, carId, lapNo);
+  const blOf = st.bestLap && !(st.bestLap.id === carId && st.bestLap.lapNo === lapNo) ? st.bestLap : null;
+  const B = useLapTelemetry(live, blOf && blOf.id, blOf && blOf.lapNo);
+  const tel = T.tel, bl = B.tel;
+  const car = st.cars.find(c => c.id === carId), code = tel ? tel.code : car ? car.code : carId;
+  const closeBtn = <button className="press" aria-label="Chiudi telemetria" onClick={onClose} style={{ width: 32, height: 32, borderRadius: "50%", background: "rgba(255,255,255,.08)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}><Icon name="close" size={13} sw={2.2} /></button>;
+  if (!tel) return (
+    <div style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,.78)", zIndex: 640, display: "flex", alignItems: "flex-end" }} onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
+      <div data-telemetry="" style={{ background: C.card, borderRadius: "24px 24px 0 0", width: "100%", padding: "16px 16px 26px" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          {d && <Headshot driver={d} size={34} />}
+          <h2 style={{ flex: 1, minWidth: 0, margin: 0, fontFamily: F_HEAD, fontWeight: 900, fontStyle: "italic", fontSize: 16, color: C.text }}>TELEMETRIA · {code} · GIRO {lapNo}</h2>
+          {closeBtn}
+        </div>
+        <p role="status" data-tel-state={T.loading ? "loading" : "missing"} style={{ margin: "16px 2px 4px", fontFamily: F_BODY, fontSize: 13, color: C.muted }}>{T.loading ? TEL_LOADING : TEL_MISSING}</p>
+      </div>
+    </div>
+  );
   const L = live.track.lenM, bounds = [0, tel.sectorDist[0], tel.sectorDist[1], L];
   const range = zoom ? [bounds[zoom - 1], bounds[zoom]] : [0, L];
   const color = (d && d.color) || C.accent;
   const hv = hover != null ? { d: tel.dist[hover], v: tel.speed[hover], thr: tel.throttle[hover], br: tel.brake[hover], g: tel.gear[hover], rpm: tel.rpm[hover] } : null;
-  const cmpAt = bl && hover != null ? bl.speed[Math.min(hover, bl.speed.length - 1)] : null;
+  // Velocità del giro più veloce nello stesso punto della pista (i campioni dei due giri non sono gli stessi).
+  const cmpAt = bl && hover != null ? bl.speed[bl.dist.reduce((k, dd, i) => Math.abs(dd - tel.dist[hover]) < Math.abs(bl.dist[k] - tel.dist[hover]) ? i : k, 0)] : null;
   const inRange = (arr) => arr.filter((_, i) => tel.dist[i] >= range[0] && tel.dist[i] <= range[1]);
   const vIn = inRange(tel.speed), top = Math.max(...vIn), low = Math.min(...vIn);
   const full = Math.round(inRange(tel.throttle).filter(x => x >= 99).length / Math.max(1, vIn.length) * 100);
@@ -1999,14 +2019,14 @@ function TelemetryModal({ live, st, carId, lapNo, sector, onClose }) {
   const common = { tel, range, hover, onHover: setHover, color };
   return (
     <div style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,.78)", zIndex: 640, display: "flex", alignItems: "flex-end" }} onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
-      <div className="scrollcol" style={{ background: C.card, borderRadius: "24px 24px 0 0", width: "100%", maxHeight: "94%", padding: "16px 16px 22px" }}>
+      <div data-telemetry="" className="scrollcol" style={{ background: C.card, borderRadius: "24px 24px 0 0", width: "100%", maxHeight: "94%", padding: "16px 16px 22px" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
           {d && <Headshot driver={d} size={34} />}
           <div style={{ flex: 1, minWidth: 0 }}>
             <h2 style={{ margin: 0, fontFamily: F_HEAD, fontWeight: 900, fontStyle: "italic", fontSize: 16, color: C.text }}>TELEMETRIA · {tel.code} · GIRO {lapNo}{zoom ? ` · SETTORE ${zoom}` : ""}</h2>
-            <span style={{ fontFamily: F_BODY, fontSize: 11.5, color: C.muted, fontVariantNumeric: "tabular-nums" }}>{LiveSim.fmtLap(tel.time)} · S1 {tel.sectors[0].t.toFixed(3)} · S2 {tel.sectors[1].t.toFixed(3)} · S3 {tel.sectors[2].t.toFixed(3)}</span>
+            <span style={{ fontFamily: F_BODY, fontSize: 11.5, color: C.muted, fontVariantNumeric: "tabular-nums" }}>{LiveSim.fmtLap(tel.time)} · {[0, 1, 2].map(k => `S${k + 1} ${tel.sectors[k] && tel.sectors[k].t != null ? tel.sectors[k].t.toFixed(3) : "—"}`).join(" · ")}</span>
           </div>
-          <button className="press" aria-label="Chiudi telemetria" onClick={onClose} style={{ width: 32, height: 32, borderRadius: "50%", background: "rgba(255,255,255,.08)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}><Icon name="close" size={13} sw={2.2} /></button>
+          {closeBtn}
         </div>
         <div style={{ display: "flex", gap: 6, flexWrap: "wrap", margin: "12px 0 10px" }}>{chip(0, "Giro intero")}{chip(1, "Settore 1")}{chip(2, "Settore 2")}{chip(3, "Settore 3")}</div>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 6, marginBottom: 10 }}>
@@ -2030,7 +2050,7 @@ function TelemetryModal({ live, st, carId, lapNo, sector, onClose }) {
         <TelChart {...common} label="Acceleratore" unit="%" field="throttle" cmp={null} yMin={0} yMax={100} kind="area" ticks={[0, 50, 100]} />
         <TelChart {...common} label="Freno" unit="acceso/spento" field="brake" cmp={null} yMin={0} yMax={1} kind="brake" ticks={[]} />
         <TelChart {...common} label="Marcia" unit="1–8" field="gear" cmp={bl} yMin={1} yMax={8} kind="gear" ticks={[2, 4, 6, 8]} />
-        <p style={{ margin: "8px 2px 0", fontFamily: F_BODY, fontSize: 10.5, color: C.dim, lineHeight: 1.5 }}>Distanza da {Math.round(range[0])} a {Math.round(range[1])} m · telemetria demo, nell'app vera arriverà dai dati ufficiali (OpenF1).</p>
+        <p style={{ margin: "8px 2px 0", fontFamily: F_BODY, fontSize: 10.5, color: C.dim, lineHeight: 1.5 }}>Distanza da {Math.round(range[0])} a {Math.round(range[1])} m · {isOf1Live(live) ? "telemetria vera del giro: dati OpenF1 (car_data)." : "telemetria simulata della prova DEMO."}</p>
       </div>
     </div>
   );
@@ -2072,13 +2092,13 @@ function LapTimesModal({ live, st, carId, onOpenLap, onClose }) {
                   <span style={{ marginLeft: "auto", display: "inline-flex" }}><Icon name="chevron" size={13} color={C.dim} /></span>
                 </span>
                 <span style={{ display: "flex", gap: 12, marginTop: 4, paddingLeft: 60, fontFamily: F_BODY, fontSize: 10.5, color: C.dim, fontVariantNumeric: "tabular-nums" }}>
-                  {l.sectors.map((x, k) => <span key={k}>S{k + 1} <b style={{ color: secColor(x), fontWeight: 700 }}>{x.t.toFixed(3)}</b></span>)}
+                  {l.sectors.map((x, k) => <span key={k}>S{k + 1} <b style={{ color: secColor(x), fontWeight: 700 }}>{x && x.t != null ? x.t.toFixed(3) : "—"}</b></span>)}
                 </span>
               </button>
             );
           })}
         </div>
-        <p style={{ margin: "10px 2px 0", fontFamily: F_BODY, fontSize: 10.5, color: C.dim }}>Tocca un giro per vederne la telemetria · dati demo.</p>
+        <p style={{ margin: "10px 2px 0", fontFamily: F_BODY, fontSize: 10.5, color: C.dim }}>Tocca un giro per vederne la telemetria · {isOf1Live(live) ? "dati OpenF1" : "dati simulati della prova DEMO"}.</p>
       </div>
     </div>
   );
@@ -2093,7 +2113,7 @@ function LiveMapView({ race, live, st, onClose }) {
         <button className="press" aria-label="Chiudi" onClick={onClose} style={{ width: 38, height: 38, borderRadius: "50%", background: C.card, border: `1px solid ${C.border}`, display: "flex", alignItems: "center", justifyContent: "center" }}><Icon name="close" size={15} sw={2.2} /></button>
         <div style={{ flex: 1, minWidth: 0 }}>
           <h1 style={{ fontFamily: F_HEAD, fontWeight: 900, fontStyle: "italic", fontSize: 17, color: C.text, margin: 0 }}>{race ? race.name : "TRACCIATO LIVE"}</h1>
-          <span style={{ fontFamily: F_BODY, fontSize: 11, color: C.dim }}>{st ? `${sessionName(st.type)} · ${liveCounter(st)} · dati demo` : "Nessuna sessione in diretta"}</span>
+          <span style={{ fontFamily: F_BODY, fontSize: 11, color: C.dim }}>{st ? `${sessionName(st.type)} · ${liveCounter(st)} · ${isOf1Live(live) ? "dati OpenF1" : "prova DEMO"}` : "Nessuna sessione in diretta"}</span>
         </div>
       </div>
       <div className="scrollcol" style={{ flex: 1, padding: "0 16px 16px" }}>
@@ -2134,6 +2154,11 @@ const INS = { top: "#121218", body: "#0C0C10", band: C.accent, bandInk: "#FFFFFF
 const surname = id => { const d = driverById(id); return (d ? d.full.split(" ").slice(-1)[0] : id).toUpperCase(); };
 const teamColorOf = id => { const d = driverById(id), t = d && teamById(d.teamId); return t ? t.color : "#8E8E96"; };
 const insightCtx = (live, st, race) => ({ st, lapsOf: id => live.sim.laps(id), telemetry: (id, n) => live.sim.telemetry(id, n), lenM: live.track.lenM, lapTime: live.track.lapTime, teamOf: TEAM_OF, seed: (race && race.round) || 1 });
+// Grafiche che si possono fare (D17). Con i dati veri di OpenF1 niente "Pagella" (i voti per tipo di curva sono una stima
+// con una parte a caso, cioè numeri inventati) e la frenata solo se la telemetria dell'ultimo giro dei primi due è già
+// arrivata (OpenF1 la dà giro per giro, a richiesta).
+const brakingReady = (live, st) => { const cs = st.cars.filter(c => !c.dnf && c.last).slice(0, 2); return cs.length === 2 && cs.every(c => !!live.sim.telemetry(c.id, c.last.lapNo)); };
+const insightTypesOf = (live, st) => (isOf1Live(live) ? INSIGHT_TYPES.filter(([t]) => t !== "vettura" && (t !== "frenata" || brakingReady(live, st))) : INSIGHT_TYPES);
 
 // Cornice comune: barra del titolo, marchio B&T Insights, fascia rossa B&T col sottotitolo.
 function InsightShell({ type, title, sub, children, compact = false, popup = false, onClose }) {
@@ -2277,16 +2302,17 @@ function InsightBanner({ type, live, st, race, variant = "full", popup = false, 
 
 // Nella pagina Race, durante la gara: le cinque grafiche, una alla volta.
 function InsightsCard({ live, st, race }) {
-  const [type, setType] = useState("sorpasso");
+  const [type0, setType] = useState("sorpasso");
   const [kind, setKind] = useState(null);
+  const types = insightTypesOf(live, st), type = types.some(([t]) => t === type0) ? type0 : types[0][0], of1 = isOf1Live(live);
   return (
     <div data-insights="" style={{ margin: "0 16px 14px", padding: "12px 12px 12px", borderRadius: 18, background: C.card, border: `1px solid ${C.border}` }}>
       <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
         <span style={{ fontFamily: F_HEAD, fontWeight: 900, fontStyle: "italic", fontSize: 14, color: C.text }}><span style={{ padding: "1px 6px", borderRadius: 5, background: C.accent, color: "#fff", marginRight: 6 }}>B&amp;T</span>INSIGHTS</span>
-        <span style={{ marginLeft: "auto", fontFamily: F_BODY, fontSize: 10.5, color: C.dim }}>analisi nostre · dati demo</span>
+        <span style={{ marginLeft: "auto", fontFamily: F_BODY, fontSize: 10.5, color: C.dim }}>analisi nostre · {of1 ? "dati OpenF1" : "prova DEMO"}</span>
       </div>
       <div className="scrollrow" style={{ display: "flex", gap: 6, overflowX: "auto", scrollbarWidth: "none", marginBottom: 10 }}>
-        {INSIGHT_TYPES.map(([id, l]) => <button key={id} data-insight-tab={id} className="press" aria-pressed={type === id ? "true" : "false"} onClick={() => setType(id)} style={{ flex: "0 0 auto", padding: "6px 11px", borderRadius: 999, background: type === id ? "rgba(232,18,29,.18)" : "rgba(255,255,255,.05)", border: `1px solid ${type === id ? INS.band : C.border}`, fontFamily: F_BODY, fontWeight: 700, fontSize: 11.5, color: type === id ? C.text : C.muted }}>{l}</button>)}
+        {types.map(([id, l]) => <button key={id} data-insight-tab={id} className="press" aria-pressed={type === id ? "true" : "false"} onClick={() => setType(id)} style={{ flex: "0 0 auto", padding: "6px 11px", borderRadius: 999, background: type === id ? "rgba(232,18,29,.18)" : "rgba(255,255,255,.05)", border: `1px solid ${type === id ? INS.band : C.border}`, fontFamily: F_BODY, fontWeight: 700, fontSize: 11.5, color: type === id ? C.text : C.muted }}>{l}</button>)}
       </div>
       {type === "vettura" && (
         <div style={{ display: "flex", gap: 6, marginBottom: 8 }}>
@@ -2294,24 +2320,24 @@ function InsightsCard({ live, st, race }) {
         </div>
       )}
       <InsightBanner type={type} live={live} st={st} race={race} kind={type === "vettura" ? kind : undefined} />
-      <p style={{ margin: "8px 2px 0", fontFamily: F_BODY, fontSize: 10.5, color: C.dim, lineHeight: 1.45 }}>Grafiche disegnate da B&T con i nostri calcoli sui tempi e sulla telemetria della diretta (nell'app vera: dati OpenF1).</p>
+      <p style={{ margin: "8px 2px 0", fontFamily: F_BODY, fontSize: 10.5, color: C.dim, lineHeight: 1.45 }}>{of1 ? "Grafiche disegnate da B&T con i nostri calcoli sui tempi della sessione (dati OpenF1). La frenata a confronto compare quando c'è la telemetria dell'ultimo giro dei primi due." : "Grafiche disegnate da B&T con i nostri calcoli sui dati simulati della prova DEMO."}</p>
     </div>
   );
 }
 
 // Banner che compare da solo sulla mappa (Second Screen e mappa grande), come in TV: ogni 3 giri,
 // nella prima parte del giro, una grafica diversa. Si può chiudere.
-function insightPopupOf(st, track) {
+function insightPopupOf(st, track, types = INSIGHT_TYPES) {
   if (!st || !isRaceType(st.type) || st.finished || st.lap < 3 || st.lap % 3 !== 0) return null;
   const lead = st.cars.find(c => !c.dnf); if (!lead) return null;
   const prog = ((lead.dist % track.lenM) + track.lenM) % track.lenM / track.lenM;
   if (prog > 0.45) return null;
-  return { lap: st.lap, type: INSIGHT_TYPES[(st.lap / 3) % INSIGHT_TYPES.length][0] };
+  return { lap: st.lap, type: types[(st.lap / 3) % types.length][0] };
 }
 function InsightPopup({ live, st, race, style, hidden = false }) {
   const [closedLap, setClosedLap] = useState(null);
   if (!live || !st || hidden) return null;
-  const pop = insightPopupOf(st, live.track);
+  const pop = insightPopupOf(st, live.track, insightTypesOf(live, st));
   if (!pop || closedLap === pop.lap) return null;
   return (
     <div data-insight-popup={pop.type} style={{ position: "absolute", left: "50%", bottom: 10, transform: "translateX(-50%)", width: "min(520px, 94%)", zIndex: 4, ...style }}>
@@ -2351,17 +2377,39 @@ function ssResize(layout, id, h) {
 const ssCapText = others => others === 1
   ? "Alta 2 posti solo se è da sola nella colonna: sposta o togli l'altra grafica (tasto Modifica)."
   : `Con altre ${others} grafiche nella colonna arriva al massimo a ${SS_SIZE_TEXT[SS_COL_UNITS - others]}: per farla più alta sposta o togli un'altra grafica (tasto Modifica).`;
-const TYRE_UI = { S: ["#E8121D", "Morbida"], M: ["#F2C230", "Media"], H: ["#F4F2EF", "Dura"] };
+const TYRE_UI = { S: ["#E8121D", "Morbida"], M: ["#F2C230", "Media"], H: ["#F4F2EF", "Dura"], I: ["#3ED66B", "Intermedia"], W: ["#4C8DFF", "Da bagnato"] };
+// Mescola non nota (OpenF1 senza stint): cerchio grigio e trattino.
+const tyreUi = k => TYRE_UI[k] || ["#86858C", "—"];
 // Radio dei team (demo): una nuova ogni 45 secondi di sessione, dai piloti di testa.
 const RADIO_LINES = ["Box, box. Box questo giro.", "Gomme ok, possiamo spingere.", "Il distacco dietro è stabile, gestisci.", "Bandiera gialla nel settore 2, attento.", "Overtake mode disponibile, attacca!", "Occhio alle temperature dei freni.", "Ottimo giro, continua così.", "Il radar dice pioggia tra poco, teniamoci pronti."];
 function radioFeed(st, n = 3) {
-  if (!st) return RADIOS.slice(0, n).map(r => ({ who: r.driver, text: r.text.replace(/[“”]/g, ""), when: r.time }));
+  if (!st) return [];
   const k = Math.floor(st.t / 45), m = Math.min(10, st.cars.length), out = [];
   for (let i = k; i > k - n && i >= 0; i--) {
     const c = st.cars[(i * 7) % m];
     out.push({ who: c.code, text: RADIO_LINES[(i * 5) % RADIO_LINES.length], when: isRaceType(st.type) ? `Giro ${Math.max(1, st.lap - (k - i))}` : st.clockText });
   }
   return out;
+}
+// Team radio veri di OpenF1 fino al punto della sessione che si vede, dal più recente (D12).
+const RADIO_EMPTY = "I team radio arrivano a fine sessione.", RADIO_NONE = "Per questa sessione la F1 non ha pubblicato team radio.";
+const of1RadiosAt = (live, st) => (isOf1Live(live) && st ? live.sim.radios().filter(r => r.t <= st.t + 0.001).reverse() : []);
+const TYRES_EMPTY = "Le gomme compaiono quando arrivano i dati della sessione.";
+// Team radio veri con l'audio: pilota, giro e lettore (D12).
+function RadioList({ live, st }) {
+  const rs = of1RadiosAt(live, st);
+  const note = (k, t) => <p data-radio-empty={k} style={{ margin: 0, padding: 16, fontFamily: F_BODY, fontSize: 12.5, color: C.dim, lineHeight: 1.5 }}>{t}</p>;
+  if (!live.sim.radios().length) return note("none", RADIO_NONE);
+  if (!rs.length) return note("later", "Ancora nessuna radio a questo punto della sessione.");
+  return rs.map((r, i) => { const d = driverById(r.id); return (
+    <div key={r.url} data-radio-row={r.id} style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 14px", borderBottom: i < rs.length - 1 ? `1px solid ${C.divider}` : "none" }}>
+      {d && <Headshot driver={d} size={36} />}
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ fontFamily: F_BODY, fontWeight: 600, fontSize: 12.5, color: C.text }}>{d ? d.full : r.code}{r.lap ? <span style={{ color: C.dim, fontWeight: 400 }}> · Giro {r.lap}</span> : null}</div>
+        <audio controls preload="none" src={r.url} aria-label={`Team radio di ${d ? d.full : r.code}${r.lap ? ", giro " + r.lap : ""}`} style={{ display: "block", width: "100%", height: 34, marginTop: 6 }} />
+      </div>
+    </div>
+  ); });
 }
 // Piloti scelti per gomme o settori (al massimo n, nell'ordine della gara); senza scelta i primi n in pista.
 const ssChosen = (st, ids, n = SS_DRIVERS[2]) => (ids && ids.length ? st.cars.filter(c => ids.includes(c.id)) : st.cars.filter(c => !c.dnf)).slice(0, n);
@@ -2389,9 +2437,14 @@ const ssAction =(label, onClick) => <button className="press" aria-label={label}
 function SsLapCharts({ live, st, carId, charts = ["speed"], hover = null, onHover = () => {}, grid = false }) {
   const car = st.cars.find(c => c.id === carId);
   const lapNo = car && car.last ? car.last.lapNo : null;
-  const tel = lapNo ? live.sim.telemetry(carId, lapNo) : null;
-  if (!tel) return <p style={{ margin: 0, fontFamily: F_BODY, fontSize: 10.5, color: C.dim }}>Il grafico arriva quando {car ? car.code : "il pilota"} completa un giro.</p>;
-  const bl = st.bestLap && !(st.bestLap.id === carId && st.bestLap.lapNo === lapNo) ? live.sim.telemetry(st.bestLap.id, st.bestLap.lapNo) : null;
+  const delay = isOf1Live(live) ? 1500 : 0;
+  const T = useLapTelemetry(live, carId, lapNo, { delay });
+  const blOf = st.bestLap && !(st.bestLap.id === carId && st.bestLap.lapNo === lapNo) ? st.bestLap : null;
+  const B = useLapTelemetry(live, blOf && blOf.id, blOf && blOf.lapNo, { delay });
+  const tel = T.tel, bl = B.tel;
+  const note = t => <p style={{ margin: 0, fontFamily: F_BODY, fontSize: 10.5, color: C.dim }}>{t}</p>;
+  if (!lapNo) return note(`Il grafico arriva quando ${car ? car.code : "il pilota"} completa un giro.`);
+  if (!tel) return note(T.loading ? TEL_LOADING : TEL_MISSING);
   const color = teamColorOf(carId), common = { tel, range: [0, live.track.lenM], hover, onHover, color };
   const C4 = {
     speed: <TelChart key="speed" {...common} label="Velocità" unit="km/h" field="speed" cmp={bl} yMin={50} yMax={350} kind="line" ticks={[100, 200, 300]} />,
@@ -2456,7 +2509,7 @@ function SsWidget({ id, h = 2, st, live, race, standings, prefs, setPrefs, onPic
   if (id === "telemetria") {
     if (!st || !live) return <SsCard id={id} title={title}><p style={{ margin: 0, fontFamily: F_BODY, fontSize: 11, color: C.dim, lineHeight: 1.4 }}>La telemetria pilota si vede durante le sessioni in diretta.</p></SsCard>;
     const ids = st.cars.map(c => c.id), cur = ids.includes(prefs.tel) ? prefs.tel : ids[0];
-    const lt = live.sim.liveTelemetry(cur) || {};
+    const lt = live.sim.liveTelemetry(cur);
     const car = st.cars.find(c => c.id === cur);
     const step = dir => setPrefs(p => ({ ...p, tel: ids[(ids.indexOf(cur) + dir + ids.length) % ids.length] }));
     const arrow = (dir, label) => <button className="press" aria-label={label} onClick={e => { if (e && e.stopPropagation) e.stopPropagation(); step(dir); }} style={{ width: 20, height: 20, borderRadius: 6, background: "rgba(255,255,255,.07)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}><span style={{ display: "inline-flex", transform: dir < 0 ? "rotate(180deg)" : "none" }}><Icon name="chevron" size={10} sw={2.6} /></span></button>;
@@ -2464,12 +2517,14 @@ function SsWidget({ id, h = 2, st, live, race, standings, prefs, setPrefs, onPic
       <SsCard id={id} title={title} attrs={{ "data-ss-tel-driver": cur }} action={ssAction("Scegli il pilota della telemetria", () => onPicker("telemetria"))}>
         <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
           {arrow(-1, "Pilota precedente")}
-          <span style={{ fontFamily: F_HEAD, fontWeight: 900, fontSize: 12.5, color: car ? car.color : C.text }}>{lt.code}</span>
+          <span style={{ fontFamily: F_HEAD, fontWeight: 900, fontSize: 12.5, color: car ? car.color : C.text }}>{car ? car.code : ""}</span>
           <span style={{ fontFamily: F_BODY, fontWeight: 600, fontSize: 9.5, color: C.dim }}>P{car ? car.pos : "-"}</span>
-          <span data-ss-tel-speed="" style={{ marginLeft: "auto", fontFamily: F_HEAD, fontWeight: 900, fontSize: 13, color: C.text, fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap" }}>{lt.speed} km/h</span>
+          {lt && <span data-ss-tel-speed="" style={{ marginLeft: "auto", fontFamily: F_HEAD, fontWeight: 900, fontSize: 13, color: C.text, fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap" }}>{lt.speed} km/h</span>}
+          {!lt && <span style={{ flex: 1 }} />}
           {arrow(1, "Pilota successivo")}
         </div>
-        <div style={{ margin: "1px 0 3px", fontFamily: F_BODY, fontSize: 9.5, color: C.muted, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>Marcia <b style={{ color: C.text }}>{lt.pit ? "N" : lt.gear}</b> · Gas <b style={{ color: C.text }}>{lt.throttle || 0}%</b> · Freno <b style={{ color: C.text }}>{lt.brake ? "sì" : "no"}</b></div>
+        {lt ? <div style={{ margin: "1px 0 3px", fontFamily: F_BODY, fontSize: 9.5, color: C.muted, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>Marcia <b style={{ color: C.text }}>{lt.pit ? "N" : lt.gear}</b> · Gas <b style={{ color: C.text }}>{lt.throttle || 0}%</b> · Freno <b style={{ color: C.text }}>{lt.brake ? "sì" : "no"}</b></div>
+          : <div data-ss-tel-now="empty" style={{ margin: "1px 0 3px", fontFamily: F_BODY, fontSize: 9.5, color: C.dim, lineHeight: 1.3 }}>Velocità, marcia e pedali di adesso: con OpenF1 la telemetria arriva giro per giro.</div>}
         {h > 1 && <SsLapCharts live={live} st={st} carId={cur} charts={h === 4 ? ["speed", "throttle", "gear"] : h === 3 ? ["speed", "throttle"] : ["speed"]} />}
       </SsCard>
     );
@@ -2477,15 +2532,16 @@ function SsWidget({ id, h = 2, st, live, race, standings, prefs, setPrefs, onPic
   if (id === "gomme") {
     // Di norma i primi in gara; con "Scegli" i piloti che vuoi tu (nell'ordine della gara): 2, 4, 6 o 10 secondo l'altezza.
     const chosen = prefs.tyre && prefs.tyre.length ? prefs.tyre : null;
-    const rows = st ? ssChosen(st, chosen, nDrivers).map(c => ({ k: c.id, code: c.code, tyre: c.tyre, age: c.tyreAge, wear: c.wear || 0, pit: c.pit, dnf: c.dnf }))
-      : TIRES.slice(0, nDrivers).map(t => { const d = driverByName(t.name); return { k: t.name, code: d ? driverCode(d) : t.name, tyre: t.compound === "Morbida" ? "S" : t.compound === "Dura" ? "H" : "M", age: null, wear: t.wear }; });
-    return <SsCard id={id} title={st ? SS_CARD_TITLE.gomme + (chosen ? ` · ${rows.length} SCELTI` : ` · PRIMI ${nDrivers}`) : title} action={st ? ssAction("Scegli i piloti delle gomme", () => onPicker("gomme")) : null}>
+    if (!st) return <SsCard id={id} title={title}><p style={{ margin: 0, fontFamily: F_BODY, fontSize: 11, color: C.dim, lineHeight: 1.4 }}>{TYRES_EMPTY}</p></SsCard>;
+    const rows = ssChosen(st, chosen, nDrivers).map(c => ({ k: c.id, code: c.code, tyre: c.tyre, age: c.tyreAge, wear: c.wear, pit: c.pit, dnf: c.dnf }));
+    return <SsCard id={id} title={SS_CARD_TITLE.gomme + (chosen ? ` · ${rows.length} SCELTI` : ` · PRIMI ${nDrivers}`)} action={ssAction("Scegli i piloti delle gomme", () => onPicker("gomme"))}>
       <div style={ssRows(h >= 3 ? 9 : 2)}>{rows.map(r => (
         <div key={r.k} data-ss-tyre-row={r.k} style={row}>
           <span style={{ width: 28, fontFamily: F_HEAD, fontWeight: 800 }}>{r.code}</span>
-          <span title={TYRE_UI[r.tyre][1]} style={{ width: 11, height: 11, borderRadius: "50%", border: `2.5px solid ${TYRE_UI[r.tyre][0]}`, flexShrink: 0 }} />
-          <span style={{ flex: 1, height: 5, borderRadius: 3, background: "rgba(255,255,255,.08)", overflow: "hidden" }}><span style={{ display: "block", height: "100%", width: r.wear + "%", background: r.wear > 75 ? C.accent : r.wear > 50 ? TIMING.yellow : TIMING.green }} /></span>
-          <span style={{ width: 52, textAlign: "right", color: C.muted, fontVariantNumeric: "tabular-nums" }}>{r.dnf ? "RIT" : r.pit ? "BOX" : `${r.wear}%${r.age != null ? ` · ${r.age}g` : ""}`}</span>
+          <span title={tyreUi(r.tyre)[1]} style={{ width: 11, height: 11, borderRadius: "50%", border: `2.5px solid ${tyreUi(r.tyre)[0]}`, flexShrink: 0 }} />
+          {r.wear != null ? <span style={{ flex: 1, height: 5, borderRadius: 3, background: "rgba(255,255,255,.08)", overflow: "hidden" }}><span style={{ display: "block", height: "100%", width: r.wear + "%", background: r.wear > 75 ? C.accent : r.wear > 50 ? TIMING.yellow : TIMING.green }} /></span>
+            : <span style={{ flex: 1, color: C.muted }}>{tyreUi(r.tyre)[1]}</span>}
+          <span style={{ width: 52, textAlign: "right", color: C.muted, fontVariantNumeric: "tabular-nums" }}>{r.dnf ? "RIT" : r.pit ? "BOX" : r.wear != null ? `${r.wear}%${r.age != null ? ` · ${r.age}g` : ""}` : r.age != null ? `${r.age} ${r.age === 1 ? "giro" : "giri"}` : "—"}</span>
         </div>
       ))}</div>
     </SsCard>;
@@ -2502,23 +2558,35 @@ function SsWidget({ id, h = 2, st, live, race, standings, prefs, setPrefs, onPic
   }
   if (id === "insights") {
     if (!st || !live || !isRaceType(st.type)) return <SsCard id={id} title={title}><p style={{ margin: 0, fontFamily: F_BODY, fontSize: 11, color: C.dim, lineHeight: 1.4 }}>Le grafiche B&amp;T Insights arrivano durante la gara.</p></SsCard>;
-    const type = INSIGHT_TYPES[Math.floor(st.t / 20) % INSIGHT_TYPES.length][0];   // cambia ogni 20 secondi di gara
+    const types = insightTypesOf(live, st), type = types[Math.floor(st.t / 20) % types.length][0];   // cambia ogni 20 secondi di gara
     return <SsCard id={id} title={title}><InsightBanner type={type} live={live} st={st} race={race} variant={h === 1 ? "ticker" : h === 4 ? "full" : "compact"} /></SsCard>;
   }
   if (id === "meteo") {
-    const w = race ? weekendWeather(race, st ? st.t : 0, live && live.raceId === race.id ? live.type : null) : null;
-    if (!w) return <SsCard id={id} title={title} />;
+    const now = sessionWeather(live, st, race);
+    if (!now) return <SsCard id={id} title={title}><p style={{ margin: 0, fontFamily: F_BODY, fontSize: 11, color: C.dim, lineHeight: 1.4 }}>{WX_EMPTY}</p></SsCard>;
+    const num = v => (v == null || !isFinite(v) ? "—" : Math.round(v));
     const cell = (l, v) => <div style={{ padding: "4px 6px", borderRadius: 8, background: "rgba(255,255,255,.05)" }}><div style={{ fontFamily: F_HEAD, fontWeight: 800, fontSize: 13, color: C.text }}>{v}</div><div style={{ fontFamily: F_BODY, fontSize: 8.5, letterSpacing: .5, color: C.dim }}>{l}</div></div>;
     return (
-      <SsCard id={id} title={title}>
-        <div style={{ display: "grid", gridTemplateColumns: h === 1 ? "repeat(4, 1fr)" : "1fr 1fr", gap: 4, marginBottom: 5 }}>{cell("ARIA", w.current.air.toFixed(0) + "°")}{cell("PISTA", w.current.track.toFixed(0) + "°")}{cell("UMIDITÀ", w.current.humidity + "%")}{cell("VENTO", w.current.wind.toFixed(0) + " km/h")}</div>
-        <div style={{ ...row, color: C.muted }}><SkyIcon kind={w.current.rain ? "rain" : "cloud"} size={14} />{w.current.rain ? "Pioggia in corso" : "Pista asciutta"}</div>
+      <SsCard id={id} title={title + (isDemoLive(live) ? " · DEMO" : "")}>
+        <div style={{ display: "grid", gridTemplateColumns: h === 1 ? "repeat(4, 1fr)" : "1fr 1fr", gap: 4, marginBottom: 5 }}>{cell("ARIA", num(now.air) + "°")}{cell("PISTA", num(now.track) + "°")}{cell("UMIDITÀ", num(now.humidity) + "%")}{cell("VENTO", num(now.wind) + " km/h")}</div>
+        <div style={{ ...row, color: C.muted }}><SkyIcon kind={now.rain ? "rain" : "cloud"} size={14} />{now.rain ? "Pioggia in corso" : "Pista asciutta"}</div>
       </SsCard>
     );
   }
-  if (id === "radio") return <SsCard id={id} title={title + " · DEMO"}><div style={ssRows(4)}>{radioFeed(st, { 1: 1, 2: 3, 3: 4, 4: 6 }[h] || 3).map((r, i) => (
-    <div key={i} style={{ width: "100%", flexShrink: 0, fontFamily: F_BODY, fontSize: 10.5, color: C.muted, lineHeight: 1.3 }}><b style={{ color: C.text, fontFamily: F_HEAD }}>{r.who}</b> <span style={{ color: C.dim }}>{r.when}</span><br />{r.text}</div>
-  ))}</div></SsCard>;
+  if (id === "radio") {
+    const n = { 1: 1, 2: 3, 3: 4, 4: 6 }[h] || 3, empty = t => <SsCard id={id} title={title}><p style={{ margin: 0, fontFamily: F_BODY, fontSize: 11, color: C.dim, lineHeight: 1.4 }}>{t}</p></SsCard>;
+    if (isOf1Live(live)) {
+      const rs = of1RadiosAt(live, st).slice(0, n);
+      if (!rs.length) return empty(live.sim.radios().length ? "Ancora nessuna radio a questo punto della sessione." : RADIO_NONE);
+      return <SsCard id={id} title={title}><div style={ssRows(4)}>{rs.map(r => (
+        <div key={r.url} data-ss-radio={r.id} style={{ width: "100%", flexShrink: 0, fontFamily: F_BODY, fontSize: 10.5, color: C.muted, lineHeight: 1.3 }}><b style={{ color: C.text, fontFamily: F_HEAD }}>{r.code}</b> <span style={{ color: C.dim }}>{r.lap ? `Giro ${r.lap}` : ""}</span><br />Radio del team · si ascolta nella scheda</div>
+      ))}</div></SsCard>;
+    }
+    if (!st) return empty(RADIO_EMPTY);
+    return <SsCard id={id} title={title + " · DEMO"}><div style={ssRows(4)}>{radioFeed(st, n).map((r, i) => (
+      <div key={i} style={{ width: "100%", flexShrink: 0, fontFamily: F_BODY, fontSize: 10.5, color: C.muted, lineHeight: 1.3 }}><b style={{ color: C.text, fontFamily: F_HEAD }}>{r.who}</b> <span style={{ color: C.dim }}>{r.when}</span><br />{r.text}</div>
+    ))}</div></SsCard>;
+  }
   const msgs = st ? st.messages.slice(-({ 1: 1, 2: 3, 3: 5, 4: 7 }[h] || 3)).reverse() : [];
   return <SsCard id={id} title={title}>{msgs.length ? <div style={ssRows(4)}>{msgs.map((m, i) => (
     <div key={i} style={{ width: "100%", flexShrink: 0, fontFamily: F_BODY, fontSize: 10.5, color: C.muted, lineHeight: 1.3 }}><b style={{ color: C.text }}>{m.time}</b> {m.text}</div>
@@ -2544,7 +2612,7 @@ function SsSheet({ id, st, live, race, standings, prefs, setPrefs, vote, onVote,
           <td style={{ ...td, color: c.dnf ? "#FF5A5F" : C.muted }}>{c.dnf ? "RITIRATO" : isRaceType(st.type) ? (c.pos === 1 ? "LEADER" : c.lapsDown > 0 ? `+${c.lapsDown} giri` : fmtGap(c.gap)) : (c.best ? LiveSim.fmtLap(c.best.time) : "—")}</td>
           <td style={{ ...td, color: C.muted }}>{c.dnf || !isRaceType(st.type) || c.pos === 1 ? "" : fmtGap(c.interval)}</td>
           <td style={td}>{c.last ? LiveSim.fmtLap(c.last.time) : "—"}</td>
-          <td style={td}><span style={{ display: "inline-flex", alignItems: "center", gap: 5 }}><span style={{ width: 10, height: 10, borderRadius: "50%", border: `2.5px solid ${TYRE_UI[c.tyre][0]}` }} />{c.tyreAge}g</span></td>
+          <td style={td}><span style={{ display: "inline-flex", alignItems: "center", gap: 5 }}><span style={{ width: 10, height: 10, borderRadius: "50%", border: `2.5px solid ${tyreUi(c.tyre)[0]}` }} />{c.tyreAge != null ? c.tyreAge + "g" : "—"}</span></td>
           <td style={td}>{c.stops}</td>
           <td style={td}>{c.dnf ? <DnfTile cause={c.dnf.cause} width={46} style={{ padding: 1, borderRadius: 6 }} /> : c.pit ? <span style={{ fontFamily: F_HEAD, fontWeight: 800, fontSize: 10, color: TIMING.pit }}>BOX</span> : null}</td>
         </tr>
@@ -2576,33 +2644,36 @@ function SsSheet({ id, st, live, race, standings, prefs, setPrefs, vote, onVote,
       </div>
     );
   }
-  else if (id === "gomme") body = !st ? noLive : (
-    <table style={{ width: "100%", borderCollapse: "collapse" }}>
-      <thead><tr>{["POS", "PILOTA", "MESCOLA", "GIRI", "USURA", "SOSTE"].map((h, i) => <th key={i} style={th}>{h}</th>)}</tr></thead>
-      <tbody>{st.cars.map(c => (
-        <tr key={c.id} data-ss-sheet-row={c.id}>
-          <td style={{ ...td, fontFamily: F_HEAD, fontWeight: 800 }}>{c.pos}</td>
-          <td style={td}><b style={{ fontFamily: F_HEAD }}>{c.code}</b></td>
-          <td style={td}><span style={{ display: "inline-flex", alignItems: "center", gap: 5 }}><span style={{ width: 10, height: 10, borderRadius: "50%", border: `2.5px solid ${TYRE_UI[c.tyre][0]}` }} />{TYRE_UI[c.tyre][1]}</span></td>
-          <td style={td}>{c.tyreAge}</td>
-          <td style={{ ...td, width: "40%" }}><span style={{ display: "flex", alignItems: "center", gap: 8 }}><span style={{ flex: 1, height: 6, borderRadius: 3, background: "rgba(255,255,255,.08)", overflow: "hidden" }}><span style={{ display: "block", height: "100%", width: (c.wear || 0) + "%", background: c.wear > 75 ? C.accent : c.wear > 50 ? TIMING.yellow : TIMING.green }} /></span>{c.dnf ? "RIT" : c.pit ? "BOX" : (c.wear || 0) + "%"}</span></td>
-          <td style={td}>{c.stops}</td>
-        </tr>
-      ))}</tbody>
-    </table>
-  );
+  else if (id === "gomme") body = !st ? <p style={{ margin: 0, fontFamily: F_BODY, fontSize: 12.5, color: C.dim }}>{TYRES_EMPTY}</p> : (() => {
+    const wear = st.cars.some(c => c.wear != null);   // l'usura c'è solo nella prova DEMO (simulata)
+    return (
+      <table style={{ width: "100%", borderCollapse: "collapse" }}>
+        <thead><tr>{["POS", "PILOTA", "MESCOLA", "GIRI", ...(wear ? ["USURA"] : []), "SOSTE"].map((h, i) => <th key={i} style={th}>{h}</th>)}</tr></thead>
+        <tbody>{st.cars.map(c => (
+          <tr key={c.id} data-ss-sheet-row={c.id}>
+            <td style={{ ...td, fontFamily: F_HEAD, fontWeight: 800 }}>{c.pos}</td>
+            <td style={td}><b style={{ fontFamily: F_HEAD }}>{c.code}</b></td>
+            <td style={td}><span style={{ display: "inline-flex", alignItems: "center", gap: 5 }}><span style={{ width: 10, height: 10, borderRadius: "50%", border: `2.5px solid ${tyreUi(c.tyre)[0]}` }} />{tyreUi(c.tyre)[1]}</span></td>
+            <td style={td}>{c.dnf ? "RIT" : c.pit ? "BOX" : c.tyreAge != null ? c.tyreAge : "—"}</td>
+            {wear && <td style={{ ...td, width: "40%" }}><span style={{ display: "flex", alignItems: "center", gap: 8 }}><span style={{ flex: 1, height: 6, borderRadius: 3, background: "rgba(255,255,255,.08)", overflow: "hidden" }}><span style={{ display: "block", height: "100%", width: (c.wear || 0) + "%", background: c.wear > 75 ? C.accent : c.wear > 50 ? TIMING.yellow : TIMING.green }} /></span>{c.dnf ? "RIT" : c.pit ? "BOX" : (c.wear || 0) + "%"}</span></td>}
+            <td style={td}>{c.stops}</td>
+          </tr>
+        ))}</tbody>
+      </table>
+    );
+  })();
   else if (id === "voto") body = !st || st.type !== "RACE" ? <p style={{ margin: 0, fontFamily: F_BODY, fontSize: 12.5, color: C.dim }}>Il voto si apre durante il GP, da metà gara.</p> : <DotdVote st={st} race={race} vote={vote} onVote={onVote} onOpenPicker={k => onOpenPicker("vote-" + k)} />;
   else if (id === "insights") body = !st || !live || !isRaceType(st.type) ? <p style={{ margin: 0, fontFamily: F_BODY, fontSize: 12.5, color: C.dim }}>Le grafiche B&amp;T Insights arrivano durante la gara.</p> : (
     <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 10 }}>
-      {INSIGHT_TYPES.map(([t]) => <InsightBanner key={t} type={t} live={live} st={st} race={race} />)}
+      {insightTypesOf(live, st).map(([t]) => <InsightBanner key={t} type={t} live={live} st={st} race={race} />)}
     </div>
   );
   else if (id === "meteo") {
-    const w = race ? weekendWeather(race, st ? st.t : 0, live && live.raceId === race.id ? live.type : null) : null;
-    body = !w ? noLive : (
+    const now = sessionWeather(live, st, race);
+    body = !now ? <p style={{ margin: 0, fontFamily: F_BODY, fontSize: 12.5, color: C.dim }}>{WX_EMPTY}</p> : (
       <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr) minmax(0, 1.4fr)", gap: 14 }}>
         <SsWidget id="meteo" h={4} st={st} live={live} race={race} prefs={prefs} />
-        <div>{w.sessions.map(x => <div key={x.key} style={{ padding: "6px 0", borderTop: `1px solid ${C.divider}`, fontFamily: F_BODY, fontSize: 11.5, color: C.muted, lineHeight: 1.4 }}><b style={{ color: C.text }}>{x.label}</b> · {x.text}</div>)}</div>
+        <p style={{ margin: 0, fontFamily: F_BODY, fontSize: 11.5, color: C.muted, lineHeight: 1.5 }}>{isDemoLive(live) ? "Meteo simulato della prova DEMO." : "Meteo vero della sessione, dai dati di OpenF1 (aria, pista, umidità, vento e pioggia)."}</p>
       </div>
     );
   }
@@ -2616,7 +2687,9 @@ function SsSheet({ id, st, live, race, standings, prefs, setPrefs, vote, onVote,
       </div>
     </div>
   );
-  else if (id === "radio") body = radioFeed(st, 8).map((r, i) => <div key={i} style={{ padding: "7px 0", borderTop: i ? `1px solid ${C.divider}` : "none", fontFamily: F_BODY, fontSize: 12.5, color: C.muted, lineHeight: 1.4 }}><b style={{ color: C.text, fontFamily: F_HEAD }}>{r.who}</b> <span style={{ color: C.dim }}>{r.when}</span> · {r.text}</div>);
+  else if (id === "radio") body = isOf1Live(live) ? <RadioList live={live} st={st} />
+    : !st ? <p style={{ margin: 0, fontFamily: F_BODY, fontSize: 12.5, color: C.dim }}>{RADIO_EMPTY}</p>
+    : radioFeed(st, 8).map((r, i) => <div key={i} style={{ padding: "7px 0", borderTop: i ? `1px solid ${C.divider}` : "none", fontFamily: F_BODY, fontSize: 12.5, color: C.muted, lineHeight: 1.4 }}><b style={{ color: C.text, fontFamily: F_HEAD }}>{r.who}</b> <span style={{ color: C.dim }}>{r.when}</span> · {r.text}</div>);
   else body = st ? <RaceControlList messages={st.messages} /> : noLive;
   return (
     <div data-ss-sheet={id} {...attrs} role="dialog" aria-label={title} onClick={e => { if (e && e.stopPropagation) e.stopPropagation(); }} style={{ position: "absolute", inset: 0, zIndex: 20, display: "flex", flexDirection: "column", background: "#09090B", padding: "8px 12px 10px", gap: 8 }}>
@@ -2775,7 +2848,8 @@ function SecondScreen({ race, live, st, standings, layout, setLayout, prefs, set
     setPick(null);
   };
   const tapFree = side => { if (edit && pick) { moveTo(pick, side); setPick(null); } };
-  const wx = race ? weekendWeather(race, st ? st.t : 0, live && live.raceId === race.id ? live.type : null) : null;
+  // Radar della pioggia: simulato, quindi solo nella prova DEMO dell'admin (con i dati veri non c'è, D10).
+  const wx = race && isDemoLive(live) ? weekendWeather(race, st ? st.t : 0, live.raceId === race.id ? live.type : null) : null;
   const rainChance = wx ? (wx.current.rain ? 95 : Math.max(...wx.sessions.map(x => x.rainPct))) : 0;
   const cells = prefs.radar && wx ? LiveSim.radarCells({ seed: (race && race.round) || 1, rainChance, windDeg: wx.current.windDir }) : [];
   const bg = st && (st.bg === "yellow" || st.bg === "red") ? (st.bg === "yellow" ? "radial-gradient(120% 90% at 50% 0%, rgba(255,210,31,.5), rgba(255,210,31,.14)), #050506" : "radial-gradient(120% 90% at 50% 0%, rgba(232,18,29,.55), rgba(232,18,29,.16)), #050506") : "#050506";
@@ -2871,7 +2945,7 @@ function SecondScreen({ race, live, st, standings, layout, setLayout, prefs, set
           <span style={{ fontFamily: F_BODY, fontSize: 11, color: C.muted, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{race ? race.name : ""} · {st ? `${sessionName(st.type)} · ${liveCounter(st)}` : "Nessuna sessione in corso"}</span>
           {st && FLAG_UI[st.flag] && <span style={{ padding: "3px 8px", borderRadius: 7, background: FLAG_UI[st.flag].color, fontFamily: F_HEAD, fontWeight: 900, fontSize: 10, color: FLAG_UI[st.flag].ink, whiteSpace: "nowrap" }}>{st.flag === "yellow" ? "GIALLA" : st.flag === "red" ? "ROSSA" : st.flag.toUpperCase()}</span>}
           <div style={{ flex: 1 }} />
-          <button className="press" aria-label="Radar meteo sulla mappa" aria-pressed={prefs.radar ? "true" : "false"} onClick={() => setPrefs(p => ({ ...p, radar: !p.radar }))} style={{ height: 28, padding: "0 10px", borderRadius: 9, background: prefs.radar ? "rgba(76,141,255,.22)" : "rgba(255,255,255,.08)", border: `1px solid ${prefs.radar ? "#4C8DFF" : C.border}`, display: "flex", alignItems: "center", gap: 5, fontFamily: F_HEAD, fontWeight: 800, fontSize: 11, color: "#fff" }}><SkyIcon kind="rain" size={14} bg="transparent" />Radar</button>
+          {wx && <button className="press" aria-label="Radar meteo sulla mappa" aria-pressed={prefs.radar ? "true" : "false"} onClick={() => setPrefs(p => ({ ...p, radar: !p.radar }))} style={{ height: 28, padding: "0 10px", borderRadius: 9, background: prefs.radar ? "rgba(76,141,255,.22)" : "rgba(255,255,255,.08)", border: `1px solid ${prefs.radar ? "#4C8DFF" : C.border}`, display: "flex", alignItems: "center", gap: 5, fontFamily: F_HEAD, fontWeight: 800, fontSize: 11, color: "#fff" }}><SkyIcon kind="rain" size={14} bg="transparent" />Radar</button>}
           {iconBtn("Modifica grafiche", <Icon name="grid" size={12} color="#fff" />, () => { setEdit(e => !e); setPick(null); setMsg(null); setSheet(null); }, edit)}
           {iconBtn("Ruota lo schermo", <Icon name="rotate" size={12} color="#fff" />, () => setFlip(f => !f))}
           {iconBtn("Chiudi Second Screen", <Icon name="close" size={12} color="#fff" sw={2.4} />, onClose)}
@@ -3779,6 +3853,8 @@ function StrategyPredictor({ races, preds = {}, onSave, onBack }) {
 /* DEGRADO GOMME: per ogni stint quanto perde a giro (corretto per la benzina) e se c'è un crollo. Gare vere 2026 e,
    durante la diretta (simulata), anche la gara in corso. */
 const degLine = s => { const n = s.to - s.from + 1; return `${surnameOf(s.code)} (${compUi(s.c)[1]} · ${n} giri): ${s.slope > 0.005 ? `degrado di +${fmtDec(s.slope)} s al giro` : "nessun degrado"}`; };
+// Nome della sessione che si vede nel Garage (D27): quella vera di OpenF1 o la prova DEMO dell'admin.
+const liveSrcLabel = live => (isOf1Live(live) ? OF1_SRC : "Prova DEMO (simulata)");
 const raceFromLive = live => { const st = live.sim.state(); return { circuitId: null, laps: live.sim.totalLaps, lap: st.lap, ...BtWk.fromSim({ totalLaps: live.sim.totalLaps, cars: st.cars.map(c => ({ code: c.code, team: (driverById(c.id) || {}).teamId || null, pos: c.dnf ? null : c.pos, laps: live.sim.laps(c.id) })) }) }; };
 function DegChart({ s }) {
   const W = 340, H = 170, L = 40, R = 10, T = 10, B = 26, P = s.pts;
@@ -3811,10 +3887,10 @@ function TyreDegTool({ races, live, onBack }) {
       <div style={WK_CARD}>
         <div style={{ display: "flex", gap: 6, marginBottom: 10 }}>
           <WkChip attrs={{ "data-deg-src": "real" }} on={src === "real"} onClick={() => { setSrc("real"); setSel(null); }}>Gare vere 2026</WkChip>
-          {liveRace && <WkChip attrs={{ "data-deg-src": "live" }} on={src === "live"} onClick={() => { setSrc("live"); setSel(null); }}>Diretta (simulata)</WkChip>}
+          {liveRace && <WkChip attrs={{ "data-deg-src": "live" }} on={src === "live"} onClick={() => { setSrc("live"); setSel(null); }}>{liveSrcLabel(live)}</WkChip>}
         </div>
         {src === "real" ? <select id="degRace" value={cid} onChange={e => { setCid(e.target.value); setSel(null); }} style={{ width: "100%", padding: "10px 12px", marginBottom: 10, borderRadius: 12, background: C.bg, border: `1px solid ${C.border}`, color: C.text, fontFamily: F_BODY, fontSize: 13 }}>{RS.map(r => <option key={r.circuitId} value={r.circuitId}>{raceNameOfCid(races, r.circuitId)} · {r.laps} giri</option>)}</select>
-          : <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10, fontFamily: F_BODY, fontSize: 12.5, color: C.text }}><span style={{ flex: 1 }}>Diretta (simulata): giro {R.lap} di {R.laps}</span><button className="press" data-deg-refresh="" onClick={() => setTick(n => n + 1)} style={{ padding: "6px 10px", borderRadius: 9, background: "rgba(255,255,255,.07)", border: `1px solid ${C.border}`, fontFamily: F_HEAD, fontWeight: 800, fontSize: 11.5, color: C.text }}>Aggiorna</button></div>}
+          : <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10, fontFamily: F_BODY, fontSize: 12.5, color: C.text }}><span style={{ flex: 1 }}>{liveSrcLabel(live)}: giro {R.lap} di {R.laps}</span><button className="press" data-deg-refresh="" onClick={() => setTick(n => n + 1)} style={{ padding: "6px 10px", borderRadius: 9, background: "rgba(255,255,255,.07)", border: `1px solid ${C.border}`, fontFamily: F_HEAD, fontWeight: 800, fontSize: 11.5, color: C.text }}>Aggiorna</button></div>}
         <div className="scrollrow" style={{ display: "flex", gap: 6, overflowX: "auto", scrollbarWidth: "none" }}>
           {["all", ...comps].map(c => <WkChip key={c} attrs={{ "data-deg-comp": c }} on={comp === c} onClick={() => { setComp(c); setSel(null); }}>{c === "all" ? "Tutte" : <><CompDot c={c} />{compUi(c)[1]}</>}</WkChip>)}
         </div>
@@ -3827,7 +3903,7 @@ function TyreDegTool({ races, live, onBack }) {
         </div>
       )}
       <div style={WK_CARD}>
-        <WkLabel>{list.length} STINT · {src === "live" ? "DIRETTA (SIMULATA)" : raceNameOfCid(races, cid).toUpperCase()}</WkLabel>
+        <WkLabel>{list.length} STINT · {src === "live" ? liveSrcLabel(live).toUpperCase() : raceNameOfCid(races, cid).toUpperCase()}</WkLabel>
         {list.map(s => { const on = cur && cur === s; return (
           <button key={s.code + s.si} className="press" data-deg-row={s.code + ":" + s.si} data-cliff={s.cliff ? "1" : "0"} onClick={() => setSel(on ? null : s.code + ":" + s.si)} style={{ display: "block", width: "100%", textAlign: "left", padding: "8px 6px", borderRadius: 0, background: on ? "rgba(231,179,76,.1)" : "transparent", border: "none", borderTop: `1px solid ${C.divider}` }}>
             <span style={{ display: "flex", alignItems: "center", gap: 7 }}><CompDot c={s.c} /><span style={{ flex: 1, fontFamily: F_BODY, fontSize: 12.5, color: C.text, lineHeight: 1.35 }}>{degLine(s)}</span></span>
@@ -3837,7 +3913,7 @@ function TyreDegTool({ races, live, onBack }) {
         ); })}
         {!list.length && <p style={{ margin: 0, fontFamily: F_BODY, fontSize: 12, color: C.dim }}>Ancora pochi giri buoni per calcolare il degrado.</p>}
       </div>
-      <WkNote>Tempi corretti per la benzina che si consuma (stima B&T: {String(BtWk.FUEL).replace(".", ",")} s a giro). Non contano i primi 3 giri, l'ultimo, i giri ai box, con Safety Car, VSC o bandiere. Crollo: almeno 3 giri di fila più lenti di oltre 0,4 s. {src === "live" ? "Diretta: gara simulata dell'anteprima." : "Dati veri: TracingInsights (github.com/TracingInsights/2026), FastF1 e tempi ufficiali Ergast/Jolpica."}</WkNote>
+      <WkNote>Tempi corretti per la benzina che si consuma (stima B&T: {String(BtWk.FUEL).replace(".", ",")} s a giro). Non contano i primi 3 giri, l'ultimo, i giri ai box, con Safety Car, VSC o bandiere. Crollo: almeno 3 giri di fila più lenti di oltre 0,4 s. {src === "live" ? (isOf1Live(live) ? "Sessione: dati veri di OpenF1." : "Prova DEMO: gara simulata, la vedi solo tu.") : "Dati veri: TracingInsights (github.com/TracingInsights/2026), FastF1 e tempi ufficiali Ergast/Jolpica."}</WkNote>
     </div>
   );
 }
@@ -3916,7 +3992,7 @@ function BluffTool({ races, live, onBack }) {
     <div data-bluff="" className="scrollcol" style={{ height: "100%" }}>
       <GameHeader title="RILEVATORE DI BLUFF" sub="Quando un pilota dice alla radio che le gomme sono finite guardiamo i tempi: è vero o vuole ingannare gli avversari?" onBack={onBack} />
       <div style={WK_CARD}>
-        <div style={{ fontFamily: F_HEAD, fontWeight: 900, fontStyle: "italic", fontSize: 14.5, color: C.text }}>{liveRace ? `Diretta (simulata) · giro ${R.lap} di ${R.laps}` : `Demo: gara simulata · ${demo.race.name}`}</div>
+        <div style={{ fontFamily: F_HEAD, fontWeight: 900, fontStyle: "italic", fontSize: 14.5, color: C.text }}>{liveRace ? `${liveSrcLabel(live)} · giro ${R.lap} di ${R.laps}` : `Demo: gara simulata · ${demo.race.name}`}</div>
         <p style={{ margin: "4px 0 8px", padding: "8px 10px", borderRadius: 10, background: "rgba(242,194,48,.1)", border: "1px solid rgba(242,194,48,.35)", fontFamily: F_BODY, fontSize: 11.5, color: C.text, lineHeight: 1.45 }}>Radio simulate: nell'anteprima le frasi le inventa il simulatore e i tempi sono quelli della gara simulata. Nell'app vera le radio le scrive l'admin mentre ascolta la diretta (OpenF1 dà gli audio, non il testo) e i tempi arrivano dal live timing.</p>
         <div style={{ display: "flex", gap: 8 }}>{[["bluff", "Bluff scoperti"], ["vero", "Radio vere"], ["dubbio", "Da capire"]].map(([k, l]) => <div key={k} style={{ flex: 1, padding: "8px 6px", borderRadius: 11, background: "rgba(255,255,255,.04)", textAlign: "center" }}><b style={{ display: "block", fontFamily: F_HEAD, fontSize: 20, color: BLUFF_UI[k][1] }}>{n(k)}</b><span style={{ fontFamily: F_BODY, fontSize: 10.5, color: C.muted }}>{l}</span></div>)}</div>
         {liveRace && <button className="press" onClick={() => setTick(x => x + 1)} style={{ marginTop: 8, padding: "6px 10px", borderRadius: 9, background: "rgba(255,255,255,.07)", border: `1px solid ${C.border}`, fontFamily: F_HEAD, fontWeight: 800, fontSize: 11.5, color: C.text }}>Aggiorna</button>}
@@ -3992,7 +4068,7 @@ function GarageScreen({ races, pitBest, onPitResult, sillyPreds, onPredict, sill
       <div style={{ padding: "6px 18px 8px", fontFamily: F_BODY, fontWeight: 700, fontSize: 11, letterSpacing: 1.2, color: C.gold }}>WEEKEND DI GARA</div>
       {card("setup", "Scanner dell'assetto", "Prove libere vere: chi ha scaricato l'ala, chi cerca carico e chi ha già fatto la simulazione di gara.", "Prove libere · dati veri")}
       {card("strategy", "Tire Strategy Predictor", "Disegna mescole e soste della prossima gara: punti contro la strategia del vincitore.", stratTag)}
-      {card("deg", "Degrado gomme", "Quanto perde ogni gomma a ogni giro e quando arriva il crollo.", live && live.type === "RACE" ? "In diretta adesso" : "Gare vere 2026")}
+      {card("deg", "Degrado gomme", "Quanto perde ogni gomma a ogni giro e quando arriva il crollo.", live && live.type === "RACE" ? liveSrcLabel(live) : "Gare vere 2026")}
       {card("mates", "Compagni a confronto", "Stessa macchina, chi va più forte? L'indice Over-Driving e i testa a testa del 2026.", "Dati veri 2026")}
       {card("bluff", "Rilevatore di bluff", "Radio contro tempi: le gomme sono davvero finite o è un bluff per ingannare gli altri?", "Durante la gara · demo")}
       <div style={{ padding: "6px 18px 8px", fontFamily: F_BODY, fontWeight: 700, fontSize: 11, letterSpacing: 1.2, color: C.gold }}>TRACCIATI</div>
@@ -4288,7 +4364,41 @@ function RatingsCard({ sessionKey, title, field, seed, mine = {}, onRate }) {
   );
 }
 
-function RaceScreen({ isPremium, onPremium, onSelectDriver, races, standings, live, liveSt, onExpandMap, onTelemetry, onOpenCircuit, wxGuess, wxResult, onGuessWeather, onLapTimes, onSecondScreen, lastRace, dotdVote, onDotdVote, ratings = {}, onRate, onOpenChats, onOpenGhost }) {
+// Stato di OpenF1 per la gara LIVE quando non c'è ancora la sessione da rivedere: bloccato durante la sessione, dati
+// che non arrivano, elenchi vuoti o caricamento.
+function Of1Status({ of1, standings, onRefresh }) {
+  const card = { margin: "0 16px 14px", padding: 14, borderRadius: 18, background: C.card, border: `1px solid ${C.border}` };
+  const refresh = onRefresh ? <button className="press" data-of1-refresh="" onClick={onRefresh} style={{ marginTop: 10, padding: "8px 12px", borderRadius: 10, background: "rgba(255,255,255,.07)", border: `1px solid ${C.border}`, fontFamily: F_HEAD, fontWeight: 800, fontSize: 12, color: C.text }}>↻ Aggiorna</button> : null;
+  if (of1.status === "locked") {
+    const top = standings.drivers.slice().sort((a, b) => a.position - b.position).slice(0, 10);
+    return (
+      <div data-of1-locked="" style={card}>
+        <Eyebrow color={C.gold}>SESSIONE IN CORSO</Eyebrow>
+        <p style={{ margin: 0, fontFamily: F_BODY, fontSize: 12.5, color: C.muted, lineHeight: 1.55 }}>Posizioni, gomme, pit stop, tempi e team radio saranno disponibili qui a fine sessione. Intanto segui la classifica mondiale e commenta in chat!</p>
+        {refresh}
+        <div style={{ marginTop: 12, borderTop: `1px solid ${C.divider}` }}>
+          {top.map(r => { const d = standingsDriver(r.id); return (
+            <div key={r.id} data-of1-standing={r.position} style={{ display: "flex", alignItems: "center", gap: 10, padding: "7px 2px", borderBottom: `1px solid ${C.divider}` }}>
+              <span style={{ width: 20, fontFamily: F_HEAD, fontWeight: 800, fontSize: 13, color: r.position <= 3 ? C.gold : C.text }}>{r.position}</span>
+              <span style={{ flex: 1, fontFamily: F_BODY, fontWeight: 600, fontSize: 12.5, color: C.text }}>{d ? d.full : r.id}</span>
+              <span style={{ fontFamily: F_HEAD, fontWeight: 800, fontSize: 12.5, color: C.text }}>{r.points}<span style={{ fontFamily: F_BODY, fontWeight: 600, fontSize: 10, color: C.dim }}> pt</span></span>
+            </div>
+          ); })}
+        </div>
+      </div>
+    );
+  }
+  const text = of1.status === "error" ? "Impossibile raggiungere il servizio dati. Riprova tra poco." : of1.status === "empty" ? "Dati non ancora disponibili" : "Caricamento dei dati della sessione…";
+  return (
+    <div data-of1-status={of1.status} role="status" style={card}>
+      <div style={{ fontFamily: F_HEAD, fontWeight: 800, fontSize: 13.5, color: C.text }}>{text}</div>
+      {of1.status === "empty" && <p style={{ margin: "4px 0 0", fontFamily: F_BODY, fontSize: 12, color: C.muted, lineHeight: 1.5 }}>I dati veri della sessione arrivano da OpenF1 a fine sessione.</p>}
+      {of1.status !== "loading" && refresh}
+    </div>
+  );
+}
+
+function RaceScreen({ isPremium, onPremium, onSelectDriver, races, standings, live, liveSt, onExpandMap, onTelemetry, onOpenCircuit, wxGuess, wxResult, onGuessWeather, onLapTimes, onSecondScreen, lastRace, dotdVote, onDotdVote, ratings = {}, onRate, onOpenChats, onOpenGhost, of1 = null, onOf1Refresh, replay = null }) {
   const [tab, setTab] = useState("classifica");
   const [champ, setChamp] = useState("piloti");
   const st = live ? liveSt : null;
@@ -4297,13 +4407,14 @@ function RaceScreen({ isPremium, onPremium, onSelectDriver, races, standings, li
   const curTab = tabs.some(t => t[0] === tab) ? tab : "classifica";
   const liveRace = live ? races.find(r => r.id === live.raceId) : null;
   const next = races.find(r => r.status === "IN ARRIVO");
-  const shown = liveRace || races.find(r => r.status === "LIVE") || next;
+  const realLive = races.find(r => r.status === "LIVE") || null;
+  const shown = liveRace || realLive || next;
   const done = races.filter(r => r.status === "CONCLUSA").length;
-  const weatherTrack = live ? live.track : (shown ? trackOf(shown.circuitId) : null);
+  const card = { margin: "0 16px 16px", borderRadius: 18, background: C.card, border: `1px solid ${C.border}`, overflow: "hidden" };
   return (
     <div className="scrollcol" style={{ height: "100%" }}>
       {st && liveRace && st.finished && isRaceType(st.type) && <FinishPodium st={st} race={liveRace} onSelectDriver={onSelectDriver} />}
-      {st && liveRace ? <LiveCard race={liveRace} st={st} track={live.track} demo={live.source === "demo"} onExpand={onExpandMap} /> : (
+      {st && liveRace ? <LiveCard race={liveRace} st={st} track={live.track} source={live.source} onExpand={onExpandMap} replay={replay} /> : (
       <div style={{ position: "relative", margin: "4px 16px 14px", borderRadius: 18, overflow: "hidden", background: C.card, border: `1px solid ${C.border}` }}>
         {shown && <CircuitArt circuitId={shown.circuitId} uid="next" />}
         {shown && <div style={{ position: "absolute", inset: 0, background: "linear-gradient(90deg, rgba(13,13,16,.94) 0%, rgba(13,13,16,.72) 48%, rgba(13,13,16,.18) 100%)" }} />}
@@ -4321,6 +4432,7 @@ function RaceScreen({ isPremium, onPremium, onSelectDriver, races, standings, li
         </div>
       </div>
       )}
+      {!st && realLive && of1 && of1.raceId === realLive.id && of1.status !== "idle" && of1.status !== "ok" && <Of1Status of1={of1} standings={standings} onRefresh={onOf1Refresh} />}
       {st && liveRace && st.type === "RACE" && <DotdCard st={st} race={liveRace} vote={dotdVote || {}} onVote={onDotdVote} />}
       {st && liveRace && st.finished && isRaceType(st.type) && (() => { const key = liveRace.id + ":" + st.type; return (
         <RatingsCard key={key} sessionKey={key} title={liveRace.name + (st.type === "SPRINT" ? " · Sprint" : "")} seed={liveRace.round * 10 + (st.type === "SPRINT" ? 1 : 0)} mine={ratings[key] || {}} onRate={onRate}
@@ -4357,7 +4469,7 @@ function RaceScreen({ isPremium, onPremium, onSelectDriver, races, standings, li
 
       {curTab === "classifica" && st && <TimingTable st={st} onTelemetry={onTelemetry} onSelectDriver={onSelectDriver} onLapTimes={onLapTimes} />}
       {curTab === "messaggi" && st && <RaceControlList messages={st.messages} />}
-      {curTab === "meteo" && <WeatherPanel race={shown} st={st} track={weatherTrack} live={live} guesses={wxGuess} results={wxResult} onGuess={onGuessWeather} />}
+      {curTab === "meteo" && <WeatherPanel race={shown} st={st} live={live} guesses={wxGuess} results={wxResult} onGuess={onGuessWeather} />}
 
       {curTab === "classifica" && !st && lastRace && <LastRaceCard race={lastRace} onSelectDriver={onSelectDriver} />}
       {curTab === "classifica" && !st && lastRace && (() => { const key = lastRace.raceId + ":" + (lastRace.type || "RACE"); return (
@@ -4366,18 +4478,20 @@ function RaceScreen({ isPremium, onPremium, onSelectDriver, races, standings, li
       ); })()}
 
       {curTab === "gomme" && (
-        <div style={{ margin: "0 16px 16px", borderRadius: 18, background: C.card, border: `1px solid ${C.border}`, overflow: "hidden", padding: "4px 0" }}>
-          {TIRES.map((t, i) => (
-            <div key={t.name} style={{ padding: "12px 16px", borderBottom: i < TIRES.length - 1 ? `1px solid ${C.divider}` : "none" }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-                <span style={{ display: "flex", alignItems: "center", gap: 9, fontFamily: F_BODY, fontWeight: 600, fontSize: 13, color: C.text }}><Headshot driver={driverByName(t.name)} size={28} />{t.name}</span>
-                <span style={{ fontFamily: F_BODY, fontSize: 11, color: C.dim }}>{t.compound} · {t.wear}% usura</span>
+        <div data-tyres="" style={{ ...card, padding: "4px 0" }}>
+          {!st && <p data-tyres-empty="" style={{ margin: 0, padding: 16, fontFamily: F_BODY, fontSize: 12.5, color: C.dim, lineHeight: 1.5 }}>{TYRES_EMPTY}</p>}
+          {st && st.cars.map((c, i) => { const d = driverById(c.id), laps = c.tyreAge != null ? `${c.tyreAge} ${c.tyreAge === 1 ? "giro" : "giri"}` : "—"; return (
+            <div key={c.id} data-tyre-row={c.id} style={{ padding: "11px 16px", borderBottom: i < st.cars.length - 1 ? `1px solid ${C.divider}` : "none" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 9 }}>
+                <span style={{ width: 20, fontFamily: F_HEAD, fontWeight: 800, fontSize: 13, color: C.text }}>{c.pos}</span>
+                {d && <Headshot driver={d} size={28} />}
+                <span style={{ flex: 1, minWidth: 0, fontFamily: F_BODY, fontWeight: 600, fontSize: 13, color: C.text }}>{d ? d.full : c.code}</span>
+                <span title={tyreUi(c.tyre)[1]} style={{ width: 12, height: 12, borderRadius: "50%", border: `2.5px solid ${tyreUi(c.tyre)[0]}`, flexShrink: 0 }} />
+                <span style={{ fontFamily: F_BODY, fontSize: 11.5, color: c.dnf ? "#FF5A5F" : C.muted, whiteSpace: "nowrap" }}>{c.dnf ? "Ritirato" : `${tyreUi(c.tyre)[1]} · ${laps}${c.pit ? " · ai box" : ""}`}</span>
               </div>
-              <div style={{ height: 6, borderRadius: 3, background: "rgba(255,255,255,.08)", overflow: "hidden" }}>
-                <div style={{ height: "100%", width: t.wear + "%", borderRadius: 3, background: t.wear > 50 ? C.accent : C.green }} />
-              </div>
+              {c.wear != null && <div style={{ height: 5, marginTop: 7, borderRadius: 3, background: "rgba(255,255,255,.08)", overflow: "hidden" }}><div style={{ height: "100%", width: c.wear + "%", borderRadius: 3, background: c.wear > 50 ? C.accent : C.green }} /></div>}
             </div>
-          ))}
+          ); })}
         </div>
       )}
 
@@ -4424,16 +4538,12 @@ function RaceScreen({ isPremium, onPremium, onSelectDriver, races, standings, li
       )}
 
       {curTab === "radio" && (
-        <div style={{ margin: "0 16px 16px", borderRadius: 18, background: C.card, border: `1px solid ${C.border}`, overflow: "hidden" }}>
-          {RADIOS.map((r, i) => (
-            <div key={i} style={{ display: "flex", alignItems: "center", gap: 12, padding: "13px 16px", borderBottom: i < RADIOS.length - 1 ? `1px solid ${C.divider}` : "none" }}>
-              <Headshot driver={driverByName(r.driver)} size={36} />
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontFamily: F_BODY, fontWeight: 600, fontSize: 12.5, color: C.text }}>{r.driver} <span style={{ color: C.dim, fontWeight: 400 }}>· {r.time}</span></div>
-                <div style={{ fontFamily: F_BODY, fontSize: 12, color: C.muted, marginTop: 2 }}>{r.text}</div>
-              </div>
-            </div>
-          ))}
+        <div data-radios="" style={card}>
+          {isOf1Live(live) && st ? <RadioList live={live} st={st} />
+            : st ? radioFeed(st, 6).map((r, i, all) => (
+              <div key={i} data-radio-demo="" style={{ padding: "12px 16px", borderBottom: i < all.length - 1 ? `1px solid ${C.divider}` : "none", fontFamily: F_BODY, fontSize: 12.5, color: C.muted, lineHeight: 1.4 }}><b style={{ color: C.text, fontFamily: F_HEAD }}>{r.who}</b> <span style={{ color: C.dim }}>{r.when} · DEMO</span><br />{r.text}</div>
+            ))
+            : <p data-radio-empty="later" style={{ margin: 0, padding: 16, fontFamily: F_BODY, fontSize: 12.5, color: C.dim, lineHeight: 1.5 }}>{RADIO_EMPTY}</p>}
         </div>
       )}
       </>
@@ -4667,7 +4777,7 @@ const driverPodium = (ids, onSelect) => ids.slice(0, 3).map((x, i) => { const d 
 function LastRaceCard({ race, onSelectDriver }) {
   const fmtRow = r => r.time;
   return (
-    <div style={{ margin: "0 16px 16px" }} data-last-race={race.real ? "real" : "demo"}>
+    <div style={{ margin: "0 16px 16px" }} data-last-race={race.real ? "real" : "demo"} data-last-race-src={race.src || "app"}>
       <div style={{ padding: "14px 12px 0", borderRadius: 18, background: C.card, border: `1px solid ${C.border}`, overflow: "hidden" }}>
         <div style={{ display: "flex", alignItems: "baseline", gap: 8, padding: "0 4px" }}>
           <Eyebrow color={C.gold}>ULTIMA GARA</Eyebrow>
@@ -6570,13 +6680,25 @@ function InfoModal({ title, body, onClose }) {
   );
 }
 
-function DriverDetailModal({ driver, onClose }) {
-  const q1 = `1:2${driver.pos % 5}.${300 + driver.pos * 37}`;
+// Scheda del pilota: bio, statistiche della carriera e i dati veri dell'ultimo weekend (D19): posizione e distacco
+// nell'ultima gara (lastRace) e il miglior giro in qualifica dello stesso round (TracingInsights, dati FastF1).
+function DriverDetailModal({ driver, lastRace = null, races = [], onClose }) {
+  const row = lastRace && Array.isArray(lastRace.rows) ? lastRace.rows.find(r => r.id === driver.id) || null : null;
+  const race = lastRace ? races.find(r => r.id === lastRace.raceId) || null : null;
+  const Q = race ? (BtWeekend.quali || []).find(q => q.round === race.round) || null : null;
+  const qd = Q && Q.drivers ? Q.drivers[driverCode(driver)] || null : null;
+  const qs = qd ? qd.q.map((v, i) => [v, i]).filter(([v]) => v > 0) : [];
+  const qBest = qs.length ? Math.min(...qs.map(([v]) => v)) : null, qSeg = qs.length ? "Q" + (qs[qs.length - 1][1] + 1) : null;
+  const box = (label, value) => (
+    <div style={{ padding: 12, borderRadius: 12, background: "rgba(255,255,255,.04)" }}>
+      <span style={{ display: "block", fontFamily: F_BODY, fontSize: 10, color: C.dim, marginBottom: 3 }}>{label}</span>
+      <span style={{ fontFamily: F_HEAD, fontWeight: 800, fontSize: 16, color: C.text }}>{value}</span>
+    </div>
+  );
   return (
     <div style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,.75)", zIndex: 600, display: "flex", alignItems: "flex-end" }} onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
-      <div className="scrollcol" style={{ background: C.card, borderRadius: "24px 24px 0 0", width: "100%", maxHeight: "90%", position: "relative" }}>
+      <div data-driver-modal={driver.id} className="scrollcol" style={{ background: C.card, borderRadius: "24px 24px 0 0", width: "100%", maxHeight: "90%", position: "relative" }}>
         <div style={{ position: "relative", height: 230, borderRadius: "24px 24px 0 0", overflow: "hidden", background: `linear-gradient(160deg, ${driver.color} 0%, ${driver.color}55 45%, ${C.card} 100%)` }}>
-          <span style={{ position: "absolute", left: 18, top: 8, fontFamily: F_HEAD, fontWeight: 900, fontStyle: "italic", fontSize: 110, lineHeight: 1, color: "rgba(255,255,255,.14)" }}>{driver.pos}</span>
           {driver.photo ? (
             <img src={driver.photo} alt={driver.full} style={{ position: "absolute", right: 8, bottom: 0, height: 222, width: "auto", maxWidth: "50%", objectFit: "contain", objectPosition: "right bottom" }} />
           ) : (
@@ -6616,29 +6738,21 @@ function DriverDetailModal({ driver, onClose }) {
             </div>
           </div>
         )}
-        <span style={{ display: "block", fontFamily: F_BODY, fontWeight: 700, fontSize: 10.5, letterSpacing: 1, color: C.dim, marginBottom: 8 }}>IN QUESTA GARA</span>
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 16 }}>
-          <div style={{ padding: 12, borderRadius: 12, background: "rgba(255,255,255,.04)" }}>
-            <span style={{ display: "block", fontFamily: F_BODY, fontSize: 10, color: C.dim, marginBottom: 3 }}>POSIZIONE</span>
-            <span style={{ fontFamily: F_HEAD, fontWeight: 800, fontSize: 16, color: C.text }}>P{driver.pos}</span>
+        <span style={{ display: "block", fontFamily: F_BODY, fontWeight: 700, fontSize: 10.5, letterSpacing: 1, color: C.dim, marginBottom: 8 }}>ULTIMA GARA{lastRace ? " · " + lastRace.name.toUpperCase() : ""}</span>
+        {row ? (
+          <div data-driver-last="" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 16 }}>
+            {box("POSIZIONE", row.pos ? "P" + row.pos : "RIT")}
+            {box(row.pos === 1 ? "TEMPO DI GARA" : "DISTACCO", row.time)}
           </div>
-          <div style={{ padding: 12, borderRadius: 12, background: "rgba(255,255,255,.04)" }}>
-            <span style={{ display: "block", fontFamily: F_BODY, fontSize: 10, color: C.dim, marginBottom: 3 }}>DISTACCO</span>
-            <span style={{ fontFamily: F_HEAD, fontWeight: 800, fontSize: 16, color: C.text }}>{driver.gap}</span>
+        ) : <p style={{ margin: "0 0 16px", fontFamily: F_BODY, fontSize: 12, color: C.dim }}>Non ha corso l'ultima gara.</p>}
+        <span style={{ display: "block", fontFamily: F_BODY, fontWeight: 700, fontSize: 10.5, letterSpacing: 1, color: C.dim, marginBottom: 8 }}>QUALIFICA{race ? " · " + race.name.toUpperCase() : ""}</span>
+        {qBest ? (
+          <div data-driver-quali="" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 16 }}>
+            {box("MIGLIOR GIRO", fmtLapMs(qBest))}
+            {box("FINO A", qSeg)}
           </div>
-          <div style={{ padding: 12, borderRadius: 12, background: "rgba(255,255,255,.04)" }}>
-            <span style={{ display: "block", fontFamily: F_BODY, fontSize: 10, color: C.dim, marginBottom: 3 }}>MIGLIOR GIRO QUALIFICA</span>
-            <span style={{ fontFamily: F_HEAD, fontWeight: 800, fontSize: 16, color: C.text }}>{q1}</span>
-          </div>
-          <div style={{ padding: 12, borderRadius: 12, background: "rgba(255,255,255,.04)" }}>
-            <span style={{ display: "block", fontFamily: F_BODY, fontSize: 10, color: C.dim, marginBottom: 3 }}>GRIGLIA</span>
-            <span style={{ fontFamily: F_HEAD, fontWeight: 800, fontSize: 16, color: C.text }}>P{driver.pos}</span>
-          </div>
-        </div>
-        <div style={{ padding: "10px 14px", borderRadius: 12, background: "rgba(255,255,255,.04)", display: "flex", alignItems: "center", gap: 8 }}>
-          <Icon name="info" size={13} color={C.dim} />
-          <span style={{ fontFamily: F_BODY, fontSize: 11, color: C.dim, lineHeight: 1.4 }}>Anteprima — nella app reale i dati di qualifica arriverebbero in diretta da F1Dash.</span>
-        </div>
+        ) : <p style={{ margin: "0 0 16px", fontFamily: F_BODY, fontSize: 12, color: C.dim }}>Tempi della qualifica non disponibili.</p>}
+        <span style={{ display: "block", fontFamily: F_BODY, fontSize: 10, color: C.dim, lineHeight: 1.45 }}>Ultima gara: risultato ufficiale. Qualifica: tempi veri di TracingInsights (dati FastF1 del live timing).</span>
         </div>
       </div>
     </div>
@@ -6821,9 +6935,18 @@ function App() {
   const [shareId, setShareId] = useState(null);   // articolo aperto nel foglio "Condividi"
   const [circuitId, setCircuitId] = useState(null); // pagina "Mostra di più" del circuito
   // Sessione in diretta che avanza 4 volte al secondo: { raceId, type, sim, track, source }. Per ora c'è solo la
-  // "Prova diretta" del Pannello Admin (source "demo", simulata): gira solo sul telefono dell'admin, su una copia
-  // dello stato, e non cambia niente di quello che vedono gli altri né dei suoi dati (D23).
-  const [live, setLive] = useState(null);
+  // Diretta: la "Prova diretta" del Pannello Admin (source "demo", simulata: gira solo sul telefono dell'admin, su una
+  // copia dello stato, e non cambia niente di quello che vedono gli altri né dei suoi dati, D23) oppure la sessione finita
+  // della gara LIVE, rivista con i dati veri di OpenF1 (source "openf1"). Con la prova DEMO accesa, si vede la prova.
+  const [demoLive, setDemoLive] = useState(null);
+  const [of1Live, setOf1Live] = useState(null);
+  const live = demoLive || of1Live;
+  const [of1, setOf1] = useState({ status: "idle", raceId: null });   // gara LIVE: "loading" | "locked" | "error" | "empty" | "ok"
+  const of1TickRef = useRef(null);
+  // Sessione rivista: parte ferma alla fine; "Rivedi dall'inizio" la fa scorrere ×10 (o ×60).
+  const [replay, setReplay] = useState({ playing: false, speed: 10 });
+  const replayRef = useRef(replay);
+  replayRef.current = replay;
   const [, setLiveTick] = useState(0);
   const [liveSpeed, setLiveSpeed] = useState(3);
   const [telemetry, setTelemetry] = useState(null); // { carId, lapNo, sector }
@@ -6880,10 +7003,16 @@ function App() {
     R.q = [...dnfs, ...R.q.filter(n => !(fast.length && n.kind === "fastest")), ...fast];   // del giro più veloce vale l'ultimo
     if (!R.cur) nextNotice();
   };
+  // Sessione rivista: gli avvisi ripartono dal punto in cui si è (all'arrivo è finita: niente avvisi di ritiri già passati).
+  const syncNotices = lv => {
+    const R = noticeRef.current, f = lv.sim.feed();
+    R.dnf = f.dnfs.length; R.best = f.bestLap; R.q = []; clearTimeout(R.timer); R.cur = null; setNotice(null);
+  };
   useEffect(() => {
     const R = noticeRef.current; clearTimeout(R.timer);
     noticeRef.current = { q: [], cur: null, best: null, dnf: 0, timer: null }; setNotice(null);
     if (!live) return;
+    if (isOf1Live(live)) syncNotices(live);
     const iv = setInterval(() => pollNotices(live), 500);
     return () => { clearInterval(iv); clearTimeout(noticeRef.current.timer); };
   }, [live]);
@@ -6895,10 +7024,26 @@ function App() {
       state: () => live.sim.state(),
       lap: (id, lapNo) => live.sim.laps(id).find(l => l.lapNo === lapNo) || null,
       retire: (id, cause) => { const ok = live.sim.retire(id, cause); setLiveTick(n => n + 1); pollNotices(live); return ok; },
+      jumpTo: t => { if (!live.sim.jumpTo) return; live.sim.jumpTo(t); syncNotices(live); setLiveTick(n => n + 1); },   // sessione rivista
     };
-    const iv = setInterval(() => { live.sim.advance(0.25 * liveSpeed); if (liveShown.current) setLiveTick(n => n + 1); }, 250);
+    // La prova DEMO va avanti da sola; la sessione rivista solo dopo "Rivedi dall'inizio", fino alla fine.
+    const iv = setInterval(() => {
+      if (isOf1Live(live)) {
+        const r = replayRef.current;
+        if (!r.playing) return;
+        live.sim.advance(0.25 * r.speed);
+        if (live.sim.t >= live.sim.duration) setReplay(x => ({ ...x, playing: false }));
+      } else live.sim.advance(0.25 * liveSpeed);
+      if (liveShown.current) setLiveTick(n => n + 1);
+    }, 250);
     return () => clearInterval(iv);
   }, [live, liveSpeed]);
+  const replayCtl = isOf1Live(live) ? {
+    playing: replay.playing, speed: replay.speed,
+    onPlay: () => { live.sim.jumpTo(0); syncNotices(live); setReplay(r => ({ ...r, playing: true })); setLiveTick(n => n + 1); },
+    onSpeed: () => setReplay(r => ({ ...r, speed: r.speed === 10 ? 60 : 10 })),
+    onEnd: () => { live.sim.jumpTo(live.sim.duration); syncNotices(live); setReplay(r => ({ ...r, playing: false })); setLiveTick(n => n + 1); },
+  } : null;
   // ── Contenuti condivisi su Firebase (src/services/appdata.js) ──────────
   // Un nuovo valore uguale a quello che c'è già non cambia lo stato (niente ridisegni inutili a ogni rilettura).
   const keep = set => v => set(cur => (sameJson(cur, v) ? cur : v));
@@ -7045,6 +7190,114 @@ function App() {
   // Aprendo il Profilo con il profilo non ancora arrivato si riprova subito.
   useEffect(() => { if (view === "profilo" && account && account.loaded === false) Account.retry().catch(() => {}); }, [view]);
 
+  // ── OpenF1 (src/services/openf1.js) ────────────────────────────────────
+  // Gara LIVE (shared/bt-races): subito e poi ogni 30 secondi si guarda l'ultima sessione, una richiesta alla volta.
+  // Durante la sessione OpenF1 gratis è bloccato: "SESSIONE IN CORSO". Finita, la si carica una volta sola e la si rivede
+  // (source "openf1"); intanto si continua a guardare, così la sessione dopo del weekend prende il suo posto.
+  // (Il progetto diceva ogni 10 secondi: con il limite di 30 richieste al minuto si guarda ogni 30 s e si carica una volta.)
+  const racesRef = useRef(races);
+  racesRef.current = races;
+  const realLiveRace = races.find(r => r.status === "LIVE") || null;
+  const realLiveId = realLiveRace ? realLiveRace.id : null;
+  useEffect(() => {
+    setOf1Live(null);
+    if (!realLiveId) { setOf1({ status: "idle", raceId: null }); return undefined; }
+    let alive = true, busy = false, loaded = null, loadedAt = 0;
+    setOf1({ status: "loading", raceId: realLiveId });
+    const tick = async () => {
+      if (busy || !alive) return;
+      busy = true;
+      try {
+        const race = racesRef.current.find(r => r.id === realLiveId);
+        const s = await OF1.latestSession();
+        if (!alive) return;
+        if (!s || !race || !sessionOfWeekend(s, race)) { if (!loaded) setOf1({ status: "empty", raceId: realLiveId }); return; }
+        if (loaded === s.session_key && !of1NeedsReload(s, loadedAt, nowMs())) return;
+        if (!loaded) setOf1({ status: "loading", raceId: realLiveId });
+        const raw = await OF1.loadSession(s.session_key);
+        if (!alive) return;
+        const track = trackOf(race.circuitId);
+        if (!raw || !track || (!raw.laps.length && !raw.position.length)) { if (!loaded) setOf1({ status: "empty", raceId: realLiveId }); return; }
+        const sim = buildReplay(raw, track, { drivers: LIVE_DRIVERS, of1: OF1 });
+        loaded = s.session_key; loadedAt = nowMs();
+        setReplay(r => ({ ...r, playing: false }));
+        setOf1Live({ raceId: race.id, type: sim.type, sim, track, source: "openf1", raw, sessionKey: s.session_key });
+        setOf1({ status: "ok", raceId: realLiveId });
+      } catch (e) {
+        if (!alive) return;
+        // Bloccato: è cominciata un'altra sessione. Senza rete (o OpenF1 occupato) si tiene quello che c'è.
+        if (e && e.locked) { loaded = null; setOf1Live(null); setOf1({ status: "locked", raceId: realLiveId }); }
+        else if (!loaded) setOf1({ status: "error", raceId: realLiveId });
+      } finally { busy = false; }
+    };
+    of1TickRef.current = tick;
+    tick();
+    const iv = setInterval(tick, OF1_POLL_MS);
+    return () => { alive = false; clearInterval(iv); of1TickRef.current = null; };
+  }, [realLiveId]);
+  // Ultima gara: all'avvio quella vera di OpenF1 (podio e classifica da session_result), salvata sul telefono per 6 ore.
+  // Senza risposta resta quella che c'è (LAST_RACE_INIT) e si riprova dopo 5 minuti.
+  useEffect(() => {
+    let alive = true, tm = null;
+    const cached = local.get(OF1_LAST_RACE_KEY);
+    if (cached && cached.race && Array.isArray(cached.race.rows)) setLastRace(cached.race);
+    const load = async () => {
+      try {
+        const now = nowMs();
+        const list = await OF1.get("sessions", `year=${new Date(now).getUTCFullYear()}&session_name=Race`);
+        const ended = list.filter(x => x && isFinite(Date.parse(x.date_end || x.date_start)) && Date.parse(x.date_end || x.date_start) + 3600000 <= now)
+          .sort((a, b) => Date.parse(b.date_start) - Date.parse(a.date_start));
+        if (!ended.length) throw new Error("nessuna gara");
+        const s = ended[0], q = "session_key=" + s.session_key;
+        const [session_result, drivers, laps] = await Promise.all([OF1.get("session_result", q), OF1.get("drivers", q), OF1.get("laps", q)]);
+        const L = lastRaceFromResult({ session: s, session_result, drivers, laps }, racesRef.current, { drivers: LIVE_DRIVERS });
+        if (!L) throw new Error("nessun risultato");
+        if (!alive) return;
+        setLastRace(L);
+        local.set(OF1_LAST_RACE_KEY, { at: Date.now(), race: L });
+      } catch (e) {
+        if (alive) tm = setTimeout(load, OF1_RETRY_MS);
+      }
+    };
+    if (!(cached && cached.at && Date.now() - cached.at < OF1_LAST_RACE_MS)) load();
+    return () => { alive = false; clearTimeout(tm); };
+  }, []);
+  // Esito del pronostico pioggia (D09): per le sessioni finite su cui si è fatto il pronostico, il meteo vero di OpenF1
+  // della sessione dello stesso tipo e dello stesso weekend. Gli esiti restano sul telefono: non cambiano più.
+  const wxRef = useRef({ guess: wxGuess, result: wxResult });
+  wxRef.current = { guess: wxGuess, result: wxResult };
+  useEffect(() => {
+    const c = local.get(OF1_WX_KEY);
+    if (c && typeof c === "object") setWxResult(r => ({ ...c, ...r }));
+    let alive = true, busy = false;
+    const years = {};
+    const sync = async () => {
+      if (busy) return;
+      busy = true;
+      try {
+        const { guess, result } = wxRef.current;
+        for (const k of Object.keys(guess).filter(x => !result[x])) {
+          const [rid, key] = k.split(":"), race = racesRef.current.find(r => r.id === rid);
+          if (!race) continue;
+          const ses = weekendWeather(race).sessions.find(x => x.key === key);
+          const at = ses && ses.utc ? Date.parse(ses.utc) : null;
+          if (at != null ? nowMs() < at + 2 * 3600000 : nowMs() < Date.parse(String(race.date).slice(0, 10) + "T23:59:59Z")) continue;   // non ancora finita
+          const y = String(race.date).slice(0, 4);
+          if (!years[y]) years[y] = await OF1.get("sessions", "year=" + y);
+          const s = years[y].find(x => of1SessionType(x) === key && sessionOfWeekend(x, race) && (at == null || Math.abs(Date.parse(x.date_start) - at) < 6 * 3600000));
+          if (!s || Date.parse(s.date_end || s.date_start) > nowMs()) continue;
+          const w = await OF1.weatherOf(s.session_key);
+          if (!alive) return;
+          if (w.length) saveWxResult(k, w.some(x => x && x.rainfall) ? "rain" : "dry");
+        }
+      } catch (e) {
+        // senza rete (o OpenF1 occupato) si riprova al prossimo giro
+      } finally { busy = false; }
+    };
+    const t0 = setTimeout(sync, 4000), iv = setInterval(sync, 15 * 60000);
+    return () => { alive = false; clearTimeout(t0); clearInterval(iv); };
+  }, [userEmail]);
+
   // Notifiche: quelle dell'admin (shared/bt-notifs) più gli avvisi di questo telefono. Sono da leggere quelle più nuove
   // dell'ultima "Segna tutte come lette" (notifSeenAt, nell'account).
   const notifs = [
@@ -7122,15 +7375,25 @@ function App() {
   // Fine di una sessione, una volta sola: com'è andato il meteo, punti FantaF1 della sessione e, a fine gara, podio e
   // riapertura della squadra (con i cambi gratis del weekend dopo). La prova DEMO non cambia niente di tutto questo:
   // né l'ultima gara, né il meteo, né i punti, né squadra e cambi (D23).
+  const saveWxResult = (k, res) => {
+    setWxResult(r => (r[k] ? r : { ...r, [k]: res }));
+    local.set(OF1_WX_KEY, { ...(local.get(OF1_WX_KEY) || {}), [k]: res });
+  };
   const closeSession = (lv) => {
     if (!lv || lv.closed) return;
     if (lv.source === "demo") { lv.closed = true; return; }
     const race = races.find(r => r.id === lv.raceId); if (!race) return;
     lv.closed = true;
     const stNow = lv.sim.state();
-    const x = weekendWeather(race).sessions.find(s => s.key === lv.type);
     const k = race.id + ":" + lv.type;
-    if (x) setWxResult(r => r[k] ? r : { ...r, [k]: x.outcome });
+    // Esito del pronostico: il meteo vero di OpenF1 della sessione (D09); senza meteo nessun esito.
+    if (lv.raw && Array.isArray(lv.raw.weather) && lv.raw.weather.length) saveWxResult(k, lv.sim.rained() ? "rain" : "dry");
+    // Dopo la gara, l'ultima gara è quella vera: podio e classifica dal risultato ufficiale (session_result).
+    if (lv.type === "RACE" && stNow.finished && lv.raw) {
+      const L = lastRaceFromResult(lv.raw, races, { drivers: LIVE_DRIVERS });
+      if (L) { setLastRace(L); local.set(OF1_LAST_RACE_KEY, { at: Date.now(), race: L }); }
+    }
+    if (!FANTA_REAL_POINTS) return;
     if (stNow.finished && ["QUALI", "SPRINT", "RACE"].includes(lv.type)) {
       const order = stNow.cars.map(c => ({ id: c.id, pos: c.pos, grid: c.grid, out: c.out ? c.outIn : null, dnf: !!c.dnf }));
       const pts = BtLogic.sessionPoints({ type: lv.type, fastest: stNow.bestLap ? stNow.bestLap.id : null, order }, TEAM_OF);
@@ -7143,8 +7406,6 @@ function App() {
       if (tr.penalty) setFantaWeekends(ws => ws.some(w => w.id === race.id + ":PEN") ? ws : [...ws, { id: race.id + ":PEN", raceId: race.id, type: "PEN", total: -tr.penalty, lines: [] }]);
       setSquadBase({ drivers: squad.drivers.slice(), teams: squad.teams.slice() });
       setFreeTransfers(tr.unlimited ? BtLogic.RULES.freeTransfers : BtLogic.nextFree(freeTransfers, tr.used));
-      if (stNow.finished) setLastRace({ raceId: race.id, name: race.name, type: "RACE", real: false, fastest: stNow.bestLap ? stNow.bestLap.id : null,
-        rows: stNow.cars.map((c, i) => c.dnf ? { id: c.id, pos: null, time: "Ritirato", dnf: c.dnf.cause, why: `${DNF_LABEL[c.dnf.cause]} · giro ${c.dnf.lap}` } : ({ id: c.id, pos: c.pos, time: i === 0 ? `${stNow.totalLaps} giri` : c.lapsDown > 0 ? `+${c.lapsDown} ${c.lapsDown === 1 ? "giro" : "giri"}` : "+" + (c.gap || 0).toFixed(3) + "s" })) });
     }
   };
   closeSessionRef.current = closeSession;
@@ -7157,7 +7418,7 @@ function App() {
   // Prova diretta (DEMO) dal Pannello Admin: avvio, stop, bandiere e ultimo giro. Non scrive niente su Firebase (né lo
   // stato delle gare in shared/bt-races, né i dati dell'account) e non blocca la squadra FantaF1 (D23).
   const startLive = (raceId, type) => {
-    if (live) closeSession(live);
+    if (demoLive) closeSession(demoLive);
     const race = races.find(r => r.id === raceId);
     const circ = race && CIRCUITS[race.circuitId];
     if (!circ) { showToast("Per questa gara non c'è il tracciato"); return; }
@@ -7165,21 +7426,22 @@ function App() {
     const sched = weekendWeather(race).sessions.find(s => s.key === type);
     const [hh, mm] = (sched ? sched.time : "15:00").split(":").map(Number);
     const sim = LiveSim.createSession({ track, drivers: LIVE_DRIVERS, type, seed: race.round * 97 + type.length, script: true, startClock: hh * 3600 + mm * 60 });
-    setLive({ raceId, type, sim, track, source: "demo" }); setLapList(null); setTelemetry(null);
+    setDemoLive({ raceId, type, sim, track, source: "demo" }); setLapList(null); setTelemetry(null);
     setDemoVotes({ ratings: {}, dotd: {} });
     showToast(`Prova diretta (DEMO): ${sessionName(type)}. La vedi solo tu.`);
   };
   const stopLive = () => {
-    if (live) closeSession(live);
-    setLive(null); setTelemetry(null); setLapList(null); setDemoVotes({ ratings: {}, dotd: {} }); showToast("Prova diretta terminata");
+    if (demoLive) closeSession(demoLive);
+    setDemoLive(null); setTelemetry(null); setLapList(null); setDemoVotes({ ratings: {}, dotd: {} }); showToast("Prova diretta terminata");
   };
-  const liveFlag = (kind, sector) => { if (live) { live.sim.setFlag(kind, sector); setLiveTick(n => n + 1); } };
+  // Bandiere, ritiri e ultimo giro: solo nella prova DEMO (la sessione vera è quella che è stata).
+  const liveFlag = (kind, sector) => { if (demoLive) { demoLive.sim.setFlag(kind, sector); setLiveTick(n => n + 1); } };
   const liveRetire = (id, cause) => {
-    if (!live || !live.sim.retire(id, cause)) return;
-    setLiveTick(n => n + 1); pollNotices(live);
+    if (!demoLive || !demoLive.sim.retire(id, cause)) return;
+    setLiveTick(n => n + 1); pollNotices(demoLive);
     const d = driverById(id); showToast(`${d ? d.full : id} ritirato: ${DNF_LABEL[cause] || DNF_LABEL.altro}`);
   };
-  const liveLastLap = () => { if (live) { live.sim.jumpToLastLap(); live.sim.advance(0.5); setLiveTick(n => n + 1); showToast(isRaceType(live.type) ? "Ultimo giro" : "Ultimo minuto"); } };
+  const liveLastLap = () => { if (demoLive) { demoLive.sim.jumpToLastLap(); demoLive.sim.advance(0.5); setLiveTick(n => n + 1); showToast(isRaceType(demoLive.type) ? "Ultimo giro" : "Ultimo minuto"); } };
   const openChat = (id) => { setChatId(id); setView("chatThread"); };
   // Profilo non ancora letto (avvio senza rete): prima di scrivere in chat lo si rilegge; finché non arriva il nome non
   // si conosce, e il messaggio non parte (revisione della Fase B, C1).
@@ -7388,7 +7650,8 @@ function App() {
   };
   const onRaceTab = view === "tab" && tab === "race";
   liveShown.current = !!live && (onRaceTab || liveTrackOpen || ssOpen || view === "admin");
-  const liveProps = { live, liveSt, onStartLive: startLive, onStopLive: stopLive, onFlag: liveFlag, onLastLap: liveLastLap, onRetire: liveRetire, liveSpeed, setLiveSpeed };
+  // Pannello Admin: i comandi della prova DEMO valgono solo per la prova (la sessione vera di OpenF1 non si tocca).
+  const liveProps = { live: demoLive, liveSt: demoLive ? (demoLive === live ? liveSt : demoLive.sim.state()) : null, onStartLive: startLive, onStopLive: stopLive, onFlag: liveFlag, onLastLap: liveLastLap, onRetire: liveRetire, liveSpeed, setLiveSpeed };
   // Sfondo della pagina Race: giallo con bandiera gialla / SC / VSC, rosso con la rossa, a scacchi al primo e all'ultimo giro.
   const pageBg = onRaceTab && liveSt ? liveSt.bg : null;
   const PAGE_BG = {
@@ -7410,7 +7673,7 @@ function App() {
   else if (view === "notifiche") body = <NotificheScreen onBack={viewBack.notifiche} onAction={a => { if (a === "feedback") { if (feedbackAsk && !feedbackAsk.read) saveAsk({ ...feedbackAsk, read: true }); setFeedbackOpen(true); } }} notifs={notifs} onReadAll={readAll} isPremium={isPremium} onPremium={() => setPremiumOpen(true)} favTeam={favTeam} favDriver={favDriver} prefs={notifPrefs} onPrefs={v => { if (!userDataWait()) setNotifPrefs(v); }} onGoProfilo={() => setView("profilo")} />;
   else {
     if (tab === "home") body = <HomeScreen ig={ig} highlights={highlights} onOpenIg={() => { setIgFrom("tab"); setView("instagram"); }} articles={articles} tagFilter={tagFilter} onTag={filterByTag} onClearTag={() => setTagFilter(null)} onOpenArticle={openArticle} isPremium={isPremium} onPremium={() => setPremiumOpen(true)} onToast={showToast} onLiveTrack={() => setLiveTrackOpen(true)} onGoFanta={() => goTab("fanta")}  saved={saved} onToggleSave={toggleSave} savedOnly={savedOnly} setSavedOnly={setSavedOnly} onOpenCircuit={openCircuit} homePoll={homePoll} homeVote={votes.home || null} onVote={castVote} />;
-    else if (tab === "race") body = <RaceScreen dotdVote={live ? votesNow.dotd[live.raceId] : null} onDotdVote={(k, id) => live && voteDotd(live.raceId, k, id)} ratings={votesNow.ratings} onRate={rateDriver} onOpenChats={() => setView("chats")} onOpenGhost={() => setView("ghost")} races={races} standings={standings} isPremium={isPremium} onPremium={() => setPremiumOpen(true)} onSelectDriver={setSelectedDriver} live={live} liveSt={liveSt} onExpandMap={() => setLiveTrackOpen(true)} onTelemetry={(carId, lapNo, sector) => setTelemetry({ carId, lapNo, sector })} onOpenCircuit={openCircuit} wxGuess={wxGuess} wxResult={wxResult} onGuessWeather={guessWeather} onLapTimes={setLapList} onSecondScreen={() => setSsOpen(true)} lastRace={lastRace} />;
+    else if (tab === "race") body = <RaceScreen dotdVote={live ? votesNow.dotd[live.raceId] : null} onDotdVote={(k, id) => live && voteDotd(live.raceId, k, id)} ratings={votesNow.ratings} onRate={rateDriver} onOpenChats={() => setView("chats")} onOpenGhost={() => setView("ghost")} races={races} standings={standings} isPremium={isPremium} onPremium={() => setPremiumOpen(true)} onSelectDriver={setSelectedDriver} live={live} liveSt={liveSt} onExpandMap={() => setLiveTrackOpen(true)} onTelemetry={(carId, lapNo, sector) => setTelemetry({ carId, lapNo, sector })} onOpenCircuit={openCircuit} wxGuess={wxGuess} wxResult={wxResult} onGuessWeather={guessWeather} onLapTimes={setLapList} onSecondScreen={() => setSsOpen(true)} lastRace={lastRace} of1={of1} onOf1Refresh={() => of1TickRef.current && of1TickRef.current()} replay={replayCtl} />;
     else if (tab === "garage") body = <GarageScreen races={races} pitBest={pitBest} onPitResult={t => { if (!userDataWait()) setPitBest(b => b == null || t < b ? t : b); }} sillyPreds={sillyPreds} onPredict={predictSeat} sillyOfficial={sillyOfficial} live={live} stratPreds={stratPreds} onStrat={(id, st) => { if (!userDataWait()) setStratPreds(x => ({ ...x, [id]: { stints: st, at: nowMs() } })); }} />;
     else if (tab === "fanta") body = <FantaScreen squad={squad} setSquad={setSquad} base={squadBase} freeTransfers={freeTransfers} budget={FANTA_BUDGET} stats={fantaStats} race={fantaRace} lock={teamLockInfo} weekends={fantaWeekends} isPremium={isPremium} onPremium={() => setPremiumOpen(true)} onToast={showToast} bonus={bonus} leagues={leagues} setLeagues={setLeagues} needAccount={needAccount} predictions={predictions} predAnswers={predAnswers} predLockOf={predLockOf} onAnswerPrediction={answerPrediction} />;
   }
@@ -7425,7 +7688,7 @@ function App() {
         <div style={{ flex: 1, minHeight: 0 }}>{body}</div>
         {showBottomNav && <BottomNav active={tab} onChange={goTab} />}
         {premiumOpen && <PremiumModal onClose={closePremium} isPremium={isPremium} plan={plan} setPlan={setPlan} onSubscribe={doSubscribe} subscribing={subscribing} subscribed={subscribed} trialUsed={!!trial} onTrial={doTrial} trial={trial} />}
-        {selectedDriver && <DriverDetailModal driver={selectedDriver} onClose={() => setSelectedDriver(null)} />}
+        {selectedDriver && <DriverDetailModal driver={selectedDriver} lastRace={lastRace} races={races} onClose={() => setSelectedDriver(null)} />}
         {liveTrackOpen && <LiveMapView race={live ? races.find(r => r.id === live.raceId) : (races.find(r => r.status === "IN ARRIVO") || null)} live={live} st={liveSt} onClose={() => setLiveTrackOpen(false)} />}
         {ssOpen && isPremium && <SecondScreen chat={chats.find(c => c.id === "generale")} blocked={blocked} onChatSend={guest ? () => needLogin("Per scrivere in chat serve un account.") : t => sendMessage("generale", t)} race={live ? races.find(r => r.id === live.raceId) : (races.find(r => r.status === "IN ARRIVO") || null)} live={live} st={liveSt} standings={standings} layout={ssLayout} setLayout={setSsLayout} prefs={ssPrefs} setPrefs={setSsPrefs} vote={live ? votesNow.dotd[live.raceId] || {} : {}} onVote={(k, id) => live && voteDotd(live.raceId, k, id)} notice={notice} onCloseNotice={nextNotice} onClose={() => setSsOpen(false)} />}
         {lapList && live && liveSt && <LapTimesModal live={live} st={liveSt} carId={lapList} onOpenLap={n => setTelemetry({ carId: lapList, lapNo: n, sector: 0 })} onClose={() => setLapList(null)} />}
@@ -7446,4 +7709,4 @@ function App() {
 
 export default App;
 // Usati dalle prove della 2.0 dentro la pagina (nell'anteprima erano variabili globali).
-export { weekendWeather, RACES_INIT, premiumOffer };
+export { weekendWeather, RACES_INIT, premiumOffer, of1NeedsReload };

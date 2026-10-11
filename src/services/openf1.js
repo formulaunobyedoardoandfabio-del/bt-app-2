@@ -343,7 +343,8 @@ function buildReplay(raw = {}, track = null, { drivers = [], of1 = null } = {}) 
       speed: inLap && !inPit && !dnf ? L / (cur.dur || typical) : 0, dist: dnf ? nDone * L : inLap ? (nStarted - 1 + frac) * L : nDone * L,
       gap: null, interval: null, lapsDown: 0, lap: isRace ? Math.max(1, nStarted) : nDone + 1,
       last: nDone ? R[nDone - 1] : null, best, sectors, minis,
-      pit: !dnf && (inPit || garage), out: false, outIn: null, tyre: tyreRec ? tyreRec.tyre : null, tyreAge: tyreRec ? tyreRec.age : null, finished,
+      pit: !dnf && (inPit || garage), out: false, outIn: null, tyre: tyreRec ? tyreRec.tyre : null,
+      tyreAge: tyreRec && tyreRec.age != null ? tyreRec.age + (inLap || !nDone ? 0 : 1) : null, finished,   // fuori dal giro: compreso l'ultimo fatto
       tyreLife: null, wear: null, stops: pits.filter(p => p.t <= at).length, dnf,
       _pos: pi >= 0 ? P[pi].position : null, _first: P.length ? P[0].position : null, _iv: ii >= 0 ? IV[ii] : null,
       _s: inLap && !inPit && !dnf ? frac * L : 0, _pre: isRace && nStarted === 0, _done: nDone, _dnfT: D ? D.t : 0,
@@ -505,7 +506,7 @@ function lastRaceFromResult(raw = {}, races = [], { drivers = [] } = {}) {
     if (r.dnf) return { id, time: "Ritirato", pos, dnf: "altro", why: null };
     return { id, time: timeOf(r), pos, dnf: null, why: null };
   });
-  return { raceId: race ? race.id : null, name: race ? race.name : ("GP " + (s.location || s.country_name || "")).trim(), type: "RACE", real: true,
+  return { raceId: race ? race.id : null, name: race ? race.name : ("GP " + (s.location || s.country_name || "")).trim(), type: "RACE", real: true, src: "openf1",
     fastest: fastest != null ? idOf(fastest) : null, rows };
 }
 

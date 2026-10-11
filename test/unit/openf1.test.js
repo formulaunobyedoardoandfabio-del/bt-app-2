@@ -101,6 +101,7 @@ t('Baku: alla fine vince Russell, 51 giri', () => {
   assert.strictEqual(r.source, 'openf1');
   assert.strictEqual(r.type, 'RACE');
   assert.strictEqual(st.cars[0].id, 'russell');
+  assert.deepStrictEqual([st.cars[0].tyre, st.cars[0].tyreAge], ['S', 20]);   // Morbide montate usate (5 giri) al giro 37, poi 15 giri
   assert.deepStrictEqual(st.cars.slice(0, 3).map(c => c.code), ['RUS', 'VER', 'HAD']);
   assert.ok(st.finished && st.cars[0].finished, 'gara finita');
   assert.strictEqual(st.cars[1].gap, 0.232);   // distacco sulla linea all'ultimo giro (il risultato ufficiale dice +0.196)
@@ -186,7 +187,7 @@ t('ultima gara da session_result: Russell primo, poi i distacchi', () => {
   const L = lastRaceFromResult(FX, RACES, ctx);
   assert.strictEqual(L.rows[0].id, 'russell');
   assert.ok(/^\+/.test(L.rows[1].time));
-  assert.deepStrictEqual([L.raceId, L.name, L.type, L.real, L.fastest], ['r15', "GP dell'Azerbaigian", 'RACE', true, 'russell']);
+  assert.deepStrictEqual([L.raceId, L.name, L.type, L.real, L.src, L.fastest], ['r15', "GP dell'Azerbaigian", 'RACE', true, 'openf1', 'russell']);
   assert.deepStrictEqual(L.rows.slice(0, 3).map(x => [x.id, x.time, x.pos]), [['russell', '1:38:02.143', 1], ['verstappen', '+0.196s', 2], ['hadjar', '+10.704s', 3]]);
   const bot = L.rows.find(x => x.id === 'bottas'), str = L.rows.find(x => x.id === 'stroll');
   assert.deepStrictEqual([bot.pos, bot.time, !!bot.dnf], [16, 'Ritirato', true]);
