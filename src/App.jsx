@@ -50,13 +50,10 @@ const F1_DISCLAIMER = APP_NAME + " è un'app non ufficiale e non è associata in
 // Pagamenti veri (abbonamento con Google Play Billing): spenti, come nell'app di oggi. Finché sono spenti la §4 dei
 // Termini dice che il Premium non è ancora disponibile.
 const PAYMENTS_ENABLED = false;
-// Prova del Premium dell'anteprima 2.0: si attiva con un tocco, senza pagare. La toglie il Task 11 (D44, Premium come oggi).
-const PREMIUM_DEMO = true;
-// Prova gratuita di 2 settimane, una sola volta per account (sul Play Store si imposta come offerta dell'abbonamento).
-const TRIAL_DAYS = 14;
-const premiumOffer = ({ trialUsed, isPremium }) => isPremium ? "premium" : trialUsed ? "subscribe" : "trial";
-const trialDaysLeft = trial => trial ? Math.max(0, Math.ceil((trial.end - Date.now()) / 86400000)) : 0;
-const fmtDay = ms => new Date(ms).toLocaleDateString("it-IT", { day: "numeric", month: "long", year: "numeric" });
+// Come l'app di oggi: finché gli abbonamenti sono spenti le funzioni Premium sono aperte a tutti (premAll), ma il
+// Premium resta in vista (tasto in alto, scheda nel Profilo, finestra "PREMIUM IN ARRIVO"). La pubblicità la toglie solo
+// un abbonamento pagato (users.isPremium, "prem"), che apre anche il FantaF1. Nessuna prova gratuita (D44).
+const PREMIUM_FREE_FOR_ALL = !PAYMENTS_ENABLED;
 // Apre un link fuori dall'app: nell'APK col browser di sistema, sul web in una nuova scheda.
 const openUrl = url => {
   try { const B = window.Capacitor?.Plugins?.Browser; if (window.Capacitor?.isNativePlatform?.() && B) { B.open({ url }); return; } } catch (e) {}
@@ -347,30 +344,20 @@ const CHAT_ROOMS = [
 
 // Le notifiche dell'admin stanno in shared/bt-notifs, nel formato di oggi (src/services/appdata.js).
 
+// Solo quello che nell'app è davvero Premium (D45), più "Senza pubblicità" e il FantaF1 senza aspettare il video.
 const PREMIUM_CATEGORIES = [
-  { name: "In gara", items: [
-    { icon: "stopwatch", title: "Tempi su giro in tempo reale" },
-    { icon: "tire", title: "Gomme: usura e strategia" },
-    { icon: "radio", title: "Team radio audio live" },
-    { icon: "flag", title: "Pit stop e distacchi completi" },
-  ]},
-  { name: "Fanta F1", items: [
-    { icon: "trophy", title: "Fanta F1 completo con leghe" },
-    { icon: "group", title: "Leghe private illimitate" },
-    { icon: "bulb", title: "Consigli formazione pre-gara" },
-  ]},
   { name: "Contenuti", items: [
     { icon: "doc", title: "News esclusive e in anteprima" },
-    { icon: "history", title: "Archivio storico dei GP" },
+    { icon: "history", title: "Archivio delle gare della stagione" },
     { icon: "play", title: "Video highlights esclusivi" },
-    { icon: "poll", title: "Sondaggi e contenuti della redazione" },
+    { icon: "poll", title: "Sondaggio della redazione in Home" },
+  ]},
+  { name: "In gara", items: [
+    { icon: "grid", title: "Modalità Second Screen durante la gara" },
   ]},
   { name: "Esperienza B&T", items: [
-    { icon: "no", title: "Zero pubblicità" },
-    { icon: "star", title: "Distintivo Premium in chat", starIcon: true },
-    { icon: "bell", title: "Notifiche personalizzate in tempo reale" },
-    { icon: "unlock", title: "Accesso anticipato alle nuove funzioni" },
-    { icon: "grid", title: "Modalità Second Screen durante la gara" },
+    { icon: "trophy", title: "Fanta F1 senza guardare il video" },
+    { icon: "no", title: "Senza pubblicità" },
   ]},
 ];
 
@@ -399,7 +386,8 @@ function SubHeader({ title, onBack, right }) {
   );
 }
 
-function TopHeader({ isPremium, unread, onPremium, onBell, onProfile, trialDays = 0 }) {
+// isPremium qui è l'abbonamento pagato (users.isPremium): senza, il tasto "Premium" apre la finestra del Premium.
+function TopHeader({ isPremium, unread, onPremium, onBell, onProfile }) {
   return (
     <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "18px 16px 14px", flexShrink: 0 }}>
       <div style={{ width: 38, height: 38, borderRadius: 11, background: C.accent, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
@@ -409,10 +397,10 @@ function TopHeader({ isPremium, unread, onPremium, onBell, onProfile, trialDays 
       {isPremium ? (
         <div data-premium-chip="on" style={{ display: "flex", alignItems: "center", gap: 6, padding: "8px 14px", borderRadius: 20, background: `linear-gradient(rgba(231,179,76,.16), rgba(231,179,76,.16)) ${C.bg}`, border: `1px solid ${C.gold}` }}>
           <Icon name="star" size={13} color={C.gold} />
-          <span style={{ fontFamily: F_HEAD, fontWeight: 700, fontSize: 12, color: C.gold }}>{trialDays ? `PROVA · ${trialDays} gg` : "PREMIUM"}</span>
+          <span style={{ fontFamily: F_HEAD, fontWeight: 700, fontSize: 12, color: C.gold }}>PREMIUM</span>
         </div>
       ) : (
-        <button className="press" data-premium-chip="off" onClick={onPremium} style={{ display: "flex", alignItems: "center", gap: 6, padding: "8px 14px", borderRadius: 20, background: `linear-gradient(rgba(231,179,76,.12), rgba(231,179,76,.12)) ${C.bg}`, border: "1px solid rgba(231,179,76,.35)" }}>
+        <button className="press" data-premium-chip="off" data-header-premium="" onClick={onPremium} style={{ display: "flex", alignItems: "center", gap: 6, padding: "8px 14px", borderRadius: 20, background: `linear-gradient(rgba(231,179,76,.12), rgba(231,179,76,.12)) ${C.bg}`, border: "1px solid rgba(231,179,76,.35)" }}>
           <Icon name="star" size={13} color={C.gold} />
           <span style={{ fontFamily: F_HEAD, fontWeight: 700, fontSize: 12, color: C.gold }}>Premium</span>
         </button>
