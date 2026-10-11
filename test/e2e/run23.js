@@ -130,11 +130,11 @@ const tests = {
     assert(pts >= 5, 'grafico dello stint: ' + pts);
     assert(!errs.length, errs.join(' | '));
   },
-  async 'degrado gomme: anche in diretta (simulata) durante la gara'(b) {
+  async 'degrado gomme: anche nella prova DEMO (simulata) durante la gara'(b) {
     const { ctx, p, errs } = await open(b); await login(p); await startLive(p, 'GARA'); await advance(p, 1800);
     await openTool(p, 'deg'); await tapSel(p, '[data-deg-src="live"]'); await w(p, 300);
     const t = await inner(p, '[data-deg]'), rows = await count(p, '[data-deg-row]'); await ctx.close();
-    assert(/diretta/i.test(t) && rows >= 5, `diretta: ${rows} righe`);
+    assert(/Prova DEMO \(simulata\)/.test(t) && rows >= 5, `prova DEMO: ${rows} righe: ` + t.slice(0, 200));
     assert(!errs.length, errs.join(' | '));
   },
   async 'compagni a confronto: Ferrari, indice Over-Driving e testa a testa (qualifiche e gare vere 2026)'(b) {
