@@ -1,0 +1,64 @@
+# APK di prova costruito da GitHub, quando Codemagic resta in coda. È gratis: i repository privati hanno 2.000 minuti
+# al mese e una build ne usa circa 10-15.
+# Parte da solo quando si aggiorna il branch "apk-prova" (git push origin tappa-1:apk-prova) oppure a mano da
+# GitHub → Actions → "APK di prova (GitHub)" → Run workflow. L'APK va nella release "APK di prova" del repository,
+# sempre con lo stesso nome (Sector4-prova.apk), con gli annunci di prova di Google come "B&T - APK di prova".
+name: APK di prova (GitHub)
+
+on:
+  push:
+    branches: [apk-prova]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: apk-prova
+  cancel-in-progress: true
+
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+      - name: Installa dipendenze
+        run: npm install
+      - name: Build app React
+        env:
+          CI: "false"
+          DISABLE_ESLINT_PLUGIN: "true"
+          GENERATE_SOURCEMAP: "false"
+          NODE_OPTIONS: --max-old-space-size=6144
+        run: npm run build
+      - name: Crea progetto Android (Capacitor + AdMob di prova)
+        env:
+          BT_ADMOB_TEST: "1"
+        run: |
+          # versionCode che cresce sempre: minuti dal 1/1/2026
+          export BUILD_NUMBER=$(( ($(date +%s) - 1767225600) / 60 ))
+          npx cap add android
+          npx cap sync android
+          python3 scripts/prepare_android.py
+          chmod +x android/gradlew
+      - name: Chiave di debug fissa
+        run: mkdir -p ~/.android && cp resources/debug.keystore ~/.android/debug.keystore
+      - name: Compila APK debug
+        run: cd android && ./gradlew assembleDebug --no-daemon
+      - name: Metti l'APK nella release "APK di prova"
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cp android/app/build/outputs/apk/debug/app-debug.apk Sector4-prova.apk
+          gh release delete apk-prova --yes --cleanup-tag || true
+          gh release create apk-prova Sector4-prova.apk --prerelease --target "$GITHUB_SHA" \
+            --title "APK di prova" \
+            --notes "Sector 4, APK di prova costruito da GitHub il $(TZ=Europe/Rome date '+%d/%m/%Y alle %H:%M') (commit ${GITHUB_SHA::7}). Si installa sopra gli APK di prova di GitHub; sopra quello di Codemagic va prima disinstallata la 2.0."

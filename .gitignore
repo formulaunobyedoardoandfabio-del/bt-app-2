@@ -4,6 +4,9 @@ android/
 .env
 *.keystore
 *.jks
+# Chiave di debug fissa per gli APK di prova di GitHub (password pubblica "android", come quella di serie di
+# Android): così un APK di prova si installa sopra quello di prima. Non è la chiave del Play Store.
+!resources/debug.keystore
 __pycache__/
 *.pyc
 .superpowers/
