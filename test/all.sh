@@ -22,7 +22,8 @@ run_one() {
   echo $? > "test/logs/$name.code"
 }
 export -f run_one
-rm -f test/logs/*.code
+# Risultati della volta prima: ogni prova parte segnata "non finita" (99) finché non scrive il suo.
+for f in "${files[@]}"; do echo 99 > "test/logs/$(basename "$f" .js).code"; done
 printf '%s\n' "${files[@]}" | xargs -P "$JOBS" -I{} bash -c 'run_one "$1"' _ {}
 fails=0; summary=""
 for f in "${files[@]}"; do
