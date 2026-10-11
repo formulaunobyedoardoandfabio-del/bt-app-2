@@ -122,6 +122,8 @@ const leaveApp = () => { const A = capPlugin("App"); if (!A) return; Promise.res
 // arrivati, il video d'attesa (2,8 s) che si ripete; poi il finale (3,2 s), dove le lettere B e T si aprono sull'app vera:
 // da OUTRO_REVEAL_S il video è trasparente (fatto da tools/splash/outro.py) e i tocchi passano all'app sotto.
 const SPLASH_VIDEO = { intro: "splash/intro.webm", loop: "splash/loop.webm", outro: "splash/outro.webm" };
+// Immagine di partenza nera dei video: senza, finché un video non disegna Android mostra il suo tasto play grigio.
+const SPLASH_POSTER = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADElEQVR42mNgYGAAAAAEAAHI6uv5AAAAAElFTkSuQmCC";
 const OUTRO_REVEAL_S = 40 / 24;
 const SPLASH_VIDEO_START_MS = 3000;   // il primo video non parte (file mancante, formato non supportato): splash fisso
 const SPLASH_MS = 1800, SPLASH_FADE_MS = 600;   // splash fisso come l'app di oggi: logo e "Caricamento…"
@@ -6601,6 +6603,8 @@ function SplashScreen({ ready, onDone }) {
   const [phase, setPhase] = useState(reduce ? "static" : "intro");   // intro | loop | outro | static
   const [loops, setLoops] = useState(0);              // quante volte è partito il video d'attesa
   const [outroShown, setOutroShown] = useState(false); // il finale è partito: via lo sfondo nero e gli altri video
+  const [shown, setShown] = useState("intro");         // il video che si vede: solo quello che sta andando (11/10: il
+                                                       // finale fermo stava sopra l'apertura e la copriva)
   const [revealed, setRevealed] = useState(false);     // le lettere si aprono: i tocchi passano all'app
   const [minDone, setMinDone] = useState(false);
   const [maxDone, setMaxDone] = useState(false);
@@ -6643,11 +6647,11 @@ function SplashScreen({ ready, onDone }) {
   };
   const onError = key => { if (key === "outro") finish(); else setPhase(ph => (ph === "outro" ? ph : "static")); };
   const video = key => (
-    <video key={key} ref={vids[key]} src={SPLASH_VIDEO[key]} muted playsInline preload="auto" aria-hidden="true"
-      onPlaying={() => { started.current = true; if (key === "outro") setOutroShown(true); }}
+    <video key={key} ref={vids[key]} src={SPLASH_VIDEO[key]} poster={SPLASH_POSTER} muted playsInline preload="auto" aria-hidden="true"
+      onPlaying={() => { started.current = true; setShown(key); if (key === "outro") setOutroShown(true); }}
       onTimeUpdate={key === "outro" ? e => { if (e.currentTarget.currentTime >= OUTRO_REVEAL_S) setRevealed(true); } : undefined}
       onEnded={() => onEnded(key)} onError={() => onError(key)}
-      style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover", opacity: phase === "static" ? 0 : key === "outro" ? 1 : outroShown ? 0 : 1, pointerEvents: "none" }} />
+      style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover", opacity: phase === "static" || key !== shown ? 0 : 1, pointerEvents: "none" }} />
   );
   const clear = phase === "outro" && outroShown;
   return (

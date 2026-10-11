@@ -30,9 +30,14 @@ const MESSAGES = {
 };
 // Età minima per iscriversi, come dice la privacy policy (in Italia 14 anni per i servizi online, D.Lgs. 101/2018).
 const MIN_AGE = 14;
-const messageOf = e => MESSAGES[(e && e.code) || ""] || MESSAGES.offline;
+// Con "Errore di connessione" si scrive anche il codice vero (raw), quando c'è: sul telefono di Edoardo l'accesso lo
+// diceva sempre con la rete che funzionava (11/10), e senza il codice non si capisce cosa risponde Firebase.
+const messageOf = e => {
+  const m = MESSAGES[(e && e.code) || ""] || MESSAGES.offline;
+  return m === MESSAGES.offline && e && e.raw ? `${m} (${String(e.raw).slice(0, 90)})` : m;
+};
 
-const mkErr = code => Object.assign(new Error(MESSAGES[code] || code), { code });
+const mkErr = (code, raw) => Object.assign(new Error(MESSAGES[code] || code), raw ? { code, raw: String(raw) } : { code });
 const normEmail = e => String(e || "").trim().toLowerCase();
 const NET = ["auth/network-request-failed", "unavailable", "deadline-exceeded", "offline", "timeout", "auth/internal-error"];
 const BAD_LOGIN = ["auth/invalid-credential", "auth/wrong-password", "auth/user-not-found", "auth/invalid-login-credentials"];
@@ -47,7 +52,7 @@ function authErr(e) {
   if (c === "auth/weak-password") return mkErr("weak");
   if (["auth/operation-not-allowed", "auth/configuration-not-found", "auth/admin-restricted-operation"].includes(c)) return mkErr("not-enabled");
   if (BAD_LOGIN.includes(c)) return mkErr("wrong-password");
-  return mkErr("offline");
+  return mkErr("offline", c || (e && e.message) || "");
 }
 const randomPw = () => {
   const a = new Uint8Array(18);
@@ -72,12 +77,12 @@ function createAccount({
   // Le operazioni sull'account cambiano anche lo stato di Authentication: mentre lavorano, l'ascolto di start() le lascia fare.
   const op = fn => async (...args) => { busy++; try { return await fn(...args); } finally { busy--; } };
   const notify = () => listeners.forEach(cb => { try { cb(current); } catch (e) {} });
-  const needAuth = async () => { const a = await getAuth(); if (!a) throw mkErr("offline"); return a; };
+  const needAuth = async () => { const a = await getAuth(); if (!a) throw mkErr("offline", "firebase-non-caricato"); return a; };
   // Lettura di users/<email> prima dell'accesso: le regole di Firebase la permettono solo agli account di oggi non
   // ancora passati (quelli con pw) o se il documento non c'è; permission-denied = l'account c'è ed è già passato.
   async function peekUser(email) {
     try { return { doc: await dbGet("users", email) }; }
-    catch (e) { if (e && e.code === "permission-denied") return { doc: null, protectedDoc: true }; throw mkErr("offline"); }
+    catch (e) { if (e && e.code === "permission-denied") return { doc: null, protectedDoc: true }; throw mkErr("offline", "firestore/" + ((e && e.code) || "errore")); }
   }
 
   async function readAdmin(email) {

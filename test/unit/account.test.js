@@ -3,7 +3,7 @@
 const assert = require('assert');
 const { setupWindow } = require('./node-window');
 const F = require('../../src/services/firebase');
-const { createAccount, MESSAGES } = require('../../src/services/account');
+const { createAccount, MESSAGES, messageOf } = require('../../src/services/account');
 
 let pass = 0, fail = 0;
 const tests = [];
@@ -246,6 +246,20 @@ t('"Su di te" dopo l\'iscrizione: un anno di nascita sotto i 14 anni si rifiuta 
   await assert.rejects(A.updateAbout({ birth: new Date().getFullYear() - 10, follow: 1, fan: 'vivo' }), e => e.code === 'too-young');
   assert.deepStrictEqual(c.fs('users/a@b.it').about, { birth: null, follow: 2, fan: 'vivo' });
 });
+// 11/10: sul telefono di Edoardo l'accesso diceva sempre "Errore di connessione" con la rete che funzionava. Gli errori
+// che non conosciamo diventano "offline": ora il messaggio dice anche il codice vero, per capire cosa succede.
+t('errore di Authentication che non conosciamo: "Errore di connessione" con il codice vero', async () => {
+  ctx();
+  const fail = code => make({ getAuth: async () => ({ signInWithEmailAndPassword: () => Promise.reject(Object.assign(new Error('x'), { code })) }) });
+  let e1, e2;
+  try { await fail('auth/requests-from-referer-https://localhost-are-blocked.').login('v@b.it', 'x'); } catch (e) { e1 = e; }
+  try { await fail('auth/internal-error').login('v@b.it', 'x'); } catch (e) { e2 = e; }
+  assert.strictEqual(e1 && e1.code, 'offline');
+  assert.strictEqual(messageOf(e1), 'Errore di connessione, riprova tra poco (auth/requests-from-referer-https://localhost-are-blocked.)');
+  assert.strictEqual(messageOf(e2), 'Errore di connessione, riprova tra poco (auth/internal-error)');
+  assert.strictEqual(messageOf({ code: 'offline' }), 'Errore di connessione, riprova tra poco');   // senza codice come prima
+});
+
 t('account disattivato su Firebase: lo dice (non "Errore di connessione")', async () => {
   ctx();
   const A = make({ getAuth: async () => ({ signInWithEmailAndPassword: () => Promise.reject(Object.assign(new Error('x'), { code: 'auth/user-disabled' })) }) });

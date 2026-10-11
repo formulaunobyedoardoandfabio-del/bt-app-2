@@ -239,6 +239,28 @@ run({
     assert(!errs.length, errs.join(' | '));
   },
 
+  // 11/10: sul telefono di Edoardo per 7 secondi si vedeva il tasto play grigio di Android, poi il finale. Il video
+  // finale, fermo in attesa, stava sopra l'apertura e la copriva (qui si vedeva il suo primo fotogramma, il logo BT).
+  // Ora si vede solo il video che sta andando, e i video fermi hanno il nero al posto del tasto play.
+  async 'splash: durante l\'apertura si vede l\'apertura (non il finale fermo sopra) e il nero al posto del tasto play'(b) {
+    const { ctx, p, errs } = await open(b, { page: 'video/index.html', waitSplash: false });
+    const look = () => p.evaluate(() => [...document.querySelectorAll('[data-splash] video')].map(v => ({
+      src: (v.currentSrc || v.getAttribute('src') || '').split('/').pop(), t: v.currentTime, paused: v.paused,
+      op: getComputedStyle(v).opacity, poster: v.getAttribute('poster') || '' })));
+    await p.waitForFunction(() => { const v = document.querySelector('[data-splash] video'); return v && v.currentTime > 1; }, null, { timeout: 6000 }).catch(() => {});
+    const intro = await look();
+    await p.waitForFunction(() => { const e = document.querySelector('[data-splash]'); return !e || e.dataset.splashPhase === 'outro'; }, null, { timeout: 14000 }).catch(() => {});
+    await p.waitForFunction(() => { const v = document.querySelectorAll('[data-splash] video')[2]; return !v || v.currentTime > 0.3; }, null, { timeout: 4000 }).catch(() => {});
+    const outro = await look();
+    await ctx.close();
+    const ops = a => a.map(v => v.src + ':' + v.op).join(' ');
+    assert(intro.length === 3 && intro[0].src === 'intro.webm' && !intro[0].paused && intro[0].t > 1, 'apertura che va: ' + JSON.stringify(intro));
+    assert(intro[0].op === '1' && intro[1].op === '0' && intro[2].op === '0', 'durante l\'apertura si deve vedere solo l\'apertura: ' + ops(intro));
+    assert(outro.length === 3 && outro[2].op === '1' && outro[0].op === '0' && outro[1].op === '0', 'durante il finale si vede solo il finale: ' + ops(outro));
+    assert(intro.every(v => /^data:image\//.test(v.poster)), 'immagine di partenza nera: ' + JSON.stringify(intro.map(v => v.poster.slice(0, 30))));
+    assert(!errs.length, errs.join(' | '));
+  },
+
   async 'caricamento lento: il secondo video si ripete finché i dati non arrivano, poi parte il finale'(b) {
     const { ctx, p, errs } = await open(b, { page: 'video/index.html', waitSplash: false, seed: { holdReads: true } });   // Firebase lentissimo
     const info = () => p.evaluate(() => { const e = document.querySelector('[data-splash]'); return e ? { phase: e.dataset.splashPhase, loops: Number(e.dataset.splashLoops || 0) } : null; });
