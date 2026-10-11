@@ -159,6 +159,15 @@ function createAppData({ fb = FB } = {}) {
   }
   const removeNotif = id => fb.sharedRemoveWhere("bt-notifs", x => x && String(x.id) === String(id));
 
+  // Rilevatore di bluff: le radio "gomme" che l'admin segna, un documento per sessione di OpenF1
+  // (shared/bt-bluff-<sessione>) = [{ code, date, lap, text, by }]. Si aggiungono e si tolgono una alla volta, senza
+  // riscrivere le altre (come le notifiche); la stessa radio segnata due volte resta una.
+  const bluffDoc = sessionKey => "bt-bluff-" + String(sessionKey).replace(/[^0-9A-Za-z_-]/g, "");
+  const loadBluff = async sessionKey => list(await fb.sgStrict(bluffDoc(sessionKey)));
+  const tagBluff = (sessionKey, { code, date, lap, text = "", by = "" } = {}) =>
+    fb.sharedAppend(bluffDoc(sessionKey), { code: String(code), date: String(date), lap: Number(lap) || null, text: String(text || ""), by: String(by || "") });
+  const untagBluff = (sessionKey, code, date) => fb.sharedRemoveWhere(bluffDoc(sessionKey), x => x && x.code === code && x.date === date);
+
   async function loadUserData(email) {
     const u = await fb.dbGet("users", email);
     return pickUser(u && u.app2);
@@ -201,7 +210,7 @@ function createAppData({ fb = FB } = {}) {
     await fb.dbSet("users", email, { app2: {} });
   }
 
-  return { loadShared, staleKinds, saveShared, appendNotif, removeNotif, loadUserData, saveUserData, flushUserData, cancelUserData, clearUserData };
+  return { loadShared, staleKinds, saveShared, appendNotif, removeNotif, loadBluff, tagBluff, untagBluff, loadUserData, saveUserData, flushUserData, cancelUserData, clearUserData };
 }
 
 // I valori di serie di tutti i contenuti, già convertiti per l'app: quelli che si vedono finché Firebase non risponde.

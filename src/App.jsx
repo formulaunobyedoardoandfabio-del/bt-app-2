@@ -3967,23 +3967,28 @@ function TeammatesTool({ races, onBack }) {
 }
 
 /* RILEVATORE DI BLUFF: radio "le gomme sono finite" contro i tempi dei giri dopo, confrontati col resto del gruppo.
-   Nell'anteprima le radio sono simulate (OpenF1 dà gli audio, non il testo): demo su una gara simulata o sulla diretta. */
-const BLUFF_DEMO = {};
-function bluffDemo(races) {
-  const r = races.find(x => x.status === "IN ARRIVO" && trackOf(x.circuitId)) || races.find(x => trackOf(x.circuitId));
-  if (BLUFF_DEMO[r.id]) return BLUFF_DEMO[r.id];
-  const sim = LiveSim.createSession({ track: trackOf(r.circuitId), drivers: LIVE_DRIVERS, type: "RACE", seed: r.round * 97 + 4, script: true });
-  for (let i = 0; i < 40000 && !sim.state().finished; i++) sim.advance(2);
-  const st = sim.state();
-  return (BLUFF_DEMO[r.id] = { race: r, R: { laps: st.totalLaps, lap: st.totalLaps, ...BtWk.fromSim({ totalLaps: st.totalLaps, cars: st.cars.map(c => ({ code: c.code, team: (driverById(c.id) || {}).teamId || null, pos: c.dnf ? null : c.pos, laps: sim.laps(c.id) })) }) } });
-}
+   Le radio sono quelle vere di OpenF1, con l'audio: durante la gara l'admin segna quelle in cui un pilota parla di gomme
+   (shared/bt-bluff-<sessione>, col testo che scrive lui ascoltandole). La demo con le radio simulate resta solo nella
+   prova DEMO dell'admin (D24). */
 const BLUFF_UI = { bluff: ["BLUFF PROBABILE", C.gold], vero: ["RADIO VERA", "#FF5A5F"], dubbio: ["DA CAPIRE", C.muted] };
-function BluffTool({ races, live, onBack }) {
-  const liveRace = !!(live && live.type === "RACE"), [, setTick] = useState(0);
-  const demo = liveRace ? null : bluffDemo(races);
-  const R = liveRace ? raceFromLive(live) : demo.R;
-  const codes = Object.keys(R.drivers);
-  const items = BtWk.demoClaims(R).filter(c => c.lap + 3 < R.lap || R.lap >= R.laps).map(c => ({ ...c, v: BtWk.bluffVerdict(BtWk.lapsOf(R, c.code), c.lap, codes.filter(k => k !== c.code).map(k => BtWk.lapsOf(R, k))) })).sort((a, b) => liveRace ? b.lap - a.lap : a.lap - b.lap);   // diretta: le più recenti in alto; demo: in ordine di gara
+const BLUFF_EXPLAIN = "Durante la gara l'admin segna le radio in cui un pilota parla di gomme: qui vedrai se era vero o un bluff.";
+function BluffTool({ races, live, tags = [], onRefresh, onBack }) {
+  const [, setTick] = useState(0);
+  useEffect(() => { if (onRefresh) onRefresh(); }, []);
+  const of1 = isOf1Live(live) && isRaceType(live.type), demo = isDemoLive(live) && live.type === "RACE";
+  const R = of1 || demo ? raceFromLive(live) : null;
+  const codes = R ? Object.keys(R.drivers) : [];
+  const verdictOf = (code, lap) => BtWk.bluffVerdict(BtWk.lapsOf(R, code), lap, codes.filter(k => k !== code).map(k => BtWk.lapsOf(R, k)));
+  const ready = c => !!R && (c.lap + 3 < R.lap || R.lap >= R.laps);   // servono 3 giri dopo la radio
+  let items = [];
+  if (of1) {
+    const radios = live.sim.radios();
+    const seen = new Set();   // la stessa radio segnata due volte (da due telefoni) si conta una volta
+    items = tags.filter(c => c && c.code && c.lap && !seen.has(c.code + "|" + c.date) && seen.add(c.code + "|" + c.date))
+      .map(c => ({ ...c, url: (radios.find(r => r.code === c.code && r.date === c.date) || {}).url || null }));
+  } else if (demo) items = BtWk.demoClaims(R).map(c => ({ ...c, sim: true }));
+  const waiting = items.filter(c => !ready(c)).length;
+  items = items.filter(ready).map(c => ({ ...c, v: verdictOf(c.code, c.lap) })).sort((a, b) => b.lap - a.lap);   // le più recenti in alto
   const n = k => items.filter(x => x.v.kind === k).length;
   const why = v => v.pitLap ? `È rientrato ai box al giro ${v.pitLap}: le gomme erano davvero finite.`
     : v.delta == null ? "Troppi giri lenti (box o bandiere) per giudicare."
@@ -3991,32 +3996,37 @@ function BluffTool({ races, live, onBack }) {
   return (
     <div data-bluff="" className="scrollcol" style={{ height: "100%" }}>
       <GameHeader title="RILEVATORE DI BLUFF" sub="Quando un pilota dice alla radio che le gomme sono finite guardiamo i tempi: è vero o vuole ingannare gli avversari?" onBack={onBack} />
-      <div style={WK_CARD}>
-        <div style={{ fontFamily: F_HEAD, fontWeight: 900, fontStyle: "italic", fontSize: 14.5, color: C.text }}>{liveRace ? `${liveSrcLabel(live)} · giro ${R.lap} di ${R.laps}` : `Demo: gara simulata · ${demo.race.name}`}</div>
-        <p style={{ margin: "4px 0 8px", padding: "8px 10px", borderRadius: 10, background: "rgba(242,194,48,.1)", border: "1px solid rgba(242,194,48,.35)", fontFamily: F_BODY, fontSize: 11.5, color: C.text, lineHeight: 1.45 }}>Radio simulate: nell'anteprima le frasi le inventa il simulatore e i tempi sono quelli della gara simulata. Nell'app vera le radio le scrive l'admin mentre ascolta la diretta (OpenF1 dà gli audio, non il testo) e i tempi arrivano dal live timing.</p>
-        <div style={{ display: "flex", gap: 8 }}>{[["bluff", "Bluff scoperti"], ["vero", "Radio vere"], ["dubbio", "Da capire"]].map(([k, l]) => <div key={k} style={{ flex: 1, padding: "8px 6px", borderRadius: 11, background: "rgba(255,255,255,.04)", textAlign: "center" }}><b style={{ display: "block", fontFamily: F_HEAD, fontSize: 20, color: BLUFF_UI[k][1] }}>{n(k)}</b><span style={{ fontFamily: F_BODY, fontSize: 10.5, color: C.muted }}>{l}</span></div>)}</div>
-        {liveRace && <button className="press" onClick={() => setTick(x => x + 1)} style={{ marginTop: 8, padding: "6px 10px", borderRadius: 9, background: "rgba(255,255,255,.07)", border: `1px solid ${C.border}`, fontFamily: F_HEAD, fontWeight: 800, fontSize: 11.5, color: C.text }}>Aggiorna</button>}
-      </div>
+      {R && (
+        <div style={WK_CARD}>
+          <div style={{ fontFamily: F_HEAD, fontWeight: 900, fontStyle: "italic", fontSize: 14.5, color: C.text }}>{`${liveSrcLabel(live)} · giro ${R.lap} di ${R.laps}`}</div>
+          {demo
+            ? <p style={{ margin: "4px 0 8px", padding: "8px 10px", borderRadius: 10, background: "rgba(242,194,48,.1)", border: "1px solid rgba(242,194,48,.35)", fontFamily: F_BODY, fontSize: 11.5, color: C.text, lineHeight: 1.45 }}>Radio simulate della prova DEMO: le frasi le inventa il simulatore e i tempi sono quelli della gara simulata. La vedi solo tu.</p>
+            : <p style={{ margin: "4px 0 8px", fontFamily: F_BODY, fontSize: 11.5, color: C.muted, lineHeight: 1.45 }}>Radio vere di OpenF1 con l'audio, segnate dall'admin: il testo è quello che ha scritto lui ascoltandole.</p>}
+          <div style={{ display: "flex", gap: 8 }}>{[["bluff", "Bluff scoperti"], ["vero", "Radio vere"], ["dubbio", "Da capire"]].map(([k, l]) => <div key={k} style={{ flex: 1, padding: "8px 6px", borderRadius: 11, background: "rgba(255,255,255,.04)", textAlign: "center" }}><b style={{ display: "block", fontFamily: F_HEAD, fontSize: 20, color: BLUFF_UI[k][1] }}>{n(k)}</b><span style={{ fontFamily: F_BODY, fontSize: 10.5, color: C.muted }}>{l}</span></div>)}</div>
+          <button className="press" onClick={() => { setTick(x => x + 1); if (onRefresh) onRefresh(); }} style={{ marginTop: 8, padding: "6px 10px", borderRadius: 9, background: "rgba(255,255,255,.07)", border: `1px solid ${C.border}`, fontFamily: F_HEAD, fontWeight: 800, fontSize: 11.5, color: C.text }}>Aggiorna</button>
+        </div>
+      )}
       <div style={WK_CARD}>
         {items.map((x, i) => { const u = BLUFF_UI[x.v.kind], I = ghostInfo(x.code); return (
-          <div key={x.code + x.lap} data-bluff-item={x.v.kind} style={{ padding: "9px 0", borderTop: i ? `1px solid ${C.divider}` : "none" }}>
+          <div key={x.code + x.lap + (x.date || "")} data-bluff-item={x.v.kind} style={{ padding: "9px 0", borderTop: i ? `1px solid ${C.divider}` : "none" }}>
             <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
               <span style={{ width: 3, height: 26, borderRadius: 2, background: I.color }} />
-              <span style={{ flex: 1, minWidth: 0 }}><b style={{ display: "block", fontFamily: F_HEAD, fontWeight: 800, fontSize: 13, color: C.text }}>{I.name}</b><span style={{ fontFamily: F_BODY, fontSize: 11, color: C.dim }}>Giro {x.lap} · radio simulata</span></span>
+              <span style={{ flex: 1, minWidth: 0 }}><b style={{ display: "block", fontFamily: F_HEAD, fontWeight: 800, fontSize: 13, color: C.text }}>{I.name}</b><span style={{ fontFamily: F_BODY, fontSize: 11, color: C.dim }}>Giro {x.lap} · {x.sim ? "radio simulata" : "radio vera (OpenF1)"}</span></span>
               <span style={{ padding: "3px 8px", borderRadius: 7, background: "rgba(255,255,255,.05)", border: `1px solid ${u[1]}`, fontFamily: F_HEAD, fontWeight: 900, fontSize: 10.5, color: u[1], whiteSpace: "nowrap" }}>{u[0]}</span>
             </div>
-            <p style={{ margin: "5px 0 2px 11px", fontFamily: F_BODY, fontStyle: "italic", fontSize: 13, color: C.text }}>“{x.text}”</p>
+            <p style={{ margin: "5px 0 2px 11px", fontFamily: F_BODY, fontStyle: "italic", fontSize: 13, color: x.text ? C.text : C.muted }}>{x.text ? `“${x.text}”` : "Parla di gomme (l'admin non ha scritto la frase)."}</p>
+            {x.url && <audio controls preload="none" src={x.url} aria-label={`Team radio di ${I.name}, giro ${x.lap}`} style={{ display: "block", width: "calc(100% - 11px)", height: 32, margin: "4px 0 4px 11px" }} />}
             <p style={{ margin: "0 0 0 11px", fontFamily: F_BODY, fontSize: 11.5, color: C.muted, lineHeight: 1.4 }}>{why(x.v)}</p>
           </div>
         ); })}
-        {!items.length && <p style={{ margin: 0, fontFamily: F_BODY, fontSize: 12, color: C.dim }}>Ancora nessuna radio da giudicare: servono almeno 3 giri dopo ogni radio.</p>}
+        {!items.length && <p data-bluff-empty="" style={{ margin: 0, fontFamily: F_BODY, fontSize: 12, color: C.dim, lineHeight: 1.5 }}>{waiting ? `Radio segnate: ${waiting}. Il verdetto arriva 3 giri dopo la radio.` : demo ? "Ancora nessuna radio da giudicare: servono almeno 3 giri dopo ogni radio." : BLUFF_EXPLAIN}</p>}
       </div>
       <WkNote>Come giudica: confronta i 3 giri dopo la radio con i 3 prima, al netto di quanto è cambiato il passo di tutto il gruppo (benzina, pista, bandiere). Radio vera: rientra ai box entro 3 giri o perde oltre mezzo secondo al giro; bluff: va come prima (meno di 0,25 s).</WkNote>
     </div>
   );
 }
 
-function GarageScreen({ races, pitBest, onPitResult, sillyPreds, onPredict, sillyOfficial, live, stratPreds = {}, onStrat }) {
+function GarageScreen({ races, pitBest, onPitResult, sillyPreds, onPredict, sillyOfficial, live, stratPreds = {}, onStrat, bluffTags = [], onBluffRefresh }) {
   const [game, setGame] = useState(null);
   const back = () => setGame(null);
   useBack(!!game, back);   // tasto indietro: dallo strumento si torna al Garage
@@ -4030,7 +4040,7 @@ function GarageScreen({ races, pitBest, onPitResult, sillyPreds, onPredict, sill
   if (game === "strategy") return <StrategyPredictor races={races} preds={stratPreds} onSave={onStrat} onBack={back} />;
   if (game === "deg") return <TyreDegTool races={races} live={live} onBack={back} />;
   if (game === "mates") return <TeammatesTool races={races} onBack={back} />;
-  if (game === "bluff") return <BluffTool races={races} live={live} onBack={back} />;
+  if (game === "bluff") return <BluffTool races={races} live={live} tags={bluffTags} onRefresh={onBluffRefresh} onBack={back} />;
   const art = { ghost: <svg viewBox="0 0 40 40" width="38" height="38" aria-hidden="true"><path d="M4 30 C12 8, 20 34, 36 10" stroke="#E8121D" strokeWidth="3" fill="none" strokeLinecap="round" /><path d="M4 33 C13 14, 21 36, 36 16" stroke="#27D8C8" strokeWidth="2.4" fill="none" strokeDasharray="3 3" strokeLinecap="round" /></svg>, pitstop: <svg viewBox="0 0 40 40" width="38" height="38" aria-hidden="true"><circle cx="20" cy="20" r="15" fill="#1A1A1E" stroke="#E8121D" strokeWidth="5" /><circle cx="20" cy="20" r="5" fill="#9C9CA1" /></svg>,
     silly: <svg viewBox="0 0 40 40" width="38" height="38" aria-hidden="true"><rect x="9" y="5" width="22" height="30" rx="3" fill="#F4F2EF" /><path d="M13 13h14M13 18h14M13 23h9" stroke="#86858C" strokeWidth="2" strokeLinecap="round" /><path d="M21 31l3-6 3 6" stroke="#E8121D" strokeWidth="2.5" fill="none" strokeLinecap="round" /></svg>,
     aero: <svg viewBox="0 0 40 40" width="38" height="38" aria-hidden="true"><path d="M5 14h30l-3 6H8z" fill="#E8121D" /><path d="M12 20v12M28 20v12" stroke="#F4F2EF" strokeWidth="3" strokeLinecap="round" /><path d="M5 9c8 3 22 3 30 0" stroke="#E7B34C" strokeWidth="2" fill="none" strokeDasharray="3 3" /></svg>,
@@ -4070,7 +4080,7 @@ function GarageScreen({ races, pitBest, onPitResult, sillyPreds, onPredict, sill
       {card("strategy", "Tire Strategy Predictor", "Disegna mescole e soste della prossima gara: punti contro la strategia del vincitore.", stratTag)}
       {card("deg", "Degrado gomme", "Quanto perde ogni gomma a ogni giro e quando arriva il crollo.", live && live.type === "RACE" ? liveSrcLabel(live) : "Gare vere 2026")}
       {card("mates", "Compagni a confronto", "Stessa macchina, chi va più forte? L'indice Over-Driving e i testa a testa del 2026.", "Dati veri 2026")}
-      {card("bluff", "Rilevatore di bluff", "Radio contro tempi: le gomme sono davvero finite o è un bluff per ingannare gli altri?", "Durante la gara · demo")}
+      {card("bluff", "Rilevatore di bluff", "Radio contro tempi: le gomme sono davvero finite o è un bluff per ingannare gli altri?", isOf1Live(live) ? "Radio vere · " + OF1_SRC : isDemoLive(live) ? "Prova DEMO (simulata)" : "Durante la gara")}
       <div style={{ padding: "6px 18px 8px", fontFamily: F_BODY, fontWeight: 700, fontSize: 11, letterSpacing: 1.2, color: C.gold }}>TRACCIATI</div>
       {card("guide", "Guida 2D dei tracciati", "Tocca le curve: marcia, velocità, punto di staccata, rischio di bloccaggio e il momento storico B&T.", "Dati veri")}
       {card("clash", "Circuit Spec Clash", "Due piste a confronto: Safety Car, sorpassi, frenate, gas a tavoletta e carico aerodinamico.", null)}
@@ -6147,12 +6157,58 @@ function AdminLiveCard({ races, live, liveSt, onStart, onStop, onFlag, onLastLap
   );
 }
 
+// Radio delle gomme (Rilevatore di bluff): l'admin ascolta i team radio veri della sessione della gara LIVE e segna
+// quelli in cui un pilota parla di gomme, con la frase se vuole (shared/bt-bluff-<sessione>). Nel Garage tutti vedono
+// il verdetto contro i tempi dei giri dopo. Una radio senza giro non si può giudicare.
+function AdminBluffCard({ live, tags = [], onTag, onUntag }) {
+  const [texts, setTexts] = useState({});
+  const [busy, setBusy] = useState(null);
+  const of1 = isOf1Live(live), race = of1 && isRaceType(live.type);
+  const radios = race ? live.sim.radios() : [];
+  const keyOf = r => r.code + "|" + r.date;
+  const tagOf = r => tags.find(x => x && x.code === r.code && x.date === r.date) || null;
+  const act = (r, fn) => { const k = keyOf(r); setBusy(k); Promise.resolve(fn()).then(ok => { if (ok) setTexts(x => ({ ...x, [k]: "" })); }).finally(() => setBusy(b => (b === k ? null : b))); };
+  const note = (k, t) => <p data-bluff-admin-empty={k} style={{ margin: 0, fontFamily: F_BODY, fontSize: 12, color: C.dim, lineHeight: 1.5 }}>{t}</p>;
+  const btn = { flexShrink: 0, padding: "9px 12px", borderRadius: 10, fontFamily: F_HEAD, fontWeight: 800, fontSize: 12, color: C.text, background: "rgba(255,255,255,.07)", border: `1px solid ${C.border}` };
+  return (
+    <>
+      <div style={aTitle}>RADIO DELLE GOMME</div>
+      <div style={aCard} data-admin-bluff="">
+        <p style={{ margin: "0 0 10px", fontFamily: F_BODY, fontSize: 11.5, color: C.muted, lineHeight: 1.5 }}>Ascolta i team radio della sessione e segna quelli in cui un pilota parla di gomme: nel Garage, nel Rilevatore di bluff, tutti vedranno se era vero o un bluff guardando i tempi dei giri dopo.</p>
+        {!of1 && note("wait", "Le radio arrivano con la sessione vera della gara LIVE (dati OpenF1), a fine sessione.")}
+        {of1 && !race && note("session", "Il rilevatore di bluff guarda la gara e la sprint: in questa sessione non si segnano radio.")}
+        {race && !radios.length && note("none", RADIO_NONE)}
+        {radios.map((r, i) => {
+          const d = driverById(r.id), name = d ? d.full : ghostInfo(r.code).name, t = tagOf(r), k = keyOf(r);
+          return (
+            <div key={k} data-bluff-radio={r.code} data-bluff-tagged={t ? "1" : "0"} style={{ padding: "10px 0", borderTop: i ? `1px solid ${C.divider}` : "none" }}>
+              <div style={{ fontFamily: F_BODY, fontWeight: 600, fontSize: 12.5, color: C.text }}>{name}{r.lap ? <span style={{ color: C.dim, fontWeight: 400 }}> · Giro {r.lap}</span> : null}</div>
+              <audio controls preload="none" src={r.url} aria-label={`Team radio di ${name}${r.lap ? ", giro " + r.lap : ""}`} style={{ display: "block", width: "100%", height: 34, margin: "6px 0" }} />
+              {t ? (
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <span style={{ flex: 1, minWidth: 0, fontFamily: F_BODY, fontStyle: "italic", fontSize: 12.5, color: t.text ? C.text : C.muted }}>{t.text ? `“${t.text}”` : "Segnata: parla di gomme."}</span>
+                  <button className="press" data-bluff-untag="" disabled={busy === k} onClick={() => act(r, () => onUntag && onUntag(r))} style={{ ...btn, opacity: busy === k ? .5 : 1 }}>Togli</button>
+                </div>
+              ) : !r.lap ? note("nolap", "Radio senza giro: non si può giudicare.") : (
+                <div style={{ display: "flex", gap: 8 }}>
+                  <input aria-label="Cosa dice…" placeholder="Cosa dice (facoltativo)" value={texts[k] || ""} maxLength={140} onChange={e => { const v = e.target.value; setTexts(x => ({ ...x, [k]: v })); }} style={{ ...aInput, flex: 1, minWidth: 0 }} />
+                  <button className="press" data-bluff-tag="" disabled={busy === k} onClick={() => act(r, () => onTag && onTag(r, texts[k] || ""))} style={{ ...btn, background: C.accent, border: `1px solid ${C.accent}`, color: "#fff", opacity: busy === k ? .5 : 1 }}>Parla di gomme</button>
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </>
+  );
+}
+
 // Calendario e stato delle gare (shared/bt-races). Le 23 gare del 2026 ci sono già; il menu dello stato scrive solo
 // bt-races (LIVE non fa partire la diretta simulata: quella è nella "Prova diretta (DEMO)"). Le gare aggiunte a mano
 // restano nel documento per l'app di oggi, fuori dal calendario della nuova app.
 // La stessa gara fuori calendario nell'elenco appena riletto da Firebase: per id (per nome e data se manca).
 const sameExtraRace = (x, r) => (r.id != null ? x.id === r.id : x.name === r.name && x.date === r.date);
-function AdminRacesTab({ races, setRaces, extra = [], setExtra, onToast, live, liveSt, onStartLive, onStopLive, onFlag, onLastLap, onRetire, liveSpeed, setLiveSpeed }) {
+function AdminRacesTab({ races, setRaces, extra = [], setExtra, onToast, live, liveSt, onStartLive, onStopLive, onFlag, onLastLap, onRetire, liveSpeed, setLiveSpeed, bluff = null }) {
   const empty = { name: "", circuit: "", country: "", round: "", date: "" };
   const [g, setG] = useState(empty);
   const add = () => {
@@ -6168,6 +6224,7 @@ function AdminRacesTab({ races, setRaces, extra = [], setExtra, onToast, live, l
   return (
     <div>
       {onStartLive && <AdminLiveCard races={races} live={live} liveSt={liveSt} onStart={onStartLive} onStop={onStopLive} onFlag={onFlag} onLastLap={onLastLap} onRetire={onRetire} speed={liveSpeed} setSpeed={setLiveSpeed} />}
+      {bluff && <AdminBluffCard {...bluff} />}
       <div style={aTitle}>AGGIUNGI GARA</div>
       <div style={aCard}>
         <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
@@ -7235,6 +7292,31 @@ function App() {
     const iv = setInterval(tick, OF1_POLL_MS);
     return () => { alive = false; clearInterval(iv); of1TickRef.current = null; };
   }, [realLiveId]);
+  // Rilevatore di bluff: le radio della sessione vera segnate dall'admin (shared/bt-bluff-<sessione>). Si leggono quando
+  // arriva la sessione e quando si apre il rilevatore; senza rete resta quello che c'è.
+  const [bluffTags, setBluffTags] = useState({ key: null, list: [] });
+  const of1Key = of1Live ? of1Live.sessionKey : null;
+  const of1KeyRef = useRef(of1Key);
+  of1KeyRef.current = of1Key;
+  const loadBluffTags = () => {
+    const key = of1KeyRef.current;
+    if (key == null) return Promise.resolve();
+    return AppData.loadBluff(key).then(list => { if (of1KeyRef.current === key) setBluffTags({ key, list }); }, () => {});
+  };
+  useEffect(() => { loadBluffTags(); }, [of1Key]);
+  const bluffNow = of1Key != null && bluffTags.key === of1Key ? bluffTags.list : [];
+  const tagBluffRadio = (r, text) => {
+    const key = of1KeyRef.current;
+    if (key == null) return Promise.resolve(false);
+    return AppData.tagBluff(key, { code: r.code, date: r.date, lap: r.lap, text: String(text || "").trim(), by: (account && account.name) || "" })
+      .then(() => { showToast("Radio segnata: nel Rilevatore di bluff"); loadBluffTags(); return true; }, () => { showToast(NOT_SAVED); return false; });
+  };
+  const untagBluffRadio = r => {
+    const key = of1KeyRef.current;
+    if (key == null) return Promise.resolve(false);
+    return AppData.untagBluff(key, r.code, r.date)
+      .then(() => { showToast("Radio tolta dal Rilevatore di bluff"); loadBluffTags(); return true; }, () => { showToast(NOT_SAVED); return false; });
+  };
   // Ultima gara: all'avvio quella vera di OpenF1 (podio e classifica da session_result), salvata sul telefono per 6 ore.
   // Senza risposta resta quella che c'è (LAST_RACE_INIT) e si riprova dopo 5 minuti.
   useEffect(() => {
@@ -7651,7 +7733,7 @@ function App() {
   const onRaceTab = view === "tab" && tab === "race";
   liveShown.current = !!live && (onRaceTab || liveTrackOpen || ssOpen || view === "admin");
   // Pannello Admin: i comandi della prova DEMO valgono solo per la prova (la sessione vera di OpenF1 non si tocca).
-  const liveProps = { live: demoLive, liveSt: demoLive ? (demoLive === live ? liveSt : demoLive.sim.state()) : null, onStartLive: startLive, onStopLive: stopLive, onFlag: liveFlag, onLastLap: liveLastLap, onRetire: liveRetire, liveSpeed, setLiveSpeed };
+  const liveProps = { live: demoLive, liveSt: demoLive ? (demoLive === live ? liveSt : demoLive.sim.state()) : null, onStartLive: startLive, onStopLive: stopLive, onFlag: liveFlag, onLastLap: liveLastLap, onRetire: liveRetire, liveSpeed, setLiveSpeed, bluff: { live: of1Live, tags: bluffNow, onTag: tagBluffRadio, onUntag: untagBluffRadio } };
   // Sfondo della pagina Race: giallo con bandiera gialla / SC / VSC, rosso con la rossa, a scacchi al primo e all'ultimo giro.
   const pageBg = onRaceTab && liveSt ? liveSt.bg : null;
   const PAGE_BG = {
@@ -7674,7 +7756,7 @@ function App() {
   else {
     if (tab === "home") body = <HomeScreen ig={ig} highlights={highlights} onOpenIg={() => { setIgFrom("tab"); setView("instagram"); }} articles={articles} tagFilter={tagFilter} onTag={filterByTag} onClearTag={() => setTagFilter(null)} onOpenArticle={openArticle} isPremium={isPremium} onPremium={() => setPremiumOpen(true)} onToast={showToast} onLiveTrack={() => setLiveTrackOpen(true)} onGoFanta={() => goTab("fanta")}  saved={saved} onToggleSave={toggleSave} savedOnly={savedOnly} setSavedOnly={setSavedOnly} onOpenCircuit={openCircuit} homePoll={homePoll} homeVote={votes.home || null} onVote={castVote} />;
     else if (tab === "race") body = <RaceScreen dotdVote={live ? votesNow.dotd[live.raceId] : null} onDotdVote={(k, id) => live && voteDotd(live.raceId, k, id)} ratings={votesNow.ratings} onRate={rateDriver} onOpenChats={() => setView("chats")} onOpenGhost={() => setView("ghost")} races={races} standings={standings} isPremium={isPremium} onPremium={() => setPremiumOpen(true)} onSelectDriver={setSelectedDriver} live={live} liveSt={liveSt} onExpandMap={() => setLiveTrackOpen(true)} onTelemetry={(carId, lapNo, sector) => setTelemetry({ carId, lapNo, sector })} onOpenCircuit={openCircuit} wxGuess={wxGuess} wxResult={wxResult} onGuessWeather={guessWeather} onLapTimes={setLapList} onSecondScreen={() => setSsOpen(true)} lastRace={lastRace} of1={of1} onOf1Refresh={() => of1TickRef.current && of1TickRef.current()} replay={replayCtl} />;
-    else if (tab === "garage") body = <GarageScreen races={races} pitBest={pitBest} onPitResult={t => { if (!userDataWait()) setPitBest(b => b == null || t < b ? t : b); }} sillyPreds={sillyPreds} onPredict={predictSeat} sillyOfficial={sillyOfficial} live={live} stratPreds={stratPreds} onStrat={(id, st) => { if (!userDataWait()) setStratPreds(x => ({ ...x, [id]: { stints: st, at: nowMs() } })); }} />;
+    else if (tab === "garage") body = <GarageScreen races={races} pitBest={pitBest} onPitResult={t => { if (!userDataWait()) setPitBest(b => b == null || t < b ? t : b); }} sillyPreds={sillyPreds} onPredict={predictSeat} sillyOfficial={sillyOfficial} live={live} stratPreds={stratPreds} onStrat={(id, st) => { if (!userDataWait()) setStratPreds(x => ({ ...x, [id]: { stints: st, at: nowMs() } })); }} bluffTags={bluffNow} onBluffRefresh={loadBluffTags} />;
     else if (tab === "fanta") body = <FantaScreen squad={squad} setSquad={setSquad} base={squadBase} freeTransfers={freeTransfers} budget={FANTA_BUDGET} stats={fantaStats} race={fantaRace} lock={teamLockInfo} weekends={fantaWeekends} isPremium={isPremium} onPremium={() => setPremiumOpen(true)} onToast={showToast} bonus={bonus} leagues={leagues} setLeagues={setLeagues} needAccount={needAccount} predictions={predictions} predAnswers={predAnswers} predLockOf={predLockOf} onAnswerPrediction={answerPrediction} />;
   }
 

@@ -237,6 +237,21 @@ t('notifiche dell\'admin: aggiunte con sharedAppend e tolte con sharedRemoveWher
   assert.deepStrictEqual(doc.map(x => x.id), ['nt2', n.id]);
 });
 
+// Task 18: radio "gomme" del rilevatore di bluff, un documento per sessione di OpenF1 (shared/bt-bluff-<sessione>).
+t('radio del bluff: segnate e tolte una alla volta nel documento della sessione; senza documento elenco vuoto', async () => {
+  const { firebase } = seed({});
+  const A = D.createAppData();
+  assert.deepStrictEqual(await A.loadBluff(99915), []);
+  const r1 = { code: 'RUS', date: '2026-09-26T11:39:00.000000+00:00', lap: 20, text: 'Le gomme sono finite!', by: 'a@b.it' };
+  const r2 = { code: 'LEC', date: '2026-09-26T11:53:00.000000+00:00', lap: 28, text: '', by: 'a@b.it' };
+  await A.tagBluff(99915, r1); await A.tagBluff(99915, r2); await A.tagBluff(99915, r1);   // la stessa due volte: una sola
+  assert.deepStrictEqual(firebase.__fake.doc('shared/bt-bluff-99915').__arr, [r1, r2]);
+  assert.deepStrictEqual(await A.loadBluff(99915), [r1, r2]);
+  await A.untagBluff(99915, 'RUS', r1.date);
+  assert.deepStrictEqual(await A.loadBluff('99915'), [r2]);
+  assert.strictEqual(firebase.__fake.doc('shared/bt-bluff-99916'), undefined);   // le altre sessioni non si toccano
+});
+
 // Revisione della Fase B (minore 2): un invio che va in tempo scaduto può arrivare lo stesso più tardi; riprovando con
 // lo stesso titolo e testo si rimanda la stessa notifica, che arrayUnion non aggiunge due volte.
 t('notifica rimandata dopo un invio in tempo scaduto (che poi arriva): una sola notifica', async () => {

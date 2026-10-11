@@ -149,13 +149,23 @@ const tests = {
     assert(rb && /Verstappen estrae il 100,\d{2}%/.test(rb), 'Red Bull: ' + rb);
     assert(!errs.length, errs.join(' | '));
   },
-  async 'rilevatore di bluff: radio (simulate) contro i tempi, con il verdetto'(b) {
+  // Task 18: le radio simulate restano solo nella prova DEMO dell'admin (D24); senza diretta c'è solo la spiegazione
+  // (le radio vere di OpenF1 segnate dall'admin: run41-bluff).
+  async 'rilevatore di bluff: radio simulate solo nella prova DEMO dell\'admin, contro i tempi, con il verdetto'(b) {
     const { ctx, p, errs } = await open(b); await login(p); await openTool(p, 'bluff');
+    const t0 = await inner(p, '[data-bluff]'), n0 = await count(p, '[data-bluff-item]');
+    await tapSel(p, '[aria-label="Indietro"]'); await w(p);
+    await startLive(p, 'GARA');
+    for (let i = 0; i < 16 && !(await p.evaluate(() => window.__btLive && window.__btLive.state().finished)); i++) await advance(p, 500);
+    const fin = await p.evaluate(() => { const s = window.__btLive.state(); return { lap: s.lap, totalLaps: s.totalLaps, finished: s.finished }; });
+    await openTool(p, 'bluff');
     const t = await inner(p, '[data-bluff]'), items = await inners(p, '[data-bluff-item]'); await ctx.close();
-    assert(/simulat/i.test(t), 'deve dire che le radio sono simulate');
+    assert(/Durante la gara l'admin segna le radio in cui un pilota parla di gomme/.test(t0) && n0 === 0 && !/simulat/i.test(t0), 'senza diretta: ' + t0.slice(0, 300));
+    assert(fin.finished || fin.lap >= fin.totalLaps, 'la gara DEMO non arriva in fondo: ' + JSON.stringify(fin));
+    assert(/DEMO/.test(t) && /simulat/i.test(t), 'deve dire che le radio sono simulate (prova DEMO): ' + t.slice(0, 300));
     assert(items.length >= 10, 'radio analizzate: ' + items.length);
     assert(items.some(x => /BLUFF PROBABILE/.test(x)) && items.some(x => /RADIO VERA/.test(x)), 'verdetti: ' + items.slice(0, 3).join(' / '));
-    assert(items.every(x => /Giro \d+/.test(x)), 'giro della radio');
+    assert(items.every(x => /Giro \d+/.test(x) && /radio simulata/.test(x)), 'giro della radio: ' + items.slice(0, 2).join(' / '));
     assert(!errs.length, errs.join(' | '));
   },
 };
