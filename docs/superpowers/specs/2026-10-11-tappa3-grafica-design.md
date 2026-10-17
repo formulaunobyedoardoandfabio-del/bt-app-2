@@ -110,11 +110,32 @@ l'APK; dopo arrivano i trofei e le altre funzioni che manderà.
 - **G28. La gomma che si rovina** nel Degrado gomme: scorrendo i giri dello stint la gomma disegnata passa da lucida a
   rovinata (graining, poi blistering) secondo il degrado vero calcolato oggi.
 
+### Aggiunte di Edoardo del 17/10
+- **G29. Scorrere tra le schede.** Nelle quattro schede della barra in basso (HOME, GARAGE, FANTA, RACE) uno swipe
+  orizzontale in qualsiasi punto della pagina porta alla scheda accanto, nella direzione del dito (dito verso sinistra:
+  la scheda a destra), con la pagina che scivola, il tic e la vibrazione. Vale solo per swipe quasi orizzontali (più di
+  un quarto della larghezza, o veloci) e non parte dagli elementi che si muovono già in orizzontale: le notizie con lo
+  swipe di G11, le righe che scorrono di lato (filtri, carte, caroselli), cursori, manettini, mappe, campi di testo e
+  il Second Screen. Nelle pagine aperte sopra le schede (articolo, chat, Pannello Admin…) non c'è.
+- **G30. Foto da Wikimedia Commons.**
+  - Piloti: la foto più recente con licenza libera in cui si vede il viso. Monoposto: per ogni scuderia la foto più
+    recente della vettura di lato (2026 se c'è). Loghi delle scuderie dalla categoria "Formula One constructor logos".
+  - Le foto le carica l'app dal link di Commons (anteprima ridotta) e prima di mostrarle legge da Commons licenza e
+    autore: si mostrano solo con CC0, pubblico dominio, CC BY o CC BY-SA, con "Foto: autore, licenza, Wikimedia
+    Commons" accanto o nei crediti; altrimenti, o senza rete, le iniziali o la sagoma di oggi.
+  - Da qui non posso aprire le foto per guardarle: per ogni pilota e scuderia preparo fino a 3 candidate (le più
+    recenti trovate) e nel Pannello Admin, scheda FOTO, Edoardo vede le candidate dal telefono e sceglie quella giusta
+    (o incolla il link di un'altra foto di Commons). La scelta vale per tutti (Firebase `shared/bt-commons-photos`).
+  - Loghi: sono marchi delle scuderie (decisione del 29/9: non nella versione per il Play Store). Si vedono nelle
+    versioni di prova; un interruttore nel codice li toglie dalla versione per il Play Store.
+
 ## Dati
 - Nei dati dell'account (`users/<email>.app2`, elenco `USER_KEYS`): `theme` ({ mode: "team" | "custom", color }),
   `sounds`, `haptics`, `helmet`, `hidden`. Sul telefono anche una copia di `theme`, `sounds`, `haptics` per l'avvio e
   per l'ospite, e il primo avvio fatto.
 - Categorie nuove delle notizie: METEO e TECNICA.
+- Foto di Commons scelte dall'admin: `shared/bt-commons-photos` = { drivers: { id: file }, cars: { teamId: file },
+  logos: { teamId: file } }; licenza e autore letti da Commons e tenuti sul telefono per 7 giorni.
 
 ## Fuori da questa parte (dopo l'APK)
 - Obiettivi e trofei, medaglia accanto al nome in chat e scheda con casco e trofei (scelte di Edoardo: C, C).
