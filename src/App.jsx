@@ -513,6 +513,19 @@ const TABS = [
   { id: "fanta", label: "FANTA", icon: "trophy" },
   { id: "race", label: "RACE", icon: "flag" },
 ];
+const TAB_IDS = TABS.map(t => t.id);
+// G29: un gesto che parte da qui è dell'elemento, non dello swipe tra le schede: data-swipe-own (notizie, manettini,
+// grafici da scorrere…), campi di testo, cursori e righe che scorrono davvero di lato.
+function ownGesture(el, root) {
+  for (let e = el; e && e !== root && e.nodeType === 1; e = e.parentElement) {
+    if (e.hasAttribute("data-swipe-own") || /^(INPUT|TEXTAREA|SELECT)$/.test(e.tagName)) return true;
+    const role = e.getAttribute("role");
+    if (role === "slider" || role === "spinbutton") return true;
+    const cs = getComputedStyle(e);
+    if ((cs.overflowX === "auto" || cs.overflowX === "scroll") && e.scrollWidth > e.clientWidth + 1) return true;
+  }
+  return false;
+}
 
 function BottomNav({ active, onChange }) {
   return (
@@ -520,7 +533,7 @@ function BottomNav({ active, onChange }) {
       {TABS.map(t => {
         const on = t.id === active;
         return (
-          <button key={t.id} className="press" data-nav-tab={t.id} onClick={() => onChange(t.id)} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 4, padding: "6px 0" }}>
+          <button key={t.id} className="press" data-nav-tab={t.id} aria-current={on ? "page" : undefined} onClick={() => onChange(t.id)} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 4, padding: "6px 0" }}>
             {on ? (
               <div style={{ width: 34, height: 26, borderRadius: 9, background: C.accent, display: "flex", alignItems: "center", justifyContent: "center" }}>
                 <Icon name={t.icon} size={16} color="#fff" sw={2.3} />
@@ -2631,7 +2644,7 @@ function TelChart({ label, unit, tel, cmp, field, yMin, yMax, kind, range, hover
       <div style={{ display: "flex", alignItems: "baseline", gap: 6, fontFamily: F_BODY, fontSize: 11, color: C.muted, margin: "0 0 2px 2px" }}>
         <span style={{ fontWeight: 700, color: C.text }}>{label}</span><span>{unit}</span>
       </div>
-      <svg data-tel-chart={field} viewBox={`0 0 ${W} ${H}`} onPointerMove={move} onPointerDown={move} style={{ display: "block", width: "100%", height: "auto", touchAction: "none" }}>
+      <svg data-tel-chart={field} data-swipe-own="" viewBox={`0 0 ${W} ${H}`} onPointerMove={move} onPointerDown={move} style={{ display: "block", width: "100%", height: "auto", touchAction: "none" }}>
         {ticks.map(v => <g key={v}><line x1={padL} x2={W - padR} y1={Y(v)} y2={Y(v)} stroke="rgba(255,255,255,.07)" strokeWidth="1" /><text x={padL - 4} y={Y(v) + 3} fill={C.dim} fontSize="8.5" textAnchor="end" fontFamily="'Work Sans', sans-serif">{v}</text></g>)}
         {tel.sectorDist.filter(d => d > d0 && d < d1).map((d, i) => <line key={i} x1={X(d)} x2={X(d)} y1={padT} y2={H - padB} stroke="rgba(255,255,255,.22)" strokeWidth="1" />)}
         {cmp && <path d={path(cmp, kind === "gear" || kind === "brake")} fill="none" stroke="#8E8E96" strokeWidth="1.5" strokeLinejoin="round" />}
@@ -3539,7 +3552,7 @@ function SecondScreen({ race, live, st, standings, layout, setLayout, prefs, set
   const grip = w => {
     const name = (SS_WIDGETS.find(x => x[0] === w.id) || [w.id, w.id])[1], on = drag === w.id;
     return (
-      <div id={"ss-grip-" + w.id} data-ss-grip={w.id} role="slider" tabIndex={0} aria-orientation="vertical" aria-label={`Altezza di ${name}: trascina su o giù`}
+      <div id={"ss-grip-" + w.id} data-ss-grip={w.id} data-swipe-own="" role="slider" tabIndex={0} aria-orientation="vertical" aria-label={`Altezza di ${name}: trascina su o giù`}
         aria-valuemin={1} aria-valuemax={SS_COL_UNITS} aria-valuenow={w.h} aria-valuetext={SS_SIZE_TEXT[w.h]}
         onPointerDown={e => startDrag(w.id, e)} onKeyDown={e => gripKey(w.id, e)} onClick={e => { if (e && e.stopPropagation) e.stopPropagation(); }}
         style={{ position: "absolute", right: 0, bottom: 0, zIndex: 5, width: 30, height: 30, display: "flex", alignItems: "flex-end", justifyContent: "flex-end", padding: 3, borderRadius: "10px 0 13px 0", cursor: "ns-resize", touchAction: "none", userSelect: "none", WebkitUserSelect: "none", outlineOffset: -2 }}>
@@ -3784,7 +3797,7 @@ function ImageViewer({ src, onClose }) {
         <span style={{ flex: 1, fontFamily: F_BODY, fontSize: 12, color: "rgba(255,255,255,.7)" }}>Pizzica con due dita o tocca due volte per ingrandire</span>
         {btn("Chiudi foto", <Icon name="close" size={16} color="#fff" sw={2.4} />, onClose)}
       </div>
-      <div onPointerDown={down} onPointerMove={move} onPointerUp={up} onPointerCancel={up} onWheel={e => setS(zRef.current.s * (e.deltaY < 0 ? 1.15 : 0.87))}
+      <div data-swipe-own="" onPointerDown={down} onPointerMove={move} onPointerUp={up} onPointerCancel={up} onWheel={e => setS(zRef.current.s * (e.deltaY < 0 ? 1.15 : 0.87))}
         style={{ flex: 1, minHeight: 0, overflow: "hidden", display: "flex", alignItems: "center", justifyContent: "center", touchAction: "none", cursor: z.s > 1 ? "grab" : "zoom-in" }}>
         <img data-zoom={z.s} src={src} alt="Foto della notizia" draggable={false} style={{ maxWidth: "100%", maxHeight: "100%", objectFit: "contain", transform: `translate(${z.x}px, ${z.y}px) scale(${z.s})`, transition: pts.current.size ? "none" : "transform .18s ease-out", userSelect: "none" }} />
       </div>
@@ -4406,7 +4419,7 @@ function StrategyBuilder({ laps, value, onChange, locked }) {
   const p = Math.min(pick, value.length - 2);
   return (
     <div data-strat-builder="">
-      <div onPointerMove={onMove} onPointerUp={() => { drag.current = null; }} onPointerLeave={() => { drag.current = null; }} style={{ position: "relative", height: 48, margin: "6px 0 4px", borderRadius: 12, background: "rgba(255,255,255,.04)", touchAction: "none" }}>
+      <div data-swipe-own="" onPointerMove={onMove} onPointerUp={() => { drag.current = null; }} onPointerLeave={() => { drag.current = null; }} style={{ position: "relative", height: 48, margin: "6px 0 4px", borderRadius: 12, background: "rgba(255,255,255,.04)", touchAction: "none" }}>
         {value.map((s, i) => { const from = i ? value[i - 1].to + 1 : 1, n = s.to - from + 1, u = compUi(s.c); return (
           <button key={"s" + i} className="press" data-strat-stint={i} data-compound={s.c} aria-label={`Stint ${i + 1}: ${u[1]}, ${n} giri. Tocca per cambiare mescola`} disabled={locked} onClick={() => cycle(i)}
             style={{ position: "absolute", top: 0, bottom: 0, left: `calc(${(from - 1) / laps * 100}% + 1px)`, width: `calc(${n / laps * 100}% - 2px)`, borderRadius: 10, background: u[0], fontFamily: F_HEAD, fontWeight: 900, fontSize: 12, color: u[2], overflow: "hidden", whiteSpace: "nowrap" }}>{n >= 6 ? `${s.c} · ${n}` : s.c}</button>
@@ -4940,7 +4953,7 @@ function GhostLap({ sessionId, onBack }) {
       </div>
       <div style={{ margin: "0 16px 12px", padding: "10px 8px 8px", borderRadius: 16, background: C.card, border: `1px solid ${C.border}` }}>
         <div style={{ padding: "0 4px 4px", fontFamily: F_BODY, fontWeight: 700, fontSize: 10.5, letterSpacing: 1, color: C.dim }}>VELOCITÀ (km/h) LUNGO IL GIRO · TOCCA E SCORRI</div>
-        <svg data-ghost-chart="speed" viewBox={`0 0 ${W} 150`} onPointerMove={scrub} onPointerDown={scrub} style={{ display: "block", width: "100%", touchAction: "pan-y", cursor: "crosshair" }} role="img" aria-label={`Velocità di ${IA.code} e ${IB.code} lungo il giro`}>
+        <svg data-ghost-chart="speed" data-swipe-own="" viewBox={`0 0 ${W} 150`} onPointerMove={scrub} onPointerDown={scrub} style={{ display: "block", width: "100%", touchAction: "pan-y", cursor: "crosshair" }} role="img" aria-label={`Velocità di ${IA.code} e ${IB.code} lungo il giro`}>
           {[100, 200, 300].map(v => <g key={v}><line x1={padL} x2={W - padR} y1={YV(v)} y2={YV(v)} stroke="rgba(255,255,255,.07)" /><text x={padL - 4} y={YV(v) + 3} textAnchor="end" fill={C.dim} fontFamily={F_BODY} fontSize="8.5">{v}</text></g>)}
           {(() => { let lastX = -99; return S.corners.map(c => { const x = X(c.d), show = c.n === cn || x - lastX >= 9; if (show) lastX = x; return <g key={c.n}><line x1={x} x2={x} y1="138" y2="142" stroke={c.n === cn ? C.gold : "rgba(255,255,255,.25)"} />{show && <text x={x} y="149" textAnchor="middle" fill={c.n === cn ? C.gold : C.dim} fontFamily={F_BODY} fontSize="6.5">{c.n}</text>}</g>; }); })()}
           <polyline points={line(B, YV)} fill="none" stroke={IB.color} strokeWidth="1.8" strokeDasharray={same ? "4 3" : undefined} opacity=".95" />
@@ -4948,7 +4961,7 @@ function GhostLap({ sessionId, onBack }) {
           {cur != null && <g><line x1={X(cur)} x2={X(cur)} y1="8" y2="138" stroke="#fff" strokeWidth="1" opacity=".6" /><circle cx={X(cur)} cy={YV(val(A, "v"))} r="3.5" fill={IA.color} stroke="#fff" /><circle cx={X(cur)} cy={YV(val(B, "v"))} r="3.5" fill={IB.color} stroke="#fff" /></g>}
         </svg>
         <div style={{ padding: "6px 4px 2px", fontFamily: F_BODY, fontWeight: 700, fontSize: 10.5, letterSpacing: 1, color: C.dim }}>DISTACCO DI {IB.code} DA {IA.code} (sopra la riga {IB.code} è dietro)</div>
-        <svg data-ghost-chart="delta" viewBox={`0 0 ${W} 80`} onPointerMove={scrub} onPointerDown={scrub} style={{ display: "block", width: "100%", touchAction: "pan-y", cursor: "crosshair" }}>
+        <svg data-ghost-chart="delta" data-swipe-own="" viewBox={`0 0 ${W} 80`} onPointerMove={scrub} onPointerDown={scrub} style={{ display: "block", width: "100%", touchAction: "pan-y", cursor: "crosshair" }}>
           <line x1={padL} x2={W - padR} y1={YD(0)} y2={YD(0)} stroke="rgba(255,255,255,.25)" />
           {[maxDt, -maxDt].map(v => <text key={v} x={padL - 4} y={YD(v) + 3} textAnchor="end" fill={C.dim} fontFamily={F_BODY} fontSize="8">{(v > 0 ? "+" : "−") + Math.abs(v).toFixed(2)}</text>)}
           <polyline points={dts.map(x => X(x.d).toFixed(1) + "," + YD(x.dt).toFixed(1)).join(" ")} fill="none" stroke={C.gold} strokeWidth="1.8" />
@@ -8417,6 +8430,22 @@ function App() {
   };
 
   const goTab = (t) => { setTab(t); setView("tab"); };
+  // Swipe tra le schede (G29): solo con la barra in basso (view "tab"). Col dito gli eventi touch, col mouse i pointer
+  // events; il gesto non parte dagli elementi con gesti propri (ownGesture) e lo decide classifySwipe (src/logic/gesture.js).
+  const tabSwipe = useRef(null), swipeClick = useRef(0);
+  const [tabEnter, setTabEnter] = useState(null);   // "left" | "right": da che parte arriva la scheda nuova
+  const swipeStart = (x, y, t, target, root) => { tabSwipe.current = ownGesture(target, root) ? null : { x, y, t }; };
+  const swipeEnd = (x, y, t, width, mouse) => {
+    const s = tabSwipe.current; tabSwipe.current = null;
+    if (!s) return;
+    const dir = classifySwipe({ dx: x - s.x, dy: y - s.y, dt: t - s.t, width });
+    if (!dir) return;
+    if (mouse) swipeClick.current = performance.now();   // il click che segue il trascinamento col mouse non apre niente
+    const i = TAB_IDS.indexOf(tab), j = dir === "left" ? i + 1 : i - 1;
+    if (j < 0 || j >= TAB_IDS.length) return;
+    fx.play("tick"); fx.buzz("select");
+    setTabEnter(dir); goTab(TAB_IDS[j]);
+  };
   const unreadCount = notifs.filter(n => n.unread).length;
 
   const castVote = (pollId, optionId) => {
@@ -8750,8 +8779,16 @@ function App() {
       <div data-bg={pageBg || undefined} style={{ height: "100%", display: "flex", flexDirection: "column", position: "relative", background: pageBg && PAGE_BG[pageBg] ? PAGE_BG[pageBg] : undefined, transition: "background .3s" }}>
         {showTopHeader && <TopHeader trialDays={trialActive ? trialDaysLeft(trial) : 0} isPremium={isPremium} unread={unreadCount} onPremium={() => setPremiumOpen(true)} onBell={() => setView("notifiche")} onProfile={() => setView("profilo")} helmet={helmet} onTrack={!!(live || realLiveRace)} />}
         {showTopHeader && offline && <div role="status" data-offline="" style={{ margin: "-6px 16px 10px", padding: "8px 12px", borderRadius: 10, background: "rgba(231,179,76,.12)", border: "1px solid rgba(231,179,76,.35)", fontFamily: F_BODY, fontSize: 12, color: C.text, lineHeight: 1.4, flexShrink: 0 }}>{OFFLINE_LINE}</div>}
-        <div style={{ flex: 1, minHeight: 0 }}>{body}</div>
-        {showBottomNav && <BottomNav active={tab} onChange={goTab} />}
+        <div data-tab-swipe={showBottomNav ? "" : undefined} style={{ flex: 1, minHeight: 0, overflow: "hidden" }}
+          onTouchStart={showBottomNav ? e => { const k = e.touches[0]; if (e.touches.length === 1) swipeStart(k.clientX, k.clientY, e.timeStamp, e.target, e.currentTarget); else tabSwipe.current = null; } : undefined}
+          onTouchEnd={showBottomNav ? e => { const k = e.changedTouches[0]; if (k) swipeEnd(k.clientX, k.clientY, e.timeStamp, e.currentTarget.clientWidth, false); } : undefined}
+          onTouchCancel={() => { tabSwipe.current = null; }}
+          onPointerDown={showBottomNav ? e => { if (e.pointerType === "mouse" && e.button === 0) swipeStart(e.clientX, e.clientY, e.timeStamp, e.target, e.currentTarget); } : undefined}
+          onPointerUp={showBottomNav ? e => { if (e.pointerType === "mouse") swipeEnd(e.clientX, e.clientY, e.timeStamp, e.currentTarget.clientWidth, true); } : undefined}
+          onClickCapture={e => { if (performance.now() - swipeClick.current < 400) { e.stopPropagation(); e.preventDefault(); } }}>
+          <div key={showBottomNav ? "tab-" + tab : "view"} data-tab-enter={showBottomNav && tabEnter ? tabEnter : undefined} className={showBottomNav && tabEnter ? "tab-enter-" + tabEnter : undefined} style={{ height: "100%" }}>{body}</div>
+        </div>
+        {showBottomNav && <BottomNav active={tab} onChange={t => { setTabEnter(null); goTab(t); }} />}
         {premiumOpen && <PremiumModal onClose={closePremium} isPremium={isPremium} plan={plan} setPlan={setPlan} onSubscribe={doSubscribe} subscribing={subscribing} subscribed={subscribed} trialUsed={!!trial} onTrial={doTrial} trial={trial} />}
         {selectedDriver && <DriverDetailModal driver={selectedDriver} lastRace={lastRace} races={races} onClose={() => setSelectedDriver(null)} />}
         {liveTrackOpen && <LiveMapView race={live ? races.find(r => r.id === live.raceId) : (races.find(r => r.status === "IN ARRIVO") || null)} live={live} st={liveSt} onClose={() => setLiveTrackOpen(false)} />}
