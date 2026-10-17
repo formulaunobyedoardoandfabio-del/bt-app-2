@@ -17,6 +17,7 @@ import Colors from "./logic/colors";
 import { filterNews, TYRES, LANES } from "./logic/newsfilter";
 import { classifySwipe, SWIPE } from "./logic/gesture";
 import { HELMET_DEFAULT, HELMET_PATTERNS, HELMET_VISORS, HELMET_FINISHES, cleanHelmet } from "./logic/helmet";
+import { qZones, zoneOf } from "./logic/qzones";
 import F1 from "./data/f1-2026";
 import AppData from "./services/appdata";
 import Compat from "./services/compat";
@@ -5487,7 +5488,35 @@ function MiniTrack({ circuitId, width = 96 }) {
   return <svg viewBox="0 0 1600 900" width={width} height={Math.round(width * 900 / 1600)} aria-hidden="true"><polygon points={c.pts} fill="none" stroke="#fff" strokeWidth="38" strokeLinejoin="round" /></svg>;
 }
 
-function FantaSlot({ kind, index, id, stats, boost, locked, onOpen, onRemove, onBoost }) {
+// Parc fermé (G21): quando si chiudono la squadra del FantaF1 o un pronostico, un telo in carbonio scende sopra con
+// "PARC FERMÉ" e l'ora della chiusura (transform, R4; con "Rimuovi animazioni" è già giù, R5). liftable: la squadra si
+// può guardare alzando il telo; resta giù una striscia per riabbassarlo.
+const CARBON_BG = "repeating-linear-gradient(45deg, rgba(255,255,255,.055) 0 2px, rgba(255,255,255,0) 2px 6px), repeating-linear-gradient(-45deg, rgba(0,0,0,.5) 0 2px, rgba(0,0,0,0) 2px 6px), linear-gradient(180deg, #2A2A31 0%, #111116 100%)";
+const PARC_STRIP = 34;   // px del telo che restano giù quando lo si alza
+function ParcFerme({ kind, at, liftable = false, compact = false }) {
+  const [up, setUp] = useState(false);
+  const when = at ? `Chiusa ${fmtRome(at)}, ora italiana` : "Chiusa";
+  return (
+    <div data-parc-ferme={kind} data-state={up ? "up" : "down"} className="parc-ferme" role="status" aria-label={`Parc fermé. ${when}`}
+      style={{ position: "absolute", inset: 0, zIndex: 4, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: compact ? 2 : 6, padding: compact ? "6px 10px" : "12px 14px", background: CARBON_BG, borderRadius: compact ? 10 : 0, boxShadow: "inset 0 -10px 18px rgba(0,0,0,.45)", textAlign: "center", transform: up ? `translateY(calc(-100% + ${PARC_STRIP}px))` : "translateY(0px)" }}>
+      <span aria-hidden="true" style={{ position: "absolute", left: 0, right: 0, bottom: 0, height: 4, background: "repeating-linear-gradient(-45deg, #F2C230 0 7px, #111 7px 14px)" }} />
+      <span style={{ fontFamily: F_HEAD, fontWeight: 900, fontStyle: "italic", fontSize: compact ? 15 : 26, letterSpacing: compact ? 1.5 : 3, color: "#fff", textShadow: "0 2px 6px rgba(0,0,0,.6)" }}>PARC FERMÉ</span>
+      <span style={{ fontFamily: F_BODY, fontWeight: 600, fontSize: compact ? 11 : 12.5, color: "#D6D5DA" }}>{when}</span>
+      {liftable && (up
+        ? <button className="press" aria-label="Copri la squadra con il telo" onClick={() => setUp(false)}
+            style={{ position: "absolute", left: 0, right: 0, bottom: 4, height: PARC_STRIP - 4, display: "flex", alignItems: "center", justifyContent: "center", fontFamily: F_HEAD, fontWeight: 800, fontSize: 11.5, color: "#fff", letterSpacing: .4 }}>PARC FERMÉ · copri la squadra</button>
+        : <button className="press" aria-label="Alza il telo e guarda la squadra" onClick={() => setUp(true)}
+            style={{ marginTop: 10, padding: "9px 16px", borderRadius: 999, background: "rgba(255,255,255,.12)", border: "1px solid rgba(255,255,255,.28)", fontFamily: F_HEAD, fontWeight: 800, fontSize: 12.5, color: "#fff" }}>Guarda la squadra</button>)}
+    </div>
+  );
+}
+
+// Carta del FantaF1 che si gira in 3D (G23): davanti il pilota (o la scuderia) e il prezzo; toccandola si gira e dietro
+// ci sono i numeri veri che l'app ha già: punti FantaF1 della stagione, quotazione con la variazione, posizione e punti
+// nel mondiale. Dal retro "Cambia" apre la scelta (con la squadra chiusa è spento).
+function FantaSlot({ kind, index, id, stats, boost, locked, standings, onOpen, onRemove, onBoost }) {
+  const [flip, setFlip] = useState(false);
+  useEffect(() => { setFlip(false); }, [id]);
   const isD = kind === "drivers";
   const d = isD && id ? driverById(id) : null;
   const t = isD ? (d && teamById(d.teamId)) : (id && teamById(id));
@@ -5500,23 +5529,46 @@ function FantaSlot({ kind, index, id, stats, boost, locked, onOpen, onRemove, on
     </button>
   );
   const label = isD ? d.full : t.name;
+  const champ = ((standings && (isD ? standings.drivers : standings.teams)) || []).find(r => r.id === id) || null;
+  const face = { borderRadius: 14, overflow: "hidden", border: `1px solid ${C.border}`, backfaceVisibility: "hidden", WebkitBackfaceVisibility: "hidden" };
+  // Sul retro: etichetta sopra e valore sotto (le carte dei piloti sono strette).
+  const stat = (k, v, extra) => (
+    <div style={{ padding: "1px 0 0", borderTop: "1px solid rgba(255,255,255,.09)", minWidth: 0 }}>
+      <div style={{ fontFamily: F_BODY, fontWeight: 700, fontSize: 7.5, letterSpacing: .5, lineHeight: 1.1, color: C.dim }}>{k}</div>
+      <div style={{ display: "flex", alignItems: "baseline", gap: 3, fontFamily: F_HEAD, fontWeight: 900, fontSize: 10.5, lineHeight: 1.2, color: C.text, whiteSpace: "nowrap", overflow: "hidden" }}>{v}{extra}</div>
+    </div>
+  );
   return (
-    <div data-fanta-card={id} style={{ position: "relative", borderRadius: 14, overflow: "hidden", background: "#0B0B0E", border: `1px solid ${C.border}`, opacity: locked ? .85 : 1 }}>
-      <button className="press" onClick={onOpen} disabled={locked} aria-label={`Cambia ${label}`} style={{ display: "block", width: "100%", textAlign: "left" }}>
-        {isD
-          ? <div style={{ height: 70, background: d.photo ? `${t.color} url(${d.photo}) 50% 0 / 100% auto no-repeat` : t.color }} />
-          : <div style={{ height: 62, background: t.color, display: "flex", alignItems: "flex-end", justifyContent: "center", paddingBottom: 2 }}><CarSilhouette color="#F4F2EF" width={118} /></div>}
-        <div style={{ padding: "6px 8px 8px" }}>
-          <div style={{ fontFamily: F_HEAD, fontWeight: 900, fontSize: isD ? (cardName(d).length > 12 ? 10.5 : 11.5) : 13, color: C.text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{isD ? cardName(d) : t.name.toUpperCase()}</div>
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 4, marginTop: 4, paddingTop: 4, borderTop: "1px solid rgba(255,255,255,.12)" }}>
-            <span style={{ fontFamily: F_HEAD, fontWeight: 900, fontSize: 12.5, color: C.text }}>{fmtM(row.price)}</span>
-            <PriceChange v={row.change} size={10.5} />
-          </div>
+    <div data-fanta-card={id} data-flip={flip ? "back" : "front"} style={{ position: "relative", perspective: 700, opacity: locked ? .85 : 1 }}>
+      <div data-flip-inner="" className="flip-inner" style={{ position: "relative", transformStyle: "preserve-3d", transform: `rotateY(${flip ? 180 : 0}deg)` }}>
+        <div data-card-front="" style={{ ...face, position: "relative", background: "#0B0B0E", pointerEvents: flip ? "none" : "auto" }}>
+          <button className="press" onClick={() => setFlip(true)} aria-label={`Gira la carta di ${label}`} style={{ display: "block", width: "100%", textAlign: "left" }}>
+            {isD
+              ? <div style={{ height: 70, background: d.photo ? `${t.color} url(${d.photo}) 50% 0 / 100% auto no-repeat` : t.color }} />
+              : <div style={{ height: 62, background: t.color, display: "flex", alignItems: "flex-end", justifyContent: "center", paddingBottom: 2 }}><CarSilhouette color="#F4F2EF" width={118} /></div>}
+            <div style={{ padding: "6px 8px 8px" }}>
+              <div style={{ fontFamily: F_HEAD, fontWeight: 900, fontSize: isD ? (cardName(d).length > 12 ? 10.5 : 11.5) : 13, color: C.text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{isD ? cardName(d) : t.name.toUpperCase()}</div>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 4, marginTop: 4, paddingTop: 4, borderTop: "1px solid rgba(255,255,255,.12)" }}>
+                <span style={{ fontFamily: F_HEAD, fontWeight: 900, fontSize: 12.5, color: C.text }}>{fmtM(row.price)}</span>
+                <PriceChange v={row.change} size={10.5} />
+              </div>
+            </div>
+          </button>
+          {!locked && <button className="press" aria-label={`Togli ${label}`} onClick={onRemove} style={{ position: "absolute", top: 6, right: 6, width: 26, height: 26, borderRadius: "50%", background: "rgba(0,0,0,.72)", display: "flex", alignItems: "center", justifyContent: "center" }}><Icon name="close" size={11} color="#fff" sw={2.6} /></button>}
+          {isD && <button className="press" data-boost={boost ? "on" : "off"} aria-pressed={boost ? "true" : "false"} aria-label={boost ? `${d.full} ha il 2X` : `Metti il 2X su ${d.full}`} onClick={onBoost} disabled={locked}
+            style={{ position: "absolute", top: 6, left: 6, height: 24, minWidth: 32, padding: "0 6px", borderRadius: 12, background: boost ? "#fff" : "rgba(0,0,0,.55)", border: boost ? "none" : "1px dashed rgba(255,255,255,.55)", fontFamily: F_HEAD, fontWeight: 900, fontSize: 11, color: boost ? "#111" : "rgba(255,255,255,.8)" }}>2X</button>}
         </div>
-      </button>
-      {!locked && <button className="press" aria-label={`Togli ${label}`} onClick={onRemove} style={{ position: "absolute", top: 6, right: 6, width: 26, height: 26, borderRadius: "50%", background: "rgba(0,0,0,.72)", display: "flex", alignItems: "center", justifyContent: "center" }}><Icon name="close" size={11} color="#fff" sw={2.6} /></button>}
-      {isD && <button className="press" data-boost={boost ? "on" : "off"} aria-pressed={boost ? "true" : "false"} aria-label={boost ? `${d.full} ha il 2X` : `Metti il 2X su ${d.full}`} onClick={onBoost} disabled={locked}
-        style={{ position: "absolute", top: 6, left: 6, height: 24, minWidth: 32, padding: "0 6px", borderRadius: 12, background: boost ? "#fff" : "rgba(0,0,0,.55)", border: boost ? "none" : "1px dashed rgba(255,255,255,.55)", fontFamily: F_HEAD, fontWeight: 900, fontSize: 11, color: boost ? "#111" : "rgba(255,255,255,.8)" }}>2X</button>}
+        <div data-card-back="" style={{ ...face, position: "absolute", inset: 0, transform: "rotateY(180deg)", background: `linear-gradient(160deg, ${alpha(t.color, .34)} 0%, #0B0B0E 58%)`, display: "flex", flexDirection: "column", pointerEvents: flip ? "auto" : "none" }}>
+          <button className="press" onClick={() => setFlip(false)} aria-label={`Torna davanti: ${label}`} style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column", justifyContent: "center", width: "100%", padding: "5px 7px 1px", textAlign: "left" }}>
+            <div style={{ fontFamily: F_HEAD, fontWeight: 900, fontSize: 10, color: C.text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", marginBottom: 1 }}>{isD ? cardName(d) : t.name.toUpperCase()}</div>
+            {stat("PUNTI FANTAF1", row.pts == null ? "–" : String(row.pts))}
+            {stat("QUOTAZIONE", fmtM(row.price), <PriceChange v={row.change} size={9} />)}
+            {stat("MONDIALE", champ && champ.position != null ? `${champ.position}° · ${champ.points == null ? "–" : champ.points} pt` : "–")}
+          </button>
+          <button className="press" aria-label={`Cambia ${label}`} onClick={onOpen} disabled={locked}
+            style={{ margin: "0 7px 6px", padding: "4px 0", borderRadius: 8, background: locked ? "rgba(255,255,255,.08)" : C.accent, fontFamily: F_HEAD, fontWeight: 800, fontSize: 10.5, color: locked ? C.dim : "#fff" }}>{locked ? "Squadra chiusa" : "Cambia"}</button>
+        </div>
+      </div>
     </div>
   );
 }
@@ -5570,7 +5622,7 @@ function FantaPicker({ kind, slot, squad, stats, budget, onPick, onClose }) {
 }
 
 // La tua squadra come in F1 Fantasy: chiusura con conto alla rovescia, nome, cambi gratis, budget, 5 piloti e 2 scuderie.
-function FantaSquadCard({ squad, setSquad, base, freeTransfers, budget, stats, race, lock, onToast, needAccount }) {
+function FantaSquadCard({ squad, setSquad, base, freeTransfers, budget, stats, race, lock, onToast, needAccount, standings }) {
   const [picking, setPicking] = useState(null);   // { kind, slot }
   const [naming, setNaming] = useState(false);
   useBack(!!picking, () => setPicking(null));
@@ -5590,7 +5642,7 @@ function FantaSquadCard({ squad, setSquad, base, freeTransfers, budget, stats, r
   const cd = lock.lockAt ? BtLogic.countdown(lock.lockAt - nowMs()) : null;
   const pad = n => String(n).padStart(2, "0");
   const slot = (kind, i) => (
-    <FantaSlot key={kind + i} kind={kind} index={i} id={squad[kind][i]} stats={stats} boost={kind === "drivers" && squad.drivers[i] && squad.boost === squad.drivers[i]} locked={locked}
+    <FantaSlot key={kind + i} kind={kind} index={i} id={squad[kind][i]} stats={stats} standings={standings} boost={kind === "drivers" && squad.drivers[i] && squad.boost === squad.drivers[i]} locked={locked}
       onOpen={guard(() => setPicking({ kind, slot: i }))}
       onRemove={guard(() => setSlot(kind, i, null))}
       onBoost={guard(() => { setSquad(s => ({ ...s, boost: s.drivers[i] })); onToast(`2X su ${driverById(squad.drivers[i]).name}: i suoi punti del weekend valgono doppio`); })} />
@@ -5651,18 +5703,21 @@ function FantaSquadCard({ squad, setSquad, base, freeTransfers, budget, stats, r
       </div>
       <p style={{ margin: "2px 14px 0", fontFamily: F_BODY, fontSize: 10.5, color: C.dim }}>Budget totale {fmtM(budget, true)} · squadra {fmtM(value, true)} · tocca "2X" per raddoppiare i punti di un pilota.</p>
 
-      <div data-fanta-drivers="" style={{ padding: "12px 14px 0" }}>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(6, 1fr)", gap: 8 }}>
-          <div style={{ gridColumn: "2 / span 2" }}>{slot("drivers", 0)}</div>
-          <div style={{ gridColumn: "4 / span 2" }}>{slot("drivers", 1)}</div>
-          <div style={{ gridColumn: "1 / span 2" }}>{slot("drivers", 2)}</div>
-          <div style={{ gridColumn: "3 / span 2" }}>{slot("drivers", 3)}</div>
-          <div style={{ gridColumn: "5 / span 2" }}>{slot("drivers", 4)}</div>
+      <div data-squad-area="" style={{ position: "relative", overflow: "hidden" }}>
+        <div data-fanta-drivers="" style={{ padding: "12px 14px 0" }}>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(6, 1fr)", gap: 8 }}>
+            <div style={{ gridColumn: "2 / span 2" }}>{slot("drivers", 0)}</div>
+            <div style={{ gridColumn: "4 / span 2" }}>{slot("drivers", 1)}</div>
+            <div style={{ gridColumn: "1 / span 2" }}>{slot("drivers", 2)}</div>
+            <div style={{ gridColumn: "3 / span 2" }}>{slot("drivers", 3)}</div>
+            <div style={{ gridColumn: "5 / span 2" }}>{slot("drivers", 4)}</div>
+          </div>
         </div>
-      </div>
-      <div style={{ height: 1, background: "rgba(255,255,255,.22)", margin: "14px 14px 0" }} />
-      <div data-fanta-teams="" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, padding: "14px 14px 16px" }}>
-        {slot("teams", 0)}{slot("teams", 1)}
+        <div style={{ height: 1, background: "rgba(255,255,255,.22)", margin: "14px 14px 0" }} />
+        <div data-fanta-teams="" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, padding: "14px 14px 16px" }}>
+          {slot("teams", 0)}{slot("teams", 1)}
+        </div>
+        {locked && <ParcFerme kind="squad" at={lock.lockAt} liftable />}
       </div>
       {!complete && <p role="status" style={{ margin: "-4px 14px 14px", fontFamily: F_BODY, fontSize: 11.5, color: C.gold }}>Mancano {squad.drivers.filter(x => !x).length + squad.teams.filter(x => !x).length} posti: completa la squadra prima della chiusura, altrimenti non prende punti.</p>}
       {picking && <FantaPicker kind={picking.kind} slot={picking.slot} squad={squad} stats={stats} budget={budget} onClose={() => setPicking(null)}
@@ -5754,6 +5809,7 @@ function PredictionCard({ q, answer, lock, onAnswer }) {
   const history = q.kind === "history";
   const choice = q.kind === "poll" || history;
   const done = history ? answer != null : lock.locked;
+  const parcFerme = !history && lock.locked && q.answer == null;   // G21: chiusa e risultato non ancora segnato
   const right = q.answer == null ? null : predLabel(q, q.answer);
   const badge = PRED_BADGE[q.kind] || ["DOMANDA", C.dim];
   const mine = predLabel(q, answer);
@@ -5763,6 +5819,8 @@ function PredictionCard({ q, answer, lock, onAnswer }) {
     <div data-prediction={q.id} style={{ padding: "13px 14px", borderRadius: 16, background: C.card, border: `1px solid ${res === true ? "rgba(62,214,107,.5)" : C.border}`, marginBottom: 10 }}>
       <span style={{ display: "inline-block", padding: "2px 7px", borderRadius: 6, background: badge[1] + "22", fontFamily: F_HEAD, fontWeight: 800, fontSize: 9.5, letterSpacing: .6, color: badge[1] }}>{badge[0]}</span>
       <div style={{ margin: "7px 0 10px", fontFamily: F_HEAD, fontWeight: 800, fontSize: 14, color: C.text, lineHeight: 1.3 }}>{q.q}</div>
+      <div style={{ position: "relative", overflow: "hidden", borderRadius: 10, minHeight: parcFerme ? 54 : 0 }}>
+      {parcFerme && <ParcFerme kind="prediction" at={lock.lockAt != null && lock.lockAt <= nowMs() ? lock.lockAt : null} compact />}
       {choice ? (
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6 }}>
           {q.options.map(([id, l]) => {
@@ -5788,6 +5846,7 @@ function PredictionCard({ q, answer, lock, onAnswer }) {
           {!done && <span style={{ fontFamily: F_BODY, fontWeight: 700, fontSize: 11, color: C.dim }}>{answer != null ? "Cambia" : "Tutti i " + (q.kind === "team" ? TEAMS.length : DRIVERS.length)}</span>}
         </button>
       )}
+      </div>
       {picking && <EntityPicker id={q.id} kind={q.kind === "team" ? "team" : "driver"} title={q.q} selected={answer} onPick={v => { onAnswer(v); setPicking(false); }} onClose={() => setPicking(false)} />}
       <p role="status" style={{ margin: "9px 0 0", fontFamily: F_BODY, fontSize: 11.5, color: C.muted, lineHeight: 1.45 }}>
         {res === true ? <b style={{ color: TIMING.green }}>Giusto! +1 punto FantaF1.</b>
@@ -5840,7 +5899,12 @@ function FantaRules() {
   );
 }
 
-function FantaScreen({ squad, setSquad, base, freeTransfers, budget, stats, race, lock, weekends = [], isPremium, onPremium, onToast, bonus = [], leagues, setLeagues, needAccount, predictions = [], predAnswers = {}, predLockOf, onAnswerPrediction }) {
+// Zona eliminazione delle leghe (G22, src/logic/qzones.js): in fondo la Zona Q1 in rosso, sopra la Zona Q2 in giallo.
+const LEAGUE_ZONES = {
+  q1: { label: "ZONA Q1", bg: "rgba(255,24,1,.13)", line: "rgba(255,90,95,.45)", ink: "#FF5A5F" },
+  q2: { label: "ZONA Q2", bg: "rgba(255,210,31,.11)", line: "rgba(255,210,31,.45)", ink: "#FFD23F" },
+};
+function FantaScreen({ squad, setSquad, base, freeTransfers, budget, stats, race, lock, weekends = [], isPremium, onPremium, onToast, bonus = [], leagues, setLeagues, needAccount, predictions = [], predAnswers = {}, predLockOf, onAnswerPrediction, standings }) {
   const [, setTick] = useState(0);
   useEffect(() => { const iv = setInterval(() => setTick(n => n + 1), 30000); return () => clearInterval(iv); }, []);
   const bonusPts = bonus.reduce((a, b) => a + b.pts, 0);
@@ -5893,7 +5957,7 @@ function FantaScreen({ squad, setSquad, base, freeTransfers, budget, stats, race
   const wk = race ? weekends.filter(w => w.raceId === race.id) : [];
   return (
     <div className="scrollcol" style={{ height: "100%" }}>
-      <FantaSquadCard squad={squad} setSquad={setSquad} base={base} freeTransfers={freeTransfers} budget={budget} stats={stats} race={race} lock={lock} onToast={onToast} needAccount={needAccount} />
+      <FantaSquadCard squad={squad} setSquad={setSquad} base={base} freeTransfers={freeTransfers} budget={budget} stats={stats} race={race} lock={lock} onToast={onToast} needAccount={needAccount} standings={standings} />
 
       <div style={{ margin: "0 16px 16px", padding: "16px", borderRadius: 18, background: C.card, border: `1px solid ${C.border}` }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
@@ -5998,10 +6062,12 @@ function FantaScreen({ squad, setSquad, base, freeTransfers, budget, stats, race
 
       {heading("trophy", "CLASSIFICA LEGA", league ? league.name : "")}
       <div data-league-table="" style={{ margin: "0 16px 16px", borderRadius: 18, background: C.card, border: `1px solid ${C.border}`, overflow: "hidden" }}>
-        {rows.map((u, i) => (
-          <div key={u.name} data-league-me={u.me ? u.pts : undefined}>
-            <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "11px 14px", background: u.me ? alpha(C.accentInk, .07) : "transparent" }}>
-              <span style={{ width: 20, fontFamily: F_HEAD, fontWeight: 800, fontSize: 15, color: C.text }}>{i + 1}</span>
+        {rows.map((u, i) => { const zone = zoneOf(i + 1, rows.length), Z = LEAGUE_ZONES[zone], first = Z && (i === 0 || zoneOf(i, rows.length) !== zone); return (
+          <React.Fragment key={u.name}>
+          {first && <div data-zone-label={zone} style={{ padding: "6px 14px 4px", background: Z.bg, borderTop: `1px solid ${Z.line}`, fontFamily: F_HEAD, fontWeight: 900, fontSize: 10, letterSpacing: 1.2, color: Z.ink }}>{Z.label}</div>}
+          <div data-zone={zone} data-league-me={u.me ? u.pts : undefined}>
+            <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "11px 14px", background: Z ? Z.bg : u.me ? alpha(C.accentInk, .07) : "transparent", boxShadow: Z && u.me ? `inset 3px 0 0 ${C.accentInk}` : "none" }}>
+              <span style={{ width: 20, fontFamily: F_HEAD, fontWeight: 800, fontSize: 15, color: Z ? Z.ink : C.text }}>{i + 1}</span>
               <span style={{ width: 10, height: 10, borderRadius: "50%", background: u.color, flexShrink: 0 }} />
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
@@ -6014,8 +6080,10 @@ function FantaScreen({ squad, setSquad, base, freeTransfers, budget, stats, race
             </div>
             {i < rows.length - 1 && <div style={{ height: 1, background: C.divider, margin: "0 14px" }} />}
           </div>
-        ))}
+          </React.Fragment>
+        ); })}
       </div>
+      {qZones(rows.length).q1 > 0 && <p data-zone-note="" style={{ margin: "-8px 20px 16px", fontFamily: F_BODY, fontSize: 10.5, color: C.dim, lineHeight: 1.45 }}>Come nelle qualifiche 2026 (22 vetture, 6 fuori in Q1 e 6 in Q2): con {rows.length} squadre le ultime {qZones(rows.length).q1} sono in Zona Q1 e le {qZones(rows.length).q2} prima in Zona Q2.</p>}
 
       <div style={{ padding: "0 16px 12px" }}>
         {isPremium ? (
@@ -8525,7 +8593,7 @@ function App() {
     const keys = r ? weekendKeys(r) : [];
     const liveHere = !!live && !!r && live.raceId === r.id && keys.indexOf(live.type) >= keys.indexOf(q.about);
     const endedHere = !!r && !!wxResult[r.id + ":" + q.about];
-    return { locked: q.answer != null || (at != null && nowMs() >= at) || liveHere || endedHere, text: `all'inizio ${SESSION_DEL[q.about] || ""}${at ? ` (${fmtRome(at)})` : ""}` };
+    return { locked: q.answer != null || (at != null && nowMs() >= at) || liveHere || endedHere, lockAt: at, text: `all'inizio ${SESSION_DEL[q.about] || ""}${at ? ` (${fmtRome(at)})` : ""}` };
   };
   const onRaceTab = view === "tab" && tab === "race";
   liveShown.current = !!live && (onRaceTab || liveTrackOpen || ssOpen || view === "admin");
@@ -8557,7 +8625,7 @@ function App() {
       onRefresh={() => refreshShared(["news", "highlights", "ig", "homePoll"]).catch(() => {})} />;
     else if (tab === "race") body = <RaceScreen dotdVote={live ? votesNow.dotd[live.raceId] : null} onDotdVote={(k, id) => live && voteDotd(live.raceId, k, id)} ratings={votesNow.ratings} onRate={rateDriver} onOpenChats={() => setView("chats")} onOpenGhost={() => setView("ghost")} races={races} standings={standings} isPremium={isPremium} onPremium={() => setPremiumOpen(true)} onSelectDriver={setSelectedDriver} live={live} liveSt={liveSt} onExpandMap={() => setLiveTrackOpen(true)} onTelemetry={(carId, lapNo, sector) => setTelemetry({ carId, lapNo, sector })} onOpenCircuit={openCircuit} wxGuess={wxGuess} wxResult={wxResult} onGuessWeather={guessWeather} onLapTimes={setLapList} onSecondScreen={() => setSsOpen(true)} lastRace={lastRace} of1={of1} onOf1Refresh={() => of1TickRef.current && of1TickRef.current()} replay={replayCtl} />;
     else if (tab === "garage") body = <GarageScreen races={races} pitBest={pitBest} onPitResult={t => { if (!userDataWait()) setPitBest(b => b == null || t < b ? t : b); }} sillyPreds={sillyPreds} onPredict={predictSeat} sillyOfficial={sillyOfficial} live={live} stratPreds={stratPreds} onStrat={(id, st) => { if (!userDataWait()) setStratPreds(x => ({ ...x, [id]: { stints: st, at: nowMs() } })); }} bluffTags={bluffNow} onBluffRefresh={loadBluffTags} />;
-    else if (tab === "fanta") body = <FantaScreen squad={squad} setSquad={setSquad} base={squadBase} freeTransfers={freeTransfers} budget={FANTA_BUDGET} stats={fantaStats} race={fantaRace} lock={teamLockInfo} weekends={fantaWeekends} isPremium={isPremium} onPremium={() => setPremiumOpen(true)} onToast={showToast} bonus={bonus} leagues={leagues} setLeagues={setLeagues} needAccount={needAccount} predictions={predictions} predAnswers={predAnswers} predLockOf={predLockOf} onAnswerPrediction={answerPrediction} />;
+    else if (tab === "fanta") body = <FantaScreen standings={standings} squad={squad} setSquad={setSquad} base={squadBase} freeTransfers={freeTransfers} budget={FANTA_BUDGET} stats={fantaStats} race={fantaRace} lock={teamLockInfo} weekends={fantaWeekends} isPremium={isPremium} onPremium={() => setPremiumOpen(true)} onToast={showToast} bonus={bonus} leagues={leagues} setLeagues={setLeagues} needAccount={needAccount} predictions={predictions} predAnswers={predAnswers} predLockOf={predLockOf} onAnswerPrediction={answerPrediction} />;
   }
 
   const showTopHeader = view === "tab";
