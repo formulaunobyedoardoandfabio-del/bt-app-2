@@ -803,13 +803,29 @@ function Headshot({ driver, size = 32 }) {
   );
 }
 
+// Interruttore "Fluid Minimal Pill" (G18): capsula grigia da spento; da acceso la copre il colore dei tasti (con
+// l'opacità) e il pallino bianco con l'ombra scatta come una molla (transform con una curva che rimbalza, R4), con il
+// tic e la vibrazione della selezione (G03).
 function Toggle({ on, onChange, disabled, label }) {
+  const lit = !!on && !disabled;
   return (
-    <button className="press" role="switch" aria-checked={on} aria-label={label} disabled={disabled} onClick={() => !disabled && onChange(!on)}
-      style={{ width: 44, height: 26, borderRadius: 13, background: on && !disabled ? C.accent : "rgba(255,255,255,.14)", position: "relative", flexShrink: 0, opacity: disabled ? .45 : 1, transition: "background .2s" }}>
-      <span style={{ position: "absolute", top: 3, left: on && !disabled ? 21 : 3, width: 20, height: 20, borderRadius: "50%", background: "#fff", transition: "left .2s" }} />
+    <button className="press" data-pill="" role="switch" aria-checked={on} aria-label={label} disabled={disabled}
+      onClick={() => { if (disabled) return; fx.play("tick"); fx.buzz("select"); onChange(!on); }}
+      style={{ width: 50, height: 30, borderRadius: 15, background: "rgba(255,255,255,.16)", position: "relative", flexShrink: 0, opacity: disabled ? .45 : 1, overflow: "hidden" }}>
+      <span data-pill-on="" className="pill-on" style={{ position: "absolute", inset: 0, borderRadius: 15, background: C.accent, opacity: lit ? 1 : 0 }} />
+      <span data-pill-knob="" className="pill-knob" style={{ position: "absolute", top: 3, left: 3, width: 24, height: 24, borderRadius: "50%", background: "#fff", boxShadow: "0 2px 6px rgba(0,0,0,.38), 0 0 1px rgba(0,0,0,.3)", transform: `translateX(${lit ? 20 : 0}px)` }} />
     </button>
   );
+}
+// Rete del telefono (navigator.onLine con gli eventi "online" e "offline"): per lo stato del Pit Wall (G18).
+function useNetOnline() {
+  const [on, setOn] = useState(() => typeof navigator === "undefined" || navigator.onLine !== false);
+  useEffect(() => {
+    const up = () => setOn(true), down = () => setOn(false);
+    window.addEventListener("online", up); window.addEventListener("offline", down);
+    return () => { window.removeEventListener("online", up); window.removeEventListener("offline", down); };
+  }, []);
+  return on;
 }
 
 // Il casco del profilo (G15), disegnato da noi (niente caschi veri dei piloti): profilo verso destra, il disegno nei due
@@ -6186,22 +6202,30 @@ function ProfiloScreen({ ig, onOpenIg, trial = null, trialUsed = false, onBack, 
   );
 }
 
-function NotificheScreen({ onBack, notifs, onReadAll, isPremium, onPremium, favTeam, favDriver, prefs, onPrefs, onGoProfilo, onAction }) {
+// Centro Notifiche (G18): la riga dello stato dice se il Pit Wall (Firebase) si raggiunge: senza la rete del telefono,
+// o se all'avvio i dati non sono arrivati (offline), "Pit Wall non raggiungibile".
+function NotificheScreen({ onBack, notifs, onReadAll, isPremium, onPremium, favTeam, favDriver, prefs, onPrefs, onGoProfilo, onAction, offline = false }) {
   const ft = favTeam ? teamById(favTeam) : null;
   const fd = favDriver ? driverById(favDriver) : null;
+  const net = useNetOnline();
+  const reach = net && !offline;
   const prefRows = [
-    { key: "team", title: ft ? `News su ${ft.name}` : "News sulla scuderia del cuore", sub: ft ? ft.tag : "Nessuna scuderia scelta", color: ft && ft.color, enabled: !!ft },
-    { key: "driver", title: fd ? `News su ${fd.full}` : "News sul pilota del cuore", sub: fd ? fd.tag : "Nessun pilota scelto", color: fd && fd.color, enabled: !!fd },
+    { key: "team", icon: "garage", title: ft ? `News su ${ft.name}` : "News sulla scuderia del cuore", sub: ft ? ft.tag : "Nessuna scuderia scelta", color: ft && ft.color, enabled: !!ft },
+    { key: "driver", icon: "helmet", title: fd ? `News su ${fd.full}` : "News sul pilota del cuore", sub: fd ? fd.tag : "Nessun pilota scelto", color: fd && fd.color, enabled: !!fd },
   ];
   return (
     <div className="scrollcol" style={{ height: "100%" }}>
-      <SubHeader title="NOTIFICHE" onBack={onBack} />
+      <SubHeader title="Centro Notifiche" onBack={onBack} />
+      <div role="status" data-pitwall={reach ? "on" : "off"} style={{ display: "flex", alignItems: "center", gap: 9, margin: "-4px 20px 14px", padding: "10px 14px", borderRadius: 12, background: C.card, border: `1px solid ${reach ? alpha(C.green, .35) : "rgba(231,179,76,.4)"}` }}>
+        <span className={reach ? "pitwall-led" : undefined} style={{ width: 9, height: 9, borderRadius: "50%", background: reach ? C.green : C.gold, boxShadow: `0 0 8px ${reach ? C.green : C.gold}`, flexShrink: 0 }} />
+        <span style={{ fontFamily: F_BODY, fontWeight: 600, fontSize: 12.5, color: C.text }}>{reach ? "Stato: Connesso al Pit Wall" : "Stato: Pit Wall non raggiungibile"}</span>
+      </div>
       <div style={{ padding: "0 24px 8px" }}><span style={{ fontFamily: F_BODY, fontWeight: 700, fontSize: 11, color: C.dim, letterSpacing: 1 }}>NOTIZIE DEDICATE</span></div>
       <div style={{ margin: "0 20px 8px", borderRadius: 16, background: C.card, border: `1px solid ${C.border}`, overflow: "hidden" }}>
         {prefRows.map((r, i) => (
           <div key={r.key}>
-            <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 14px" }}>
-              <span style={{ width: 10, height: 10, borderRadius: "50%", background: r.color || "rgba(255,255,255,.2)", flexShrink: 0 }} />
+            <div data-pref-row={r.key} style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 14px" }}>
+              <span data-pref-icon="" style={{ width: 34, height: 34, borderRadius: 10, background: r.color ? alpha(r.color, .16) : "rgba(255,255,255,.06)", border: `1px solid ${r.color ? alpha(r.color, .4) : C.border}`, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}><Icon name={r.icon} size={17} color={r.color ? (Colors.contrast(r.color, "#000000") >= 3 ? r.color : C.text) : C.dim} /></span>
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ fontFamily: F_BODY, fontWeight: 600, fontSize: 13, color: C.text }}>{r.title}</div>
                 <div style={{ fontFamily: F_BODY, fontSize: 11, color: r.color || C.dim }}>{r.sub}</div>
@@ -8489,7 +8513,7 @@ function App() {
   else if (view === "chats") body = <ChatsView chats={chats} onOpen={openChat} blocked={blocked} onBack={viewBack.chats} unreadOf={(id, ms) => Chat.unread(id, ms)} />;
   else if (view === "profilo") body = <ProfiloScreen ig={ig} onOpenIg={() => { setIgFrom("profilo"); setView("instagram"); }} aboutMe={aboutMe} onSaveAboutMe={a => Account.updateAbout(a).catch(e => showToast(e && (e.code === "too-young" || e.code === "not-loaded") ? messageOf(e) : NOT_SAVED))} account={account} onSaveName={n => Account.updateName(n)} isAdmin={Account.isAdmin()} trial={trialActive ? trial : null} trialUsed={!!trial} onBack={viewBack.profilo} onNotifiche={() => setView("notifiche")} onPremium={() => setPremiumOpen(true)} onAdmin={() => guest ? needLogin("Accedi per usare il pannello admin.") : setView(adminUnlocked ? "admin" : "adminLock")} onLogout={logout} isPremium={isPremium} onAbout={() => setInfoModal({ title: "Info su B&T", body: ABOUT_TEXT })} onFeedback={() => setFeedbackOpen(true)} onHelp={() => setInfoModal({ title: "Assistenza", body: HELP_TEXT })} favTeam={favTeam} favDriver={favDriver} onPickTeam={() => guest ? needLogin("Per scegliere scuderia e pilota del cuore serve un account.") : setPicker("team")} onPickDriver={() => guest ? needLogin("Per scegliere scuderia e pilota del cuore serve un account.") : setPicker("driver")} guest={guest} onLogin={() => needLogin(null)} onTerms={() => setTermsOpen(true)} blocked={blocked} onUnblock={unblockUser} onDeleteAccount={deleteAccount} savedCount={saved.length} onOpenSaved={openSaved} onTheme={() => setThemeOpen(true)} helmet={helmet} onHelmet={() => setHelmetOpen(true)}
     sounds={sounds} haptics={haptics} onSounds={v => { if (userDataWait()) return; setSounds(v); fx.setSounds(v); if (v) fx.play("tick"); }} onHaptics={v => { if (userDataWait()) return; setHaptics(v); fx.setHaptics(v); if (v) fx.buzz("light"); }} />;
-  else if (view === "notifiche") body = <NotificheScreen onBack={viewBack.notifiche} onAction={a => { if (a === "feedback") { if (feedbackAsk && !feedbackAsk.read) saveAsk({ ...feedbackAsk, read: true }); setFeedbackOpen(true); } }} notifs={notifs} onReadAll={readAll} isPremium={isPremium} onPremium={() => setPremiumOpen(true)} favTeam={favTeam} favDriver={favDriver} prefs={notifPrefs} onPrefs={v => { if (!userDataWait()) setNotifPrefs(v); }} onGoProfilo={() => setView("profilo")} />;
+  else if (view === "notifiche") body = <NotificheScreen offline={offline} onBack={viewBack.notifiche} onAction={a => { if (a === "feedback") { if (feedbackAsk && !feedbackAsk.read) saveAsk({ ...feedbackAsk, read: true }); setFeedbackOpen(true); } }} notifs={notifs} onReadAll={readAll} isPremium={isPremium} onPremium={() => setPremiumOpen(true)} favTeam={favTeam} favDriver={favDriver} prefs={notifPrefs} onPrefs={v => { if (!userDataWait()) setNotifPrefs(v); }} onGoProfilo={() => setView("profilo")} />;
   else {
     if (tab === "home") body = <HomeScreen ig={ig} highlights={highlights} onOpenIg={() => { setIgFrom("tab"); setView("instagram"); }} articles={articles} tagFilter={tagFilter} onTag={filterByTag} onClearTag={() => setTagFilter(null)} onOpenArticle={openArticle} isPremium={isPremium} onPremium={() => setPremiumOpen(true)} onToast={showToast} onLiveTrack={() => setLiveTrackOpen(true)} onGoFanta={() => goTab("fanta")}  saved={saved} onToggleSave={toggleSave} savedOnly={savedOnly} setSavedOnly={setSavedOnly} onOpenCircuit={openCircuit} homePoll={homePoll} homeVote={votes.home || null} onVote={castVote}
       hidden={hidden} onHide={hideArticle} onUnhideAll={() => { if (!userDataWait()) setHidden([]); }} onSwipeSave={saveFromSwipe}
