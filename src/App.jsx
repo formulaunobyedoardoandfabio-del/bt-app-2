@@ -173,8 +173,17 @@ function Icon({ name, size = 18, color = C.text, sw = 2 }) {
     case "home": return <svg {...s}><path d="M3 11l9-8 9 8" /><path d="M5 10v10h14V10" /></svg>;
     case "instagram": return <svg {...s}><rect x="3" y="3" width="18" height="18" rx="5" /><circle cx="12" cy="12" r="4" /><circle cx="17.5" cy="6.5" r="1" /></svg>;
     case "chat": return <svg {...s}><path d="M21 11.5a8.5 8.5 0 0 1-8.5 8.5 8.4 8.4 0 0 1-3.8-.9L3 20l1-5.6a8.4 8.4 0 0 1-.9-3.9A8.5 8.5 0 0 1 21 11.5Z" /></svg>;
-    case "trophy": return <svg {...s}><path d="M8 21h8M12 17v4M17 3H7a2 2 0 0 0-2 2v3a7 7 0 0 0 14 0V5a2 2 0 0 0-2-2Z" /><path d="M5 6H3a2 2 0 0 0 0 4h2M19 6h2a2 2 0 0 1 0 4h-2" /></svg>;
-    case "flag": return <svg {...s}><path d="M5 21V4" /><path d="M5 4h13l-3 4 3 4H5" /></svg>;
+    // Tappa 3 (G04): da qui le icone di Tabler Icons (tabler.io, licenza MIT: src/licenze/tabler-icons.txt, crediti in
+    // "Info su B&T"): coppa, bandiera, volante, casco, motore, contagiri, colori, volume, vibrazione, play, pausa, avanti.
+    case "trophy": return <svg {...s}><path d="M8 21l8 0" /><path d="M12 17l0 4" /><path d="M7 4l10 0" /><path d="M17 4v8a5 5 0 0 1 -10 0v-8" /><path d="M3 9a2 2 0 1 0 4 0a2 2 0 1 0 -4 0" /><path d="M17 9a2 2 0 1 0 4 0a2 2 0 1 0 -4 0" /></svg>;
+    case "flag": return <svg {...s}><path d="M5 5a5 5 0 0 1 7 0a5 5 0 0 0 7 0v9a5 5 0 0 1 -7 0a5 5 0 0 0 -7 0v-9" /><path d="M5 21v-7" /></svg>;
+    case "wheel": return <svg {...s}><path d="M3 12a9 9 0 1 0 18 0a9 9 0 1 0 -18 0" /><path d="M10 12a2 2 0 1 0 4 0a2 2 0 1 0 -4 0" /><path d="M12 14l0 7" /><path d="M10 12l-6.75 -2" /><path d="M14 12l6.75 -2" /></svg>;
+    case "helmet": return <svg {...s}><path d="M12 4a9 9 0 0 1 5.656 16h-11.312a9 9 0 0 1 5.656 -16" /><path d="M20 9h-8.8a1 1 0 0 0 -.968 1.246c.507 2 1.596 3.418 3.268 4.254c2 1 4.333 1.5 7 1.5" /></svg>;
+    case "engine": return <svg {...s}><path d="M3 10v6" /><path d="M12 5v3" /><path d="M10 5h4" /><path d="M5 13h-2" /><path d="M6 10h2l2 -2h3.382a1 1 0 0 1 .894 .553l1.448 2.894a1 1 0 0 0 .894 .553h1.382v-2h2a1 1 0 0 1 1 1v6a1 1 0 0 1 -1 1h-2v-2h-3v2a1 1 0 0 1 -1 1h-3.465a1 1 0 0 1 -.832 -.445l-1.703 -2.555h-2v-6" /></svg>;
+    case "gauge": return <svg {...s}><path d="M3 12a9 9 0 1 0 18 0a9 9 0 1 0 -18 0" /><path d="M11 12a1 1 0 1 0 2 0a1 1 0 1 0 -2 0" /><path d="M13.41 10.59l2.59 -2.59" /><path d="M7 12a5 5 0 0 1 5 -5" /></svg>;
+    case "media-play": return <svg {...s}><path d="M7 4v16l13 -8l-13 -8" /></svg>;
+    case "media-pause": return <svg {...s}><path d="M6 6a1 1 0 0 1 1 -1h2a1 1 0 0 1 1 1v12a1 1 0 0 1 -1 1h-2a1 1 0 0 1 -1 -1l0 -12" /><path d="M14 6a1 1 0 0 1 1 -1h2a1 1 0 0 1 1 1v12a1 1 0 0 1 -1 1h-2a1 1 0 0 1 -1 -1l0 -12" /></svg>;
+    case "media-skip": return <svg {...s}><path d="M4 5v14l12 -7l-12 -7" /><path d="M20 5l0 14" /></svg>;
     case "search": return <svg {...s}><circle cx="11" cy="11" r="7" /><path d="M21 21l-4.3-4.3" /></svg>;
     case "mail": return <svg {...s}><rect x="2" y="4" width="20" height="16" rx="2" /><path d="m2 6 10 7 10-7" /></svg>;
     case "lock": return <svg {...s}><rect x="5" y="11" width="14" height="10" rx="2" /><path d="M8 11V7a4 4 0 0 1 8 0v4" /></svg>;
@@ -211,9 +220,9 @@ function Icon({ name, size = 18, color = C.text, sw = 2 }) {
     case "link": return <svg {...s}><path d="M10 13a5 5 0 0 0 7.07 0l3-3a5 5 0 0 0-7.07-7.07l-1.5 1.5" /><path d="M14 11a5 5 0 0 0-7.07 0l-3 3a5 5 0 0 0 7.07 7.07l1.5-1.5" /></svg>;
     case "rotate": return <svg {...s}><path d="M20 12a8 8 0 1 1-2.34-5.66" /><polyline points="20,4 20,9 15,9" /></svg>;
     case "external": return <svg {...s}><path d="M14 4h6v6" /><path d="M20 4l-9 9" /><path d="M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5" /></svg>;
-    case "sound": return <svg {...s}><path d="M4 9h4l5-4v14l-5-4H4z" /><path d="M16.5 9.5a3.5 3.5 0 0 1 0 5" /><path d="M19 7a7 7 0 0 1 0 10" /></svg>;
-    case "vibrate": return <svg {...s}><rect x="8" y="4" width="8" height="16" rx="2" /><path d="M4.5 9v6M19.5 9v6" /><path d="M11 17h2" /></svg>;
-    case "palette": return <svg {...s}><path d="M12 3a9 9 0 0 0 0 18c1.2 0 1.8-.9 1.8-1.8 0-.5-.2-.9-.5-1.2-.3-.3-.5-.7-.5-1.2 0-1 .8-1.8 1.8-1.8H17a4 4 0 0 0 4-4c0-4.4-4-8-9-8Z" /><circle cx="7.5" cy="11.5" r="1.1" /><circle cx="10.5" cy="7.5" r="1.1" /><circle cx="15" cy="8" r="1.1" /></svg>;
+    case "sound": return <svg {...s}><path d="M15 8a5 5 0 0 1 0 8" /><path d="M17.7 5a9 9 0 0 1 0 14" /><path d="M6 15h-2a1 1 0 0 1 -1 -1v-4a1 1 0 0 1 1 -1h2l3.5 -4.5a.8 .8 0 0 1 1.5 .5v14a.8 .8 0 0 1 -1.5 .5l-3.5 -4.5" /></svg>;
+    case "vibrate": return <svg {...s}><path d="M3 5a2 2 0 0 1 2 -2h8a2 2 0 0 1 2 2v14a2 2 0 0 1 -2 2h-8a2 2 0 0 1 -2 -2l0 -14" /><path d="M8 4l2 0" /><path d="M9 17l0 .01" /><path d="M21 6l-2 3l2 3l-2 3l2 3" /></svg>;
+    case "palette": return <svg {...s}><path d="M12 21a9 9 0 0 1 0 -18c4.97 0 9 3.582 9 8c0 1.06 -.474 2.078 -1.318 2.828c-.844 .75 -1.989 1.172 -3.182 1.172h-2.5a2 2 0 0 0 -1 3.75a1.3 1.3 0 0 1 -1 2.25" /><path d="M7.5 10.5a1 1 0 1 0 2 0a1 1 0 1 0 -2 0" /><path d="M11.5 7.5a1 1 0 1 0 2 0a1 1 0 1 0 -2 0" /><path d="M15.5 10.5a1 1 0 1 0 2 0a1 1 0 1 0 -2 0" /></svg>;
     default: return null;
   }
 }
@@ -237,7 +246,7 @@ const HELMETS = {};  // casco
 // Sotto il casco: la fonte, se la foto originale aveva il marchio di chi l'ha scattata, oppure "Immagine indicativa".
 const HELMET_NOTES = { norris: "Foto: JMD (jmd.de)", piastri: "Foto: DNA F1", alonso: "Foto: DNA F1", albon: "Foto: carmodel.com", bottas: "Foto: carmodel.com",
   russell: "Immagine indicativa", antonelli: "Immagine indicativa", leclerc: "Immagine indicativa", bearman: "Immagine indicativa", colapinto: "Immagine indicativa" };
-const GAPS = ["—", "+0.412", "+1.038", "+2.774", "+4.116", "+6.902", "+9.554", "+14.310", "+17.882", "+21.407", "+24.019", "+27.655", "+31.230", "+34.918", "+38.104", "+41.772", "+45.390", "+49.861", "+53.227", "+58.004", "+1 giro", "+1 giro"];
+const GAPS = ["–", "+0.412", "+1.038", "+2.774", "+4.116", "+6.902", "+9.554", "+14.310", "+17.882", "+21.407", "+24.019", "+27.655", "+31.230", "+34.918", "+38.104", "+41.772", "+45.390", "+49.861", "+53.227", "+58.004", "+1 giro", "+1 giro"];
 const DRIVERS = DRIVER_DATA.map(([id, name, full, teamId, born, nat, wins, podiums, titles, bio], i) => {
   const t = teamById(teamId);
   const ACCENTS = { "ü": "u", "é": "e", "è": "e", "á": "a", "í": "i", "ó": "o" };
@@ -322,7 +331,7 @@ const CIRCUIT_IDS = F1.CIRCUIT_IDS;
 // Calendario come nella 2.0 (lo stato vero arriva da Firebase, shared/bt-races: src/services/appdata.js).
 const RACES_INIT = F1.RACES.map((r, i) => ({ ...r, status: i < 15 ? "CONCLUSA" : "IN ARRIVO" }));
 const RACE_STATUSES = F1.RACE_STATUSES;
-const fmtDate = (iso) => { if (!iso) return "—"; const [y, m, d] = iso.split("-").map(Number); const M = ["gen", "feb", "mar", "apr", "mag", "giu", "lug", "ago", "set", "ott", "nov", "dic"]; return `${d} ${M[m - 1]} ${y}`; };
+const fmtDate = (iso) => { if (!iso) return "–"; const [y, m, d] = iso.split("-").map(Number); const M = ["gen", "feb", "mar", "apr", "mag", "giu", "lug", "ago", "set", "ott", "nov", "dic"]; return `${d} ${M[m - 1]} ${y}`; };
 
 // Classifiche: shared/bt-piloti, bt-costruttori e bt-standings-note (valori di partenza dopo Baku in src/data/f1-2026.js).
 // In classifica c'è anche chi ha corso solo qualche gara da sostituto e non è tra i 22 titolari: gli ospiti arrivano con
@@ -363,7 +372,7 @@ const FANTA_REAL_POINTS = false;
 // Le domande stanno in shared/bt-predictions: le scrive l'admin; di serie ci sono solo quelle di storia (src/data/f1-2026.js).
 
 // Instagram: shared/bt-ig-config (handle, follower, post e video li scrive l'admin; niente numeri inventati).
-const fmtK = (n) => n == null || n === "" ? "—" : n >= 1000 ? (n / 1000).toFixed(n >= 100000 ? 0 : 1).replace(".0", "") + "K" : String(n);
+const fmtK = (n) => n == null || n === "" ? "–" : n >= 1000 ? (n / 1000).toFixed(n >= 100000 ? 0 : 1).replace(".0", "") + "K" : String(n);
 // Sondaggi (Home e notizie): la risposta esatta la segna l'admin e chi ha indovinato prende +2 punti FantaF1.
 // Il sondaggio della Home sta in shared/bt-home-poll: se non c'è, il riquadro non si vede.
 const articlePoll = a => a && a.poll ? { ...a.poll, id: "art-" + a.id } : null;
@@ -892,7 +901,7 @@ const FOLLOW_STEPS = ["Meno di 1 anno", "1 – 3 anni", "4 – 6 anni", "7 – 1
 const FAN_TYPES = [["vivo", "Vivo e respiro F1!"], ["vroom", "Se fa Vroom è bello"], ["matricola", "Matricola delle 4 ruote"], ["nuovo", "Nuovo sport da seguire"]];
 const ABOUT_INIT = { birth: null, follow: 1, fan: "vivo" };   // valori di partenza dei moduli "Su di te"
 const BIRTH_YEARS = Array.from({ length: 2016 - 1935 + 1 }, (_, i) => 2016 - i);
-const fanLabel = id => (FAN_TYPES.find(f => f[0] === id) || [null, "—"])[1];
+const fanLabel = id => (FAN_TYPES.find(f => f[0] === id) || [null, "–"])[1];
 function FollowSlider({ id, value, onChange }) {
   return (
     <div>
@@ -957,8 +966,8 @@ function AboutCard({ about, onSave }) {
           </div>
         ) : (
           <>
-            {row("birth", "Anno di nascita", a.birth || "—", true)}
-            {row("follow", "Segue F1", FOLLOW_STEPS[a.follow] || "—")}
+            {row("birth", "Anno di nascita", a.birth || "Non indicato", true)}
+            {row("follow", "Segue F1", FOLLOW_STEPS[a.follow] || "Non indicato")}
             {row("fan", "Tipo fan", fanLabel(a.fan))}
           </>
         )}
@@ -1183,7 +1192,7 @@ function HomeScreen({ ig, onOpenIg, highlights = [], articles, tagFilter, onTag,
       {!isPremium && (
         <button className="press" onClick={onPremium} style={{ display: "flex", alignItems: "center", gap: 10, width: "calc(100% - 32px)", margin: "0 16px 16px", padding: "10px 14px", borderRadius: 12, background: "rgba(255,255,255,.04)", border: `1px dashed ${C.border}`, textAlign: "left" }}>
           <span style={{ fontFamily: F_BODY, fontWeight: 700, fontSize: 9, color: C.dim, letterSpacing: 1, padding: "2px 6px", borderRadius: 4, background: "rgba(255,255,255,.08)", flexShrink: 0 }}>ADV</span>
-          <span style={{ flex: 1, fontFamily: F_BODY, fontSize: 11.5, color: C.dim }}>Spazio pubblicitario — passa a Premium per rimuoverlo.</span>
+          <span style={{ flex: 1, fontFamily: F_BODY, fontSize: 11.5, color: C.dim }}>Spazio pubblicitario: con Premium non lo vedi più.</span>
           <span style={{ fontFamily: F_HEAD, fontWeight: 800, fontSize: 10.5, color: C.gold, flexShrink: 0 }}>RIMUOVI</span>
         </button>
       )}
@@ -1453,7 +1462,7 @@ function ShareSheet({ article, locked, handle, onClose, onToast }) {
 
 /* ── DIRETTA IN STILE F1DASH ─────────────────────────────────────────── */
 const SECTOR_COLORS = [LED_RED, "#27D8C8", "#F2C230"];   // S1, S2, S3 sulla mappa (confini stimati)
-const fmtGap = g => (g == null ? "—" : "+" + g.toFixed(3));
+const fmtGap = g => (g == null ? "–" : "+" + g.toFixed(3));
 
 /* ── CIRCUITI: disegno di sfondo, mappa coi settori e scheda "Mostra di più" ── */
 // Disegno del circuito: tracciato luminoso sui colori del paese (nessuna foto, nessun problema di diritti).
@@ -1694,9 +1703,9 @@ function LiveCard({ race, st, track, source, onExpand, replay }) {
       </div>
       {of1 && replay && (
         <div data-replay-bar="" style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 8 }}>
-          <button className="press" data-replay="play" onClick={replay.onPlay} style={rbtn}>{replay.playing ? "↺ Di nuovo dall'inizio" : "▶ Rivedi dall'inizio"}</button>
+          <button className="press" data-replay="play" onClick={replay.onPlay} style={rbtn}><span style={{ display: "inline-flex", alignItems: "center", gap: 5 }}><Icon name={replay.playing ? "rotate" : "media-play"} size={12} sw={2.4} />{replay.playing ? "Di nuovo dall'inizio" : "Rivedi dall'inizio"}</span></button>
           <button className="press" data-replay="x10" aria-label={`Velocità ×${replay.speed}: tocca per cambiarla`} onClick={replay.onSpeed} style={rbtn}>×{replay.speed}</button>
-          <button className="press" data-replay="fine" onClick={replay.onEnd} style={{ ...rbtn, marginLeft: "auto" }}>Fine ⏭</button>
+          <button className="press" data-replay="fine" onClick={replay.onEnd} style={{ ...rbtn, marginLeft: "auto" }}><span style={{ display: "inline-flex", alignItems: "center", gap: 5 }}>Fine<Icon name="media-skip" size={12} sw={2.4} /></span></button>
         </div>
       )}
       <div style={{ display: "flex", gap: 12, alignItems: "center", marginTop: 8, fontFamily: F_BODY, fontSize: 10.5, color: C.dim }}>
@@ -1797,7 +1806,7 @@ function SectorCells({ c, onTelemetry, compact = false, tiny = false, style }) {
             </span>
             <span style={{ display: "flex", justifyContent: compact ? "flex-end" : "space-between", gap: 4, fontFamily: F_BODY, fontSize: tiny ? 9 : compact ? 9.5 : 10.5, lineHeight: tiny ? 1.1 : undefined, color: C.dim }}>
               {!compact && <span>S{si + 1}</span>}
-              <span style={{ fontWeight: 700, color: secColor(sec), opacity: cur ? 1 : .6, fontVariantNumeric: "tabular-nums" }}>{sec && sec.t != null ? sec.t.toFixed(compact ? 2 : 3) : "—"}</span>
+              <span style={{ fontWeight: 700, color: secColor(sec), opacity: cur ? 1 : .6, fontVariantNumeric: "tabular-nums" }}>{sec && sec.t != null ? sec.t.toFixed(compact ? 2 : 3) : "–"}</span>
             </span>
           </>
         );
@@ -1832,7 +1841,7 @@ function TimingTable({ st, onTelemetry, onSelectDriver, onLapTimes }) {
         if (race && st.finished && c.pos <= 3) return null;   // i primi tre sono sul podio qui sopra
         const d = driverById(c.id);
         const main = race ? c.last : c.best ? { ...c.best, st: i === 0 ? "purple" : "none" } : null;
-        const gap = c.dnf ? "RIT" : race ? (i === 0 ? (st.finished ? "VINCITORE" : "LEADER") : c.lapsDown > 0 ? `+${c.lapsDown} ${c.lapsDown === 1 ? "GIRO" : "GIRI"}` : fmtGap(c.gap)) : (i === 0 ? (c.best ? "MIGLIOR TEMPO" : "—") : fmtGap(c.gap));
+        const gap = c.dnf ? "RIT" : race ? (i === 0 ? (st.finished ? "VINCITORE" : "LEADER") : c.lapsDown > 0 ? `+${c.lapsDown} ${c.lapsDown === 1 ? "GIRO" : "GIRI"}` : fmtGap(c.gap)) : (i === 0 ? (c.best ? "MIGLIOR TEMPO" : "–") : fmtGap(c.gap));
         return (
           <div key={c.id} data-timing-row="" data-timing-pos={c.pos} data-timing-id={c.id} data-dnf={c.dnf ? c.dnf.cause : undefined} style={{ padding: "10px 12px 11px", borderBottom: i < st.cars.length - 1 ? `1px solid ${C.divider}` : "none", opacity: c.out ? .45 : 1, background: c.dnf ? "rgba(255,24,1,.05)" : "transparent" }}>
             <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
@@ -1847,7 +1856,7 @@ function TimingTable({ st, onTelemetry, onSelectDriver, onLapTimes }) {
               {main ? (
                 <button className="press" aria-label={`Tempi sul giro di ${c.code}`} onClick={() => onLapTimes ? onLapTimes(c.id) : onTelemetry(c.id, main.lapNo, 0)}
                   style={{ padding: "4px 7px", borderRadius: 7, background: "rgba(255,255,255,.05)", fontFamily: F_HEAD, fontWeight: 800, fontSize: 13, color: c.dnf ? C.dim : lapColor(main), fontVariantNumeric: "tabular-nums" }}>{LiveSim.fmtLap(main.time)}</button>
-              ) : <span style={{ width: 62, textAlign: "right", fontFamily: F_HEAD, fontWeight: 800, fontSize: 13, color: C.dim }}>—</span>}
+              ) : <span style={{ width: 62, textAlign: "right", fontFamily: F_HEAD, fontWeight: 800, fontSize: 13, color: C.dim }}>–</span>}
             </div>
             {c.dnf ? <DnfRow c={c} style={{ marginTop: 8, paddingLeft: 28 }} /> : <SectorCells c={c} onTelemetry={onTelemetry} style={{ marginTop: 8, paddingLeft: 28 }} />}
           </div>
@@ -1980,7 +1989,7 @@ function WeatherPanel({ race, st, live, guesses = {}, results = {}, onGuess }) {
       <div style={{ fontFamily: F_BODY, fontWeight: 600, fontSize: 9.5, letterSpacing: .6, color: C.dim, marginTop: 2 }}>{label}</div>
     </div>
   );
-  const num = (v, d = 0) => (v == null || !isFinite(v) ? "—" : Number(v).toFixed(d));
+  const num = (v, d = 0) => (v == null || !isFinite(v) ? "–" : Number(v).toFixed(d));
   return (
     <div style={{ margin: "0 16px 16px", display: "flex", flexDirection: "column", gap: 12 }}>
       {now ? (
@@ -2124,7 +2133,7 @@ function TelemetryModal({ live, st, carId, lapNo, sector, onClose }) {
           {d && <Headshot driver={d} size={34} />}
           <div style={{ flex: 1, minWidth: 0 }}>
             <h2 style={{ margin: 0, fontFamily: F_HEAD, fontWeight: 900, fontStyle: "italic", fontSize: 16, color: C.text }}>TELEMETRIA · {tel.code} · GIRO {lapNo}{zoom ? ` · SETTORE ${zoom}` : ""}</h2>
-            <span style={{ fontFamily: F_BODY, fontSize: 11.5, color: C.muted, fontVariantNumeric: "tabular-nums" }}>{LiveSim.fmtLap(tel.time)} · {[0, 1, 2].map(k => `S${k + 1} ${tel.sectors[k] && tel.sectors[k].t != null ? tel.sectors[k].t.toFixed(3) : "—"}`).join(" · ")}</span>
+            <span style={{ fontFamily: F_BODY, fontSize: 11.5, color: C.muted, fontVariantNumeric: "tabular-nums" }}>{LiveSim.fmtLap(tel.time)} · {[0, 1, 2].map(k => `S${k + 1} ${tel.sectors[k] && tel.sectors[k].t != null ? tel.sectors[k].t.toFixed(3) : "–"}`).join(" · ")}</span>
           </div>
           {closeBtn}
         </div>
@@ -2192,7 +2201,7 @@ function LapTimesModal({ live, st, carId, onOpenLap, onClose }) {
                   <span style={{ marginLeft: "auto", display: "inline-flex" }}><Icon name="chevron" size={13} color={C.dim} /></span>
                 </span>
                 <span style={{ display: "flex", gap: 12, marginTop: 4, paddingLeft: 60, fontFamily: F_BODY, fontSize: 10.5, color: C.dim, fontVariantNumeric: "tabular-nums" }}>
-                  {l.sectors.map((x, k) => <span key={k}>S{k + 1} <b style={{ color: secColor(x), fontWeight: 700 }}>{x && x.t != null ? x.t.toFixed(3) : "—"}</b></span>)}
+                  {l.sectors.map((x, k) => <span key={k}>S{k + 1} <b style={{ color: secColor(x), fontWeight: 700 }}>{x && x.t != null ? x.t.toFixed(3) : "–"}</b></span>)}
                 </span>
               </button>
             );
@@ -2229,7 +2238,7 @@ function LiveMapView({ race, live, st, onClose }) {
                 <span style={{ width: 16, fontFamily: F_HEAD, fontWeight: 800, fontSize: 12, color: C.text }}>{c.pos}</span>
                 <span style={{ width: 8, height: 8, borderRadius: "50%", background: c.color }} />
                 <span style={{ flex: 1, fontFamily: F_HEAD, fontWeight: 800, fontSize: 12, color: C.text }}>{c.code}</span>
-                <span style={{ fontFamily: F_BODY, fontSize: 10.5, color: C.dim, fontVariantNumeric: "tabular-nums" }}>{c.pos === 1 ? "—" : isRaceType(st.type) ? (c.lapsDown ? `+${c.lapsDown}G` : fmtGap(c.gap)) : fmtGap(c.gap)}</span>
+                <span style={{ fontFamily: F_BODY, fontSize: 10.5, color: C.dim, fontVariantNumeric: "tabular-nums" }}>{c.pos === 1 ? "–" : isRaceType(st.type) ? (c.lapsDown ? `+${c.lapsDown}G` : fmtGap(c.gap)) : fmtGap(c.gap)}</span>
               </div>
             ))}
           </div>
@@ -2479,7 +2488,7 @@ const ssCapText = others => others === 1
   : `Con altre ${others} grafiche nella colonna arriva al massimo a ${SS_SIZE_TEXT[SS_COL_UNITS - others]}: per farla più alta sposta o togli un'altra grafica (tasto Modifica).`;
 const TYRE_UI = { S: [LED_RED, "Morbida"], M: ["#F2C230", "Media"], H: ["#F4F2EF", "Dura"], I: ["#3ED66B", "Intermedia"], W: ["#4C8DFF", "Da bagnato"] };
 // Mescola non nota (OpenF1 senza stint): cerchio grigio e trattino.
-const tyreUi = k => TYRE_UI[k] || ["#86858C", "—"];
+const tyreUi = k => TYRE_UI[k] || ["#86858C", "–"];
 // Radio dei team (demo): una nuova ogni 45 secondi di sessione, dai piloti di testa.
 const RADIO_LINES = ["Box, box. Box questo giro.", "Gomme ok, possiamo spingere.", "Il distacco dietro è stabile, gestisci.", "Bandiera gialla nel settore 2, attento.", "Overtake mode disponibile, attacca!", "Occhio alle temperature dei freni.", "Ottimo giro, continua così.", "Il radar dice pioggia tra poco, teniamoci pronti."];
 function radioFeed(st, n = 3) {
@@ -2583,7 +2592,7 @@ function SsWidget({ id, h = 2, st, live, race, standings, prefs, setPrefs, onPic
   const fits = { 1: 4, 2: 10, 3: 16, 4: 22 }[h] || 10;   // righe al massimo: se ne vedono solo quelle intere che entrano
   const nDrivers = SS_DRIVERS[h] || SS_DRIVERS[2];        // piloti di gomme e settori per questa altezza
   if (id === "classifica") {
-    const rows = st ? st.cars.slice(0, fits).map(c => ({ k: c.id, pos: c.pos, code: c.code, color: c.color, dnf: c.dnf, right: c.dnf ? "RIT" : isRaceType(st.type) ? (c.pos === 1 ? "LEADER" : c.lapsDown > 0 ? `+${c.lapsDown}G` : fmtGap(c.interval)) : (c.best ? LiveSim.fmtLap(c.best.time) : "—") }))
+    const rows = st ? st.cars.slice(0, fits).map(c => ({ k: c.id, pos: c.pos, code: c.code, color: c.color, dnf: c.dnf, right: c.dnf ? "RIT" : isRaceType(st.type) ? (c.pos === 1 ? "LEADER" : c.lapsDown > 0 ? `+${c.lapsDown}G` : fmtGap(c.interval)) : (c.best ? LiveSim.fmtLap(c.best.time) : "–") }))
       : standings.drivers.slice().sort((a, b) => a.position - b.position).slice(0, fits).map(r => { const d = driverById(r.id); return { k: r.id, pos: r.position, code: d ? driverCode(d) : r.id, color: d ? d.color : C.dim, right: r.points + " pt" }; });
     return <SsCard id={id} title={st ? title : "MONDIALE PILOTI"}><div style={ssRows(0)}>{rows.map(r => (
       <div key={r.k} style={row}><span style={{ width: 13, fontFamily: F_HEAD, fontWeight: 800 }}>{r.pos}</span><span style={{ width: 3, height: 11, borderRadius: 2, background: r.color }} /><span style={{ flex: 1, fontFamily: F_HEAD, fontWeight: 800 }}>{r.code}</span><span style={{ color: r.dnf ? "#FF5A5F" : C.muted, fontVariantNumeric: "tabular-nums" }}>{r.right}</span></div>
@@ -2641,7 +2650,7 @@ function SsWidget({ id, h = 2, st, live, race, standings, prefs, setPrefs, onPic
           <span title={tyreUi(r.tyre)[1]} style={{ width: 11, height: 11, borderRadius: "50%", border: `2.5px solid ${tyreUi(r.tyre)[0]}`, flexShrink: 0 }} />
           {r.wear != null ? <span style={{ flex: 1, height: 5, borderRadius: 3, background: "rgba(255,255,255,.08)", overflow: "hidden" }}><span style={{ display: "block", height: "100%", width: r.wear + "%", background: r.wear > 75 ? C.red : r.wear > 50 ? TIMING.yellow : TIMING.green }} /></span>
             : <span style={{ flex: 1, color: C.muted }}>{tyreUi(r.tyre)[1]}</span>}
-          <span style={{ width: 52, textAlign: "right", color: C.muted, fontVariantNumeric: "tabular-nums" }}>{r.dnf ? "RIT" : r.pit ? "BOX" : r.wear != null ? `${r.wear}%${r.age != null ? ` · ${r.age}g` : ""}` : r.age != null ? `${r.age} ${r.age === 1 ? "giro" : "giri"}` : "—"}</span>
+          <span style={{ width: 52, textAlign: "right", color: C.muted, fontVariantNumeric: "tabular-nums" }}>{r.dnf ? "RIT" : r.pit ? "BOX" : r.wear != null ? `${r.wear}%${r.age != null ? ` · ${r.age}g` : ""}` : r.age != null ? `${r.age} ${r.age === 1 ? "giro" : "giri"}` : "–"}</span>
         </div>
       ))}</div>
     </SsCard>;
@@ -2664,7 +2673,7 @@ function SsWidget({ id, h = 2, st, live, race, standings, prefs, setPrefs, onPic
   if (id === "meteo") {
     const now = sessionWeather(live, st, race);
     if (!now) return <SsCard id={id} title={title}><p style={{ margin: 0, fontFamily: F_BODY, fontSize: 11, color: C.dim, lineHeight: 1.4 }}>{WX_EMPTY}</p></SsCard>;
-    const num = v => (v == null || !isFinite(v) ? "—" : Math.round(v));
+    const num = v => (v == null || !isFinite(v) ? "–" : Math.round(v));
     const cell = (l, v) => <div style={{ padding: "4px 6px", borderRadius: 8, background: "rgba(255,255,255,.05)" }}><div style={{ fontFamily: F_HEAD, fontWeight: 800, fontSize: 13, color: C.text }}>{v}</div><div style={{ fontFamily: F_BODY, fontSize: 8.5, letterSpacing: .5, color: C.dim }}>{l}</div></div>;
     return (
       <SsCard id={id} title={title + (isDemoLive(live) ? " · DEMO" : "")}>
@@ -2709,10 +2718,10 @@ function SsSheet({ id, st, live, race, standings, prefs, setPrefs, vote, onVote,
         <tr key={c.id} data-ss-sheet-row={c.id} style={{ opacity: c.dnf ? .85 : 1 }}>
           <td style={{ ...td, fontFamily: F_HEAD, fontWeight: 800 }}>{c.pos}</td>
           <td style={td}><span style={{ display: "inline-flex", alignItems: "center", gap: 7 }}><span style={{ width: 3, height: 13, borderRadius: 2, background: c.color }} /><b style={{ fontFamily: F_HEAD }}>{c.code}</b><span style={{ color: C.muted }}>{d ? d.full : ""}</span></span></td>
-          <td style={{ ...td, color: c.dnf ? "#FF5A5F" : C.muted }}>{c.dnf ? "RITIRATO" : isRaceType(st.type) ? (c.pos === 1 ? "LEADER" : c.lapsDown > 0 ? `+${c.lapsDown} giri` : fmtGap(c.gap)) : (c.best ? LiveSim.fmtLap(c.best.time) : "—")}</td>
+          <td style={{ ...td, color: c.dnf ? "#FF5A5F" : C.muted }}>{c.dnf ? "RITIRATO" : isRaceType(st.type) ? (c.pos === 1 ? "LEADER" : c.lapsDown > 0 ? `+${c.lapsDown} giri` : fmtGap(c.gap)) : (c.best ? LiveSim.fmtLap(c.best.time) : "–")}</td>
           <td style={{ ...td, color: C.muted }}>{c.dnf || !isRaceType(st.type) || c.pos === 1 ? "" : fmtGap(c.interval)}</td>
-          <td style={td}>{c.last ? LiveSim.fmtLap(c.last.time) : "—"}</td>
-          <td style={td}><span style={{ display: "inline-flex", alignItems: "center", gap: 5 }}><span style={{ width: 10, height: 10, borderRadius: "50%", border: `2.5px solid ${tyreUi(c.tyre)[0]}` }} />{c.tyreAge != null ? c.tyreAge + "g" : "—"}</span></td>
+          <td style={td}>{c.last ? LiveSim.fmtLap(c.last.time) : "–"}</td>
+          <td style={td}><span style={{ display: "inline-flex", alignItems: "center", gap: 5 }}><span style={{ width: 10, height: 10, borderRadius: "50%", border: `2.5px solid ${tyreUi(c.tyre)[0]}` }} />{c.tyreAge != null ? c.tyreAge + "g" : "–"}</span></td>
           <td style={td}>{c.stops}</td>
           <td style={td}>{c.dnf ? <DnfTile cause={c.dnf.cause} width={46} style={{ padding: 1, borderRadius: 6 }} /> : c.pit ? <span style={{ fontFamily: F_HEAD, fontWeight: 800, fontSize: 10, color: TIMING.pit }}>BOX</span> : null}</td>
         </tr>
@@ -2754,7 +2763,7 @@ function SsSheet({ id, st, live, race, standings, prefs, setPrefs, vote, onVote,
             <td style={{ ...td, fontFamily: F_HEAD, fontWeight: 800 }}>{c.pos}</td>
             <td style={td}><b style={{ fontFamily: F_HEAD }}>{c.code}</b></td>
             <td style={td}><span style={{ display: "inline-flex", alignItems: "center", gap: 5 }}><span style={{ width: 10, height: 10, borderRadius: "50%", border: `2.5px solid ${tyreUi(c.tyre)[0]}` }} />{tyreUi(c.tyre)[1]}</span></td>
-            <td style={td}>{c.dnf ? "RIT" : c.pit ? "BOX" : c.tyreAge != null ? c.tyreAge : "—"}</td>
+            <td style={td}>{c.dnf ? "RIT" : c.pit ? "BOX" : c.tyreAge != null ? c.tyreAge : "–"}</td>
             {wear && <td style={{ ...td, width: "40%" }}><span style={{ display: "flex", alignItems: "center", gap: 8 }}><span style={{ flex: 1, height: 6, borderRadius: 3, background: "rgba(255,255,255,.08)", overflow: "hidden" }}><span style={{ display: "block", height: "100%", width: (c.wear || 0) + "%", background: c.wear > 75 ? C.red : c.wear > 50 ? TIMING.yellow : TIMING.green }} /></span>{c.dnf ? "RIT" : c.pit ? "BOX" : (c.wear || 0) + "%"}</span></td>}
             <td style={td}>{c.stops}</td>
           </tr>
@@ -3272,7 +3281,7 @@ function AdminHighlightsTab({ items = [], setItems, onToast }) {
           <div key={h.id} data-hl-row={h.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "9px 0", borderTop: `1px solid ${C.divider}` }}>
             <span style={{ flex: 1, minWidth: 0 }}>
               <b style={{ display: "block", fontFamily: F_BODY, fontSize: 12.5, color: C.text }}>{h.title}</b>
-              <span style={{ fontFamily: F_BODY, fontSize: 11, color: C.dim }}>{h.dur || "durata —"} · {h.link ? "con link" : "senza link"}{h.thumb ? " · copertina" : ""}</span>
+              <span style={{ fontFamily: F_BODY, fontSize: 11, color: C.dim }}>{h.dur || "durata non indicata"} · {h.link ? "con link" : "senza link"}{h.thumb ? " · copertina" : ""}</span>
             </span>
             <button className="press" data-hl-edit={h.id} onClick={() => { setEdit(h.id); setF({ title: h.title, dur: h.dur || "", link: h.link || "", thumb: h.thumb || null }); }} style={{ padding: "6px 10px", borderRadius: 9, background: "rgba(255,255,255,.07)", border: `1px solid ${C.border}`, fontFamily: F_BODY, fontWeight: 700, fontSize: 11, color: C.text }}>Modifica</button>
             <button className="press" data-hl-delete={h.id} onClick={() => { setItems(xs => xs.filter(x => x.id !== h.id)).then(ok => { if (!ok) return; if (edit === h.id) { setEdit(null); setF(empty); } onToast("Video eliminato"); }); }} style={{ padding: "6px 10px", borderRadius: 9, background: alpha(C.accentInk, .14), border: `1px solid ${alpha(C.accentInk, .4)}`, fontFamily: F_BODY, fontWeight: 700, fontSize: 11, color: "#FF8A8F" }}>Elimina</button>
@@ -3292,7 +3301,7 @@ function IgBigButton({ ig, onOpen }) {
       <span style={{ width: 46, height: 46, borderRadius: 15, background: "rgba(255,255,255,.2)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}><Icon name="instagram" size={24} color="#fff" sw={2.2} /></span>
       <span style={{ flex: 1, minWidth: 0 }}>
         <span style={{ display: "block", fontFamily: F_HEAD, fontWeight: 900, fontStyle: "italic", fontSize: 17, color: "#fff", letterSpacing: .3 }}>SEGUICI SU INSTAGRAM</span>
-        <span style={{ display: "block", marginTop: 1, fontFamily: F_BODY, fontSize: 12, color: "rgba(255,255,255,.9)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>@{ig.handle} · {fmtK(ig.followers)} follower · video e reazioni</span>
+        <span style={{ display: "block", marginTop: 1, fontFamily: F_BODY, fontSize: 12, color: "rgba(255,255,255,.9)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>@{ig.handle}{ig.followers != null && ig.followers !== "" ? ` · ${fmtK(ig.followers)} follower` : ""} · video e reazioni</span>
       </span>
       <Icon name="chevron" size={18} color="#fff" sw={2.6} />
     </button>
@@ -3704,7 +3713,7 @@ const COMP_UI = { S: [LED_RED, "Morbide", "#fff"], M: ["#F2C230", "Medie", "#151
 const compUi = c => COMP_UI[c] || COMP_UI["?"];
 const TEAM_SHORT = { mclaren: "MCL", redbull: "RBR", mercedes: "MER", ferrari: "FER", williams: "WIL", racingbulls: "RB", astonmartin: "AST", haas: "HAA", audi: "AUD", alpine: "ALP", cadillac: "CAD" };
 const roundOfCircuit = cid => CIRCUIT_IDS.indexOf(cid) + 1;
-const fmtLapMs = ms => ms ? LiveSim.fmtLap(ms / 1000) : "—";
+const fmtLapMs = ms => ms ? LiveSim.fmtLap(ms / 1000) : "–";
 const fmtDec = (v, d = 2) => Math.abs(v).toFixed(d).replace(".", ",");
 const sgn = (v, d = 2) => (v >= 0 ? "+" : "−") + fmtDec(v, d);
 const surnameOf = code => ghostInfo(code).name.split(" ").slice(-1)[0];
@@ -4271,7 +4280,7 @@ function GhostReplay({ A, B, IA, IB, duel }) {
       <div style={{ display: "flex", flexWrap: "wrap", gap: 6, padding: 8 }}>
         {btn({ "data-ghost-play": "" }, play ? "Pausa" : "Play", play, () => { setPlay(x => !x); setCap(null); })}
         {btn({ "data-ghost-slow": "" }, "Rallenty", slow, () => setSlow(x => !x))}
-        {[["frenata", "Frenata"], ["apice", "Apice"], ["uscita", "Uscita"]].map(([kk, l]) => <React.Fragment key={kk}>{btn({ "data-ghost-freeze": kk }, "⏸ " + l, cap === kk, () => freeze(kk))}</React.Fragment>)}
+        {[["frenata", "Frenata"], ["apice", "Apice"], ["uscita", "Uscita"]].map(([kk, l]) => <React.Fragment key={kk}>{btn({ "data-ghost-freeze": kk }, <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}><Icon name="media-pause" size={11} color="#fff" sw={2.4} />{l}</span>, cap === kk, () => freeze(kk))}</React.Fragment>)}
       </div>
       <p style={{ margin: 0, padding: "0 10px 9px", fontFamily: F_BODY, fontSize: 10.5, color: C.dim, lineHeight: 1.4 }}>Le due vetture entrano nella curva insieme: la distanza tra loro è solo quella guadagnata in questa curva. Posizioni da GPS (circa 4 al secondo, interpolate).</p>
     </div>
@@ -4304,7 +4313,7 @@ function GhostLap({ sessionId, onBack }) {
     </div>
   );
   const capBrake = !duel ? "" : duel.brake.later == null ? "QUI NESSUNO FRENA: CURVA IN PIENO" : duel.brake.later === "pari" ? "STESSO PUNTO DI FRENATA" : `${(duel.brake.later === "A" ? IA : IB).last} FRENA ${duel.brake.diff.toFixed(1).replace(".", ",").replace(",0", "")} m DOPO`;
-  const row = (label, va, vb, fmt) => <div style={{ display: "grid", gridTemplateColumns: "1fr 72px 72px", gap: 6, padding: "5px 0", borderTop: `1px solid ${C.divider}`, fontFamily: F_BODY, fontSize: 12, color: C.muted }}><span>{label}</span><b style={{ textAlign: "right", color: C.text, fontFamily: F_HEAD }}>{va == null ? "—" : fmt(va)}</b><b style={{ textAlign: "right", color: C.text, fontFamily: F_HEAD }}>{vb == null ? "—" : fmt(vb)}</b></div>;
+  const row = (label, va, vb, fmt) => <div style={{ display: "grid", gridTemplateColumns: "1fr 72px 72px", gap: 6, padding: "5px 0", borderTop: `1px solid ${C.divider}`, fontFamily: F_BODY, fontSize: 12, color: C.muted }}><span>{label}</span><b style={{ textAlign: "right", color: C.text, fontFamily: F_HEAD }}>{va == null ? "–" : fmt(va)}</b><b style={{ textAlign: "right", color: C.text, fontFamily: F_HEAD }}>{vb == null ? "–" : fmt(vb)}</b></div>;
   return (
     <div data-ghost="" className="scrollcol" style={{ height: "100%" }}>
       <GameHeader title="GHOST LAP · DATI VERI" sub={`${S.name}: due giri veloci sovrapposti, metro per metro.`} onBack={onBack} />
@@ -4590,7 +4599,7 @@ function RaceScreen({ isPremium, onPremium, onSelectDriver, races, standings, li
       {curTab === "gomme" && (
         <div data-tyres="" style={{ ...card, padding: "4px 0" }}>
           {!st && <p data-tyres-empty="" style={{ margin: 0, padding: 16, fontFamily: F_BODY, fontSize: 12.5, color: C.dim, lineHeight: 1.5 }}>{TYRES_EMPTY}</p>}
-          {st && st.cars.map((c, i) => { const d = driverById(c.id), laps = c.tyreAge != null ? `${c.tyreAge} ${c.tyreAge === 1 ? "giro" : "giri"}` : "—"; return (
+          {st && st.cars.map((c, i) => { const d = driverById(c.id), laps = c.tyreAge != null ? `${c.tyreAge} ${c.tyreAge === 1 ? "giro" : "giri"}` : "–"; return (
             <div key={c.id} data-tyre-row={c.id} style={{ padding: "11px 16px", borderBottom: i < st.cars.length - 1 ? `1px solid ${C.divider}` : "none" }}>
               <div style={{ display: "flex", alignItems: "center", gap: 9 }}>
                 <span style={{ width: 20, fontFamily: F_HEAD, fontWeight: 800, fontSize: 13, color: C.text }}>{c.pos}</span>
@@ -5193,7 +5202,7 @@ function NumPad({ value, onChange, onOk, okLabel = "Invia", onCancel, max = 3 })
   return (
     <div data-numpad="" style={{ marginTop: 2 }}>
       <div style={{ display: "flex", gap: 6, marginBottom: 8 }}>
-        <div data-numpad-display="" aria-live="polite" style={{ flex: 1, height: 44, borderRadius: 12, background: "rgba(255,255,255,.04)", border: `1px solid ${value ? C.accentInk : C.border}`, display: "flex", alignItems: "center", justifyContent: "center", fontFamily: F_HEAD, fontWeight: 900, fontSize: 24, color: value ? C.text : C.dim, fontVariantNumeric: "tabular-nums" }}>{value || "—"}</div>
+        <div data-numpad-display="" aria-live="polite" style={{ flex: 1, height: 44, borderRadius: 12, background: "rgba(255,255,255,.04)", border: `1px solid ${value ? C.accentInk : C.border}`, display: "flex", alignItems: "center", justifyContent: "center", fontFamily: F_HEAD, fontWeight: 900, fontSize: 24, color: value ? C.text : C.dim, fontVariantNumeric: "tabular-nums" }}>{value || "–"}</div>
         {onCancel && <button className="press" onClick={onCancel} style={{ padding: "0 12px", borderRadius: 12, background: "rgba(255,255,255,.05)", fontFamily: F_BODY, fontWeight: 700, fontSize: 12, color: C.muted }}>Annulla</button>}
       </div>
       <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 6 }}>
@@ -6136,7 +6145,7 @@ function AdminPredictionsTab({ predictions, setPredictions, answers, races, onTo
             {opts.map((o, i) => (
               <div key={i} style={{ display: "flex", gap: 6, marginBottom: 6 }}>
                 <input aria-label={"Risposta " + (i + 1)} value={o} onChange={e => setOpts(a => a.map((x, j) => j === i ? e.target.value : x))} style={{ ...aInput, flex: 1 }} />
-                {kind === "history" && <button className="press" aria-label={"Risposta giusta: " + (i + 1)} aria-pressed={histAns === i ? "true" : "false"} onClick={() => setHistAns(i)} style={aChip(histAns === i, TIMING.green)}>{histAns === i ? "Giusta" : "—"}</button>}
+                {kind === "history" && <button className="press" aria-label={"Risposta giusta: " + (i + 1)} aria-pressed={histAns === i ? "true" : "false"} onClick={() => setHistAns(i)} style={aChip(histAns === i, TIMING.green)}>{histAns === i ? "Giusta" : "–"}</button>}
               </div>
             ))}
           </>
@@ -6147,7 +6156,7 @@ function AdminPredictionsTab({ predictions, setPredictions, answers, races, onTo
             <div style={{ display: "flex", gap: 6, marginBottom: 10 }}>
               {[["QUALI", "Qualifiche"], ["RACE", "Gara"]].map(([id, l]) => <button key={id} className="press" aria-pressed={about === id ? "true" : "false"} onClick={() => setAbout(id)} style={aChip(about === id)}>{l}</button>)}
             </div>
-            <p style={{ margin: "0 0 10px", fontFamily: F_BODY, fontSize: 11, color: C.dim }}>Per il weekend di: {next ? next.name : "—"}</p>
+            <p style={{ margin: "0 0 10px", fontFamily: F_BODY, fontSize: 11, color: C.dim }}>Per il weekend di: {next ? next.name : "–"}</p>
           </>
         )}
         <ABtn onClick={add} disabled={!text.trim()}>AGGIUNGI PREVISIONE</ABtn>
@@ -6356,7 +6365,7 @@ function AdminRacesTab({ races, setRaces, extra = [], setExtra, onToast, live, l
           <span style={{ width: 26, fontFamily: F_HEAD, fontWeight: 800, fontSize: 12, color: C.dim }}>R{r.round}</span>
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ fontFamily: F_BODY, fontWeight: 600, fontSize: 12.5, color: C.text }}>{r.name}</div>
-            <div style={{ fontFamily: F_BODY, fontSize: 10.5, color: C.dim }}>{r.circuit || "—"} · {fmtDate(r.date)}</div>
+            <div style={{ fontFamily: F_BODY, fontSize: 10.5, color: C.dim }}>{r.circuit || "–"} · {fmtDate(r.date)}</div>
           </div>
           <select aria-label={"Stato " + r.name} value={r.status} onChange={e => setStatus(r.id, e.target.value)} style={{ padding: "6px 8px", borderRadius: 8, background: statusColor(r.status), border: `1px solid ${C.border}`, color: "#fff", fontFamily: F_BODY, fontWeight: 700, fontSize: 10.5, colorScheme: "dark" }}>
             {RACE_STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
@@ -6369,8 +6378,8 @@ function AdminRacesTab({ races, setRaces, extra = [], setExtra, onToast, live, l
         {extra.map(r => (
           <div key={r.id} data-extra-race={r.id} style={{ ...aCard, padding: "10px 12px", marginBottom: 8, display: "flex", alignItems: "center", gap: 10 }}>
             <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ fontFamily: F_BODY, fontWeight: 600, fontSize: 12.5, color: C.text }}>{r.name || "—"}</div>
-              <div style={{ fontFamily: F_BODY, fontSize: 10.5, color: C.dim }}>{r.circuit || "—"} · {Compat.fmtDate(r.date)} · {r.status || ""}</div>
+              <div style={{ fontFamily: F_BODY, fontWeight: 600, fontSize: 12.5, color: C.text }}>{r.name || "–"}</div>
+              <div style={{ fontFamily: F_BODY, fontSize: 10.5, color: C.dim }}>{r.circuit || "–"} · {Compat.fmtDate(r.date)} · {r.status || ""}</div>
             </div>
             <TrashBtn label={"Elimina " + (r.name || "gara")} onClick={() => { setExtra(list => list.filter(x => !sameExtraRace(x, r))).then(ok => ok && onToast("Gara eliminata")); }} />
           </div>
@@ -6587,7 +6596,7 @@ function PremiumModal({ onClose, isPremium, plan, setPlan, onSubscribe, subscrib
 
         <div style={{ padding: "16px 22px 24px" }}>
           {isPremium ? (
-            <p style={{ textAlign: "center", fontFamily: F_BODY, fontSize: 13, color: C.green, padding: "20px 0" }}>Sei già Premium — grazie per il supporto! ✓</p>
+            <p style={{ textAlign: "center", fontFamily: F_BODY, fontSize: 13, color: C.green, padding: "20px 0" }}>Sei già Premium: grazie per il supporto!</p>
           ) : (
             <>
               {PREMIUM_CATEGORIES.map(cat => (
@@ -6622,15 +6631,15 @@ function PremiumModal({ onClose, isPremium, plan, setPlan, onSubscribe, subscrib
                   {subscribing ? "Attendi…" : "PROVA GRATIS 2 SETTIMANE"}
                 </button>
                 <p style={{ textAlign: "center", fontFamily: F_BODY, fontSize: 11.5, color: C.muted, margin: "10px 0 0" }}>Poi {price} · disdici quando vuoi, anche durante la prova</p>
-                <button className="press" disabled={subscribing} onClick={onSubscribe} style={{ display: "block", margin: "8px auto 0", padding: "8px 12px", fontFamily: F_BODY, fontWeight: 700, fontSize: 12, color: C.gold }}>Oppure abbonati subito — {price}</button>
+                <button className="press" disabled={subscribing} onClick={onSubscribe} style={{ display: "block", margin: "8px auto 0", padding: "8px 12px", fontFamily: F_BODY, fontWeight: 700, fontSize: 12, color: C.gold }}>Oppure abbonati subito: {price}</button>
               </>) : (<>
                 <button className="press" disabled={subscribing} onClick={onSubscribe} style={{ display: "block", width: "100%", marginTop: 16, padding: "16px 0", borderRadius: 14, background: subscribing ? "#555" : C.accent, boxShadow: subscribing ? "none" : `0 10px 22px -10px ${C.accent}`, fontFamily: F_HEAD, fontWeight: 900, fontStyle: "italic", fontSize: 14.5, color: "#fff", letterSpacing: .2, textAlign: "center" }}>
-                  {subscribing ? "Attendi…" : `ABBONATI — ${price}`}
+                  {subscribing ? "Attendi…" : `ABBONATI · ${price}`}
                 </button>
                 {trialUsed && <p style={{ textAlign: "center", fontFamily: F_BODY, fontSize: 11.5, color: C.muted, margin: "10px 0 0" }}>Hai già usato la prova gratuita di 2 settimane.</p>}
               </>)}
               <p style={{ textAlign: "center", fontFamily: F_BODY, fontSize: 10.5, color: C.dim, lineHeight: 1.7, margin: "14px 0 0" }}>
-                Annulla in qualsiasi momento · Rinnovo automatico<br /><span style={{ color: C.accentInk }}>Anteprima demo — nessun pagamento reale</span>
+                Annulla in qualsiasi momento · Rinnovo automatico<br /><span style={{ color: C.accentInk }}>Anteprima demo: nessun pagamento reale</span>
               </p>
               </>}
             </>
@@ -6786,7 +6795,7 @@ function FeedbackModal({ onClose, onSend }) {
   const [sent, setSent] = useState(false);
   const [sending, setSending] = useState(false);
   const [err, setErr] = useState("");
-  const buzz = ms => { try { if (navigator.vibrate) navigator.vibrate(ms); } catch (e) {} };
+  const buzz = () => { fx.buzz("select"); fx.play("tick"); };
   useEffect(() => { if (!sent) return undefined; const t = setTimeout(onClose, 2000); return () => clearTimeout(t); }, [sent]);
   const send = async () => {
     if (!stars || sending) return;
@@ -6795,25 +6804,25 @@ function FeedbackModal({ onClose, onSend }) {
     catch (e) { setErr(FEEDBACK_MSG.offline); }
     setSending(false);
   };
-  const LABELS = ["", "😤 Molto male", "😕 Migliorabile", "😐 Nella media", "😊 Bene!", "🔥 Ottimo!"];
+  const LABELS = ["", "Molto male", "Migliorabile", "Nella media", "Bene", "Ottimo"];
   return (
     <div data-feedback="" role="dialog" aria-modal="true" aria-label="Invia feedback" style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,.8)", zIndex: 760, display: "flex", alignItems: "flex-end" }} onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
       <div style={{ background: C.card, borderRadius: "24px 24px 0 0", width: "100%", padding: "20px 20px 26px" }}>
         <div style={{ width: 36, height: 4, borderRadius: 2, background: "rgba(255,255,255,.14)", margin: "0 auto 16px" }} />
         {sent ? (
           <div style={{ textAlign: "center", padding: "18px 0" }}>
-            <div style={{ fontSize: 46, marginBottom: 10 }}>🏁</div>
+            <svg viewBox="0 0 48 48" width="52" height="52" aria-hidden="true" style={{ display: "block", margin: "0 auto 10px" }}><path d="M10 6v38" stroke={C.text} strokeWidth="3" strokeLinecap="round" />{[0, 1, 2].map(r => [0, 1, 2, 3].map(c => <rect key={r + "-" + c} x={12 + c * 7.5} y={8 + r * 7} width="7.5" height="7" fill={(r + c) % 2 ? C.text : "#000"} />))}<rect x="12" y="8" width="30" height="21" fill="none" stroke={C.text} strokeWidth="1.2" /></svg>
             <div style={{ fontFamily: F_HEAD, fontWeight: 900, fontStyle: "italic", fontSize: 18, color: C.text }}>Grazie per il feedback!</div>
-            <p style={{ fontFamily: F_BODY, color: C.muted, fontSize: 13, margin: "8px 0 0" }}>Lo leggiamo tutti. Aiuti B&amp;T a migliorare!</p>
+            <p style={{ fontFamily: F_BODY, color: C.muted, fontSize: 13, margin: "8px 0 0" }}>Lo leggiamo tutti: ci aiuta a scegliere cosa sistemare.</p>
           </div>
         ) : (
           <>
-            <div style={{ fontFamily: F_HEAD, fontWeight: 900, fontStyle: "italic", fontSize: 17, color: C.text, marginBottom: 4 }}>📣 Invia Feedback</div>
-            <p style={{ fontFamily: F_BODY, color: C.muted, fontSize: 12, margin: "0 0 16px" }}>Bastano 30 secondi. La tua opinione conta davvero.</p>
+            <h2 style={{ fontFamily: F_HEAD, fontWeight: 900, fontStyle: "italic", fontSize: 17, color: C.text, margin: "0 0 4px" }}>Invia feedback</h2>
+            <p style={{ fontFamily: F_BODY, color: C.muted, fontSize: 12, margin: "0 0 16px" }}>Bastano 30 secondi: scegli le stelle e, se vuoi, scrivici cosa cambiare.</p>
             <div style={{ display: "flex", justifyContent: "center", gap: 8, marginBottom: 12 }}>
               {[1, 2, 3, 4, 5].map(n => (
                 <button key={n} className="press" data-feedback-star={n} aria-label={`${n} stell${n === 1 ? "a" : "e"}`} aria-pressed={n <= stars ? "true" : "false"} onClick={() => { setStars(n); buzz(40); }}
-                  style={{ fontSize: 34, lineHeight: 1, transition: "transform .15s", transform: n <= stars ? "scale(1.15)" : "scale(1)", filter: n <= stars ? "none" : "grayscale(1) opacity(.4)" }}>⭐</button>
+                  style={{ lineHeight: 0, transition: "transform .15s", transform: n <= stars ? "scale(1.15)" : "scale(1)" }}><svg viewBox="0 0 24 24" width="34" height="34" aria-hidden="true"><path d="M12 2.8l2.8 5.7 6.3.9-4.6 4.4 1.1 6.2L12 17.1 6.4 20l1.1-6.2L2.9 9.4l6.3-.9z" fill={n <= stars ? C.gold : "none"} stroke={n <= stars ? C.gold : C.dim} strokeWidth="1.6" strokeLinejoin="round" /></svg></button>
               ))}
             </div>
             <p style={{ textAlign: "center", fontFamily: F_BODY, fontSize: 12, color: C.muted, margin: "0 0 14px", minHeight: 16 }}>{LABELS[stars]}</p>
@@ -6940,7 +6949,7 @@ function LiveTrackView({ onClose }) {
         </button>
         <div style={{ flex: 1 }}>
           <h1 style={{ fontFamily: F_HEAD, fontWeight: 900, fontStyle: "italic", fontSize: 17, color: C.text, margin: 0 }}>TRACCIATO LIVE</h1>
-          <span style={{ fontFamily: F_BODY, fontSize: 11, color: C.dim }}>Anteprima grafica — posizioni non reali</span>
+          <span style={{ fontFamily: F_BODY, fontSize: 11, color: C.dim }}>Anteprima grafica: posizioni non reali</span>
         </div>
       </div>
       <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: 20 }}>
@@ -7579,7 +7588,7 @@ function App() {
     });
   };
 
-  const ABOUT_TEXT = APP_NAME + " è l'app di B&T, nata dalla passione di un gruppo di amici per la Formula 1: un posto solo nostro per seguire le gare, parlarne insieme e tenere traccia di come va la nostra lega FantaF1.\n\nQui trovi le news, la diretta gara, la nostra chat e il nostro Instagram, tutto in un'unica app.\n\nTracciati dei circuiti: f1-circuits di Tomislav Bacinger, licenza MIT.\nCaratteri: Titillium Web (Accademia di Belle Arti di Urbino) e Work Sans, licenza SIL Open Font License 1.1.\n\nVersione 2.0 — 2026.";
+  const ABOUT_TEXT = APP_NAME + " è l'app di B&T, nata dalla passione di un gruppo di amici per la Formula 1: un posto solo nostro per seguire le gare, parlarne insieme e tenere traccia di come va la nostra lega FantaF1.\n\nQui trovi le news, la diretta gara, la nostra chat e il nostro Instagram, tutto in un'unica app.\n\nTracciati dei circuiti: f1-circuits di Tomislav Bacinger, licenza MIT.\nCaratteri: Titillium Web (Accademia di Belle Arti di Urbino) e Work Sans, licenza SIL Open Font License 1.1.\n\nIcone: Tabler Icons, licenza MIT.\n\nVersione 2.0, 2026.";
   const HELP_TEXT = "Hai domande o hai trovato un problema nell'app? Scrivici, ti rispondiamo il prima possibile.\n\nEmail: bt.formula1@gmail.com\n\nOppure passa dalla Chat Generale: la community è sempre pronta a dare una mano.";
 
   const showToast = (msg) => {

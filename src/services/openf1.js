@@ -497,7 +497,7 @@ function lastRaceFromResult(raw = {}, races = [], { drivers = [] } = {}) {
     if (g.down) return lapsWord(g.down);
     if (g.v != null) return "+" + g.v.toFixed(3) + "s";
     const down = winLaps != null && isNum(r.number_of_laps) ? winLaps - r.number_of_laps : 0;
-    return down > 0 ? lapsWord(down) : "—";
+    return down > 0 ? lapsWord(down) : "–";
   };
   const rows = [...classified, ...others].map(r => {
     const id = idOf(r.driver_number), pos = isNum(r.position) ? r.position : null;

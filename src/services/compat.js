@@ -48,11 +48,11 @@ function fmtDate(iso) {
   if (m && !HAS_ZONE.test(s)) { y = +m[1]; mo = +m[2]; d = +m[3]; }
   else {
     const t = parseDate(s);
-    if (isNaN(t)) return "—";
+    if (isNaN(t)) return "–";
     const p = romeParts(t);
     y = +p.year; mo = +p.month; d = +p.day;
   }
-  if (!(mo >= 1 && mo <= 12 && d >= 1 && d <= 31)) return "—";
+  if (!(mo >= 1 && mo <= 12 && d >= 1 && d <= 31)) return "–";
   return `${d} ${MESI[mo - 1]} ${y}`;
 }
 // "Adesso", "N min fa", "N h fa", "Ieri", "N giorni fa" (meno di 7), poi la data.

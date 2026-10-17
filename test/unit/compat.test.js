@@ -72,8 +72,8 @@ t('gare: date "2026-09-26", "2026-09-26T13:00" e round "17" scritto come testo n
   assert.strictEqual(C.fmtDate('2026-09-26'), '26 set 2026');
   assert.strictEqual(C.fmtDate('2026-09-26T13:00'), '26 set 2026');
   assert.strictEqual(C.fmtDate('2026-09-26T23:30:00Z'), '27 set 2026');   // con il fuso: la data in Italia
-  assert.strictEqual(C.fmtDate(''), '—');
-  assert.strictEqual(C.fmtDate('non è una data'), '—');
+  assert.strictEqual(C.fmtDate(''), '–');   // Tappa 3 (G05): valore mancante con la lineetta corta
+  assert.strictEqual(C.fmtDate('non è una data'), '–');
 });
 
 t('gare: date scritta in ora italiana senza fuso (Singapore → "2026-10-11T14:00:00")', () => {

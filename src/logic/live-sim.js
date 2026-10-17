@@ -15,7 +15,7 @@
   }
   const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
   const fmtLap = t => {
-    if (t == null || !isFinite(t)) return "—";
+    if (t == null || !isFinite(t)) return "–";
     const m = Math.floor(t / 60), s = t - m * 60;
     return (m ? m + ":" + (s < 10 ? "0" : "") : "") + s.toFixed(3);
   };
@@ -163,10 +163,10 @@
       c.dnf = { cause: k, lap, t, seq: ++dnfSeq };
       c.v = 0; c.pitHold = 0; c.stopAt = null;
       say({
-        incidente: `INCIDENTE: ${carLabel(c)} FINISCE CONTRO LE BARRIERE IN CURVA ${turn} — RITIRATO`,
-        motore: `${carLabel(c)} SI FERMA IN PISTA: PROBLEMA AL MOTORE — RITIRATO`,
-        incendio: `INCENDIO SULLA ${carLabel(c)}: IL PILOTA È SCESO ED È IN SALVO — RITIRATO`,
-        penalita: `BANDIERA NERA PER ${carLabel(c)}: SQUALIFICA PER TROPPE PENALITÀ — RITIRATO`,
+        incidente: `INCIDENTE: ${carLabel(c)} FINISCE CONTRO LE BARRIERE IN CURVA ${turn}, RITIRATO`,
+        motore: `${carLabel(c)} SI FERMA IN PISTA: PROBLEMA AL MOTORE, RITIRATO`,
+        incendio: `INCENDIO SULLA ${carLabel(c)}: IL PILOTA È SCESO ED È IN SALVO, RITIRATO`,
+        penalita: `BANDIERA NERA PER ${carLabel(c)}: SQUALIFICA PER TROPPE PENALITÀ, RITIRATO`,
         altro: `${carLabel(c)} RITIRATO`,
       }[k], "Other", { dnf: c.id, cause: k });
       return true;
@@ -202,18 +202,18 @@
     const events = !script ? [] : isRace ? [
       [1.02, () => say(`SEMAFORO VERDE: VIA ALLA ${raceWord}`, "Flag", { flag: "GREEN" })],
       [1.9, () => say("OVERTAKE MODE ABILITATO", "Overtake")],
-      [2.45, () => { const c = pick(8, 15); say(`LIMITI DELLA PISTA: ${carLabel(c)} — TEMPO ${fmtLap(c.last ? c.last.time : track.lapTime)} CANCELLATO, CURVA 7 GIRO ${currentLap() - 1}`, "Other"); }],
+      [2.45, () => { const c = pick(8, 15); say(`LIMITI DELLA PISTA: ${carLabel(c)}, TEMPO ${fmtLap(c.last ? c.last.time : track.lapTime)} CANCELLATO, CURVA 7 GIRO ${currentLap() - 1}`, "Other"); }],
       [3.3, () => {
         setFlag("yellow", 2);
         const a = cars.find(c => c.code === "LEC") || pick(3, 8), b = cars.find(c => c.code === "HAM") || pick(4, 9);
-        say(`INCIDENTE: ${carLabel(a)} E ${carLabel(b)} IN CURVA 10 — SARÀ INVESTIGATO DOPO LA GARA`, "Other");
+        say(`INCIDENTE: ${carLabel(a)} E ${carLabel(b)} IN CURVA 10, SARÀ INVESTIGATO DOPO LA GARA`, "Other");
       }],
       [3.62, () => setFlag("green")],
       // Ritiri della gara demo, uno per ogni causa: motore (poi VSC), incidente (poi SC), incendio, troppe penalità.
       [4.12, () => retireScripted("BOT", "motore", 14, 21)],
       [4.2, () => setFlag("vsc")],
       [4.62, () => setFlag("green")],
-      [5.3, () => { const c = cars.find(x => x.code === "SAI") || pick(6, 12); say(`PENALITÀ DI 5 SECONDI PER ${carLabel(c)} — HA CAUSATO UNA COLLISIONE`, "Other"); }],
+      [5.3, () => { const c = cars.find(x => x.code === "SAI") || pick(6, 12); say(`PENALITÀ DI 5 SECONDI PER ${carLabel(c)}: HA CAUSATO UNA COLLISIONE`, "Other"); }],
       [6.12, () => retireScripted("STR", "incidente", 12, 20)],
       [6.2, () => setFlag("sc")],
       [7.05, () => say("SAFETY CAR RIENTRA IN QUESTO GIRO", "SafetyCar")],
@@ -222,18 +222,18 @@
       [8.4, () => { setFlag("red"); timers.push([t + 50, () => say(`LA ${raceWord} RIPRENDERÀ TRA POCHI MINUTI`, "Other")], [t + 90, () => setFlag("green")]); }],
       [10.4, () => { retireScripted("COL", "incendio", 10, 18); setFlag("yellow", 3); }],
       [10.75, () => setFlag("green")],
-      [11.5, () => { const c = cars.find(x => x.code === "LAW" && !x.dnf) || pick(8, 16); c.penaltyFor = true; say(`PENALITÀ DI 5 SECONDI PER ${carLabel(c)} — LIMITI DELLA PISTA SUPERATI TROPPE VOLTE`, "Other"); }],
-      [12.6, () => { const c = cars.find(x => x.penaltyFor && !x.dnf) || pick(8, 16); c.penaltyFor = true; say(`PENALITÀ DI 10 SECONDI PER ${carLabel(c)} — HA CAUSATO UNA COLLISIONE (SECONDA PENALITÀ)`, "Other"); }],
+      [11.5, () => { const c = cars.find(x => x.code === "LAW" && !x.dnf) || pick(8, 16); c.penaltyFor = true; say(`PENALITÀ DI 5 SECONDI PER ${carLabel(c)}: LIMITI DELLA PISTA SUPERATI TROPPE VOLTE`, "Other"); }],
+      [12.6, () => { const c = cars.find(x => x.penaltyFor && !x.dnf) || pick(8, 16); c.penaltyFor = true; say(`PENALITÀ DI 10 SECONDI PER ${carLabel(c)}: HA CAUSATO UNA COLLISIONE (SECONDA PENALITÀ)`, "Other"); }],
       [13.6, () => { const c = cars.find(x => x.penaltyFor && !x.dnf); if (c) retire(c.id, "penalita"); else retireScripted("LAW", "penalita", 8, 16); }],
     ] : [];
     let evIdx = 0, nextRandom = isRace ? 11 : 1e9;
 
     function randomMessage() {
       const r = R();
-      if (r < 0.3) { const c = pick(5, 18); say(`LIMITI DELLA PISTA: ${carLabel(c)} — TEMPO ${fmtLap(c.last ? c.last.time : track.lapTime)} CANCELLATO, CURVA ${3 + Math.floor(R() * 15)}`); }
-      else if (r < 0.5) { const a = pick(3, 12), b = pick(4, 14); if (a !== b) say(`INCIDENTE TRA ${carLabel(a)} E ${carLabel(b)} IN CURVA ${1 + Math.floor(R() * 18)} ANNOTATO — IN FASE DI INVESTIGAZIONE`); }
+      if (r < 0.3) { const c = pick(5, 18); say(`LIMITI DELLA PISTA: ${carLabel(c)}, TEMPO ${fmtLap(c.last ? c.last.time : track.lapTime)} CANCELLATO, CURVA ${3 + Math.floor(R() * 15)}`); }
+      else if (r < 0.5) { const a = pick(3, 12), b = pick(4, 14); if (a !== b) say(`INCIDENTE TRA ${carLabel(a)} E ${carLabel(b)} IN CURVA ${1 + Math.floor(R() * 18)} ANNOTATO, IN FASE DI INVESTIGAZIONE`); }
       else if (r < 0.65) { const c = pick(2, 14); say(`INVESTIGAZIONE SU ${carLabel(c)}: NESSUNA ULTERIORE AZIONE`); }
-      else if (r < 0.8) { const c = pick(6, 20); say(`PENALITÀ DI 10 SECONDI PER ${carLabel(c)} — INGRESSO IN PIT LANE NON CONSENTITO`); }
+      else if (r < 0.8) { const c = pick(6, 20); say(`PENALITÀ DI 10 SECONDI PER ${carLabel(c)}: INGRESSO IN PIT LANE NON CONSENTITO`); }
       else { const o = order().filter(x => !x.dnf); const c = o[Math.max(0, o.length - 1 - Math.floor(R() * 4))]; say(`BANDIERA BLU PER ${carLabel(c)}`, "Flag", { flag: "BLUE" }); }
     }
 

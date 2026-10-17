@@ -237,7 +237,7 @@ const tests = {
     assert(lbl === '7 – 10 anni', 'la barra non cambia gli anni: ' + lbl);
     assert(follow && /7 – 10 anni/.test(follow), 'profilo, segue F1: ' + follow);
     assert(fan && /Se fa Vroom è bello/.test(fan), 'profilo, tipo fan: ' + fan);
-    assert(birth && /—/.test(birth), 'profilo, anno di nascita non scelto: ' + birth);
+    assert(birth && /Non indicato/.test(birth), 'profilo, anno di nascita non scelto: ' + birth);   // Tappa 3 (G05): niente lineetta lunga
     assert(!errs.length, errs.join(' | '));
   },
   async 'profilo: About You si modifica (anno di nascita, anni di F1, tipo di tifoso)'(b) {

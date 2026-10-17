@@ -7,12 +7,13 @@ const C = require("./compat");
 
 const APP_VERSION = "2.0.0";
 const PREFIX = "bt-feedback-";
+// Tappa 3 (G05): nomi senza emoji.
 const FEEDBACK_CATS = [
-  { id: "generale", label: "💬 Generale" },
-  { id: "bug", label: "🐛 Bug" },
-  { id: "live", label: "📡 Dati live" },
-  { id: "design", label: "🎨 Design" },
-  { id: "idea", label: "💡 Idea" },
+  { id: "generale", label: "Generale" },
+  { id: "bug", label: "Bug" },
+  { id: "live", label: "Dati live" },
+  { id: "design", label: "Design" },
+  { id: "idea", label: "Idea" },
 ];
 const FEEDBACK_MSG = {
   offline: "Feedback non inviato: controlla la connessione e riprova.",
