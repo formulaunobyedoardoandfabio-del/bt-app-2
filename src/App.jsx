@@ -14,6 +14,7 @@ import DnfArtData from "./logic/dnf-art";
 import BtGhost from "./logic/bt-ghost";
 import BtWk from "./logic/bt-weekend";
 import Colors from "./logic/colors";
+import { filterNews, TYRES, LANES } from "./logic/newsfilter";
 import F1 from "./data/f1-2026";
 import AppData from "./services/appdata";
 import Compat from "./services/compat";
@@ -375,7 +376,7 @@ const fmtK = (n) => n == null || n === "" ? "–" : n >= 1000 ? (n / 1000).toFix
 // Sondaggi (Home e notizie): la risposta esatta la segna l'admin e chi ha indovinato prende +2 punti FantaF1.
 // Il sondaggio della Home sta in shared/bt-home-poll: se non c'è, il riquadro non si vede.
 const articlePoll = a => a && a.poll ? { ...a.poll, id: "art-" + a.id } : null;
-const NEWS_CATEGORIES = ["NEWS", "GARA", "APP", "ANALISI", "FANTA", "PILOTI", "SCUDERIE"];
+const NEWS_CATEGORIES = ["NEWS", "GARA", "APP", "ANALISI", "FANTA", "PILOTI", "SCUDERIE", "METEO", "TECNICA"];   // METEO e TECNICA: Tappa 3 (G09-G10)
 const STATS_NOTE = "Statistiche carriera aggiornate a settembre 2026";
 
 const LEAGUE = [
@@ -1181,17 +1182,82 @@ function PollCard({ poll, vote, onVote, title = "SONDAGGIO" }) {
   );
 }
 
+// Monoposto vista dall'alto, col muso a destra (disegno nostro), nel colore dei tasti.
+function TopCar({ w = 38 }) {
+  return (
+    <svg viewBox="0 0 48 20" width={w} height={w * 20 / 48} aria-hidden="true">
+      <rect x="1" y="3" width="5" height="14" rx="1.5" fill={C.accent} />
+      <rect x="7" y="1" width="8" height="5" rx="2" fill="#1A1A1E" /><rect x="7" y="14" width="8" height="5" rx="2" fill="#1A1A1E" />
+      <rect x="31" y="1" width="7" height="5" rx="2" fill="#1A1A1E" /><rect x="31" y="14" width="7" height="5" rx="2" fill="#1A1A1E" />
+      <path d="M5 8.5h10l4-2.5h10l6 2.5h7l4 1.5-4 1.5h-7l-6 2.5H19l-4-2.5H5z" fill={C.accent} />
+      <ellipse cx="22" cy="10" rx="3.2" ry="2" fill="#0B0B0E" />
+      <rect x="44" y="5" width="3" height="10" rx="1" fill={C.accent} />
+    </svg>
+  );
+}
+
+// Selettore "Pit Lane" (G10) sopra i filtri: la corsia dei box con Tutte, Scuderie, Piloti, Tecnica; la monoposto
+// scivola sulla voce scelta (solo transform), con il suono della cambiata.
+function PitLane({ value, onChange }) {
+  const i = Math.max(0, LANES.findIndex(l => l.id === value));
+  return (
+    <div data-pit-lane="" role="group" aria-label="Pit Lane: argomento delle notizie" style={{ position: "relative", margin: "0 16px 10px", padding: "6px 6px 4px", borderRadius: 14, background: "#0B0B0E", border: `1px solid ${C.border}`, overflow: "hidden" }}>
+      <span aria-hidden="true" style={{ position: "absolute", left: 12, right: 12, top: 17, borderTop: "2px dashed rgba(255,255,255,.13)" }} />
+      <span aria-hidden="true" style={{ position: "absolute", left: 6, top: 5, fontFamily: F_HEAD, fontWeight: 800, fontSize: 8, letterSpacing: 1, color: C.dim }}>PIT LANE</span>
+      <span data-lane-car={LANES[i].id} className="lane-car" aria-hidden="true" style={{ position: "absolute", top: 8, left: 6, width: "calc((100% - 12px) / 4)", display: "flex", justifyContent: "center", transform: `translateX(${i * 100}%)` }}><TopCar w={34} /></span>
+      <div style={{ position: "relative", display: "grid", gridTemplateColumns: "repeat(4, 1fr)", marginTop: 22 }}>
+        {LANES.map(l => {
+          const on = l.id === value;
+          return <button key={l.id} className="press" data-lane={l.id} aria-pressed={on ? "true" : "false"} onClick={() => onChange(l.id)} style={{ padding: "7px 0 6px", fontFamily: F_HEAD, fontWeight: 800, fontSize: 12, color: on ? C.text : C.dim, letterSpacing: .3 }}>{l.label}</button>;
+        })}
+      </div>
+    </div>
+  );
+}
+
+// Filtri a forma di gomma (G09): Soft = ultim'ora, Medium = generali, Hard = approfondimenti, Intermedia = meteo.
+// Toccata, la gomma ruota e lascia l'impronta del battistrada; toccata di nuovo si toglie.
+function TyreFilter({ value, onChange }) {
+  return (
+    <div data-tyres="" style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 6, margin: "0 16px 10px" }}>
+      {TYRES.map(t => {
+        const on = value === t.id;
+        return (
+          <button key={t.id} className="press" data-tyre={t.id} data-tyre-on={on ? "1" : undefined} aria-pressed={on ? "true" : "false"} aria-label={`Gomma ${t.name}: ${t.label.toLowerCase()}`} onClick={() => onChange(on ? null : t.id)}
+            style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 3, padding: "7px 0 6px", borderRadius: 12, background: on ? alpha(t.color, .1) : "rgba(255,255,255,.03)", border: `1px solid ${on ? alpha(t.color, .55) : C.border}` }}>
+            <svg key={on ? "on" : "off"} className={on ? "tyre-spin" : undefined} viewBox="0 0 40 40" width="32" height="32" aria-hidden="true">
+              <circle cx="20" cy="20" r="18.5" fill="#141418" stroke="#2C2C33" strokeWidth="1.5" />
+              {[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11].map(k => <rect key={k} x="19" y="1.6" width="2" height="3.4" rx="1" fill="#2C2C33" transform={`rotate(${k * 30} 20 20)`} />)}
+              <circle cx="20" cy="20" r="12.5" fill="none" stroke={t.color} strokeWidth="2.6" strokeDasharray="14 5.6" />
+              <circle cx="20" cy="20" r="8" fill="#24242A" stroke="#3A3A42" strokeWidth="1" />
+              <circle cx="20" cy="20" r="2.4" fill="#5A5A64" />
+            </svg>
+            <span style={{ height: 5, display: "flex", alignItems: "center" }}>
+              {on && <svg data-tyre-print="" className="tyre-print" viewBox="0 0 36 5" width="36" height="5" aria-hidden="true"><path d="M1 4.5l2.5-4 2.5 4M7 4.5l2.5-4 2.5 4M13 4.5l2.5-4 2.5 4M19 4.5l2.5-4 2.5 4M25 4.5l2.5-4 2.5 4M31 4.5l2.5-4 2.5 4" fill="none" stroke={alpha(t.color, .7)} strokeWidth="1.3" /></svg>}
+            </span>
+            <span style={{ fontFamily: F_BODY, fontWeight: 700, fontSize: 9.5, color: on ? C.text : C.muted, whiteSpace: "nowrap" }}>{t.label}</span>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
 function HomeScreen({ ig, onOpenIg, highlights = [], articles, tagFilter, onTag, onClearTag, onOpenArticle, isPremium, onPremium, onToast, onLiveTrack, onGoFanta, saved = [], onToggleSave, savedOnly = false, setSavedOnly, onOpenCircuit, homePoll = null, homeVote = null, onVote }) {
   const [q, setQ] = useState("");
+  const [tyre, setTyre] = useState(null);     // filtro a gomma (G09): soft | medium | hard | inter
+  const [lane, setLane] = useState("all");    // Pit Lane (G10): all | teams | drivers | tech
   const visible = articles.filter(a => a.published !== false);
   const byTag = tagFilter ? visible.filter(a => articleTags(a).some(t => t.key === tagFilter.key)) : visible;
   const bySaved = savedOnly ? byTag.filter(a => saved.includes(a.id)) : byTag;
+  const byPit = filterNews(bySaved, { tyre, lane, now: nowMs() });
   const nq = normText(q.trim());
-  const matches = nq ? bySaved.filter(a => articleText(a).includes(nq)) : bySaved;
+  const matches = nq ? byPit.filter(a => articleText(a).includes(nq)) : byPit;
+  const pitOn = !!tyre || lane !== "all";
   // Anche i circuiti si cercano: per nome, città, paese, GP o hashtag (#Monza).
   const cq = nq.replace(/^#/, "");
   const circuitHits = cq.length >= 3 && !savedOnly ? CIRCUIT_IDS.filter(id => CIRCUIT_INFO[id] && circuitText(id).includes(cq)) : [];
-  const listMode = !!(tagFilter || nq || savedOnly);   // ricerca o filtri: elenco semplice, senza articolo in evidenza
+  const listMode = !!(tagFilter || nq || savedOnly || pitOn);   // ricerca o filtri: elenco semplice, senza articolo in evidenza
   // In grande sempre la notizia più recente; sotto le altre, dalla più nuova alla più vecchia.
   const sorted = BtLogic.newestFirst(matches);
   const featured = listMode ? null : sorted[0] || null;
@@ -1234,9 +1300,10 @@ function HomeScreen({ ig, onOpenIg, highlights = [], articles, tagFilter, onTag,
           <input id="newsSearch" type="search" placeholder="Cerca articoli, piloti, scuderie…" value={q} onChange={e => setQ(e.target.value)} style={{ flex: 1, minWidth: 0, border: "none", background: "none", outline: "none", fontFamily: F_BODY, fontSize: 13, color: C.text }} />
         </div>
       </div>
+      <PitLane value={lane} onChange={v => { if (v === lane) return; setLane(v); fx.play("shift"); fx.buzz("light"); }} />
+      <TyreFilter value={tyre} onChange={v => { setTyre(v); fx.play("tick"); fx.buzz("select"); }} />
       <div style={{ display: "flex", gap: 8, margin: "0 16px 14px" }}>
-        <button className="press" onClick={() => setSavedOnly && setSavedOnly(false)} style={aChip(!savedOnly)}>Tutte</button>
-        <button className="press" onClick={() => setSavedOnly && setSavedOnly(true)} style={aChip(savedOnly, C.gold)}><Icon name={savedOnly ? "bookmark-fill" : "bookmark"} size={12} color={savedOnly ? C.gold : C.muted} /> Salvati{saved.length ? ` · ${saved.length}` : ""}</button>
+        <button className="press" aria-pressed={savedOnly ? "true" : "false"} onClick={() => setSavedOnly && setSavedOnly(!savedOnly)} style={aChip(savedOnly, C.gold)}><Icon name={savedOnly ? "bookmark-fill" : "bookmark"} size={12} color={savedOnly ? C.gold : C.muted} /> Salvati{saved.length ? ` · ${saved.length}` : ""}</button>
       </div>
       {nq && matches.length > 0 && <p style={{ margin: "0 16px 12px", fontFamily: F_BODY, fontSize: 12, color: C.dim }}>{matches.length} {matches.length === 1 ? "risultato" : "risultati"} per “{q.trim()}”</p>}
       {circuitHits.length > 0 && (
@@ -1254,6 +1321,9 @@ function HomeScreen({ ig, onOpenIg, highlights = [], articles, tagFilter, onTag,
             </button>
           ); })}
         </div>
+      )}
+      {matches.length === 0 && pitOn && !nq && !savedOnly && !tagFilter && (
+        <p data-pit-empty="" style={{ margin: "0 16px 16px", fontFamily: F_BODY, fontSize: 12.5, color: C.dim, lineHeight: 1.55 }}>Nessuna notizia per questa scelta. Tocca di nuovo la gomma per toglierla, o scegli "Tutte" nella corsia.</p>
       )}
       {matches.length === 0 && (nq || savedOnly) && (
         <p style={{ margin: "0 16px 16px", fontFamily: F_BODY, fontSize: 12.5, color: C.dim, lineHeight: 1.55 }}>{nq ? `Nessun articolo trovato per “${q.trim()}”.` : "Non hai ancora salvato articoli: tocca il segnalibro su una notizia per ritrovarla qui."}</p>

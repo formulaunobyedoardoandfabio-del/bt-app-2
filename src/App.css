@@ -88,4 +88,11 @@
   @keyframes abortblink{ 0%,12%{ opacity:1; } 13%,25%{ opacity:0; } 26%,38%{ opacity:1; } 39%,51%{ opacity:0; } 52%,64%{ opacity:1; } 65%,77%{ opacity:0; } 78%,100%{ opacity:1; } }
   .abort-shake{ animation:abortshake .42s cubic-bezier(.36,.07,.19,.97); }
   @keyframes abortshake{ 10%,90%{ transform:translateX(-2px); } 20%,80%{ transform:translateX(4px); } 30%,50%,70%{ transform:translateX(-7px); } 40%,60%{ transform:translateX(7px); } }
+  /* Tappa 3 (G09-G10): la gomma scelta ruota e lascia l'impronta; la monoposto della Pit Lane scivola sulla voce. */
+  .tyre-spin{ transform-origin:50% 50%; animation:tyrespin .6s cubic-bezier(.2,.8,.3,1) both; }
+  @keyframes tyrespin{ from{ transform:rotate(-220deg); } to{ transform:rotate(0deg); } }
+  .tyre-print{ transform-origin:0 50%; animation:tyreprint .45s ease .3s both; }
+  @keyframes tyreprint{ from{ opacity:0; transform:scaleX(.2); } to{ opacity:1; transform:scaleX(1); } }
+  .lane-car{ transition:transform .34s cubic-bezier(.3,.9,.3,1); }
+  @media (prefers-reduced-motion:reduce){ .tyre-spin, .tyre-print{ animation:none; } .lane-car{ transition:none; } }
   @media (prefers-reduced-motion:reduce){ .press, .toast, .live-notice{ transition:none; animation:none; } .track-dot{ animation:none !important; } .cta-shine::after{ animation:none; display:none; } .led-seq > span, .pit-zoom, .pit-out, .pit-lines > span > i{ animation:none; } .abort-yellow{ animation:none; opacity:1; } .abort-shake{ animation:none; } }
