@@ -13,6 +13,7 @@ import BtInsights from "./logic/bt-insights";
 import DnfArtData from "./logic/dnf-art";
 import BtGhost from "./logic/bt-ghost";
 import BtWk from "./logic/bt-weekend";
+import Colors from "./logic/colors";
 import F1 from "./data/f1-2026";
 import AppData from "./services/appdata";
 import Compat from "./services/compat";
@@ -25,8 +26,13 @@ import { createOpenF1, buildReplay, lastRaceFromResult, sessionType as of1Sessio
 import LOGO from "./data/logo";
 
 /* ── DESIGN TOKENS (matches the B&T concept style) ─────────────────── */
+// Tappa 3 (G01-G02): sfondo nero puro (schermi OLED) e il colore dei tasti scelto da chi usa l'app. applyTheme cambia
+// accent (fondo dei tasti, col testo bianco sopra almeno 3:1), accentInk (testi, icone, bordi e linee sul nero, almeno
+// 4,5:1) e onAccent (il testo sui tasti); red resta il rosso LED per le cose rosse per forza (gomme morbide, bandiera
+// rossa, semafori, errori, usura e budget superato).
+const { LED_RED, shade, rgba: alpha } = Colors;
 const C = {
-  bg:      "#0A0A0C",
+  bg:      "#000000",
   card:    "#18181C",
   raised:  "rgba(255,255,255,.05)",
   border:  "rgba(255,255,255,.08)",
@@ -34,10 +40,34 @@ const C = {
   text:    "#F4F2EF",
   muted:   "#9C9CA1",
   dim:     "#86858C",
-  accent:  "#E8121D",
+  accent:  LED_RED,
+  accentInk: LED_RED,
+  onAccent: "#FFFFFF",
+  red:     LED_RED,
   gold:    "#E7B34C",
   green:   "#4AE54A",
 };
+// Colori dell'app (Profilo → "Colori dell'app"): theme = { mode: "team", color: null } (di serie: il colore della
+// scuderia del cuore, senza scuderia il rosso LED) o { mode: "custom", color }. Sul telefono (bt-theme) si tiene anche il
+// colore usato l'ultima volta (bootColor): vale all'avvio finché non arrivano i dati dell'account.
+const THEME_KEY = "bt-theme";
+function cleanTheme(t) {
+  if (!t || typeof t !== "object") return null;
+  if (t.mode === "custom") { const color = Colors.normHex(t.color); return color ? { mode: "custom", color } : null; }
+  return t.mode === "team" ? { mode: "team", color: null } : null;
+}
+function themeBase(theme, favTeam, bootColor = null) {
+  const th = cleanTheme(theme);
+  if (th && th.mode === "custom") return th.color;
+  const team = favTeam && teamById(favTeam);
+  if (team) return Colors.normHex(team.color) || LED_RED;
+  return Colors.normHex(bootColor) || LED_RED;
+}
+function applyTheme(theme, favTeam, bootColor = null) {
+  const base = themeBase(theme, favTeam, bootColor), tones = Colors.accentTones(base, C.bg);
+  C.accent = tones.accent; C.accentInk = tones.ink; C.onAccent = tones.on;
+  return { base, ...tones };
+}
 const F_HEAD = "'Titillium Web', sans-serif";
 const F_BODY = "'Work Sans', sans-serif";
 
@@ -180,6 +210,7 @@ function Icon({ name, size = 18, color = C.text, sw = 2 }) {
     case "link": return <svg {...s}><path d="M10 13a5 5 0 0 0 7.07 0l3-3a5 5 0 0 0-7.07-7.07l-1.5 1.5" /><path d="M14 11a5 5 0 0 0-7.07 0l-3 3a5 5 0 0 0 7.07 7.07l1.5-1.5" /></svg>;
     case "rotate": return <svg {...s}><path d="M20 12a8 8 0 1 1-2.34-5.66" /><polyline points="20,4 20,9 15,9" /></svg>;
     case "external": return <svg {...s}><path d="M14 4h6v6" /><path d="M20 4l-9 9" /><path d="M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5" /></svg>;
+    case "palette": return <svg {...s}><path d="M12 3a9 9 0 0 0 0 18c1.2 0 1.8-.9 1.8-1.8 0-.5-.2-.9-.5-1.2-.3-.3-.5-.7-.5-1.2 0-1 .8-1.8 1.8-1.8H17a4 4 0 0 0 4-4c0-4.4-4-8-9-8Z" /><circle cx="7.5" cy="11.5" r="1.1" /><circle cx="10.5" cy="7.5" r="1.1" /><circle cx="15" cy="8" r="1.1" /></svg>;
     default: return null;
   }
 }
@@ -279,7 +310,7 @@ const sessionName = type => (SESSION_TYPES.find(s => s[0] === type) || [type, ty
 const TIMING = { purple: "#B35CFF", green: "#3ED66B", yellow: "#F2C230", pit: "#4C8DFF", none: "rgba(255,255,255,.12)" };
 const FLAG_UI = {
   yellow: { color: "#FFD21F", ink: "#1A1400" }, sc: { color: "#FFD21F", ink: "#1A1400" }, vsc: { color: "#FFD21F", ink: "#1A1400" },
-  red: { color: "#E8121D", ink: "#fff" },
+  red: { color: LED_RED, ink: "#fff" },
 };
 
 /* ── DATI MODIFICABILI DAL PANNELLO ADMIN ─────────────────────────── */
@@ -339,7 +370,7 @@ const STATS_NOTE = "Statistiche carriera aggiornate a settembre 2026";
 const LEAGUE = [
   { pos: 1, name: "M. Bianchi", nick: "@bianchi_bj", team: "Scuderia BlackJack", pts: "1.284 pt", color: "#2E9E8F" },
   { pos: 2, name: "F. Greco", nick: "@ferrarista92", team: "I Ferraristi", pts: "1.201 pt", color: "#3B6FD4" },
-  { pos: 3, name: "Tu", team: "La tua squadra", pts: "1.166 pt", color: "#E8121D", me: true },
+  { pos: 3, name: "Tu", team: "La tua squadra", pts: "1.166 pt", color: LED_RED, me: true },
   { pos: 4, name: "S. Conti", nick: "@boxboys_sc", team: "Box Boys", pts: "1.098 pt", color: "#E8842C" },
   { pos: 5, name: "E. Marino", nick: "@pitwall_em", team: "Pit Wall Crew", pts: "1.034 pt", color: "#7B5FC4" },
   { pos: 6, name: "L. Rinaldi", nick: "@podiumhunter", team: "Podium Hunters", pts: "980 pt", color: "#D9B830" },
@@ -430,7 +461,7 @@ function TopHeader({ isPremium, unread, onPremium, onBell, onProfile, trialDays 
       )}
       <button className="press" aria-label="Notifiche" onClick={onBell} style={{ position: "relative", width: 38, height: 38, borderRadius: "50%", background: C.card, border: `1px solid ${C.border}`, display: "flex", alignItems: "center", justifyContent: "center" }}>
         <Icon name="bell" size={16} />
-        {unread > 0 && <span data-unread-dot="" style={{ position: "absolute", top: 6, right: 7, width: 8, height: 8, borderRadius: "50%", background: C.accent, border: "1.5px solid " + C.bg }} />}
+        {unread > 0 && <span data-unread-dot="" style={{ position: "absolute", top: 6, right: 7, width: 8, height: 8, borderRadius: "50%", background: C.accentInk, border: "1.5px solid " + C.bg }} />}
       </button>
       <button className="press" aria-label="Profilo" onClick={onProfile} style={{ width: 38, height: 38, borderRadius: "50%", background: C.card, border: `1px solid ${C.border}`, display: "flex", alignItems: "center", justifyContent: "center" }}>
         <Icon name="person" size={16} />
@@ -644,7 +675,7 @@ function drawArticle(ctx, paint, a, { locked, handle, photo }) {
       const s = Math.max(IMG_TW / photo.naturalWidth, heroH / photo.naturalHeight), dw = photo.naturalWidth * s, dh = photo.naturalHeight * s;
       ctx.drawImage(photo, IMG_PAD + (IMG_TW - dw) / 2, y + (heroH - dh) / 2, dw, dh);
     } else {
-      const g = ctx.createLinearGradient(IMG_PAD, y, IMG_PAD + IMG_TW * .7, y + heroH); g.addColorStop(0, "#3a0a0c"); g.addColorStop(.7, "#0f0f12");
+      const g = ctx.createLinearGradient(IMG_PAD, y, IMG_PAD + IMG_TW * .7, y + heroH); g.addColorStop(0, shade(C.accent, .25)); g.addColorStop(.7, "#0f0f12");
       ctx.fillStyle = g; ctx.fillRect(IMG_PAD, y, IMG_TW, heroH);
       ctx.fillStyle = "rgba(255,255,255,.06)"; ctx.font = `italic 900 150px ${CF_HEAD}`; ctx.textAlign = "center"; ctx.fillText("B&T", IMG_W / 2, y + heroH / 2 + 52); ctx.textAlign = "left";
     }
@@ -760,6 +791,68 @@ function Toggle({ on, onChange, disabled, label }) {
   );
 }
 
+// Profilo → "Colori dell'app" (G02): il colore della scuderia del cuore (di serie), uno dei 12 colori pronti o "Scegli
+// tu" con la ruota dei colori del telefono. Dal colore applyTheme ricava i toni dei tasti e dei testi: si vedono subito
+// in tutta l'app e nell'anteprima in fondo.
+function ThemeSheet({ theme, favTeam, onPick, onClose }) {
+  const team = favTeam ? teamById(favTeam) : null;
+  const custom = theme && theme.mode === "custom" ? theme.color : null;
+  const wheel = custom && !Colors.PALETTE.some(c => c.color === custom) ? custom : null;
+  const head = { fontFamily: F_BODY, fontWeight: 700, fontSize: 11, color: C.dim, letterSpacing: 1, margin: "18px 0 10px" };
+  const rowStyle = on => ({ position: "relative", display: "flex", alignItems: "center", gap: 12, width: "100%", padding: 12, borderRadius: 14, textAlign: "left", background: on ? alpha(C.accentInk, .1) : "rgba(255,255,255,.04)", border: `1px solid ${on ? C.accentInk : C.border}`, cursor: "pointer" });
+  const check = <Icon name="check" size={16} color={C.accentInk} sw={2.4} />;
+  return (
+    <div style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,.75)", zIndex: 620, display: "flex", alignItems: "flex-end" }} onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
+      <div className="scrollcol" data-theme-sheet="" style={{ background: C.card, borderRadius: "24px 24px 0 0", width: "100%", maxHeight: "88%", padding: "20px 20px 22px" }}>
+        <div style={{ display: "flex", alignItems: "center", marginBottom: 6 }}>
+          <h2 style={{ flex: 1, fontFamily: F_HEAD, fontWeight: 900, fontStyle: "italic", fontSize: 17, color: C.text, margin: 0 }}>COLORI DELL'APP</h2>
+          <button className="press" aria-label="Chiudi" onClick={onClose} style={{ width: 32, height: 32, borderRadius: "50%", background: "rgba(255,255,255,.08)", display: "flex", alignItems: "center", justifyContent: "center" }}><Icon name="close" size={13} sw={2.2} /></button>
+        </div>
+        <p style={{ margin: 0, fontFamily: F_BODY, fontSize: 12.5, color: C.muted, lineHeight: 1.5 }}>Il colore dei tasti, dei titoli e delle linee. Con qualsiasi colore i testi restano leggibili: se serve, l'app lo scurisce o lo schiarisce un po'.</p>
+        <div style={{ marginTop: 16 }}>
+          <button className="press" data-theme-team="" aria-pressed={theme && theme.mode === "team" ? "true" : "false"} onClick={() => onPick({ mode: "team", color: null })} style={rowStyle(theme && theme.mode === "team")}>
+            <span style={{ width: 30, height: 30, borderRadius: "50%", flexShrink: 0, background: team ? team.color : LED_RED, border: "2px solid rgba(255,255,255,.2)" }} />
+            <span style={{ flex: 1, minWidth: 0 }}>
+              <span style={{ display: "block", fontFamily: F_BODY, fontWeight: 700, fontSize: 14, color: C.text }}>Colore della mia scuderia</span>
+              <span style={{ display: "block", fontFamily: F_BODY, fontSize: 11.5, color: C.muted, marginTop: 2 }}>{team ? team.name : "Rosso LED: scegli la scuderia del cuore nel Profilo"}</span>
+            </span>
+            {theme && theme.mode === "team" && check}
+          </button>
+        </div>
+        <div style={head}>COLORI</div>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 10 }}>
+          {Colors.PALETTE.map(c => {
+            const on = custom === c.color;
+            return (
+              <button key={c.color} className="press" data-theme-color={c.color} aria-label={c.name} aria-pressed={on ? "true" : "false"} onClick={() => onPick({ mode: "custom", color: c.color })} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 6, padding: "6px 0" }}>
+                <span style={{ width: 38, height: 38, borderRadius: "50%", background: c.color, boxShadow: on ? `0 0 0 3px ${C.card}, 0 0 0 5px ${C.text}` : "inset 0 0 0 1px rgba(255,255,255,.18)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                  {on && <Icon name="check" size={16} color={Colors.contrast(c.color, "#000000") > Colors.contrast(c.color, "#FFFFFF") ? "#000" : "#fff"} sw={2.6} />}
+                </span>
+                <span style={{ fontFamily: F_BODY, fontSize: 10.5, color: on ? C.text : C.muted, textAlign: "center", lineHeight: 1.2 }}>{c.name}</span>
+              </button>
+            );
+          })}
+        </div>
+        <div style={head}>COME VUOI TU</div>
+        <label htmlFor="themeWheel" style={rowStyle(!!wheel)}>
+          <span style={{ position: "relative", width: 30, height: 30, borderRadius: "50%", flexShrink: 0, overflow: "hidden", background: wheel || "conic-gradient(#FF1801, #FFD100, #4AE54A, #27F4D2, #3671C6, #A142F4, #FF87BC, #FF1801)", border: "2px solid rgba(255,255,255,.2)" }}>
+            <input id="themeWheel" data-theme-wheel="" type="color" aria-label="Scegli tu il colore" value={(wheel || custom || C.accentInk).toLowerCase()} onChange={e => { const v = Colors.normHex(e.target.value); if (v) onPick({ mode: "custom", color: v }); }} style={{ position: "absolute", inset: 0, width: "100%", height: "100%", opacity: 0, border: "none", padding: 0, cursor: "pointer" }} />
+          </span>
+          <span style={{ flex: 1, minWidth: 0 }}>
+            <span style={{ display: "block", fontFamily: F_BODY, fontWeight: 700, fontSize: 14, color: C.text }}>Scegli tu</span>
+            <span style={{ display: "block", fontFamily: F_BODY, fontSize: 11.5, color: C.muted, marginTop: 2 }}>{wheel || "Con la ruota dei colori del telefono"}</span>
+          </span>
+          {wheel && check}
+        </label>
+        <div data-theme-preview="" style={{ display: "flex", alignItems: "center", gap: 14, marginTop: 18, padding: 14, borderRadius: 14, background: C.bg, border: `1px solid ${C.border}` }}>
+          <span data-theme-sample="tasto" style={{ padding: "10px 16px", borderRadius: 11, background: C.accent, fontFamily: F_HEAD, fontWeight: 900, fontStyle: "italic", fontSize: 13, color: C.onAccent }}>TASTO</span>
+          <span data-theme-sample="testo" style={{ flex: 1, fontFamily: F_HEAD, fontWeight: 800, fontSize: 13, color: C.accentInk, borderBottom: `2px solid ${C.accentInk}`, paddingBottom: 3 }}>Titoli e linee</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function PickerModal({ title, options, selected, onPick, onClose }) {
   return (
     <div style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,.75)", zIndex: 620, display: "flex", alignItems: "flex-end" }} onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
@@ -769,11 +862,11 @@ function PickerModal({ title, options, selected, onPick, onClose }) {
           <button className="press" aria-label="Chiudi" onClick={onClose} style={{ width: 32, height: 32, borderRadius: "50%", background: "rgba(255,255,255,.08)", display: "flex", alignItems: "center", justifyContent: "center" }}><Icon name="close" size={13} sw={2.2} /></button>
         </div>
         {options.map(o => (
-          <button key={o.id} className="press" onClick={() => { onPick(o.id); onClose(); }} style={{ display: "flex", alignItems: "center", gap: 12, width: "100%", padding: "11px 20px", textAlign: "left", background: selected === o.id ? "rgba(232,18,29,.08)" : "transparent" }}>
+          <button key={o.id} className="press" onClick={() => { onPick(o.id); onClose(); }} style={{ display: "flex", alignItems: "center", gap: 12, width: "100%", padding: "11px 20px", textAlign: "left", background: selected === o.id ? alpha(C.accentInk, .08) : "transparent" }}>
             {o.driver ? <Headshot driver={o.driver} size={32} /> : <span style={{ width: 12, height: 12, borderRadius: "50%", background: o.color, flexShrink: 0 }} />}
             <span style={{ flex: 1, fontFamily: F_BODY, fontWeight: 600, fontSize: 14, color: C.text }}>{o.label}</span>
             {o.sub && <span style={{ fontFamily: F_BODY, fontSize: 11, color: C.dim }}>{o.sub}</span>}
-            {selected === o.id && <Icon name="check" size={15} color={C.accent} sw={2.4} />}
+            {selected === o.id && <Icon name="check" size={15} color={C.accentInk} sw={2.4} />}
           </button>
         ))}
       </div>
@@ -804,7 +897,7 @@ function FollowSlider({ id, value, onChange }) {
         <label htmlFor={id} style={{ fontFamily: F_BODY, fontWeight: 600, fontSize: 12, color: C.muted }}>Da quanto segui la F1</label>
         <span data-follow-label="" style={{ fontFamily: F_HEAD, fontWeight: 800, fontSize: 13.5, color: C.text }}>{FOLLOW_STEPS[value]}</span>
       </div>
-      <input id={id} type="range" min="0" max={FOLLOW_STEPS.length - 1} step="1" value={value} aria-valuetext={FOLLOW_STEPS[value]} onChange={e => onChange(Number(e.target.value))} style={{ width: "100%", accentColor: C.accent, margin: "4px 0" }} />
+      <input id={id} type="range" min="0" max={FOLLOW_STEPS.length - 1} step="1" value={value} aria-valuetext={FOLLOW_STEPS[value]} onChange={e => onChange(Number(e.target.value))} style={{ width: "100%", accentColor: C.accentInk, margin: "4px 0" }} />
       <div style={{ display: "flex", justifyContent: "space-between", fontFamily: F_BODY, fontSize: 10, color: C.dim }}><span>meno di 1 anno</span><span>più di 10 anni</span></div>
     </div>
   );
@@ -814,7 +907,7 @@ function FanTypePicker({ value, onChange }) {
     <div role="radiogroup" aria-label="Che tifoso sei" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
       {FAN_TYPES.map(([id, label]) => {
         const on = value === id;
-        return <button key={id} type="button" className="press" role="radio" aria-checked={on ? "true" : "false"} aria-pressed={on ? "true" : "false"} data-fan-option={id} onClick={() => onChange(id)} style={{ padding: "11px 8px", borderRadius: 12, background: on ? "rgba(232,18,29,.16)" : C.card, border: `1px solid ${on ? C.accent : C.border}`, fontFamily: F_BODY, fontWeight: 700, fontSize: 12, color: on ? C.text : C.muted, textAlign: "center", lineHeight: 1.3 }}>{label}</button>;
+        return <button key={id} type="button" className="press" role="radio" aria-checked={on ? "true" : "false"} aria-pressed={on ? "true" : "false"} data-fan-option={id} onClick={() => onChange(id)} style={{ padding: "11px 8px", borderRadius: 12, background: on ? alpha(C.accentInk, .16) : C.card, border: `1px solid ${on ? C.accentInk : C.border}`, fontFamily: F_BODY, fontWeight: 700, fontSize: 12, color: on ? C.text : C.muted, textAlign: "center", lineHeight: 1.3 }}>{label}</button>;
       })}
     </div>
   );
@@ -931,7 +1024,7 @@ function LoginScreen({ auth, onDone, onGuest, onBack, reason }) {
         <p style={{ fontFamily: F_BODY, fontSize: 13, color: C.muted, textAlign: "center", lineHeight: 1.5, margin: 0 }}>
           Notizie, classifiche live, FantaF1 e la community B&amp;T, tutto in un'app.
         </p>
-        {reason && <div role="status" style={{ marginTop: 14, padding: "10px 14px", borderRadius: 12, background: "rgba(232,18,29,.1)", border: "1px solid rgba(232,18,29,.35)", fontFamily: F_BODY, fontSize: 12.5, color: C.text, textAlign: "center", lineHeight: 1.45 }}>{reason}</div>}
+        {reason && <div role="status" style={{ marginTop: 14, padding: "10px 14px", borderRadius: 12, background: alpha(C.accentInk, .1), border: `1px solid ${alpha(C.accentInk, .35)}`, fontFamily: F_BODY, fontSize: 12.5, color: C.text, textAlign: "center", lineHeight: 1.45 }}>{reason}</div>}
       </div>
 
       <div style={{ display: "flex", margin: "0 24px 22px", padding: 4, borderRadius: 14, background: C.card, border: `1px solid ${C.border}`, flexShrink: 0 }}>
@@ -979,15 +1072,15 @@ function LoginScreen({ auth, onDone, onGuest, onBack, reason }) {
             Ho almeno 14 anni
           </label>
         )}
-        {isLogin && <div style={{ textAlign: "right", marginBottom: 18 }}><button className="press" onClick={forgot} style={{ fontFamily: F_BODY, fontWeight: 600, fontSize: 12, color: C.accent, padding: "6px 0" }}>Password dimenticata?</button></div>}
+        {isLogin && <div style={{ textAlign: "right", marginBottom: 18 }}><button className="press" onClick={forgot} style={{ fontFamily: F_BODY, fontWeight: 600, fontSize: 12, color: C.accentInk, padding: "6px 0" }}>Password dimenticata?</button></div>}
         {info && <p style={{ background: "rgba(255,255,255,.05)", border: `1px solid ${C.border}`, borderRadius: 10, padding: "9px 14px", marginTop: 0, marginBottom: 14, color: C.text, fontSize: 12, lineHeight: 1.5 }}>{info}</p>}
-        {err && <p style={{ background: "#E1060018", border: `1px solid ${C.accent}`, borderRadius: 10, padding: "9px 14px", marginTop: 0, marginBottom: 14, color: "#ff6b6b", fontSize: 12, lineHeight: 1.5 }}>{err}</p>}
+        {err && <p style={{ background: "#E1060018", border: `1px solid ${C.red}`, borderRadius: 10, padding: "9px 14px", marginTop: 0, marginBottom: 14, color: "#ff6b6b", fontSize: 12, lineHeight: 1.5 }}>{err}</p>}
         <button className="press" onClick={submit} disabled={busy} style={{ display: "block", width: "100%", padding: "15px 0", borderRadius: 14, background: busy ? "#555" : C.accent, boxShadow: busy ? "none" : `0 10px 22px -10px ${C.accent}`, fontFamily: F_HEAD, fontWeight: 900, fontStyle: "italic", fontSize: 14, color: "#fff", letterSpacing: .3, textAlign: "center", marginBottom: 16 }}>
           {isLogin ? "ACCEDI" : "CREA ACCOUNT"}
         </button>
         <p style={{ textAlign: "center", fontFamily: F_BODY, fontSize: 12, color: C.muted, margin: 0 }}>
-          {isLogin ? <>Non hai un account? <button className="press" onClick={() => setMode("register")} style={{ display: "inline", fontFamily: F_BODY, fontWeight: 700, fontSize: 12, color: C.accent }}>Registrati</button></>
-                   : <>Hai già un account? <button className="press" onClick={() => setMode("login")} style={{ display: "inline", fontFamily: F_BODY, fontWeight: 700, fontSize: 12, color: C.accent }}>Accedi</button></>}
+          {isLogin ? <>Non hai un account? <button className="press" onClick={() => setMode("register")} style={{ display: "inline", fontFamily: F_BODY, fontWeight: 700, fontSize: 12, color: C.accentInk }}>Registrati</button></>
+                   : <>Hai già un account? <button className="press" onClick={() => setMode("login")} style={{ display: "inline", fontFamily: F_BODY, fontWeight: 700, fontSize: 12, color: C.accentInk }}>Accedi</button></>}
         </p>
         {onGuest && (
           <>
@@ -1142,7 +1235,7 @@ function HomeScreen({ ig, onOpenIg, highlights = [], articles, tagFilter, onTag,
         <SaveBtn a={featured} saved={saved.includes(featured.id)} onToggle={onToggleSave} style={{ top: 12, right: 28 }} />
         <button className="press" data-featured={featured.id} onClick={() => onOpenArticle(featured.id)} style={{ display: "block", textAlign: "left", width: "calc(100% - 32px)", margin: "0 16px 14px", borderRadius: 18, overflow: "hidden", background: C.card, border: `1px solid ${C.border}` }}>
           {/* La foto si vede intera, con le sue proporzioni: niente ritagli. */}
-          <div style={{ minHeight: featuredImg ? 0 : 170, position: "relative", background: featuredImg ? "#111" : "linear-gradient(155deg,#3a0a0c 0%,#0f0f12 65%)" }}>
+          <div style={{ minHeight: featuredImg ? 0 : 170, position: "relative", background: featuredImg ? "#111" : `linear-gradient(155deg,${shade(C.accent, .25)} 0%,#0f0f12 65%)` }}>
             {featuredImg && <img data-news-img="" src={featuredImg} alt="" style={{ display: "block", width: "100%", height: "auto", maxHeight: 440, objectFit: "contain", background: "#111" }} />}
             <span style={{ position: "absolute", top: 14, left: 14, padding: "5px 11px", borderRadius: 7, background: C.accent, fontFamily: F_HEAD, fontWeight: 800, fontSize: 10, letterSpacing: 1, color: "#fff" }}>{featured.cat}</span>
             {!featuredImg && (
@@ -1252,7 +1345,7 @@ function ArticleScreen({ article, onBack, isPremium, onPremium, onTag, saved = f
               <span aria-hidden="true" style={{ position: "absolute", right: 10, bottom: 10, display: "inline-flex", alignItems: "center", gap: 5, padding: "5px 9px", borderRadius: 999, background: "rgba(0,0,0,.6)", fontFamily: F_BODY, fontWeight: 700, fontSize: 11, color: "#fff" }}><Icon name="search" size={12} color="#fff" /> Tocca per ingrandire</span>
             </button>
           : (
-            <div style={{ height: 160, borderRadius: 16, margin: "16px 0", background: "linear-gradient(155deg,#3a0a0c 0%,#0f0f12 70%)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+            <div style={{ height: 160, borderRadius: 16, margin: "16px 0", background: `linear-gradient(155deg,${shade(C.accent, .25)} 0%,#0f0f12 70%)`, display: "flex", alignItems: "center", justifyContent: "center" }}>
               <span style={{ fontFamily: F_HEAD, fontWeight: 900, fontStyle: "italic", fontSize: 44, color: "rgba(255,255,255,.06)" }}>B&amp;T</span>
             </div>
           )}
@@ -1356,14 +1449,14 @@ function ShareSheet({ article, locked, handle, onClose, onToast }) {
 }
 
 /* ── DIRETTA IN STILE F1DASH ─────────────────────────────────────────── */
-const SECTOR_COLORS = ["#E8121D", "#27D8C8", "#F2C230"];   // S1, S2, S3 sulla mappa (confini stimati)
+const SECTOR_COLORS = [LED_RED, "#27D8C8", "#F2C230"];   // S1, S2, S3 sulla mappa (confini stimati)
 const fmtGap = g => (g == null ? "—" : "+" + g.toFixed(3));
 
 /* ── CIRCUITI: disegno di sfondo, mappa coi settori e scheda "Mostra di più" ── */
 // Disegno del circuito: tracciato luminoso sui colori del paese (nessuna foto, nessun problema di diritti).
 function CircuitArt({ circuitId, uid = "a" }) {
   const tr = trackOf(circuitId), info = CIRCUIT_INFO[circuitId];
-  const [c1, c2] = info ? info.colors : [C.accent, C.gold];
+  const [c1, c2] = info ? info.colors : [C.accentInk, C.gold];
   const g = "art-" + uid + "-" + circuitId;
   return (
     <svg data-race-art="" viewBox="0 0 1600 900" preserveAspectRatio="xMidYMid slice" aria-hidden="true" style={{ position: "absolute", inset: 0, width: "100%", height: "100%", display: "block" }}>
@@ -1483,7 +1576,7 @@ function CircuitScreen({ circuitId, races, articles, onBack, onTag, onOpenArticl
               return (
                 <div key={s.key} style={{ display: "flex", alignItems: "center", gap: 10, padding: "11px 14px", borderTop: i ? `1px solid ${C.divider}` : "none" }}>
                   <span style={{ width: 70, fontFamily: F_BODY, fontWeight: 600, fontSize: 11.5, color: C.dim }}>{t.day}</span>
-                  <span style={{ flex: 1, fontFamily: F_HEAD, fontWeight: 800, fontSize: 13.5, color: s.key === "RACE" ? C.accent : C.text }}>{LiveSim.SESSION_LABEL[s.key] || s.key}</span>
+                  <span style={{ flex: 1, fontFamily: F_HEAD, fontWeight: 800, fontSize: 13.5, color: s.key === "RACE" ? C.accentInk : C.text }}>{LiveSim.SESSION_LABEL[s.key] || s.key}</span>
                   <span style={{ textAlign: "right", fontFamily: F_BODY, fontSize: 11, color: C.dim, lineHeight: 1.35 }}>
                     <b style={{ fontFamily: F_HEAD, fontSize: 14, color: C.text, fontVariantNumeric: "tabular-nums" }}>{t.local}</b> locale<br />
                     <span style={{ fontVariantNumeric: "tabular-nums" }}>{t.italyDay ? t.italyDay + " " : ""}{t.italy}</span> in Italia
@@ -1582,8 +1675,8 @@ function LiveCard({ race, st, track, source, onExpand, replay }) {
   return (
     <div data-live-card="" data-live-source={source} style={{ margin: "4px 16px 14px", padding: "14px 14px 12px", borderRadius: 18, background: C.card, border: `1px solid ${C.border}` }}>
       <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
-        <span style={{ width: 7, height: 7, borderRadius: "50%", background: of1 ? C.gold : C.accent }} />
-        <span style={{ fontFamily: F_BODY, fontWeight: 700, fontSize: 11, color: of1 ? C.gold : C.accent, letterSpacing: 1.2 }}>{of1 ? "SESSIONE RIVISTA" : "IN DIRETTA"} · {sessionName(st.type)}</span>
+        <span style={{ width: 7, height: 7, borderRadius: "50%", background: of1 ? C.gold : C.accentInk }} />
+        <span style={{ fontFamily: F_BODY, fontWeight: 700, fontSize: 11, color: of1 ? C.gold : C.accentInk, letterSpacing: 1.2 }}>{of1 ? "SESSIONE RIVISTA" : "IN DIRETTA"} · {sessionName(st.type)}</span>
         {demo && <span data-demo="" title="Prova diretta: sessione simulata, la vedi solo tu" style={{ padding: "2px 7px", borderRadius: 6, background: C.gold, fontFamily: F_HEAD, fontWeight: 900, fontSize: 10, letterSpacing: .8, color: "#141414" }}>DEMO</span>}
         <div style={{ flexGrow: 1 }} />
         <span style={{ fontFamily: F_HEAD, fontWeight: 800, fontSize: 13, color: C.text, fontVariantNumeric: "tabular-nums" }}>{liveCounter(st)}</span>
@@ -1618,7 +1711,7 @@ function LiveCard({ race, st, track, source, onExpand, replay }) {
 
 // Ritiri (DNF): il disegno cambia con la causa (incidente, motore, incendio, troppe penalità; generico se non si sa).
 const DNF_LABEL = { incidente: "Incidente", motore: "Problema al motore", incendio: "Incendio sulla vettura", penalita: "Troppe penalità: squalificato", altro: "Ritirato" };
-const DNF_COLORS = { ink: "#F4F2EF", smoke: "#9C9CA6", fire: "#FF7A1A", flame: "#FFD23F", red: "#E8121D" };
+const DNF_COLORS = { ink: "#F4F2EF", smoke: "#9C9CA6", fire: "#FF7A1A", flame: "#FFD23F", red: LED_RED };
 const svgAttr = a => a.replace(/-([a-z])/g, (_, ch) => ch.toUpperCase());
 function DnfArt({ cause, width = 96, bg = "#101014" }) {
   const k = DnfArtData.CAUSES.includes(cause) ? cause : "altro";
@@ -1667,7 +1760,7 @@ function LiveNotice({ n, onClose, inStage = false }) {
   );
   return (
     <div key={n.key} className="live-notice" data-live-notice="dnf" data-notice-driver={n.id} role="status"
-      style={{ ...place, display: "flex", alignItems: "center", gap: 10, padding: "8px 10px 8px 8px", borderRadius: 16, background: "linear-gradient(100deg, #2A0A0D 0%, #3A0C10 60%, #4A1015 100%)", boxShadow: "0 14px 30px -12px rgba(0,0,0,.8), inset 0 0 0 1px rgba(232,18,29,.45)" }}>
+      style={{ ...place, display: "flex", alignItems: "center", gap: 10, padding: "8px 10px 8px 8px", borderRadius: 16, background: "linear-gradient(100deg, #2A0A0D 0%, #3A0C10 60%, #4A1015 100%)", boxShadow: "0 14px 30px -12px rgba(0,0,0,.8), inset 0 0 0 1px rgba(255,24,1,.45)" }}>
       <DnfTile cause={n.cause} width={78} bg="#101014" />
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ fontFamily: F_HEAD, fontWeight: 900, fontStyle: "italic", fontSize: 12.5, letterSpacing: .8, color: "#FF5A5F" }}>RITIRATO · GIRO {n.lap}</div>
@@ -1738,7 +1831,7 @@ function TimingTable({ st, onTelemetry, onSelectDriver, onLapTimes }) {
         const main = race ? c.last : c.best ? { ...c.best, st: i === 0 ? "purple" : "none" } : null;
         const gap = c.dnf ? "RIT" : race ? (i === 0 ? (st.finished ? "VINCITORE" : "LEADER") : c.lapsDown > 0 ? `+${c.lapsDown} ${c.lapsDown === 1 ? "GIRO" : "GIRI"}` : fmtGap(c.gap)) : (i === 0 ? (c.best ? "MIGLIOR TEMPO" : "—") : fmtGap(c.gap));
         return (
-          <div key={c.id} data-timing-row="" data-timing-pos={c.pos} data-timing-id={c.id} data-dnf={c.dnf ? c.dnf.cause : undefined} style={{ padding: "10px 12px 11px", borderBottom: i < st.cars.length - 1 ? `1px solid ${C.divider}` : "none", opacity: c.out ? .45 : 1, background: c.dnf ? "rgba(232,18,29,.05)" : "transparent" }}>
+          <div key={c.id} data-timing-row="" data-timing-pos={c.pos} data-timing-id={c.id} data-dnf={c.dnf ? c.dnf.cause : undefined} style={{ padding: "10px 12px 11px", borderBottom: i < st.cars.length - 1 ? `1px solid ${C.divider}` : "none", opacity: c.out ? .45 : 1, background: c.dnf ? "rgba(255,24,1,.05)" : "transparent" }}>
             <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
               <span style={{ width: 20, fontFamily: F_HEAD, fontWeight: 800, fontSize: 14, color: c.dnf ? C.dim : C.text, fontVariantNumeric: "tabular-nums" }}>{c.pos}</span>
               <button className="press" onClick={() => d && onSelectDriver(d)} style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0, flex: 1, textAlign: "left" }}>
@@ -2012,14 +2105,14 @@ function TelemetryModal({ live, st, carId, lapNo, sector, onClose }) {
   );
   const L = live.track.lenM, bounds = [0, tel.sectorDist[0], tel.sectorDist[1], L];
   const range = zoom ? [bounds[zoom - 1], bounds[zoom]] : [0, L];
-  const color = (d && d.color) || C.accent;
+  const color = (d && d.color) || C.accentInk;
   const hv = hover != null ? { d: tel.dist[hover], v: tel.speed[hover], thr: tel.throttle[hover], br: tel.brake[hover], g: tel.gear[hover], rpm: tel.rpm[hover] } : null;
   // Velocità del giro più veloce nello stesso punto della pista (i campioni dei due giri non sono gli stessi).
   const cmpAt = bl && hover != null ? bl.speed[bl.dist.reduce((k, dd, i) => Math.abs(dd - tel.dist[hover]) < Math.abs(bl.dist[k] - tel.dist[hover]) ? i : k, 0)] : null;
   const inRange = (arr) => arr.filter((_, i) => tel.dist[i] >= range[0] && tel.dist[i] <= range[1]);
   const vIn = inRange(tel.speed), top = Math.max(...vIn), low = Math.min(...vIn);
   const full = Math.round(inRange(tel.throttle).filter(x => x >= 99).length / Math.max(1, vIn.length) * 100);
-  const chip = (id, label) => <button key={id} className="press" aria-pressed={zoom === id ? "true" : "false"} onClick={() => { setZoom(id); setHover(null); }} style={{ padding: "6px 10px", borderRadius: 999, background: zoom === id ? "rgba(232,18,29,.16)" : "rgba(255,255,255,.05)", border: `1px solid ${zoom === id ? C.accent : C.border}`, fontFamily: F_BODY, fontWeight: 700, fontSize: 11, color: zoom === id ? C.text : C.muted }}>{label}</button>;
+  const chip = (id, label) => <button key={id} className="press" aria-pressed={zoom === id ? "true" : "false"} onClick={() => { setZoom(id); setHover(null); }} style={{ padding: "6px 10px", borderRadius: 999, background: zoom === id ? alpha(C.accentInk, .16) : "rgba(255,255,255,.05)", border: `1px solid ${zoom === id ? C.accentInk : C.border}`, fontFamily: F_BODY, fontWeight: 700, fontSize: 11, color: zoom === id ? C.text : C.muted }}>{label}</button>;
   const common = { tel, range, hover, onHover: setHover, color };
   return (
     <div style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,.78)", zIndex: 640, display: "flex", alignItems: "flex-end" }} onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
@@ -2154,7 +2247,7 @@ function LiveMapView({ race, live, st, onClose }) {
 const INSIGHT_TYPES = [["sorpasso", "Chi raggiunge chi"], ["strategia", "Strategie"], ["passo", "Ritmo gara"], ["frenata", "Frenata"], ["vettura", "Pagella"]];
 const CORNER_KINDS = [["lente", "CURVE LENTE", "Curve lente"], ["medie", "CURVE MEDIE", "Curve medie"], ["veloci", "CURVE VELOCI", "Curve veloci"]];
 const TYRE_WORD = { S: "Morbida", M: "Media", H: "Dura" };
-const INS = { top: "#121218", body: "#0C0C10", band: C.accent, bandInk: "#FFFFFF", label: C.gold, hi: C.gold, hiInk: "#15120A", up: "#27D8C8", down: "#FF5A5F" };
+const INS = { top: "#121218", body: "#0C0C10", get band() { return C.accent; }, bandInk: "#FFFFFF", label: C.gold, hi: C.gold, hiInk: "#15120A", up: "#27D8C8", down: "#FF5A5F" };
 const surname = id => { const d = driverById(id); return (d ? d.full.split(" ").slice(-1)[0] : id).toUpperCase(); };
 const teamColorOf = id => { const d = driverById(id), t = d && teamById(d.teamId); return t ? t.color : "#8E8E96"; };
 const insightCtx = (live, st, race) => ({ st, lapsOf: id => live.sim.laps(id), telemetry: (id, n) => live.sim.telemetry(id, n), lenM: live.track.lenM, lapTime: live.track.lapTime, teamOf: TEAM_OF, seed: (race && race.round) || 1 });
@@ -2316,7 +2409,7 @@ function InsightsCard({ live, st, race }) {
         <span style={{ marginLeft: "auto", fontFamily: F_BODY, fontSize: 10.5, color: C.dim }}>analisi nostre · {of1 ? "dati OpenF1" : "prova DEMO"}</span>
       </div>
       <div className="scrollrow" style={{ display: "flex", gap: 6, overflowX: "auto", scrollbarWidth: "none", marginBottom: 10 }}>
-        {types.map(([id, l]) => <button key={id} data-insight-tab={id} className="press" aria-pressed={type === id ? "true" : "false"} onClick={() => setType(id)} style={{ flex: "0 0 auto", padding: "6px 11px", borderRadius: 999, background: type === id ? "rgba(232,18,29,.18)" : "rgba(255,255,255,.05)", border: `1px solid ${type === id ? INS.band : C.border}`, fontFamily: F_BODY, fontWeight: 700, fontSize: 11.5, color: type === id ? C.text : C.muted }}>{l}</button>)}
+        {types.map(([id, l]) => <button key={id} data-insight-tab={id} className="press" aria-pressed={type === id ? "true" : "false"} onClick={() => setType(id)} style={{ flex: "0 0 auto", padding: "6px 11px", borderRadius: 999, background: type === id ? alpha(C.accentInk, .18) : "rgba(255,255,255,.05)", border: `1px solid ${type === id ? INS.band : C.border}`, fontFamily: F_BODY, fontWeight: 700, fontSize: 11.5, color: type === id ? C.text : C.muted }}>{l}</button>)}
       </div>
       {type === "vettura" && (
         <div style={{ display: "flex", gap: 6, marginBottom: 8 }}>
@@ -2381,7 +2474,7 @@ function ssResize(layout, id, h) {
 const ssCapText = others => others === 1
   ? "Alta 2 posti solo se è da sola nella colonna: sposta o togli l'altra grafica (tasto Modifica)."
   : `Con altre ${others} grafiche nella colonna arriva al massimo a ${SS_SIZE_TEXT[SS_COL_UNITS - others]}: per farla più alta sposta o togli un'altra grafica (tasto Modifica).`;
-const TYRE_UI = { S: ["#E8121D", "Morbida"], M: ["#F2C230", "Media"], H: ["#F4F2EF", "Dura"], I: ["#3ED66B", "Intermedia"], W: ["#4C8DFF", "Da bagnato"] };
+const TYRE_UI = { S: [LED_RED, "Morbida"], M: ["#F2C230", "Media"], H: ["#F4F2EF", "Dura"], I: ["#3ED66B", "Intermedia"], W: ["#4C8DFF", "Da bagnato"] };
 // Mescola non nota (OpenF1 senza stint): cerchio grigio e trattino.
 const tyreUi = k => TYRE_UI[k] || ["#86858C", "—"];
 // Radio dei team (demo): una nuova ogni 45 secondi di sessione, dai piloti di testa.
@@ -2543,7 +2636,7 @@ function SsWidget({ id, h = 2, st, live, race, standings, prefs, setPrefs, onPic
         <div key={r.k} data-ss-tyre-row={r.k} style={row}>
           <span style={{ width: 28, fontFamily: F_HEAD, fontWeight: 800 }}>{r.code}</span>
           <span title={tyreUi(r.tyre)[1]} style={{ width: 11, height: 11, borderRadius: "50%", border: `2.5px solid ${tyreUi(r.tyre)[0]}`, flexShrink: 0 }} />
-          {r.wear != null ? <span style={{ flex: 1, height: 5, borderRadius: 3, background: "rgba(255,255,255,.08)", overflow: "hidden" }}><span style={{ display: "block", height: "100%", width: r.wear + "%", background: r.wear > 75 ? C.accent : r.wear > 50 ? TIMING.yellow : TIMING.green }} /></span>
+          {r.wear != null ? <span style={{ flex: 1, height: 5, borderRadius: 3, background: "rgba(255,255,255,.08)", overflow: "hidden" }}><span style={{ display: "block", height: "100%", width: r.wear + "%", background: r.wear > 75 ? C.red : r.wear > 50 ? TIMING.yellow : TIMING.green }} /></span>
             : <span style={{ flex: 1, color: C.muted }}>{tyreUi(r.tyre)[1]}</span>}
           <span style={{ width: 52, textAlign: "right", color: C.muted, fontVariantNumeric: "tabular-nums" }}>{r.dnf ? "RIT" : r.pit ? "BOX" : r.wear != null ? `${r.wear}%${r.age != null ? ` · ${r.age}g` : ""}` : r.age != null ? `${r.age} ${r.age === 1 ? "giro" : "giri"}` : "—"}</span>
         </div>
@@ -2642,7 +2735,7 @@ function SsSheet({ id, st, live, race, standings, prefs, setPrefs, vote, onVote,
       <div style={{ display: "grid", gridTemplateColumns: "150px minmax(0, 1fr)", gap: 14 }}>
         <div className="scrollcol" style={{ display: "flex", flexDirection: "column", gap: 4, maxHeight: "100%" }}>
           <span style={{ ...th, padding: "0 2px 4px" }}>SCEGLI IL PILOTA</span>
-          {st.cars.map(c => <button key={c.id} className="press" data-pick-driver={c.id} aria-pressed={cur === c.id ? "true" : "false"} onClick={() => { setPrefs(p => ({ ...p, tel: c.id })); setHover(null); }} style={{ display: "flex", alignItems: "center", gap: 6, padding: "5px 7px", borderRadius: 8, background: cur === c.id ? "rgba(232,18,29,.18)" : "rgba(255,255,255,.04)", border: `1px solid ${cur === c.id ? C.accent : "transparent"}`, textAlign: "left" }}><span style={{ width: 3, height: 13, borderRadius: 2, background: c.color }} /><b style={{ fontFamily: F_HEAD, fontSize: 11.5, color: C.text }}>{c.code}</b><span style={{ marginLeft: "auto", fontFamily: F_BODY, fontSize: 10, color: C.dim }}>P{c.pos}</span></button>)}
+          {st.cars.map(c => <button key={c.id} className="press" data-pick-driver={c.id} aria-pressed={cur === c.id ? "true" : "false"} onClick={() => { setPrefs(p => ({ ...p, tel: c.id })); setHover(null); }} style={{ display: "flex", alignItems: "center", gap: 6, padding: "5px 7px", borderRadius: 8, background: cur === c.id ? alpha(C.accentInk, .18) : "rgba(255,255,255,.04)", border: `1px solid ${cur === c.id ? C.accentInk : "transparent"}`, textAlign: "left" }}><span style={{ width: 3, height: 13, borderRadius: 2, background: c.color }} /><b style={{ fontFamily: F_HEAD, fontSize: 11.5, color: C.text }}>{c.code}</b><span style={{ marginLeft: "auto", fontFamily: F_BODY, fontSize: 10, color: C.dim }}>P{c.pos}</span></button>)}
         </div>
         <div style={{ minWidth: 0 }}><SsLapCharts live={live} st={st} carId={cur} charts={["speed", "throttle", "brake", "gear"]} hover={hover} onHover={setHover} grid /></div>
       </div>
@@ -2659,7 +2752,7 @@ function SsSheet({ id, st, live, race, standings, prefs, setPrefs, vote, onVote,
             <td style={td}><b style={{ fontFamily: F_HEAD }}>{c.code}</b></td>
             <td style={td}><span style={{ display: "inline-flex", alignItems: "center", gap: 5 }}><span style={{ width: 10, height: 10, borderRadius: "50%", border: `2.5px solid ${tyreUi(c.tyre)[0]}` }} />{tyreUi(c.tyre)[1]}</span></td>
             <td style={td}>{c.dnf ? "RIT" : c.pit ? "BOX" : c.tyreAge != null ? c.tyreAge : "—"}</td>
-            {wear && <td style={{ ...td, width: "40%" }}><span style={{ display: "flex", alignItems: "center", gap: 8 }}><span style={{ flex: 1, height: 6, borderRadius: 3, background: "rgba(255,255,255,.08)", overflow: "hidden" }}><span style={{ display: "block", height: "100%", width: (c.wear || 0) + "%", background: c.wear > 75 ? C.accent : c.wear > 50 ? TIMING.yellow : TIMING.green }} /></span>{c.dnf ? "RIT" : c.pit ? "BOX" : (c.wear || 0) + "%"}</span></td>}
+            {wear && <td style={{ ...td, width: "40%" }}><span style={{ display: "flex", alignItems: "center", gap: 8 }}><span style={{ flex: 1, height: 6, borderRadius: 3, background: "rgba(255,255,255,.08)", overflow: "hidden" }}><span style={{ display: "block", height: "100%", width: (c.wear || 0) + "%", background: c.wear > 75 ? C.red : c.wear > 50 ? TIMING.yellow : TIMING.green }} /></span>{c.dnf ? "RIT" : c.pit ? "BOX" : (c.wear || 0) + "%"}</span></td>}
             <td style={td}>{c.stops}</td>
           </tr>
         ))}</tbody>
@@ -2724,7 +2817,7 @@ function RadarOverlay({ cells, windDeg }) {
         cells.forEach(c => {
           const x = (((c.x + c.vx * k) % 1.8 + 1.8) % 1.8 - 0.4) * W, y = (((c.y + c.vy * k) % 1.4 + 1.4) % 1.4 - 0.2) * H, rad = c.r * W;
           const g = ctx.createRadialGradient(x, y, 0, x, y, rad);
-          const col = c.i > .75 ? "232,18,29" : c.i > .5 ? "242,194,48" : c.i > .3 ? "62,214,107" : "76,141,255";
+          const col = c.i > .75 ? "255,24,1" : c.i > .5 ? "242,194,48" : c.i > .3 ? "62,214,107" : "76,141,255";
           g.addColorStop(0, `rgba(${col},.5)`); g.addColorStop(.6, `rgba(${col},.2)`); g.addColorStop(1, `rgba(${col},0)`);
           ctx.fillStyle = g; ctx.beginPath(); ctx.arc(x, y, rad, 0, Math.PI * 2); ctx.fill();
         });
@@ -2856,7 +2949,7 @@ function SecondScreen({ race, live, st, standings, layout, setLayout, prefs, set
   const wx = race && isDemoLive(live) ? weekendWeather(race, st ? st.t : 0, live.raceId === race.id ? live.type : null) : null;
   const rainChance = wx ? (wx.current.rain ? 95 : Math.max(...wx.sessions.map(x => x.rainPct))) : 0;
   const cells = prefs.radar && wx ? LiveSim.radarCells({ seed: (race && race.round) || 1, rainChance, windDeg: wx.current.windDir }) : [];
-  const bg = st && (st.bg === "yellow" || st.bg === "red") ? (st.bg === "yellow" ? "radial-gradient(120% 90% at 50% 0%, rgba(255,210,31,.5), rgba(255,210,31,.14)), #050506" : "radial-gradient(120% 90% at 50% 0%, rgba(232,18,29,.55), rgba(232,18,29,.16)), #050506") : "#050506";
+  const bg = st && (st.bg === "yellow" || st.bg === "red") ? (st.bg === "yellow" ? "radial-gradient(120% 90% at 50% 0%, rgba(255,210,31,.5), rgba(255,210,31,.14)), #050506" : "radial-gradient(120% 90% at 50% 0%, rgba(255,24,1,.55), rgba(255,24,1,.16)), #050506") : "#050506";
   const iconBtn = (label, icon, onClick, on) => <button className="press" aria-label={label} onClick={onClick} style={{ height: 28, padding: "0 10px", borderRadius: 9, background: on ? C.accent : "rgba(255,255,255,.08)", border: `1px solid ${on ? C.accent : C.border}`, display: "flex", alignItems: "center", gap: 5, fontFamily: F_HEAD, fontWeight: 800, fontSize: 11, color: "#fff" }}>{icon}{label === "Modifica grafiche" ? (edit ? "Fatto" : "Modifica") : null}</button>;
   const openPicker = k => { setPicker(k); setPickMsg(null); };
   // Maniglietta nell'angolo in basso a destra di ogni grafica: si trascina su e giù (½, 1, 1½ o 2 posti).
@@ -2928,7 +3021,7 @@ function SecondScreen({ race, live, st, standings, layout, setLayout, prefs, set
             const on = multi ? sel.includes(o.id) : picker === "telemetria" && prefs.tel === o.id;
             return (
               <button key={o.id} className="press" data-pick-driver={isTeam ? undefined : o.id} data-vote-option={isVote ? o.id : undefined} aria-pressed={on ? "true" : "false"} onClick={() => choose(o.id)}
-                style={{ display: "flex", alignItems: "center", gap: 6, padding: "7px 8px", borderRadius: 10, background: on ? "rgba(232,18,29,.18)" : "rgba(255,255,255,.05)", border: `1px solid ${on ? C.accent : C.border}`, textAlign: "left" }}>
+                style={{ display: "flex", alignItems: "center", gap: 6, padding: "7px 8px", borderRadius: 10, background: on ? alpha(C.accentInk, .18) : "rgba(255,255,255,.05)", border: `1px solid ${on ? C.accentInk : C.border}`, textAlign: "left" }}>
                 <span style={{ width: 4, height: 16, borderRadius: 2, background: o.color, flexShrink: 0 }} />
                 <span style={{ flex: 1, minWidth: 0, fontFamily: F_HEAD, fontWeight: 800, fontSize: 12, color: C.text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{o.label}</span>
                 {o.sub && <span style={{ fontFamily: F_BODY, fontSize: 10, color: C.dim }}>{o.sub}</span>}
@@ -2944,7 +3037,7 @@ function SecondScreen({ race, live, st, standings, layout, setLayout, prefs, set
     <div className="ss-root" data-ss="" role="dialog" aria-label="Second Screen" style={{ background: bg }}>
       <div className={"ss-stage" + (flip ? " ss-flip" : "")} data-ss-stage="" style={{ background: bg, padding: "8px 10px 10px", gap: 8 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
-          <span style={{ width: 7, height: 7, borderRadius: "50%", background: st ? C.accent : C.dim }} />
+          <span style={{ width: 7, height: 7, borderRadius: "50%", background: st ? C.accentInk : C.dim }} />
           <span style={{ fontFamily: F_HEAD, fontWeight: 900, fontStyle: "italic", fontSize: 13, color: C.text, whiteSpace: "nowrap" }}>SECOND SCREEN</span>
           <span style={{ fontFamily: F_BODY, fontSize: 11, color: C.muted, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{race ? race.name : ""} · {st ? `${sessionName(st.type)} · ${liveCounter(st)}` : "Nessuna sessione in corso"}</span>
           {st && FLAG_UI[st.flag] && <span style={{ padding: "3px 8px", borderRadius: 7, background: FLAG_UI[st.flag].color, fontFamily: F_HEAD, fontWeight: 900, fontSize: 10, color: FLAG_UI[st.flag].ink, whiteSpace: "nowrap" }}>{st.flag === "yellow" ? "GIALLA" : st.flag === "red" ? "ROSSA" : st.flag.toUpperCase()}</span>}
@@ -2970,7 +3063,7 @@ function SecondScreen({ race, live, st, standings, layout, setLayout, prefs, set
             <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 6 }}>
               <span style={{ fontFamily: F_BODY, fontWeight: 700, fontSize: 10.5, color: C.muted, marginRight: 4 }}>Grafiche ({all.length} · {used / 2 === Math.floor(used / 2) ? used / 2 : (used / 2).toFixed(1).replace(".", ",")} posti su 4):</span>
               {SS_WIDGETS.map(([id, label]) => { const on = all.some(w => w.id === id); return (
-                <button key={id} data-ss-chip={id} className="press" aria-pressed={on ? "true" : "false"} onClick={() => toggle(id)} style={{ padding: "5px 9px", borderRadius: 999, background: on ? "rgba(232,18,29,.18)" : "rgba(255,255,255,.05)", border: `1px solid ${on ? C.accent : C.border}`, fontFamily: F_BODY, fontWeight: 700, fontSize: 10.5, color: on ? C.text : C.muted }}>{on ? "✓ " : ""}{label}</button>
+                <button key={id} data-ss-chip={id} className="press" aria-pressed={on ? "true" : "false"} onClick={() => toggle(id)} style={{ padding: "5px 9px", borderRadius: 999, background: on ? alpha(C.accentInk, .18) : "rgba(255,255,255,.05)", border: `1px solid ${on ? C.accentInk : C.border}`, fontFamily: F_BODY, fontWeight: 700, fontSize: 10.5, color: on ? C.text : C.muted }}>{on ? "✓ " : ""}{label}</button>
               ); })}
             </div>
             <p role="status" style={{ margin: "5px 0 0", fontFamily: F_BODY, fontSize: 10.5, color: msg ? TIMING.yellow : C.dim }}>{msg || (pick ? "Ora tocca un'altra grafica per scambiarle, o un posto libero." : "Per spostare una grafica toccala e poi tocca dove metterla. Per l'altezza trascina su o giù la maniglietta in basso a destra: ½, 1, 1½ o 2 posti.")}</p>
@@ -3179,7 +3272,7 @@ function AdminHighlightsTab({ items = [], setItems, onToast }) {
               <span style={{ fontFamily: F_BODY, fontSize: 11, color: C.dim }}>{h.dur || "durata —"} · {h.link ? "con link" : "senza link"}{h.thumb ? " · copertina" : ""}</span>
             </span>
             <button className="press" data-hl-edit={h.id} onClick={() => { setEdit(h.id); setF({ title: h.title, dur: h.dur || "", link: h.link || "", thumb: h.thumb || null }); }} style={{ padding: "6px 10px", borderRadius: 9, background: "rgba(255,255,255,.07)", border: `1px solid ${C.border}`, fontFamily: F_BODY, fontWeight: 700, fontSize: 11, color: C.text }}>Modifica</button>
-            <button className="press" data-hl-delete={h.id} onClick={() => { setItems(xs => xs.filter(x => x.id !== h.id)).then(ok => { if (!ok) return; if (edit === h.id) { setEdit(null); setF(empty); } onToast("Video eliminato"); }); }} style={{ padding: "6px 10px", borderRadius: 9, background: "rgba(232,18,29,.14)", border: "1px solid rgba(232,18,29,.4)", fontFamily: F_BODY, fontWeight: 700, fontSize: 11, color: "#FF8A8F" }}>Elimina</button>
+            <button className="press" data-hl-delete={h.id} onClick={() => { setItems(xs => xs.filter(x => x.id !== h.id)).then(ok => { if (!ok) return; if (edit === h.id) { setEdit(null); setF(empty); } onToast("Video eliminato"); }); }} style={{ padding: "6px 10px", borderRadius: 9, background: alpha(C.accentInk, .14), border: `1px solid ${alpha(C.accentInk, .4)}`, fontFamily: F_BODY, fontWeight: 700, fontSize: 11, color: "#FF8A8F" }}>Elimina</button>
           </div>
         ))}
       </div>
@@ -3237,13 +3330,13 @@ const PIT_RATING = { record: ["DA RECORD!", "Sotto i 2,0 secondi, come i pit sto
 function PitCar() {
   return (
     <svg viewBox="0 0 200 330" aria-hidden="true" style={{ position: "absolute", inset: 0, width: "100%", height: "100%" }}>
-      <rect x="30" y="8" width="140" height="22" rx="6" fill="#E8121D" />
-      <rect x="40" y="30" width="120" height="6" rx="3" fill="#B50E17" />
-      <path d="M92 30 L108 30 L116 110 L132 140 L136 250 L124 300 L76 300 L64 250 L68 140 L84 110 Z" fill="#E8121D" />
-      <path d="M68 150 L44 160 L44 245 L64 250 Z M132 150 L156 160 L156 245 L136 250 Z" fill="#B50E17" />
+      <rect x="30" y="8" width="140" height="22" rx="6" fill={C.accent} />
+      <rect x="40" y="30" width="120" height="6" rx="3" fill={shade(C.accent, .78)} />
+      <path d="M92 30 L108 30 L116 110 L132 140 L136 250 L124 300 L76 300 L64 250 L68 140 L84 110 Z" fill={C.accent} />
+      <path d="M68 150 L44 160 L44 245 L64 250 Z M132 150 L156 160 L156 245 L136 250 Z" fill={shade(C.accent, .78)} />
       <ellipse cx="100" cy="168" rx="15" ry="26" fill="#0A0A0C" />
       <path d="M86 150 Q100 136 114 150" stroke="#E7B34C" strokeWidth="5" fill="none" strokeLinecap="round" />
-      <rect x="36" y="300" width="128" height="20" rx="5" fill="#E8121D" />
+      <rect x="36" y="300" width="128" height="20" rx="5" fill={C.accent} />
       <text x="100" y="230" textAnchor="middle" fill="#fff" fontFamily={F_HEAD} fontWeight="900" fontStyle="italic" fontSize="18">B&amp;T</text>
     </svg>
   );
@@ -3254,7 +3347,7 @@ function PitWheel({ id, n, active, onTap }) {
   return (
     <button className="press" data-pit-wheel={id} data-step={n} aria-label={`Ruota ${PIT_NAME[id]}: ${done ? "fatta" : steps[n][1]}`} onClick={() => onTap(id)}
       style={{ position: "absolute", ...PIT_POS[id], width: "27%", height: "24%", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 4, borderRadius: 14, background: "rgba(0,0,0,.25)", touchAction: "manipulation" }}>
-      <span style={{ width: "62%", height: "70%", borderRadius: 10, display: "flex", alignItems: "center", justifyContent: "center", background: tyre === "none" ? "transparent" : "#1A1A1E", border: tyre === "none" ? "2px dashed rgba(255,255,255,.35)" : `4px solid ${tyre === "new" ? "#E8121D" : "#4A4A52"}`, boxShadow: done ? "0 0 0 3px #3ED66B" : active ? "0 0 0 2px rgba(231,179,76,.6)" : "none" }}>
+      <span style={{ width: "62%", height: "70%", borderRadius: 10, display: "flex", alignItems: "center", justifyContent: "center", background: tyre === "none" ? "transparent" : "#1A1A1E", border: tyre === "none" ? "2px dashed rgba(255,255,255,.35)" : `4px solid ${tyre === "new" ? LED_RED : "#4A4A52"}`, boxShadow: done ? "0 0 0 3px #3ED66B" : active ? "0 0 0 2px rgba(231,179,76,.6)" : "none" }}>
         <span style={{ width: 16, height: 16, borderRadius: "50%", background: n === 1 || n === 2 ? "transparent" : "#9C9CA1", border: "2px solid #9C9CA1" }} />
       </span>
       <span style={{ padding: "2px 7px", borderRadius: 6, background: done ? "#3ED66B" : C.gold, fontFamily: F_HEAD, fontWeight: 900, fontSize: 10.5, color: "#15120A", whiteSpace: "nowrap" }}>{done ? "OK" : `${n + 1} · ${steps[n][0].toUpperCase()}`}</span>
@@ -3282,7 +3375,7 @@ function PitStopGame({ best, onResult, onBack }) {
     <div className="scrollcol" data-pit-phase={s.phase} style={{ height: "100%" }}>
       <GameHeader title="PIT STOP CHALLENGE" sub="Cambia le 4 gomme nel minor tempo possibile. Obiettivo: sotto i 2,0 secondi." onBack={onBack} />
       <div style={{ margin: "0 16px 10px", display: "flex", alignItems: "center", gap: 10 }}>
-        <div style={{ display: "flex", gap: 6 }}>{[1, 2, 3].map(k => <span key={k} style={{ width: 18, height: 18, borderRadius: "50%", background: lights >= k ? "#E8121D" : "#2A2A30", boxShadow: lights >= k ? "0 0 10px rgba(232,18,29,.8)" : "none" }} />)}</div>
+        <div style={{ display: "flex", gap: 6 }}>{[1, 2, 3].map(k => <span key={k} style={{ width: 18, height: 18, borderRadius: "50%", background: lights >= k ? LED_RED : "#2A2A30", boxShadow: lights >= k ? "0 0 10px rgba(255,24,1,.8)" : "none" }} />)}</div>
         <span style={{ fontFamily: F_HEAD, fontWeight: 900, fontStyle: "italic", fontSize: 14, color: s.phase === "go" ? "#3ED66B" : C.muted }}>{s.phase === "ready" ? "Pronto?" : s.phase === "lights" ? "Aspetta il via…" : s.phase === "go" ? "VIA!" : "FINITO"}</span>
         <span data-pit-clock="" style={{ marginLeft: "auto", fontFamily: F_HEAD, fontWeight: 900, fontSize: 26, color: C.text, fontVariantNumeric: "tabular-nums" }}>{fmtSec(live)} s</span>
       </div>
@@ -3300,7 +3393,7 @@ function PitStopGame({ best, onResult, onBack }) {
           {best != null && <div data-pit-best={best} style={{ fontFamily: F_BODY, fontWeight: 700, fontSize: 12, color: C.gold, marginTop: 6 }}>Il tuo record: {fmtSec(best)} s</div>}
         </div>
       ) : null}
-      <button className="press" data-pit-start="" disabled={s.phase === "lights" || s.phase === "go"} onClick={start} style={{ display: "block", width: "calc(100% - 32px)", margin: "0 16px 18px", padding: "13px 0", borderRadius: 14, background: s.phase === "lights" || s.phase === "go" ? "rgba(232,18,29,.3)" : C.accent, fontFamily: F_HEAD, fontWeight: 900, fontSize: 14, color: "#fff" }}>{s.phase === "done" ? "RIPROVA" : "INIZIA IL PIT STOP"}</button>
+      <button className="press" data-pit-start="" disabled={s.phase === "lights" || s.phase === "go"} onClick={start} style={{ display: "block", width: "calc(100% - 32px)", margin: "0 16px 18px", padding: "13px 0", borderRadius: 14, background: s.phase === "lights" || s.phase === "go" ? alpha(C.accent, .3) : C.accent, fontFamily: F_HEAD, fontWeight: 900, fontSize: 14, color: "#fff" }}>{s.phase === "done" ? "RIPROVA" : "INIZIA IL PIT STOP"}</button>
     </div>
   );
 }
@@ -3324,7 +3417,7 @@ function SillySeason({ preds, onPredict, official, onBack }) {
   const [draft, setDraft] = useState({});
   const current = Object.fromEntries(SILLY_SEATS.map(s => [s.id, s.id]));
   const board = BtLogic.sillyBoard({ official, current, mine: preds, seed: 27 });
-  const chip = (on, label, attrs, onClick) => <button key={label} className="press" {...attrs} aria-pressed={on ? "true" : "false"} onClick={onClick} style={{ padding: "6px 9px", borderRadius: 9, background: on ? "rgba(232,18,29,.2)" : "rgba(255,255,255,.05)", border: `1px solid ${on ? C.accent : C.border}`, fontFamily: F_BODY, fontWeight: 700, fontSize: 11, color: on ? C.text : C.muted }}>{label}</button>;
+  const chip = (on, label, attrs, onClick) => <button key={label} className="press" {...attrs} aria-pressed={on ? "true" : "false"} onClick={onClick} style={{ padding: "6px 9px", borderRadius: 9, background: on ? alpha(C.accentInk, .2) : "rgba(255,255,255,.05)", border: `1px solid ${on ? C.accentInk : C.border}`, fontFamily: F_BODY, fontWeight: 700, fontSize: 11, color: on ? C.text : C.muted }}>{label}</button>;
   const seatRow = (s, i) => {
     const d = driverById(s.id) || {}, off = official[s.id], pred = preds[s.id], open = !s.confirmed && !off;
     const pts = off && pred ? BtLogic.sillyPoints({ pred, official: off, current: s.id }) : null;
@@ -3347,7 +3440,7 @@ function SillySeason({ preds, onPredict, official, onBack }) {
             <div style={{ display: "flex", flexWrap: "wrap", gap: 5, marginBottom: 10 }}>{[...SILLY_SEATS.map(x => x.id), "altro"].map(id => chip(draft.pick === id, id === "altro" ? "Un altro" : driverCode(driverById(id)), { "data-silly-pick": id }, () => setDraft(x => ({ ...x, pick: id }))))}</div>
             <div style={{ fontFamily: F_BODY, fontWeight: 700, fontSize: 11.5, color: C.text, marginBottom: 6 }}>{d.name || s.id}: rinnova o cambia scuderia?</div>
             <div style={{ display: "flex", gap: 6, marginBottom: 10 }}>{[["rinnova", "Rinnova"], ["cambia", "Cambia scuderia"]].map(([k, l]) => chip(draft.renew === k, l, { "data-silly-renew": k }, () => setDraft(x => ({ ...x, renew: k }))))}</div>
-            <button className="press" data-silly-publish="" disabled={!(draft.pick && draft.renew)} onClick={() => { if (!(draft.pick && draft.renew)) return; onPredict(s.id, { pick: draft.pick, renew: draft.renew, at: nowMs() }); setOpenSeat(null); }} style={{ width: "100%", padding: "10px 0", borderRadius: 11, background: draft.pick && draft.renew ? C.accent : "rgba(232,18,29,.3)", fontFamily: F_HEAD, fontWeight: 800, fontSize: 12.5, color: "#fff" }}>PUBBLICA LA PREVISIONE</button>
+            <button className="press" data-silly-publish="" disabled={!(draft.pick && draft.renew)} onClick={() => { if (!(draft.pick && draft.renew)) return; onPredict(s.id, { pick: draft.pick, renew: draft.renew, at: nowMs() }); setOpenSeat(null); }} style={{ width: "100%", padding: "10px 0", borderRadius: 11, background: draft.pick && draft.renew ? C.accent : alpha(C.accent, .3), fontFamily: F_HEAD, fontWeight: 800, fontSize: 12.5, color: "#fff" }}>PUBBLICA LA PREVISIONE</button>
           </div>
         )}
       </div>
@@ -3370,7 +3463,7 @@ function SillySeason({ preds, onPredict, official, onBack }) {
       ) : (
         <div style={{ padding: "0 16px 18px" }}>
           {board.map((r, i) => (
-            <div key={r.name} data-silly-row="" data-me={r.me ? "true" : "false"} data-points={r.points} style={{ display: "flex", alignItems: "center", gap: 10, padding: "9px 10px", borderRadius: 11, marginBottom: 5, background: r.me ? "rgba(232,18,29,.14)" : C.card, border: `1px solid ${r.me ? C.accent : C.border}` }}>
+            <div key={r.name} data-silly-row="" data-me={r.me ? "true" : "false"} data-points={r.points} style={{ display: "flex", alignItems: "center", gap: 10, padding: "9px 10px", borderRadius: 11, marginBottom: 5, background: r.me ? alpha(C.accentInk, .14) : C.card, border: `1px solid ${r.me ? C.accentInk : C.border}` }}>
               <span style={{ width: 20, fontFamily: F_HEAD, fontWeight: 900, fontSize: 13, color: i < 3 ? C.gold : C.muted }}>{i + 1}</span>
               <span style={{ flex: 1, fontFamily: F_BODY, fontWeight: r.me ? 800 : 600, fontSize: 12.5, color: C.text }}>{r.name}</span>
               <span style={{ fontFamily: F_HEAD, fontWeight: 900, fontSize: 14, color: C.text }}>{r.points} pt</span>
@@ -3396,7 +3489,7 @@ function AeroCalc({ races, onBack }) {
   const slider = (id, label, value, set, lo, hi) => (
     <div style={{ marginBottom: 14 }}>
       <label htmlFor={id} style={{ display: "flex", justifyContent: "space-between", fontFamily: F_BODY, fontWeight: 700, fontSize: 12, color: C.text, marginBottom: 6 }}><span>{label}</span><span style={{ color: C.gold }}>{String(value).replace(".", ",")} / 10</span></label>
-      <input id={id} type="range" min="0" max="10" step="0.5" value={value} onChange={e => set(+e.target.value)} style={{ width: "100%", accentColor: C.accent }} />
+      <input id={id} type="range" min="0" max="10" step="0.5" value={value} onChange={e => set(+e.target.value)} style={{ width: "100%", accentColor: C.accentInk }} />
       <div style={{ display: "flex", justifyContent: "space-between", fontFamily: F_BODY, fontSize: 10.5, color: C.dim }}><span>{lo}</span><span>{hi}</span></div>
     </div>
   );
@@ -3404,7 +3497,7 @@ function AeroCalc({ races, onBack }) {
     <div style={{ marginBottom: 10 }}>
       <div style={{ display: "flex", justifyContent: "space-between", fontFamily: F_BODY, fontSize: 12, color: C.muted, marginBottom: 4 }}><span>{label}</span><b style={{ fontFamily: F_HEAD, fontSize: 15, color: C.text }}>{v} km/h</b></div>
       <div data-aero-bar={k} data-value={v} style={{ position: "relative", height: 12, borderRadius: 6, background: "rgba(255,255,255,.07)", overflow: "hidden" }}>
-        <span style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: `${Math.max(3, Math.min(100, (v - min) / (max - min) * 100))}%`, background: k === "top" ? C.accent : C.gold, borderRadius: 6 }} />
+        <span style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: `${Math.max(3, Math.min(100, (v - min) / (max - min) * 100))}%`, background: k === "top" ? C.accentInk : C.gold, borderRadius: 6 }} />
         <span aria-hidden="true" style={{ position: "absolute", top: -2, bottom: -2, width: 2, left: `${Math.max(0, Math.min(100, (ideal - min) / (max - min) * 100))}%`, background: "#fff", opacity: .8 }} />
       </div>
     </div>
@@ -3476,13 +3569,13 @@ function GuideMini({ circuitId, size = 34, color = "#fff" }) {
 function CircuitCta({ circuitId, onOpen }) {
   const has = !!GUIDE()[circuitId];
   return (
-    <button className="press cta-shine" data-circuit-cta={circuitId} onClick={onOpen} style={{ position: "relative", display: "flex", alignItems: "center", gap: 12, width: "100%", minHeight: 62, marginTop: 14, padding: "10px 12px 10px 10px", borderRadius: 14, overflow: "hidden", background: "linear-gradient(100deg, #E8121D 0%, #B80E17 58%, #730A10 100%)", border: "1px solid rgba(255,255,255,.22)", boxShadow: "0 10px 24px -8px rgba(232,18,29,.65)", textAlign: "left" }}>
+    <button className="press cta-shine" data-circuit-cta={circuitId} onClick={onOpen} style={{ position: "relative", display: "flex", alignItems: "center", gap: 12, width: "100%", minHeight: 62, marginTop: 14, padding: "10px 12px 10px 10px", borderRadius: 14, overflow: "hidden", background: `linear-gradient(100deg, ${C.accent} 0%, ${shade(C.accent, .79)} 58%, ${shade(C.accent, .5)} 100%)`, border: "1px solid rgba(255,255,255,.22)", boxShadow: `0 10px 24px -8px ${alpha(C.accent, .65)}`, textAlign: "left" }}>
       <span style={{ width: 44, height: 44, borderRadius: 12, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(0,0,0,.22)" }}><GuideMini circuitId={circuitId} size={34} /></span>
       <span style={{ flex: 1, minWidth: 0 }}>
         <b style={{ display: "block", fontFamily: F_HEAD, fontWeight: 900, fontStyle: "italic", fontSize: 16, color: "#fff", letterSpacing: .3 }}>ESPLORA IL CIRCUITO</b>
         <span style={{ display: "block", marginTop: 1, fontFamily: F_BODY, fontWeight: 600, fontSize: 11.5, color: "rgba(255,255,255,.88)" }}>{has ? "Guida 2D delle curve · staccate · momenti storici" : "Numeri, programma del weekend e curiosità"}</span>
       </span>
-      <span style={{ width: 32, height: 32, borderRadius: "50%", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", background: "#fff" }}><Icon name="chevron" size={15} color="#E8121D" sw={2.8} /></span>
+      <span style={{ width: 32, height: 32, borderRadius: "50%", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", background: "#fff" }}><Icon name="chevron" size={15} color={C.accent} sw={2.8} /></span>
     </button>
   );
 }
@@ -3501,7 +3594,7 @@ function CircuitGuide({ circuitId }) {
       <div style={{ position: "relative", borderRadius: 14, background: "radial-gradient(120% 90% at 50% 20%, #1d1d24, #0b0b0e)" }}>
         <svg viewBox={`0 0 ${W} ${H}`} style={{ display: "block", width: "100%" }} role="img" aria-label="Mappa del circuito con le curve">
           <path d={d} fill="none" stroke="#33333d" strokeWidth="11" strokeLinejoin="round" />
-          <path d={d} fill="none" stroke="#E8121D" strokeWidth="2.4" strokeLinejoin="round" opacity=".9" />
+          <path d={d} fill="none" stroke={C.accentInk} strokeWidth="2.4" strokeLinejoin="round" opacity=".9" />
           {cur && (() => { const [x, y] = P([cur.x, cur.y]); return <circle cx={x} cy={y} r="13" fill="rgba(231,179,76,.25)" stroke={C.gold} strokeWidth="2" />; })()}
         </svg>
         {g.corners.map(c => { const [x, y] = pos(c), on = c.n === sel; return (
@@ -3519,8 +3612,8 @@ function CircuitGuide({ circuitId }) {
           {line("Punto di staccata", cur.brake == null ? "nessuna frenata: curva in pieno" : cur.shared ? "è la stessa frenata della curva prima" : `${cur.brake} m prima della curva, da ${cur.vEntry} a ${cur.vMin} km/h`)}
           <div style={{ display: "flex", gap: 8, padding: "6px 0", borderTop: `1px solid ${C.divider}`, fontFamily: F_BODY, fontSize: 12.5, lineHeight: 1.4 }}><span style={{ width: 128, flexShrink: 0, color: C.dim }}>Rischio di bloccaggio</span><span><b data-guide-risk={cur.risk} style={{ color: RISK_UI[cur.risk][1], fontFamily: F_HEAD }}>{RISK_UI[cur.risk][0]}</b> <span style={{ color: C.muted }}>· {RISK_UI[cur.risk][2]}</span></span></div>
           {cur.full != null && line("Gas al 100%", `${cur.full} m dopo il punto più lento`)}
-          <div style={{ marginTop: 6, padding: "9px 10px", borderRadius: 11, background: "rgba(232,18,29,.1)", border: "1px solid rgba(232,18,29,.3)" }}>
-            <div style={{ fontFamily: F_HEAD, fontWeight: 900, fontSize: 12, color: C.accent, marginBottom: 3 }}>Momento storico B&T</div>
+          <div style={{ marginTop: 6, padding: "9px 10px", borderRadius: 11, background: alpha(C.accentInk, .1), border: `1px solid ${alpha(C.accentInk, .3)}` }}>
+            <div style={{ fontFamily: F_HEAD, fontWeight: 900, fontSize: 12, color: C.accentInk, marginBottom: 3 }}>Momento storico B&T</div>
             {moment.length ? moment.map((m, i) => <p key={i} style={{ margin: i ? "7px 0 0" : 0, fontFamily: F_BODY, fontSize: 12.5, color: C.text, lineHeight: 1.45 }}><b>{m.year} · {m.race} · {m.who} su {m.on}.</b> {m.text_it} <a href={m.url} target="_blank" rel="noopener noreferrer" style={{ color: C.gold, fontSize: 11 }}>Fonte</a></p>)
               : <p style={{ margin: 0, fontFamily: F_BODY, fontSize: 12, color: C.muted }}>{cur.detected ? "Per le curve ricavate dalle frenate non abbiamo ancora i momenti storici." : "Nessun sorpasso storico registrato da B&T in questa curva, per ora."}</p>}
           </div>
@@ -3571,7 +3664,7 @@ function SpecClash({ a: a0, b: b0, races }) {
   return (
     <div data-clash="" style={{ margin: "0 16px 16px", padding: 12, borderRadius: 18, background: C.card, border: `1px solid ${C.border}` }}>
       <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
-        <span style={{ width: 10, height: 10, borderRadius: 3, background: C.accent, flexShrink: 0 }} />{sel("clashA", a, setA)}
+        <span style={{ width: 10, height: 10, borderRadius: 3, background: C.accentInk, flexShrink: 0 }} />{sel("clashA", a, setA)}
         <span style={{ fontFamily: F_HEAD, fontWeight: 900, fontStyle: "italic", fontSize: 13, color: C.gold }}>VS</span>
         {sel("clashB", b, setB)}<span style={{ width: 10, height: 10, borderRadius: 3, background: C.gold, flexShrink: 0 }} />
       </div>
@@ -3580,7 +3673,7 @@ function SpecClash({ a: a0, b: b0, races }) {
           <div style={{ fontFamily: F_BODY, fontWeight: 700, fontSize: 11, color: C.muted, textAlign: "center", marginBottom: 4 }}>{l}</div>
           <div style={{ display: "grid", gridTemplateColumns: "58px 1fr 1fr 58px", alignItems: "center", gap: 6 }}>
             <b style={{ fontFamily: F_HEAD, fontSize: 13.5, color: C.text, textAlign: "right", whiteSpace: "nowrap" }}>{fmt(va, u)}</b>
-            <span style={{ height: 10, borderRadius: 5, background: "rgba(255,255,255,.06)", display: "flex", justifyContent: "flex-end", overflow: "hidden" }}><span style={{ width: (va == null ? 0 : Math.min(100, va / max * 100)) + "%", background: C.accent, borderRadius: 5 }} /></span>
+            <span style={{ height: 10, borderRadius: 5, background: "rgba(255,255,255,.06)", display: "flex", justifyContent: "flex-end", overflow: "hidden" }}><span style={{ width: (va == null ? 0 : Math.min(100, va / max * 100)) + "%", background: C.accentInk, borderRadius: 5 }} /></span>
             <span style={{ height: 10, borderRadius: 5, background: "rgba(255,255,255,.06)", overflow: "hidden" }}><span style={{ display: "block", height: "100%", width: (vb == null ? 0 : Math.min(100, vb / max * 100)) + "%", background: C.gold, borderRadius: 5 }} /></span>
             <b style={{ fontFamily: F_HEAD, fontSize: 13.5, color: C.text, whiteSpace: "nowrap" }}>{fmt(vb, u)}</b>
           </div>
@@ -3588,7 +3681,7 @@ function SpecClash({ a: a0, b: b0, races }) {
       ); })}
       <div data-clash-row="downforce" data-a={dfA || ""} data-b={dfB || ""} style={{ marginBottom: 10 }}>
         <div style={{ fontFamily: F_BODY, fontWeight: 700, fontSize: 11, color: C.muted, textAlign: "center", marginBottom: 4 }}>Livello di carico aerodinamico</div>
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6 }}>{[dfA, dfB].map((v, i) => <span key={i} style={{ padding: "6px 8px", borderRadius: 9, textAlign: "center", background: i ? "rgba(231,179,76,.12)" : "rgba(232,18,29,.12)", fontFamily: F_HEAD, fontWeight: 800, fontSize: 12, color: v ? C.text : C.dim }}>{v || "n.d."}</span>)}</div>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6 }}>{[dfA, dfB].map((v, i) => <span key={i} style={{ padding: "6px 8px", borderRadius: 9, textAlign: "center", background: i ? "rgba(231,179,76,.12)" : alpha(C.accentInk, .12), fontFamily: F_HEAD, fontWeight: 800, fontSize: 12, color: v ? C.text : C.dim }}>{v || "n.d."}</span>)}</div>
       </div>
       <div style={{ display: "flex", flexDirection: "column", gap: 3, margin: "4px 0 8px", fontFamily: F_HEAD, fontWeight: 800, fontStyle: "italic", fontSize: 12, color: C.text }}>
         {[verdict("overtakes", "Più sorpassi"), verdict("sc", "Safety Car più probabile"), verdict("full", "Più gas a tavoletta"), verdict("brembo", "Frenate più dure")].filter(Boolean).map((t, i) => <span key={i}>{t}</span>)}
@@ -3604,7 +3697,7 @@ function ClashTool({ races, onBack }) {
 /* ── WEEKEND DI GARA: strumenti del Garage con i dati veri 2026 ─────── */
 // Logica: app-preview/bt-weekend.js (BtWk, testata in rtest/weekend.test.js). Dati: app-preview/real-weekend.js
 // (BtWeekend: prove libere di Sepang e Baku, qualifiche e gare 2026, da TracingInsights/FastF1).
-const COMP_UI = { S: ["#E8121D", "Morbide", "#fff"], M: ["#F2C230", "Medie", "#15120A"], H: ["#F4F2EF", "Dure", "#15120A"], I: ["#3ED66B", "Intermedie", "#0A0A0C"], W: ["#4C8DFF", "Da bagnato", "#fff"], "?": ["#86858C", "Sconosciute", "#fff"] };
+const COMP_UI = { S: [LED_RED, "Morbide", "#fff"], M: ["#F2C230", "Medie", "#15120A"], H: ["#F4F2EF", "Dure", "#15120A"], I: ["#3ED66B", "Intermedie", "#0A0A0C"], W: ["#4C8DFF", "Da bagnato", "#fff"], "?": ["#86858C", "Sconosciute", "#fff"] };
 const compUi = c => COMP_UI[c] || COMP_UI["?"];
 const TEAM_SHORT = { mclaren: "MCL", redbull: "RBR", mercedes: "MER", ferrari: "FER", williams: "WIL", racingbulls: "RB", astonmartin: "AST", haas: "HAA", audi: "AUD", alpine: "ALP", cadillac: "CAD" };
 const roundOfCircuit = cid => CIRCUIT_IDS.indexOf(cid) + 1;
@@ -4045,19 +4138,19 @@ function GarageScreen({ races, pitBest, onPitResult, sillyPreds, onPredict, sill
   if (game === "deg") return <TyreDegTool races={races} live={live} onBack={back} />;
   if (game === "mates") return <TeammatesTool races={races} onBack={back} />;
   if (game === "bluff") return <BluffTool races={races} live={live} tags={bluffTags} onRefresh={onBluffRefresh} onBack={back} />;
-  const art = { ghost: <svg viewBox="0 0 40 40" width="38" height="38" aria-hidden="true"><path d="M4 30 C12 8, 20 34, 36 10" stroke="#E8121D" strokeWidth="3" fill="none" strokeLinecap="round" /><path d="M4 33 C13 14, 21 36, 36 16" stroke="#27D8C8" strokeWidth="2.4" fill="none" strokeDasharray="3 3" strokeLinecap="round" /></svg>, pitstop: <svg viewBox="0 0 40 40" width="38" height="38" aria-hidden="true"><circle cx="20" cy="20" r="15" fill="#1A1A1E" stroke="#E8121D" strokeWidth="5" /><circle cx="20" cy="20" r="5" fill="#9C9CA1" /></svg>,
-    silly: <svg viewBox="0 0 40 40" width="38" height="38" aria-hidden="true"><rect x="9" y="5" width="22" height="30" rx="3" fill="#F4F2EF" /><path d="M13 13h14M13 18h14M13 23h9" stroke="#86858C" strokeWidth="2" strokeLinecap="round" /><path d="M21 31l3-6 3 6" stroke="#E8121D" strokeWidth="2.5" fill="none" strokeLinecap="round" /></svg>,
-    aero: <svg viewBox="0 0 40 40" width="38" height="38" aria-hidden="true"><path d="M5 14h30l-3 6H8z" fill="#E8121D" /><path d="M12 20v12M28 20v12" stroke="#F4F2EF" strokeWidth="3" strokeLinecap="round" /><path d="M5 9c8 3 22 3 30 0" stroke="#E7B34C" strokeWidth="2" fill="none" strokeDasharray="3 3" /></svg>,
-    guide: <svg viewBox="0 0 40 40" width="38" height="38" aria-hidden="true"><path d="M8 28C5 19 11 9 20 10s13-3 13 6-9 6-7 12-12 6-18 0Z" stroke="#F4F2EF" strokeWidth="2.6" fill="none" strokeLinejoin="round" /><circle cx="20" cy="10" r="3.6" fill="#E8121D" /><circle cx="26" cy="28" r="3.6" fill="#E7B34C" /><circle cx="8" cy="28" r="2.6" fill="#F4F2EF" /></svg>,
-    clash: <svg viewBox="0 0 40 40" width="38" height="38" aria-hidden="true"><rect x="5" y="9" width="13" height="5" rx="2.5" fill="#E8121D" /><rect x="22" y="9" width="9" height="5" rx="2.5" fill="#E7B34C" /><rect x="8" y="18" width="10" height="5" rx="2.5" fill="#E8121D" /><rect x="22" y="18" width="13" height="5" rx="2.5" fill="#E7B34C" /><rect x="3" y="27" width="15" height="5" rx="2.5" fill="#E8121D" /><rect x="22" y="27" width="6" height="5" rx="2.5" fill="#E7B34C" /><path d="M20 6v29" stroke="#F4F2EF" strokeWidth="1.5" /></svg>,
-    setup: <svg viewBox="0 0 40 40" width="38" height="38" aria-hidden="true"><circle cx="20" cy="20" r="14" fill="none" stroke="#F4F2EF" strokeWidth="2" opacity=".45" /><circle cx="20" cy="20" r="8" fill="none" stroke="#F4F2EF" strokeWidth="2" opacity=".8" /><path d="M20 20 31 11" stroke="#E8121D" strokeWidth="3" strokeLinecap="round" /><circle cx="27" cy="25" r="2.6" fill="#E7B34C" /><circle cx="13" cy="15" r="2.2" fill="#E8121D" /></svg>,
-    strategy: <svg viewBox="0 0 40 40" width="38" height="38" aria-hidden="true"><rect x="3" y="15" width="12" height="10" rx="3" fill="#E8121D" /><rect x="17" y="15" width="10" height="10" rx="3" fill="#F2C230" /><rect x="29" y="15" width="8" height="10" rx="3" fill="#F4F2EF" /><path d="M16 9v22M28 9v22" stroke="#F4F2EF" strokeWidth="1.6" strokeDasharray="2 2" /></svg>,
-    deg: <svg viewBox="0 0 40 40" width="38" height="38" aria-hidden="true"><circle cx="14" cy="23" r="10" fill="#1A1A1E" stroke="#F2C230" strokeWidth="4" /><circle cx="14" cy="23" r="3" fill="#9C9CA1" /><path d="M23 9l5 7 4-3 5 9" stroke="#E8121D" strokeWidth="2.6" fill="none" strokeLinecap="round" strokeLinejoin="round" /></svg>,
-    mates: <svg viewBox="0 0 40 40" width="38" height="38" aria-hidden="true"><circle cx="13" cy="15" r="7" fill="#E8121D" /><circle cx="27" cy="15" r="7" fill="#E7B34C" /><path d="M4 34c1-6 4-9 9-9s8 3 9 9M18 34c1-6 4-9 9-9s8 3 9 9" stroke="#F4F2EF" strokeWidth="2.4" fill="none" strokeLinecap="round" /></svg>,
-    bluff: <svg viewBox="0 0 40 40" width="38" height="38" aria-hidden="true"><path d="M6 8h28a3 3 0 0 1 3 3v14a3 3 0 0 1-3 3H17l-7 6v-6H6a3 3 0 0 1-3-3V11a3 3 0 0 1 3-3Z" fill="#F4F2EF" /><path d="M16.5 15a3.5 3.5 0 1 1 5 3.2c-1 .5-1.5 1.1-1.5 2.3" stroke="#E8121D" strokeWidth="2.6" fill="none" strokeLinecap="round" /><circle cx="20" cy="24.5" r="1.6" fill="#E8121D" /></svg> };
+  const art = { ghost: <svg viewBox="0 0 40 40" width="38" height="38" aria-hidden="true"><path d="M4 30 C12 8, 20 34, 36 10" stroke={C.accentInk} strokeWidth="3" fill="none" strokeLinecap="round" /><path d="M4 33 C13 14, 21 36, 36 16" stroke="#27D8C8" strokeWidth="2.4" fill="none" strokeDasharray="3 3" strokeLinecap="round" /></svg>, pitstop: <svg viewBox="0 0 40 40" width="38" height="38" aria-hidden="true"><circle cx="20" cy="20" r="15" fill="#1A1A1E" stroke={C.accentInk} strokeWidth="5" /><circle cx="20" cy="20" r="5" fill="#9C9CA1" /></svg>,
+    silly: <svg viewBox="0 0 40 40" width="38" height="38" aria-hidden="true"><rect x="9" y="5" width="22" height="30" rx="3" fill="#F4F2EF" /><path d="M13 13h14M13 18h14M13 23h9" stroke="#86858C" strokeWidth="2" strokeLinecap="round" /><path d="M21 31l3-6 3 6" stroke={C.accentInk} strokeWidth="2.5" fill="none" strokeLinecap="round" /></svg>,
+    aero: <svg viewBox="0 0 40 40" width="38" height="38" aria-hidden="true"><path d="M5 14h30l-3 6H8z" fill={C.accentInk} /><path d="M12 20v12M28 20v12" stroke="#F4F2EF" strokeWidth="3" strokeLinecap="round" /><path d="M5 9c8 3 22 3 30 0" stroke="#E7B34C" strokeWidth="2" fill="none" strokeDasharray="3 3" /></svg>,
+    guide: <svg viewBox="0 0 40 40" width="38" height="38" aria-hidden="true"><path d="M8 28C5 19 11 9 20 10s13-3 13 6-9 6-7 12-12 6-18 0Z" stroke="#F4F2EF" strokeWidth="2.6" fill="none" strokeLinejoin="round" /><circle cx="20" cy="10" r="3.6" fill={C.accentInk} /><circle cx="26" cy="28" r="3.6" fill="#E7B34C" /><circle cx="8" cy="28" r="2.6" fill="#F4F2EF" /></svg>,
+    clash: <svg viewBox="0 0 40 40" width="38" height="38" aria-hidden="true"><rect x="5" y="9" width="13" height="5" rx="2.5" fill={C.accentInk} /><rect x="22" y="9" width="9" height="5" rx="2.5" fill="#E7B34C" /><rect x="8" y="18" width="10" height="5" rx="2.5" fill={C.accentInk} /><rect x="22" y="18" width="13" height="5" rx="2.5" fill="#E7B34C" /><rect x="3" y="27" width="15" height="5" rx="2.5" fill={C.accentInk} /><rect x="22" y="27" width="6" height="5" rx="2.5" fill="#E7B34C" /><path d="M20 6v29" stroke="#F4F2EF" strokeWidth="1.5" /></svg>,
+    setup: <svg viewBox="0 0 40 40" width="38" height="38" aria-hidden="true"><circle cx="20" cy="20" r="14" fill="none" stroke="#F4F2EF" strokeWidth="2" opacity=".45" /><circle cx="20" cy="20" r="8" fill="none" stroke="#F4F2EF" strokeWidth="2" opacity=".8" /><path d="M20 20 31 11" stroke={C.accentInk} strokeWidth="3" strokeLinecap="round" /><circle cx="27" cy="25" r="2.6" fill="#E7B34C" /><circle cx="13" cy="15" r="2.2" fill={C.accentInk} /></svg>,
+    strategy: <svg viewBox="0 0 40 40" width="38" height="38" aria-hidden="true"><rect x="3" y="15" width="12" height="10" rx="3" fill={LED_RED} /><rect x="17" y="15" width="10" height="10" rx="3" fill="#F2C230" /><rect x="29" y="15" width="8" height="10" rx="3" fill="#F4F2EF" /><path d="M16 9v22M28 9v22" stroke="#F4F2EF" strokeWidth="1.6" strokeDasharray="2 2" /></svg>,
+    deg: <svg viewBox="0 0 40 40" width="38" height="38" aria-hidden="true"><circle cx="14" cy="23" r="10" fill="#1A1A1E" stroke="#F2C230" strokeWidth="4" /><circle cx="14" cy="23" r="3" fill="#9C9CA1" /><path d="M23 9l5 7 4-3 5 9" stroke={C.accentInk} strokeWidth="2.6" fill="none" strokeLinecap="round" strokeLinejoin="round" /></svg>,
+    mates: <svg viewBox="0 0 40 40" width="38" height="38" aria-hidden="true"><circle cx="13" cy="15" r="7" fill={C.accentInk} /><circle cx="27" cy="15" r="7" fill="#E7B34C" /><path d="M4 34c1-6 4-9 9-9s8 3 9 9M18 34c1-6 4-9 9-9s8 3 9 9" stroke="#F4F2EF" strokeWidth="2.4" fill="none" strokeLinecap="round" /></svg>,
+    bluff: <svg viewBox="0 0 40 40" width="38" height="38" aria-hidden="true"><path d="M6 8h28a3 3 0 0 1 3 3v14a3 3 0 0 1-3 3H17l-7 6v-6H6a3 3 0 0 1-3-3V11a3 3 0 0 1 3-3Z" fill="#F4F2EF" /><path d="M16.5 15a3.5 3.5 0 1 1 5 3.2c-1 .5-1.5 1.1-1.5 2.3" stroke={C.accentInk} strokeWidth="2.6" fill="none" strokeLinecap="round" /><circle cx="20" cy="24.5" r="1.6" fill={C.accentInk} /></svg> };
   const card = (id, title, sub, tag) => (
     <button key={id} className="press" data-game={id} onClick={() => setGame(id)} style={{ display: "flex", alignItems: "center", gap: 12, width: "calc(100% - 32px)", margin: "0 16px 12px", padding: 14, borderRadius: 18, background: C.card, border: `1px solid ${C.border}`, textAlign: "left" }}>
-      <span style={{ width: 62, height: 62, borderRadius: 16, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", background: "linear-gradient(135deg, rgba(232,18,29,.3), rgba(231,179,76,.16))" }}>{art[id]}</span>
+      <span style={{ width: 62, height: 62, borderRadius: 16, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", background: `linear-gradient(135deg, ${alpha(C.accentInk, .3)}, rgba(231,179,76,.16))` }}>{art[id]}</span>
       <span style={{ flex: 1, minWidth: 0 }}>
         <span style={{ display: "block", fontFamily: F_HEAD, fontWeight: 900, fontStyle: "italic", fontSize: 16, color: C.text }}>{title}</span>
         <span style={{ display: "block", marginTop: 3, fontFamily: F_BODY, fontSize: 12, color: C.muted, lineHeight: 1.35 }}>{sub}</span>
@@ -4170,7 +4263,7 @@ function GhostReplay({ A, B, IA, IB, duel }) {
           {[[IA, ca.p], [IB, cb.p]].map(([I, p]) => <span key={I.code} style={{ padding: "2px 7px", borderRadius: 6, background: "rgba(0,0,0,.6)", fontFamily: F_HEAD, fontWeight: 800, fontSize: 11, color: "#fff", borderLeft: `3px solid ${I.color}` }}>{I.code} {Math.round(p.v)} km/h</span>)}
         </div>
         <span style={{ position: "absolute", right: 8, top: 8, padding: "2px 7px", borderRadius: 6, background: "rgba(0,0,0,.6)", fontFamily: F_HEAD, fontWeight: 800, fontSize: 11, color: C.gold }}>{Math.abs(gapM) < 0.5 ? "AFFIANCATI" : `${(gapM > 0 ? IA : IB).code} DAVANTI DI ${Math.abs(gapM).toFixed(1).replace(".", ",")} m`}</span>
-        {cap && <div data-ghost-caption="" style={{ position: "absolute", left: 8, right: 8, bottom: 8, padding: "6px 9px", borderRadius: 8, background: "rgba(232,18,29,.92)", fontFamily: F_HEAD, fontWeight: 900, fontStyle: "italic", fontSize: 13, color: "#fff", textAlign: "center" }}>{capText}</div>}
+        {cap && <div data-ghost-caption="" style={{ position: "absolute", left: 8, right: 8, bottom: 8, padding: "6px 9px", borderRadius: 8, background: alpha(C.accent, .92), fontFamily: F_HEAD, fontWeight: 900, fontStyle: "italic", fontSize: 13, color: "#fff", textAlign: "center" }}>{capText}</div>}
       </div>
       <div style={{ display: "flex", flexWrap: "wrap", gap: 6, padding: 8 }}>
         {btn({ "data-ghost-play": "" }, play ? "Pausa" : "Play", play, () => { setPlay(x => !x); setCap(null); })}
@@ -4204,7 +4297,7 @@ function GhostLap({ sessionId, onBack }) {
   const val = (Lp, k) => cur == null ? null : BtGhost.at(Lp, k, cur);
   const chips = (side, sel, set, other) => (
     <div className="scrollrow" style={{ display: "flex", gap: 5, overflowX: "auto", scrollbarWidth: "none", marginBottom: 6 }}>
-      {codes.map(c => { const I = ghostInfo(c), on = c === sel; return <button key={c} className="press" {...{ ["data-ghost-" + side]: c }} aria-pressed={on ? "true" : "false"} disabled={c === other} onClick={() => { set(c); setReplay(false); }} style={{ flex: "0 0 auto", display: "flex", alignItems: "center", gap: 5, padding: "5px 8px", borderRadius: 9, background: on ? "rgba(232,18,29,.18)" : "rgba(255,255,255,.05)", border: `1px solid ${on ? C.accent : C.border}`, opacity: c === other ? .35 : 1 }}><span style={{ width: 3, height: 12, borderRadius: 2, background: I.color }} /><b style={{ fontFamily: F_HEAD, fontSize: 11.5, color: C.text }}>{c}</b></button>; })}
+      {codes.map(c => { const I = ghostInfo(c), on = c === sel; return <button key={c} className="press" {...{ ["data-ghost-" + side]: c }} aria-pressed={on ? "true" : "false"} disabled={c === other} onClick={() => { set(c); setReplay(false); }} style={{ flex: "0 0 auto", display: "flex", alignItems: "center", gap: 5, padding: "5px 8px", borderRadius: 9, background: on ? alpha(C.accentInk, .18) : "rgba(255,255,255,.05)", border: `1px solid ${on ? C.accentInk : C.border}`, opacity: c === other ? .35 : 1 }}><span style={{ width: 3, height: 12, borderRadius: 2, background: I.color }} /><b style={{ fontFamily: F_HEAD, fontSize: 11.5, color: C.text }}>{c}</b></button>; })}
     </div>
   );
   const capBrake = !duel ? "" : duel.brake.later == null ? "QUI NESSUNO FRENA: CURVA IN PIENO" : duel.brake.later === "pari" ? "STESSO PUNTO DI FRENATA" : `${(duel.brake.later === "A" ? IA : IB).last} FRENA ${duel.brake.diff.toFixed(1).replace(".", ",").replace(",0", "")} m DOPO`;
@@ -4325,7 +4418,7 @@ function RatingsCard({ sessionKey, title, field, seed, mine = {}, onRate }) {
       <p style={{ margin: "3px 0 10px", fontFamily: F_BODY, fontSize: 11.5, color: C.muted, lineHeight: 1.4 }}>{title} · vota i piloti da 1 a 10 su 5 parametri</p>
       <div className="scrollrow" style={{ display: "flex", gap: 6, overflowX: "auto", scrollbarWidth: "none", marginBottom: 10 }}>
         {field.map(x => { const dx = driverById(x.id), on = x.id === cur; return (
-          <button key={x.id} className="press" data-rating-driver={x.id} aria-pressed={on ? "true" : "false"} onClick={() => choose(x.id)} style={{ flex: "0 0 auto", display: "flex", alignItems: "center", gap: 5, padding: "6px 9px", borderRadius: 10, background: on ? "rgba(232,18,29,.18)" : "rgba(255,255,255,.05)", border: `1px solid ${on ? C.accent : C.border}` }}>
+          <button key={x.id} className="press" data-rating-driver={x.id} aria-pressed={on ? "true" : "false"} onClick={() => choose(x.id)} style={{ flex: "0 0 auto", display: "flex", alignItems: "center", gap: 5, padding: "6px 9px", borderRadius: 10, background: on ? alpha(C.accentInk, .18) : "rgba(255,255,255,.05)", border: `1px solid ${on ? C.accentInk : C.border}` }}>
             <span style={{ width: 3, height: 14, borderRadius: 2, background: dx ? dx.color : C.dim }} />
             <b style={{ fontFamily: F_HEAD, fontSize: 12, color: C.text }}>{dx ? driverCode(dx) : x.id}</b>
             <span style={{ fontFamily: F_BODY, fontSize: 10, color: x.pos ? C.dim : "#FF5A5F" }}>{x.pos ? "P" + x.pos : "RIT"}</span>
@@ -4370,7 +4463,7 @@ function RatingsCard({ sessionKey, title, field, seed, mine = {}, onRate }) {
             ))}
             <div style={{ display: "flex", gap: 8, marginTop: 4 }}>
               <button className="press" onClick={() => setDraft(null)} style={{ flex: 1, padding: "10px 12px", borderRadius: 11, background: "rgba(255,255,255,.07)", border: `1px solid ${C.border}`, fontFamily: F_HEAD, fontWeight: 800, fontSize: 12, color: C.muted }}>Annulla</button>
-              <button className="press" data-rate-send="" disabled={!complete} onClick={() => { if (!complete) return; onRate(sessionKey, cur, { ...draft }); setDraft(null); }} style={{ flex: 2, padding: "10px 12px", borderRadius: 11, background: complete ? C.accent : "rgba(232,18,29,.3)", fontFamily: F_HEAD, fontWeight: 800, fontSize: 12.5, color: complete ? "#fff" : "rgba(255,255,255,.55)" }}>{complete ? "INVIA IL VOTO" : (n => n === 1 ? "Manca 1 parametro" : `Mancano ${n} parametri`)(P.filter(([k]) => !draft[k]).length)}</button>
+              <button className="press" data-rate-send="" disabled={!complete} onClick={() => { if (!complete) return; onRate(sessionKey, cur, { ...draft }); setDraft(null); }} style={{ flex: 2, padding: "10px 12px", borderRadius: 11, background: complete ? C.accent : alpha(C.accent, .3), fontFamily: F_HEAD, fontWeight: 800, fontSize: 12.5, color: complete ? "#fff" : "rgba(255,255,255,.55)" }}>{complete ? "INVIA IL VOTO" : (n => n === 1 ? "Manca 1 parametro" : `Mancano ${n} parametri`)(P.filter(([k]) => !draft[k]).length)}</button>
             </div>
           </div>
         )}
@@ -4435,8 +4528,8 @@ function RaceScreen({ isPremium, onPremium, onSelectDriver, races, standings, li
         <div style={{ position: "relative", padding: "18px 16px 16px" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
           {/* Gara messa LIVE dall'admin (shared/bt-races): "In diretta", senza dati simulati (D23); i dati veri arrivano da OpenF1. */}
-          <span style={{ width: 7, height: 7, borderRadius: "50%", background: shown && shown.status === "LIVE" ? C.accent : C.gold }} />
-          <span style={{ fontFamily: F_BODY, fontWeight: 700, fontSize: 11, color: shown && shown.status === "LIVE" ? C.accent : C.gold, letterSpacing: 1.2 }}>{shown && shown.status === "LIVE" ? "IN DIRETTA" : "PROSSIMA GARA"}</span>
+          <span style={{ width: 7, height: 7, borderRadius: "50%", background: shown && shown.status === "LIVE" ? C.accentInk : C.gold }} />
+          <span style={{ fontFamily: F_BODY, fontWeight: 700, fontSize: 11, color: shown && shown.status === "LIVE" ? C.accentInk : C.gold, letterSpacing: 1.2 }}>{shown && shown.status === "LIVE" ? "IN DIRETTA" : "PROSSIMA GARA"}</span>
           <div style={{ flexGrow: 1 }} />
           <span style={{ fontFamily: F_BODY, fontWeight: 600, fontSize: 12, color: C.muted }}>{shown ? `ROUND ${shown.round}/${races.length}` : `${done}/${races.length}`}</span>
         </div>
@@ -4460,7 +4553,7 @@ function RaceScreen({ isPremium, onPremium, onSelectDriver, races, standings, li
         {isPremium ? <span style={{ fontFamily: F_BODY, fontSize: 10.5, color: C.muted }}>· in orizzontale</span> : <Icon name="lock" size={11} color={C.gold} />}
       </button>
       {onOpenGhost && !st && ghostSessions().length > 0 && (() => { const [gid, gname] = ghostSessions()[0], gc = Object.keys(BtRealData[gid].laps), surn = c => ghostInfo(c).name.split(" ").slice(-1)[0]; return (
-        <button className="press" data-ghost-open={gid} onClick={onOpenGhost} style={{ display: "block", width: "calc(100% - 32px)", margin: "0 16px 14px", padding: 14, borderRadius: 16, textAlign: "left", background: "linear-gradient(120deg, rgba(232,18,29,.24), rgba(24,24,28,1) 62%)", border: "1px solid rgba(232,18,29,.45)" }}>
+        <button className="press" data-ghost-open={gid} onClick={onOpenGhost} style={{ display: "block", width: "calc(100% - 32px)", margin: "0 16px 14px", padding: 14, borderRadius: 16, textAlign: "left", background: `linear-gradient(120deg, ${alpha(C.accentInk, .24)}, rgba(24,24,28,1) 62%)`, border: `1px solid ${alpha(C.accentInk, .45)}` }}>
           <span style={{ display: "flex", alignItems: "center", gap: 8 }}><span style={{ flexShrink: 0, whiteSpace: "nowrap", padding: "2px 7px", borderRadius: 6, background: C.accent, fontFamily: F_HEAD, fontWeight: 900, fontSize: 10, color: "#fff" }}>DATI VERI</span><span style={{ fontFamily: F_HEAD, fontWeight: 900, fontStyle: "italic", fontSize: 15, color: C.text }}>GHOST LAP · QUALIFICHE DI {gname.toUpperCase()}</span></span>
           <span style={{ display: "block", marginTop: 5, fontFamily: F_BODY, fontSize: 12, color: C.muted, lineHeight: 1.4 }}>Il giro più veloce di {surn(gc[0])} contro {gc.slice(1, 4).map(surn).join(", ")} e gli altri: velocità metro per metro, curva per curva e replay 2D.</span>
           <span style={{ display: "inline-flex", alignItems: "center", gap: 4, marginTop: 8, fontFamily: F_HEAD, fontWeight: 800, fontSize: 12, color: C.gold }}>Apri il Ghost Lap <Icon name="chevron" size={12} color={C.gold} sw={2.6} /></span>
@@ -4468,7 +4561,7 @@ function RaceScreen({ isPremium, onPremium, onSelectDriver, races, standings, li
       ); })()}
       {onOpenChats && (
         <button className="press" data-race-chat="" onClick={onOpenChats} style={{ display: "flex", alignItems: "center", gap: 10, width: "calc(100% - 32px)", margin: "0 16px 14px", padding: "11px 14px", borderRadius: 14, background: C.card, border: `1px solid ${C.border}`, textAlign: "left" }}>
-          <span style={{ width: 36, height: 36, borderRadius: 12, background: "rgba(232,18,29,.16)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}><Icon name="chat" size={18} color={C.accent} /></span>
+          <span style={{ width: 36, height: 36, borderRadius: 12, background: alpha(C.accentInk, .16), display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}><Icon name="chat" size={18} color={C.accentInk} /></span>
           <span style={{ flex: 1, minWidth: 0 }}><b style={{ display: "block", fontFamily: F_HEAD, fontWeight: 800, fontSize: 13.5, color: C.text }}>Chat dei tifosi</b><span style={{ fontFamily: F_BODY, fontSize: 11.5, color: C.muted }}>{st ? "Commenta la diretta con la community B&T" : "Parla di F1 con la community B&T"}</span></span>
           <Icon name="chevron" size={15} color={C.dim} />
         </button>
@@ -4503,7 +4596,7 @@ function RaceScreen({ isPremium, onPremium, onSelectDriver, races, standings, li
                 <span title={tyreUi(c.tyre)[1]} style={{ width: 12, height: 12, borderRadius: "50%", border: `2.5px solid ${tyreUi(c.tyre)[0]}`, flexShrink: 0 }} />
                 <span style={{ fontFamily: F_BODY, fontSize: 11.5, color: c.dnf ? "#FF5A5F" : C.muted, whiteSpace: "nowrap" }}>{c.dnf ? "Ritirato" : `${tyreUi(c.tyre)[1]} · ${laps}${c.pit ? " · ai box" : ""}`}</span>
               </div>
-              {c.wear != null && <div style={{ height: 5, marginTop: 7, borderRadius: 3, background: "rgba(255,255,255,.08)", overflow: "hidden" }}><div style={{ height: "100%", width: c.wear + "%", borderRadius: 3, background: c.wear > 50 ? C.accent : C.green }} /></div>}
+              {c.wear != null && <div style={{ height: 5, marginTop: 7, borderRadius: 3, background: "rgba(255,255,255,.08)", overflow: "hidden" }}><div style={{ height: "100%", width: c.wear + "%", borderRadius: 3, background: c.wear > 50 ? C.red : C.green }} /></div>}
             </div>
           ); })}
         </div>
@@ -4513,7 +4606,7 @@ function RaceScreen({ isPremium, onPremium, onSelectDriver, races, standings, li
         <div style={{ margin: "0 16px 16px" }}>
           <div style={{ display: "flex", gap: 6, marginBottom: 10 }}>
             {[["piloti", "Piloti"], ["costruttori", "Costruttori"]].map(([id, l]) => (
-              <button key={id} className="press" onClick={() => setChamp(id)} style={{ padding: "7px 14px", borderRadius: 999, background: champ === id ? "rgba(232,18,29,.16)" : "rgba(255,255,255,.05)", border: `1px solid ${champ === id ? C.accent : C.border}`, fontFamily: F_BODY, fontWeight: 700, fontSize: 11.5, color: champ === id ? C.text : C.muted }}>{l}</button>
+              <button key={id} className="press" onClick={() => setChamp(id)} style={{ padding: "7px 14px", borderRadius: 999, background: champ === id ? alpha(C.accentInk, .16) : "rgba(255,255,255,.05)", border: `1px solid ${champ === id ? C.accentInk : C.border}`, fontFamily: F_BODY, fontWeight: 700, fontSize: 11.5, color: champ === id ? C.text : C.muted }}>{l}</button>
             ))}
           </div>
           {!st && (() => {
@@ -4572,7 +4665,7 @@ function InstagramScreen({ ig }) {
   return (
     <div className="scrollcol" style={{ height: "100%" }}>
       <div style={{ margin: "4px 16px 16px", display: "flex", alignItems: "center", gap: 14 }}>
-        <div style={{ width: 60, height: 60, borderRadius: "50%", background: "linear-gradient(155deg,#3a0a0c 0%,#0f0f12 70%)", border: `2px solid ${C.accent}`, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+        <div style={{ width: 60, height: 60, borderRadius: "50%", background: `linear-gradient(155deg,${shade(C.accent, .25)} 0%,#0f0f12 70%)`, border: `2px solid ${C.accentInk}`, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
           <span style={{ fontFamily: F_HEAD, fontWeight: 900, fontStyle: "italic", fontSize: 16, color: C.text }}>B&amp;T</span>
         </div>
         <div style={{ flex: 1, minWidth: 0 }}>
@@ -4598,7 +4691,7 @@ function InstagramScreen({ ig }) {
       </button>
 
       <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "0 16px 12px" }}>
-        <Icon name="play" size={15} color={C.accent} />
+        <Icon name="play" size={15} color={C.accentInk} />
         <h2 style={{ fontFamily: F_HEAD, fontWeight: 900, fontStyle: "italic", fontSize: 16, color: C.text, margin: 0 }}>ULTIMI VIDEO</h2>
       </div>
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, margin: "0 16px 16px" }}>
@@ -4676,7 +4769,7 @@ function ChatThreadScreen({ chat, onBack, onSend, isPremium, blocked = [], onRep
   return (
     <div style={{ height: "100%", display: "flex", flexDirection: "column" }}>
       <SubHeader title={chat.name} onBack={onBack} right={<IconCircle name={chat.icon} bg={chat.color} stroke={chat.iconColor} size={32} filled />} />
-      {chat.id === "live" && liveRace && <div data-live-band="" style={{ margin: "0 16px 8px", padding: "8px 12px", borderRadius: 10, background: "rgba(232,18,29,.14)", border: "1px solid rgba(232,18,29,.4)", fontFamily: F_HEAD, fontWeight: 800, fontSize: 12.5, color: C.text, flexShrink: 0 }}>LIVE: {liveRace.name}</div>}
+      {chat.id === "live" && liveRace && <div data-live-band="" style={{ margin: "0 16px 8px", padding: "8px 12px", borderRadius: 10, background: alpha(C.accentInk, .14), border: `1px solid ${alpha(C.accentInk, .4)}`, fontFamily: F_HEAD, fontWeight: 800, fontSize: 12.5, color: C.text, flexShrink: 0 }}>LIVE: {liveRace.name}</div>}
       <div className="scrollcol" style={{ flex: 1, padding: "6px 16px", display: "flex", flexDirection: "column", gap: 10 }}>
         {shown.length === 0 && <p data-chat-empty="" style={{ margin: "24px 0", textAlign: "center", fontFamily: F_BODY, fontSize: 13, color: C.muted }}>{CHAT_MSG.empty}</p>}
         {shown.map((m, i) => (
@@ -4814,7 +4907,7 @@ function LastRaceCard({ race, onSelectDriver }) {
                 </div>
                 {(r.dnf || r.time === "Ritirato") && <DnfTile cause={r.dnf || "altro"} width={56} style={{ padding: 2, borderRadius: 8 }} />}
                 {race.fastest === r.id && <span title="Giro più veloce" style={{ padding: "2px 6px", borderRadius: 5, background: "rgba(168,85,247,.18)", fontFamily: F_HEAD, fontWeight: 800, fontSize: 9, color: "#C084FC" }}>GV</span>}
-                <span style={{ fontFamily: F_BODY, fontWeight: 600, fontSize: 12, color: r.pos ? C.dim : C.accent, flexShrink: 0 }}>{fmtRow(r)}</span>
+                <span style={{ fontFamily: F_BODY, fontWeight: 600, fontSize: 12, color: r.pos ? C.dim : "#FF5A5F", flexShrink: 0 }}>{fmtRow(r)}</span>
               </button>
               {i < rows.length - 1 && <div style={{ height: 1, background: C.divider, margin: "0 14px" }} />}
             </div>
@@ -4893,7 +4986,7 @@ function FantaPicker({ kind, slot, squad, stats, budget, onPick, onClose }) {
   const current = squad[kind][slot];
   const left = budget - BtLogic.squadValue(squad, stats) + (current ? Number(stats[kind][current].price) : 0);
   const rows = Object.entries(stats[kind]).map(([id, v]) => ({ id, ...v })).sort((a, b) => sort === "price" ? b.price - a.price || b.pts - a.pts : b.pts - a.pts);
-  const chip = (id, l) => <button key={id} className="press" aria-pressed={sort === id ? "true" : "false"} onClick={() => setSort(id)} style={{ padding: "6px 12px", borderRadius: 999, background: sort === id ? "rgba(232,18,29,.16)" : "rgba(255,255,255,.05)", border: `1px solid ${sort === id ? C.accent : C.border}`, fontFamily: F_BODY, fontWeight: 700, fontSize: 11.5, color: sort === id ? C.text : C.muted }}>{l}</button>;
+  const chip = (id, l) => <button key={id} className="press" aria-pressed={sort === id ? "true" : "false"} onClick={() => setSort(id)} style={{ padding: "6px 12px", borderRadius: 999, background: sort === id ? alpha(C.accentInk, .16) : "rgba(255,255,255,.05)", border: `1px solid ${sort === id ? C.accentInk : C.border}`, fontFamily: F_BODY, fontWeight: 700, fontSize: 11.5, color: sort === id ? C.text : C.muted }}>{l}</button>;
   return (
     <div role="dialog" aria-modal="true" aria-label={isD ? "Scegli un pilota" : "Scegli una scuderia"} style={{ position: "absolute", inset: 0, zIndex: 640, background: "rgba(0,0,0,.72)", display: "flex", alignItems: "flex-end" }} onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
       <div style={{ width: "100%", maxHeight: "86%", display: "flex", flexDirection: "column", background: C.card, borderRadius: "24px 24px 0 0" }}>
@@ -4914,7 +5007,7 @@ function FantaPicker({ kind, slot, squad, stats, budget, onPick, onClose }) {
             const why = r.id === current ? "In squadra" : inSquad ? "Già in squadra" : !afford ? "Budget insufficiente" : null;
             const off = inSquad || (!afford && r.id !== current);
             return (
-              <button key={r.id} data-pick={r.id} className="press" disabled={off} onClick={() => { onPick(r.id); onClose(); }} style={{ display: "flex", alignItems: "center", gap: 12, width: "100%", padding: "9px 18px", textAlign: "left", opacity: off ? .42 : 1, background: r.id === current ? "rgba(232,18,29,.08)" : "transparent" }}>
+              <button key={r.id} data-pick={r.id} className="press" disabled={off} onClick={() => { onPick(r.id); onClose(); }} style={{ display: "flex", alignItems: "center", gap: 12, width: "100%", padding: "9px 18px", textAlign: "left", opacity: off ? .42 : 1, background: r.id === current ? alpha(C.accentInk, .08) : "transparent" }}>
                 {d ? <Headshot driver={d} size={36} /> : <span style={{ width: 36, height: 36, borderRadius: 10, background: t.color, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}><CarSilhouette color="#F4F2EF" width={30} /></span>}
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ fontFamily: F_BODY, fontWeight: 700, fontSize: 13.5, color: C.text }}>{d ? d.full : t.name}</div>
@@ -4971,8 +5064,8 @@ function FantaSquadCard({ squad, setSquad, base, freeTransfers, budget, stats, r
           {race && <MiniTrack circuitId={race.circuitId} width={92} />}
         </div>
         {locked ? (
-          <div role="status" data-team-lock="locked" style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 12, padding: "11px 14px", borderRadius: 14, background: "rgba(232,18,29,.14)", border: "1px solid rgba(232,18,29,.4)" }}>
-            <Icon name="lock" size={15} color={C.accent} />
+          <div role="status" data-team-lock="locked" style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 12, padding: "11px 14px", borderRadius: 14, background: alpha(C.accentInk, .14), border: `1px solid ${alpha(C.accentInk, .4)}` }}>
+            <Icon name="lock" size={15} color={C.accentInk} />
             <span style={{ fontFamily: F_BODY, fontSize: 12.5, color: C.text, lineHeight: 1.4 }}><b>Squadra bloccata</b> · si riapre a fine gara{lock.demo ? " (diretta demo)" : lock.unlockAt ? ` (${fmtRome(lock.unlockAt)})` : ""}.</span>
           </div>
         ) : (
@@ -5001,15 +5094,15 @@ function FantaSquadCard({ squad, setSquad, base, freeTransfers, budget, stats, r
         )}
         <div style={{ textAlign: "right", flexShrink: 0 }}>
           <div style={{ fontFamily: F_BODY, fontSize: 10.5, color: C.dim }}>Cambi gratis</div>
-          <div data-transfers="" style={{ fontFamily: F_HEAD, fontWeight: 900, fontSize: 15, color: tr.extra ? C.accent : C.text }}>{tr.unlimited ? "Illimitati" : `${Math.max(0, tr.free - tr.used)} di ${tr.free}`}</div>
+          <div data-transfers="" style={{ fontFamily: F_HEAD, fontWeight: 900, fontSize: 15, color: tr.extra ? "#FF5A5F" : C.text }}>{tr.unlimited ? "Illimitati" : `${Math.max(0, tr.free - tr.used)} di ${tr.free}`}</div>
         </div>
       </div>
-      {tr.extra > 0 && <p role="status" style={{ margin: "4px 14px 0", fontFamily: F_BODY, fontSize: 11.5, color: C.accent }}>{tr.extra === 1 ? "1 cambio in più" : `${tr.extra} cambi in più`} dei gratis: −{tr.penalty} punti a fine weekend.</p>}
+      {tr.extra > 0 && <p role="status" style={{ margin: "4px 14px 0", fontFamily: F_BODY, fontSize: 11.5, color: "#FF5A5F" }}>{tr.extra === 1 ? "1 cambio in più" : `${tr.extra} cambi in più`} dei gratis: −{tr.penalty} punti a fine weekend.</p>}
 
       <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "12px 14px 4px" }}>
         <div style={{ flex: 1 }}>
-          <div style={{ fontFamily: F_BODY, fontSize: 12, color: C.muted }}>Budget: <b data-budget-left="" style={{ fontFamily: F_HEAD, fontWeight: 900, fontSize: 16, color: left < 0 ? C.accent : C.text }}>{fmtM(left, true)}</b></div>
-          <div style={{ height: 4, width: 150, marginTop: 5, borderRadius: 2, background: "rgba(255,255,255,.1)", overflow: "hidden" }}><div style={{ height: "100%", width: Math.max(0, Math.min(100, left / budget * 100)) + "%", background: left < 0 ? C.accent : TIMING.green }} /></div>
+          <div style={{ fontFamily: F_BODY, fontSize: 12, color: C.muted }}>Budget: <b data-budget-left="" style={{ fontFamily: F_HEAD, fontWeight: 900, fontSize: 16, color: left < 0 ? "#FF5A5F" : C.text }}>{fmtM(left, true)}</b></div>
+          <div style={{ height: 4, width: 150, marginTop: 5, borderRadius: 2, background: "rgba(255,255,255,.1)", overflow: "hidden" }}><div style={{ height: "100%", width: Math.max(0, Math.min(100, left / budget * 100)) + "%", background: left < 0 ? C.red : TIMING.green }} /></div>
         </div>
         <button className="press" disabled={locked} onClick={guard(() => { setSquad(s => ({ ...s, drivers: s.drivers.map(() => null), teams: s.teams.map(() => null), boost: null })); onToast("Squadra svuotata: scegli piloti e scuderie"); })} style={{ padding: "8px 10px", fontFamily: F_HEAD, fontWeight: 800, fontSize: 13, color: C.muted, textDecoration: "underline", opacity: locked ? .45 : 1 }}>Reset</button>
         <button className="press" disabled={locked || complete} onClick={guard(() => { setSquad(s => BtLogic.autoFill(s, stats, budget)); onToast("Squadra completata: la combinazione con più punti in stagione che entra nel budget"); })} style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "9px 14px", borderRadius: 999, background: locked || complete ? "rgba(255,255,255,.12)" : "#fff", fontFamily: F_HEAD, fontWeight: 900, fontSize: 13, color: locked || complete ? C.dim : "#111" }}><Icon name="sparkle" size={14} color={locked || complete ? C.dim : "#111"} />Riempi</button>
@@ -5068,13 +5161,13 @@ function EntityPicker({ id, kind, title, selected, onPick, onClose }) {
         <div className="scrollcol" style={{ flex: 1, minHeight: 0, paddingBottom: 12 }}>
           {list.map(o => (
             <button key={o.id} data-pick-option={o.id} className="press" aria-pressed={selected === o.id ? "true" : "false"} onClick={() => onPick(o.id)}
-              style={{ display: "flex", alignItems: "center", gap: 12, width: "100%", padding: "9px 18px", textAlign: "left", background: selected === o.id ? "rgba(232,18,29,.1)" : "transparent" }}>
+              style={{ display: "flex", alignItems: "center", gap: 12, width: "100%", padding: "9px 18px", textAlign: "left", background: selected === o.id ? alpha(C.accentInk, .1) : "transparent" }}>
               {o.driver ? <Headshot driver={o.driver} size={34} /> : <span style={{ width: 34, height: 34, borderRadius: 10, background: o.color, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}><CarSilhouette color="#F4F2EF" width={28} /></span>}
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ fontFamily: F_BODY, fontWeight: 700, fontSize: 13.5, color: C.text }}>{o.label}</div>
                 <div style={{ fontFamily: F_BODY, fontSize: 10.5, color: C.dim }}>{o.sub}</div>
               </div>
-              {selected === o.id && <Icon name="check" size={15} color={C.accent} />}
+              {selected === o.id && <Icon name="check" size={15} color={C.accentInk} />}
             </button>
           ))}
         </div>
@@ -5097,7 +5190,7 @@ function NumPad({ value, onChange, onOk, okLabel = "Invia", onCancel, max = 3 })
   return (
     <div data-numpad="" style={{ marginTop: 2 }}>
       <div style={{ display: "flex", gap: 6, marginBottom: 8 }}>
-        <div data-numpad-display="" aria-live="polite" style={{ flex: 1, height: 44, borderRadius: 12, background: "rgba(255,255,255,.04)", border: `1px solid ${value ? C.accent : C.border}`, display: "flex", alignItems: "center", justifyContent: "center", fontFamily: F_HEAD, fontWeight: 900, fontSize: 24, color: value ? C.text : C.dim, fontVariantNumeric: "tabular-nums" }}>{value || "—"}</div>
+        <div data-numpad-display="" aria-live="polite" style={{ flex: 1, height: 44, borderRadius: 12, background: "rgba(255,255,255,.04)", border: `1px solid ${value ? C.accentInk : C.border}`, display: "flex", alignItems: "center", justifyContent: "center", fontFamily: F_HEAD, fontWeight: 900, fontSize: 24, color: value ? C.text : C.dim, fontVariantNumeric: "tabular-nums" }}>{value || "—"}</div>
         {onCancel && <button className="press" onClick={onCancel} style={{ padding: "0 12px", borderRadius: 12, background: "rgba(255,255,255,.05)", fontFamily: F_BODY, fontWeight: 700, fontSize: 12, color: C.muted }}>Annulla</button>}
       </div>
       <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 6 }}>
@@ -5123,7 +5216,7 @@ function PredictionCard({ q, answer, lock, onAnswer }) {
   const badge = PRED_BADGE[q.kind] || ["DOMANDA", C.dim];
   const mine = predLabel(q, answer);
   const d = q.kind === "driver" && answer ? driverById(answer) : null, t = q.kind === "team" && answer ? teamById(answer) : null;
-  const openBtn = { display: "flex", alignItems: "center", gap: 10, width: "100%", padding: "9px 11px", borderRadius: 12, textAlign: "left", background: "rgba(255,255,255,.05)", border: `1px solid ${answer != null ? C.accent : C.border}`, opacity: done ? .6 : 1 };
+  const openBtn = { display: "flex", alignItems: "center", gap: 10, width: "100%", padding: "9px 11px", borderRadius: 12, textAlign: "left", background: "rgba(255,255,255,.05)", border: `1px solid ${answer != null ? C.accentInk : C.border}`, opacity: done ? .6 : 1 };
   return (
     <div data-prediction={q.id} style={{ padding: "13px 14px", borderRadius: 16, background: C.card, border: `1px solid ${res === true ? "rgba(62,214,107,.5)" : C.border}`, marginBottom: 10 }}>
       <span style={{ display: "inline-block", padding: "2px 7px", borderRadius: 6, background: badge[1] + "22", fontFamily: F_HEAD, fontWeight: 800, fontSize: 9.5, letterSpacing: .6, color: badge[1] }}>{badge[0]}</span>
@@ -5134,7 +5227,7 @@ function PredictionCard({ q, answer, lock, onAnswer }) {
             const isMine = answer === id, isRight = q.answer === id && (history ? answer != null : true);
             const show = done && q.answer != null;
             return <button key={id} data-option={id} className="press" disabled={done} aria-pressed={isMine ? "true" : "false"} onClick={() => onAnswer(id)}
-              style={{ padding: "9px 8px", borderRadius: 10, textAlign: "center", fontFamily: F_BODY, fontWeight: 700, fontSize: 12, color: C.text, background: show && isRight ? "rgba(62,214,107,.18)" : isMine ? "rgba(232,18,29,.16)" : "rgba(255,255,255,.05)", border: `1px solid ${show && isRight ? "rgba(62,214,107,.6)" : isMine ? C.accent : C.border}` }}>{l}</button>;
+              style={{ padding: "9px 8px", borderRadius: 10, textAlign: "center", fontFamily: F_BODY, fontWeight: 700, fontSize: 12, color: C.text, background: show && isRight ? "rgba(62,214,107,.18)" : isMine ? alpha(C.accentInk, .16) : "rgba(255,255,255,.05)", border: `1px solid ${show && isRight ? "rgba(62,214,107,.6)" : isMine ? C.accentInk : C.border}` }}>{l}</button>;
           })}
         </div>
       ) : q.kind === "number" ? (
@@ -5250,7 +5343,7 @@ function FantaScreen({ squad, setSquad, base, freeTransfers, budget, stats, race
   const smallBtn = (label, onClick, opts = {}) => <button className="press" onClick={onClick} disabled={opts.disabled} aria-label={opts.aria} style={{ flexShrink: 0, padding: "9px 12px", borderRadius: 10, background: opts.primary ? C.accent : "rgba(255,255,255,.07)", border: `1px solid ${opts.primary ? C.accent : C.border}`, fontFamily: F_HEAD, fontWeight: 800, fontSize: 12, color: "#fff", opacity: opts.disabled ? .45 : 1 }}>{label}</button>;
   const heading = (icon, text, right) => (
     <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 16px 10px" }}>
-      <Icon name={icon} size={15} color={C.accent} />
+      <Icon name={icon} size={15} color={C.accentInk} />
       <h2 style={{ fontFamily: F_HEAD, fontWeight: 900, fontStyle: "italic", fontSize: 16, color: C.text, margin: 0 }}>{text}</h2>
       {right && <span style={{ marginLeft: "auto", fontFamily: F_BODY, fontSize: 11, color: C.dim }}>{right}</span>}
     </div>
@@ -5266,7 +5359,7 @@ function FantaScreen({ squad, setSquad, base, freeTransfers, budget, stats, race
           <span style={{ padding: "4px 10px", borderRadius: 8, background: "rgba(231,179,76,.14)", fontFamily: F_HEAD, fontWeight: 800, fontSize: 11, color: C.gold }}>#{myPos} in lega</span>
         </div>
         <div style={{ display: "flex", alignItems: "baseline", gap: 6 }}>
-          <span data-fanta-total="" style={{ fontFamily: F_HEAD, fontWeight: 900, fontSize: 30, color: C.accent }}>{total}</span>
+          <span data-fanta-total="" style={{ fontFamily: F_HEAD, fontWeight: 900, fontSize: 30, color: C.accentInk }}>{total}</span>
           <span style={{ fontFamily: F_BODY, fontSize: 12, color: C.muted }}>punti totali{bonusPts ? ` · di cui ${bonusPts} bonus` : ""}</span>
         </div>
         <div style={{ marginTop: 10, paddingTop: 10, borderTop: `1px solid ${C.divider}` }}>
@@ -5276,7 +5369,7 @@ function FantaScreen({ squad, setSquad, base, freeTransfers, budget, stats, race
           </div>
           {wk.length ? wk.map(w => (
             <div key={w.id} data-weekend-row={w.type} style={{ display: "flex", alignItems: "center", gap: 8, padding: "3px 0", fontFamily: F_BODY, fontSize: 12, color: C.muted }}>
-              <span style={{ flex: 1 }}>{w.type === "PEN" ? "Cambi oltre i gratis" : sessionLabelIt(w.type)}</span><b style={{ color: w.total < 0 ? C.accent : TIMING.green }}>{w.total > 0 ? "+" : ""}{w.total}</b>
+              <span style={{ flex: 1 }}>{w.type === "PEN" ? "Cambi oltre i gratis" : sessionLabelIt(w.type)}</span><b style={{ color: w.total < 0 ? "#FF5A5F" : TIMING.green }}>{w.total > 0 ? "+" : ""}{w.total}</b>
             </div>
           )) : <p style={{ margin: 0, fontFamily: F_BODY, fontSize: 11.5, color: C.dim, lineHeight: 1.45 }}>I punti arrivano con qualifiche e gara (nella demo: Profilo → Pannello Admin → GARA LIVE).</p>}
         </div>
@@ -5365,7 +5458,7 @@ function FantaScreen({ squad, setSquad, base, freeTransfers, budget, stats, race
       <div data-league-table="" style={{ margin: "0 16px 16px", borderRadius: 18, background: C.card, border: `1px solid ${C.border}`, overflow: "hidden" }}>
         {rows.map((u, i) => (
           <div key={u.name} data-league-me={u.me ? u.pts : undefined}>
-            <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "11px 14px", background: u.me ? "rgba(232,18,29,.07)" : "transparent" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "11px 14px", background: u.me ? alpha(C.accentInk, .07) : "transparent" }}>
               <span style={{ width: 20, fontFamily: F_HEAD, fontWeight: 800, fontSize: 15, color: C.text }}>{i + 1}</span>
               <span style={{ width: 10, height: 10, borderRadius: "50%", background: u.color, flexShrink: 0 }} />
               <div style={{ flex: 1, minWidth: 0 }}>
@@ -5406,7 +5499,7 @@ function FantaScreen({ squad, setSquad, base, freeTransfers, budget, stats, race
   );
 }
 
-function ProfiloScreen({ ig, onOpenIg, trial = null, trialUsed = false, onBack, onNotifiche, onPremium, onAdmin, onLogout, isPremium, onAbout, onHelp, onFeedback, aboutMe, onSaveAboutMe, favTeam, favDriver, onPickTeam, onPickDriver, guest, onLogin, onTerms, blocked = [], onUnblock, onDeleteAccount, savedCount = 0, onOpenSaved, account = null, onSaveName, isAdmin = false }) {
+function ProfiloScreen({ ig, onOpenIg, trial = null, trialUsed = false, onBack, onNotifiche, onPremium, onAdmin, onLogout, isPremium, onAbout, onHelp, onFeedback, aboutMe, onSaveAboutMe, favTeam, favDriver, onPickTeam, onPickDriver, guest, onLogin, onTerms, blocked = [], onUnblock, onDeleteAccount, savedCount = 0, onOpenSaved, account = null, onSaveName, isAdmin = false, onTheme }) {
   const ft = favTeam ? teamById(favTeam) : null;
   const fd = favDriver ? driverById(favDriver) : null;
   const favRows = [
@@ -5442,6 +5535,7 @@ function ProfiloScreen({ ig, onOpenIg, trial = null, trialUsed = false, onBack, 
   const noAbout = !waiting && !!aboutMe && aboutMe.fan == null && aboutMe.follow == null;   // account di oggi senza "Su di te"
   const rows = [
     { icon: "bell", label: "Notifiche", onClick: onNotifiche, chevron: true },
+    { icon: "palette", label: "Colori dell'app", onClick: onTheme, chevron: true },
     ...(isAdmin ? [{ icon: "gear", label: "Pannello Admin · Pubblica notizia", onClick: onAdmin, badge: "ADMIN" }] : []),
     { icon: "help", label: "Assistenza", onClick: onHelp, chevron: true },
     { icon: "chat", label: "Invia feedback", onClick: onFeedback, chevron: true },   // come oggi, ma dal Profilo (niente pulsante fluttuante)
@@ -5463,7 +5557,7 @@ function ProfiloScreen({ ig, onOpenIg, trial = null, trialUsed = false, onBack, 
       ) : (
       <div style={{ display: "flex", flexDirection: "column", alignItems: "center", padding: "14px 24px 22px" }}>
         <div style={{ position: "relative" }}>
-          <div style={{ width: 84, height: 84, borderRadius: "50%", background: C.accent, display: "flex", alignItems: "center", justifyContent: "center" }}>
+          <div data-profile-avatar="" style={{ width: 84, height: 84, borderRadius: "50%", background: C.accent, display: "flex", alignItems: "center", justifyContent: "center" }}>
             <span style={{ fontFamily: F_HEAD, fontWeight: 900, fontStyle: "italic", fontSize: 26, color: "#fff" }}>{initials}</span>
           </div>
           {!waiting && <button className="press" aria-label={editing ? "Salva profilo" : "Modifica profilo"} onClick={() => (editing ? saveName() : (setName(account ? account.name : ""), setEditing(true)))} style={{ position: "absolute", bottom: -2, right: -2, width: 30, height: 30, borderRadius: "50%", background: editing ? C.accent : C.card, border: `2px solid ${C.bg}`, display: "flex", alignItems: "center", justifyContent: "center" }}>
@@ -5570,7 +5664,7 @@ function ProfiloScreen({ ig, onOpenIg, trial = null, trialUsed = false, onBack, 
       {confirmDel && (
         <div style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,.85)", zIndex: 650, display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}>
           <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 20, padding: "26px 22px 18px", maxWidth: 330, width: "100%", textAlign: "center" }}>
-            <Icon name="trash" size={30} color={C.accent} />
+            <Icon name="trash" size={30} color={C.accentInk} />
             <h2 style={{ fontFamily: F_HEAD, fontWeight: 900, fontStyle: "italic", fontSize: 19, color: C.text, margin: "12px 0 8px" }}>Eliminare l'account?</h2>
             <p style={{ fontFamily: F_BODY, fontSize: 13, color: C.muted, lineHeight: 1.6, margin: "0 0 14px" }}>Cancelleremo il tuo profilo, i messaggi che hai scritto in chat, le segnalazioni e i feedback che hai inviato. L'operazione non si può annullare.</p>
             <label htmlFor="delPw" style={{ display: "block", textAlign: "left", fontFamily: F_BODY, fontWeight: 600, fontSize: 12, color: C.muted, marginBottom: 6 }}>Per confermare scrivi la tua password</label>
@@ -5612,10 +5706,10 @@ function NotificheScreen({ onBack, notifs, onReadAll, isPremium, onPremium, favT
         ))}
       </div>
       {(!ft || !fd) && (
-        <button className="press" onClick={onGoProfilo} style={{ display: "block", margin: "0 24px 12px", fontFamily: F_BODY, fontWeight: 600, fontSize: 12, color: C.accent }}>Scegli scuderia e pilota del cuore nel profilo →</button>
+        <button className="press" onClick={onGoProfilo} style={{ display: "block", margin: "0 24px 12px", fontFamily: F_BODY, fontWeight: 600, fontSize: 12, color: C.accentInk }}>Scegli scuderia e pilota del cuore nel profilo →</button>
       )}
       <div style={{ display: "flex", justifyContent: "flex-end", padding: "8px 20px 10px" }}>
-        <button className="press" onClick={onReadAll} style={{ fontFamily: F_BODY, fontWeight: 600, fontSize: 12, color: C.accent }}>Segna tutte come lette</button>
+        <button className="press" onClick={onReadAll} style={{ fontFamily: F_BODY, fontWeight: 600, fontSize: 12, color: C.accentInk }}>Segna tutte come lette</button>
       </div>
       <div style={{ padding: "0 20px 16px" }}>
         {isPremium ? (
@@ -5632,7 +5726,7 @@ function NotificheScreen({ onBack, notifs, onReadAll, isPremium, onPremium, favT
         const Row = n.action ? "button" : "div";   // le notifiche con un'azione (es. il feedback) si toccano
         return (
         <div key={n.id || i}>
-          <Row {...(n.action ? { className: "press", "data-notif-action": n.action, onClick: () => onAction && onAction(n.action) } : {})} style={{ display: "flex", alignItems: "flex-start", gap: 12, width: "100%", textAlign: "left", padding: "14px 20px", background: n.unread ? "rgba(232,18,29,.06)" : "transparent" }}>
+          <Row {...(n.action ? { className: "press", "data-notif-action": n.action, onClick: () => onAction && onAction(n.action) } : {})} style={{ display: "flex", alignItems: "flex-start", gap: 12, width: "100%", textAlign: "left", padding: "14px 20px", background: n.unread ? alpha(C.accentInk, .06) : "transparent" }}>
             {n.bg === "gold-soft"
               ? <div style={{ width: 40, height: 40, borderRadius: "50%", background: "rgba(231,179,76,.16)", border: "1px solid rgba(231,179,76,.35)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}><Icon name="star" size={16} color={C.gold} /></div>
               : <IconCircle name={n.icon} bg={n.bg} stroke={n.stroke} size={40} filled />}
@@ -5674,7 +5768,7 @@ function AdminKeypad({ onOk, onCancel }) {
       <button className="press" aria-label="Indietro" onClick={onCancel} style={{ position: "absolute", top: 18, left: 16, width: 38, height: 38, borderRadius: "50%", background: C.card, border: `1px solid ${C.border}`, display: "flex", alignItems: "center", justifyContent: "center" }}>
         <Icon name="back" size={17} />
       </button>
-      <div style={{ width: 54, height: 54, borderRadius: 16, background: "rgba(232,18,29,.12)", display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 14 }}><Icon name="lock" size={24} color={C.accent} /></div>
+      <div style={{ width: 54, height: 54, borderRadius: 16, background: alpha(C.accentInk, .12), display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 14 }}><Icon name="lock" size={24} color={C.accentInk} /></div>
       <h2 style={{ fontFamily: F_HEAD, fontWeight: 900, fontStyle: "italic", fontSize: 19, color: "#fff", margin: "0 0 4px" }}>PANNELLO ADMIN</h2>
       <p role="status" style={{ fontFamily: F_BODY, fontSize: 13, color: err ? "#ff5a5a" : "#6b6b70", margin: "0 0 24px" }}>{err ? "Codice errato, riprova" : ok ? "Accesso consentito" : "Inserisci il codice di accesso"}</p>
       <div aria-label={`${code.length} cifre su 6`} style={{ display: "flex", gap: 12, marginBottom: 28 }}>
@@ -5701,8 +5795,8 @@ const aInput = { width: "100%", padding: "10px 12px", borderRadius: 10, backgrou
 const aNum = { ...aInput, padding: "8px 6px", textAlign: "center", fontSize: 12.5 };
 const aLabel = { display: "block", fontFamily: F_BODY, fontWeight: 700, fontSize: 10.5, letterSpacing: .8, color: C.dim, margin: "0 0 6px" };
 const aCard = { background: C.card, border: `1px solid ${C.border}`, borderRadius: 14, padding: 14, marginBottom: 14 };
-const aTitle = { fontFamily: F_HEAD, fontWeight: 900, fontStyle: "italic", fontSize: 13, color: C.accent, margin: "4px 0 10px", letterSpacing: .3 };
-const aChip = (active, color = C.accent) => ({ display: "inline-flex", alignItems: "center", gap: 5, padding: "6px 10px", borderRadius: 999, background: active ? color + "33" : "rgba(255,255,255,.04)", border: `1px solid ${active ? color : C.border}`, fontFamily: F_BODY, fontWeight: 600, fontSize: 11.5, color: active ? C.text : C.muted });
+const aTitle = { fontFamily: F_HEAD, fontWeight: 900, fontStyle: "italic", fontSize: 13, get color() { return C.accentInk; }, margin: "4px 0 10px", letterSpacing: .3 };
+const aChip = (active, color = C.accentInk) => ({ display: "inline-flex", alignItems: "center", gap: 5, padding: "6px 10px", borderRadius: 999, background: active ? color + "33" : "rgba(255,255,255,.04)", border: `1px solid ${active ? color : C.border}`, fontFamily: F_BODY, fontWeight: 600, fontSize: 11.5, color: active ? C.text : C.muted });
 function ABtn({ children, onClick, disabled, kind = "primary", style }) {
   const bg = kind === "primary" ? C.accent : "rgba(255,255,255,.07)";
   return <button className="press" onClick={onClick} disabled={disabled} style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 6, width: "100%", padding: "12px 0", borderRadius: 12, background: bg, opacity: disabled ? .45 : 1, fontFamily: F_HEAD, fontWeight: 900, fontStyle: "italic", fontSize: 13, color: "#fff", ...style }}>{children}</button>;
@@ -5710,7 +5804,7 @@ function ABtn({ children, onClick, disabled, kind = "primary", style }) {
 function TrashBtn({ onClick, label }) {
   const [armed, setArmed] = useState(false);
   useEffect(() => { if (!armed) return; const t = setTimeout(() => setArmed(false), 2500); return () => clearTimeout(t); }, [armed]);
-  return <button className="press" aria-label={label} onClick={() => armed ? onClick() : setArmed(true)} style={{ flexShrink: 0, padding: armed ? "6px 9px" : 6, borderRadius: 8, background: armed ? "rgba(232,18,29,.18)" : "transparent", fontFamily: F_BODY, fontWeight: 700, fontSize: 10.5, color: C.accent }}>{armed ? "Elimina?" : <Icon name="trash" size={15} color={C.dim} />}</button>;
+  return <button className="press" aria-label={label} onClick={() => armed ? onClick() : setArmed(true)} style={{ flexShrink: 0, padding: armed ? "6px 9px" : 6, borderRadius: 8, background: armed ? alpha(C.accentInk, .18) : "transparent", fontFamily: F_BODY, fontWeight: 700, fontSize: 10.5, color: C.accentInk }}>{armed ? "Elimina?" : <Icon name="trash" size={15} color={C.dim} />}</button>;
 }
 // Messaggi dell'app di oggi per la foto caricata dall'admin (codici di uploadImage, src/services/firebase.js).
 const IMG_MSG = {
@@ -5833,7 +5927,7 @@ function AdminNewsTab({ articles, setArticles, onPublish, onToast }) {
         {f.image && (
           <div style={{ position: "relative", marginBottom: 10 }}>
             {imgBroken
-              ? <div role="alert" style={{ height: 70, borderRadius: 10, border: "1px dashed rgba(232,18,29,.5)", display: "flex", alignItems: "center", justifyContent: "center", padding: "0 40px", fontFamily: F_BODY, fontSize: 12, color: "#ff6b6b", textAlign: "center" }}>Impossibile caricare l'immagine da questo link.</div>
+              ? <div role="alert" style={{ height: 70, borderRadius: 10, border: "1px dashed rgba(255,24,1,.5)", display: "flex", alignItems: "center", justifyContent: "center", padding: "0 40px", fontFamily: F_BODY, fontSize: 12, color: "#ff6b6b", textAlign: "center" }}>Impossibile caricare l'immagine da questo link.</div>
               : <StoredImg src={f.image} alt="Anteprima immagine" onError={() => setImgBroken(true)} style={{ width: "100%", height: "auto", maxHeight: 260, objectFit: "contain", background: "#111", borderRadius: 10, display: "block" }}
                   fallback={<div style={{ height: 70, borderRadius: 10, background: "#111", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: F_BODY, fontSize: 12, color: C.dim }}>Caricamento della foto…</div>} />}
             <button className="press" aria-label="Rimuovi immagine" onClick={() => setImage("")} style={{ position: "absolute", top: 6, right: 6, width: 26, height: 26, borderRadius: "50%", background: "rgba(0,0,0,.6)", display: "flex", alignItems: "center", justifyContent: "center" }}><Icon name="close" size={11} color="#fff" sw={2.4} /></button>
@@ -5872,7 +5966,7 @@ function AdminNewsTab({ articles, setArticles, onPublish, onToast }) {
           <span style={{ fontFamily: F_BODY, fontWeight: 700, fontSize: 12, color: C.text }}>PUBBLICATO <span style={{ fontWeight: 400, color: C.dim }}>{f.published ? "" : "(salva come bozza)"}</span></span>
           <Toggle on={f.published} onChange={v => set("published", v)} label="Pubblicato" />
         </div>
-        {error && <p role="alert" style={{ margin: "0 0 10px", fontFamily: F_BODY, fontSize: 12, color: C.accent }}>{error}</p>}
+        {error && <p role="alert" style={{ margin: "0 0 10px", fontFamily: F_BODY, fontSize: 12, color: "#ff6b6b" }}>{error}</p>}
         <ABtn onClick={publish}>{f.published ? "PUBBLICA" : "SALVA BOZZA"}</ABtn>
       </div>
 
@@ -6448,7 +6542,7 @@ function AdminScreen({ silly = {}, onSilly, highlights = [], setHighlights, onBa
 function PremiumModal({ onClose, isPremium, plan, setPlan, onSubscribe, subscribing, subscribed, trialUsed, onTrial, trial }) {
   const offer = premiumOffer({ trialUsed, isPremium });
   const price = plan === "monthly" ? "2,99€/mese" : "24,99€/anno";
-  const heroGradient = `linear-gradient(135deg, #1a0000, ${C.accent}44, #1a0000)`;
+  const heroGradient = `linear-gradient(135deg, ${shade(C.accent, .11)}, ${alpha(C.accentInk, .27)}, ${shade(C.accent, .11)})`;
   if (subscribed) {
     return (
       <div style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,.9)", zIndex: 500, display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}>
@@ -6485,7 +6579,7 @@ function PremiumModal({ onClose, isPremium, plan, setPlan, onSubscribe, subscrib
             <>
               {PREMIUM_CATEGORIES.map(cat => (
                 <React.Fragment key={cat.name}>
-                  <Eyebrow color={C.accent}>{cat.name.toUpperCase()}</Eyebrow>
+                  <Eyebrow color={C.accentInk}>{cat.name.toUpperCase()}</Eyebrow>
                   <div>{cat.items.map(it => <FeatureRow key={it.title} icon={it.icon} title={it.title} starIcon={it.starIcon} />)}</div>
                 </React.Fragment>
               ))}
@@ -6523,7 +6617,7 @@ function PremiumModal({ onClose, isPremium, plan, setPlan, onSubscribe, subscrib
                 {trialUsed && <p style={{ textAlign: "center", fontFamily: F_BODY, fontSize: 11.5, color: C.muted, margin: "10px 0 0" }}>Hai già usato la prova gratuita di 2 settimane.</p>}
               </>)}
               <p style={{ textAlign: "center", fontFamily: F_BODY, fontSize: 10.5, color: C.dim, lineHeight: 1.7, margin: "14px 0 0" }}>
-                Annulla in qualsiasi momento · Rinnovo automatico<br /><span style={{ color: C.accent }}>Anteprima demo — nessun pagamento reale</span>
+                Annulla in qualsiasi momento · Rinnovo automatico<br /><span style={{ color: C.accentInk }}>Anteprima demo — nessun pagamento reale</span>
               </p>
               </>}
             </>
@@ -6576,9 +6670,9 @@ function TermsSheet({ review, onAccept, onClose }) {
         <div ref={bodyRef} data-terms-body="" className="scrollcol" onScroll={e => { if (atEnd(e.currentTarget)) setScrolled(true); }} style={{ flex: 1, minHeight: 0, padding: "8px 22px 6px" }}>
           <div>{S.map(([h, b, b2]) => (
             <div key={h}>
-              <h3 style={{ fontFamily: F_HEAD, fontWeight: 800, fontStyle: "italic", fontSize: 14, color: C.accent, margin: "4px 0 6px" }}>{h}</h3>
+              <h3 style={{ fontFamily: F_HEAD, fontWeight: 800, fontStyle: "italic", fontSize: 14, color: C.accentInk, margin: "4px 0 6px" }}>{h}</h3>
               {b !== null ? <p style={pStyle}>{b}</p> : (
-                <p style={pStyle}>Raccogliamo solo i dati necessari al funzionamento del servizio (email, nome, "Su di te" cioè anno di nascita, da quanti anni segui la F1 e che tifoso sei, messaggi in chat, segnalazioni, feedback con la tua email, preferenze) e li conserviamo su Firebase (Google). Non vendiamo i dati a terzi. Puoi eliminare l'account e i tuoi dati in qualsiasi momento da Profilo → Elimina account. Tutti i dettagli sono nella <button className="press" onClick={() => openUrl(PRIVACY_URL)} aria-label="Apri la Privacy Policy" style={{ font: "inherit", color: C.accent, textDecoration: "underline", padding: 0 }}>Privacy Policy</button>.</p>
+                <p style={pStyle}>Raccogliamo solo i dati necessari al funzionamento del servizio (email, nome, "Su di te" cioè anno di nascita, da quanti anni segui la F1 e che tifoso sei, messaggi in chat, segnalazioni, feedback con la tua email, preferenze) e li conserviamo su Firebase (Google). Non vendiamo i dati a terzi. Puoi eliminare l'account e i tuoi dati in qualsiasi momento da Profilo → Elimina account. Tutti i dettagli sono nella <button className="press" onClick={() => openUrl(PRIVACY_URL)} aria-label="Apri la Privacy Policy" style={{ font: "inherit", color: C.accentInk, textDecoration: "underline", padding: 0 }}>Privacy Policy</button>.</p>
               )}
               {b2 && <p style={pStyle}>{b2}</p>}
             </div>
@@ -6713,12 +6807,12 @@ function FeedbackModal({ onClose, onSend }) {
             <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 14 }}>
               {FEEDBACK_CATS.map(c => {
                 const on = category === c.id;
-                return <button key={c.id} className="press" data-feedback-cat={c.id} aria-pressed={on ? "true" : "false"} onClick={() => { setCategory(c.id); buzz(30); }} style={{ padding: "6px 12px", borderRadius: 20, background: on ? "rgba(232,18,29,.14)" : "rgba(255,255,255,.05)", border: `1px solid ${on ? C.accent : C.border}`, fontFamily: F_BODY, fontWeight: 600, fontSize: 11.5, color: on ? C.accent : C.muted }}>{c.label}</button>;
+                return <button key={c.id} className="press" data-feedback-cat={c.id} aria-pressed={on ? "true" : "false"} onClick={() => { setCategory(c.id); buzz(30); }} style={{ padding: "6px 12px", borderRadius: 20, background: on ? alpha(C.accentInk, .14) : "rgba(255,255,255,.05)", border: `1px solid ${on ? C.accentInk : C.border}`, fontFamily: F_BODY, fontWeight: 600, fontSize: 11.5, color: on ? C.accentInk : C.muted }}>{c.label}</button>;
               })}
             </div>
             <textarea data-feedback-msg="" aria-label="Il tuo feedback" placeholder="Scrivi qui (opzionale)… cosa ti piace? Cosa manca?" value={msg} onChange={e => setMsg(e.target.value)} rows={3}
               style={{ width: "100%", background: C.bg, border: `1px solid ${C.border}`, borderRadius: 12, padding: "11px 13px", color: C.text, fontFamily: F_BODY, fontSize: 13, outline: "none", resize: "none", marginBottom: 12 }} />
-            {err && <p role="alert" style={{ background: "#E1060018", border: `1px solid ${C.accent}`, borderRadius: 10, padding: "9px 14px", margin: "0 0 12px", color: "#ff6b6b", fontFamily: F_BODY, fontSize: 12, lineHeight: 1.5 }}>{err}</p>}
+            {err && <p role="alert" style={{ background: "#E1060018", border: `1px solid ${C.red}`, borderRadius: 10, padding: "9px 14px", margin: "0 0 12px", color: "#ff6b6b", fontFamily: F_BODY, fontSize: 12, lineHeight: 1.5 }}>{err}</p>}
             <button className="press" onClick={send} disabled={!stars || sending} style={{ display: "block", width: "100%", padding: "15px 0", borderRadius: 14, background: stars && !sending ? C.accent : "rgba(255,255,255,.1)", fontFamily: F_HEAD, fontWeight: 900, fontStyle: "italic", fontSize: 14, color: stars ? "#fff" : C.dim }}>{sending ? "Invio…" : "INVIA FEEDBACK"}</button>
           </>
         )}
@@ -6893,7 +6987,10 @@ const USER_INIT = {
   saved: [], favTeam: null, favDriver: null, notifPrefs: { team: true, driver: true }, votes: {},
   squad: FANTA_SQUAD_INIT, squadBase: { drivers: FANTA_SQUAD_INIT.drivers.slice(), teams: FANTA_SQUAD_INIT.teams.slice() }, freeTransfers: 3,
   predAnswers: {}, sillyPreds: {}, stratPreds: {}, pitBest: null, wxGuess: {}, ratings: {}, dotd: {}, notifSeenAt: 0,
+  theme: { mode: "team", color: null }, sounds: true, haptics: true, helmet: null, hidden: [],
 };
+// Dati dell'account che restano anche sul telefono: uscendo dall'account non tornano quelli di serie.
+const PHONE_KEYS = ["theme"];
 const NOT_SAVED = "Non salvato: controlla la connessione e riprova.";
 const USER_WAIT = "I tuoi dati non sono ancora arrivati: controlla la connessione e riprova tra poco.";
 const DATA_CHANGED = "Non salvato: nel frattempo i dati sono stati cambiati. Ora vedi quelli aggiornati: rifai la modifica e salva di nuovo.";
@@ -6982,6 +7079,14 @@ function App() {
   const [favTeam, setFavTeam] = useState(USER_INIT.favTeam);
   const [favDriver, setFavDriver] = useState(USER_INIT.favDriver);
   const [notifPrefs, setNotifPrefs] = useState(USER_INIT.notifPrefs);
+  // Tappa 3: colori dell'app (sul telefono e nell'account), suoni, vibrazioni, casco e notizie nascoste (account).
+  const [theme, setTheme] = useState(() => cleanTheme(local.get(THEME_KEY)) || USER_INIT.theme);
+  const [bootColor] = useState(() => { const t = local.get(THEME_KEY); return (t && Colors.normHex(t.color)) || null; });
+  const [sounds, setSounds] = useState(USER_INIT.sounds);
+  const [haptics, setHaptics] = useState(USER_INIT.haptics);
+  const [helmet, setHelmet] = useState(USER_INIT.helmet);
+  const [hidden, setHidden] = useState(USER_INIT.hidden);
+  const [themeOpen, setThemeOpen] = useState(false);
   const [picker, setPicker] = useState(null); // 'team' | 'driver'
   const [adminUnlocked, setAdminUnlocked] = useState(false);
   const [guest, setGuest] = useState(false);
@@ -7149,26 +7254,42 @@ function App() {
   const userEmailRef = useRef(null);
   const userReady = useRef(false);   // dati dell'account letti: da qui in poi le modifiche si salvano
   const userSnap = useRef({});       // ultimo valore letto o salvato di ogni dato (JSON): si manda solo quello che cambia
-  const userVals = { saved, favTeam, favDriver, notifPrefs, votes, squad, squadBase, freeTransfers, predAnswers, sillyPreds, stratPreds, pitBest, wxGuess, ratings, dotd, notifSeenAt };
+  const userVals = { saved, favTeam, favDriver, notifPrefs, votes, squad, squadBase, freeTransfers, predAnswers, sillyPreds, stratPreds, pitBest, wxGuess, ratings, dotd, notifSeenAt,
+    theme, sounds, haptics, helmet, hidden };
   const userValsRef = useRef(userVals);
   userValsRef.current = userVals;
   const userSet = { saved: setSaved, favTeam: setFavTeam, favDriver: setFavDriver, notifPrefs: setNotifPrefs, votes: setVotes, squad: setSquad, squadBase: setSquadBase,
     freeTransfers: setFreeTransfers, predAnswers: setPredAnswers, sillyPreds: setSillyPreds, stratPreds: setStratPreds, pitBest: setPitBest, wxGuess: setWxGuess,
-    ratings: setRatings, dotd: setDotd, notifSeenAt: setNotifSeenAt };
+    ratings: setRatings, dotd: setDotd, notifSeenAt: setNotifSeenAt,
+    theme: v => setTheme(cleanTheme(v) || USER_INIT.theme), sounds: v => setSounds(v !== false), haptics: v => setHaptics(v !== false),
+    helmet: setHelmet, hidden: v => setHidden(Array.isArray(v) ? v : []) };
+  // Dati dell'account arrivati (per quale email): finché non arrivano, il colore dell'app resta quello del telefono.
+  const [userLoaded, setUserLoaded] = useState(null);
   const loadUser = em => AppData.loadUserData(em).then(data => {
     if (userEmailRef.current !== em) return;   // intanto si è usciti, o è entrato un altro account
     const cur = userValsRef.current;
     AppData.USER_KEYS.forEach(k => { if (data[k] !== undefined) userSet[k](data[k]); });
-    userSnap.current = Object.fromEntries(AppData.USER_KEYS.map(k => [k, JSON.stringify(data[k] !== undefined ? data[k] : cur[k])]));
+    // Un dato del telefono (il colore scelto da ospite) che l'account non ha ancora si salva anche nell'account.
+    userSnap.current = Object.fromEntries(AppData.USER_KEYS.map(k => [k, JSON.stringify(data[k] !== undefined ? data[k] : PHONE_KEYS.includes(k) ? USER_INIT[k] : cur[k])]));
     userReady.current = true;
+    setUserLoaded(em);
   }, () => {});   // senza rete i dati restano in memoria: si riprova alla prossima rilettura
+  // Colori dell'app (G01-G02): si applicano qui, prima di disegnare le pagine. Finché Authentication non ha risposto o
+  // i dati dell'account non sono arrivati vale il colore usato l'ultima volta su questo telefono.
+  const themePending = account === undefined || (!!userEmail && userLoaded !== userEmail);
+  const tones = applyTheme(theme, favTeam, themePending ? bootColor : null);
+  useEffect(() => {
+    const st = document.documentElement.style;
+    st.setProperty("--accent", tones.accent); st.setProperty("--accent-ink", tones.ink);
+  }, [tones.accent, tones.ink]);
+  useEffect(() => { if (!themePending) local.set(THEME_KEY, { mode: theme.mode, color: tones.base }); }, [themePending, theme.mode, tones.base]);
   const enterAccount = email => {
     const em = String(email || "").trim().toLowerCase();
     if (!em) return;
     userEmailRef.current = em; userReady.current = false; setUserEmail(em);
     loadUser(em);
   };
-  const resetUser = () => { userEmailRef.current = null; userReady.current = false; setUserEmail(null); AppData.USER_KEYS.forEach(k => userSet[k](USER_INIT[k])); };
+  const resetUser = () => { userEmailRef.current = null; userReady.current = false; setUserEmail(null); setUserLoaded(null); AppData.USER_KEYS.forEach(k => { if (!PHONE_KEYS.includes(k)) userSet[k](USER_INIT[k]); }); };
   // Dati personali non ancora letti da Firebase (avvio senza rete): finché non arrivano non si cambiano, altrimenti la
   // modifica, fatta sopra i valori di serie, andrebbe persa o cancellerebbe quelli veri (revisione della Fase B, I1).
   // Intanto si riprova a leggerli.
@@ -7639,6 +7760,7 @@ function App() {
   useBack(!!telemetry, () => setTelemetry(null));
   useBack(!!infoModal, () => setInfoModal(null));
   useBack(!!picker, () => setPicker(null));
+  useBack(themeOpen, () => setThemeOpen(false));
   useBack(shareId != null, () => setShareId(null));
   useBack(termsOpen, () => setTermsOpen(false));
   useBack(feedbackOpen, () => setFeedbackOpen(false));
@@ -7743,9 +7865,9 @@ function App() {
   // Sfondo della pagina Race: giallo con bandiera gialla / SC / VSC, rosso con la rossa, a scacchi al primo e all'ultimo giro.
   const pageBg = onRaceTab && liveSt ? liveSt.bg : null;
   const PAGE_BG = {
-    yellow: "radial-gradient(140% 75% at 50% 0%, rgba(255,210,31,.75) 0%, rgba(255,210,31,.42) 45%, rgba(255,210,31,.26) 100%), #0A0A0C",
-    red: "radial-gradient(140% 75% at 50% 0%, rgba(232,18,29,.8) 0%, rgba(232,18,29,.45) 45%, rgba(232,18,29,.28) 100%), #0A0A0C",
-    chequered: "repeating-conic-gradient(rgba(255,255,255,.2) 0% 25%, rgba(255,255,255,0) 0% 50%) 0 0 / 44px 44px, #0A0A0C",
+    yellow: "radial-gradient(140% 75% at 50% 0%, rgba(255,210,31,.75) 0%, rgba(255,210,31,.42) 45%, rgba(255,210,31,.26) 100%), #000000",
+    red: "radial-gradient(140% 75% at 50% 0%, rgba(255,24,1,.8) 0%, rgba(255,24,1,.45) 45%, rgba(255,24,1,.28) 100%), #000000",
+    chequered: "repeating-conic-gradient(rgba(255,255,255,.2) 0% 25%, rgba(255,255,255,0) 0% 50%) 0 0 / 44px 44px, #000000",
   };
 
   let body;
@@ -7757,7 +7879,7 @@ function App() {
   else if (view === "instagram") body = <InstagramView ig={ig} onToast={showToast} onBack={viewBack.instagram} />;
   else if (view === "ghost") body = <GhostLap onBack={viewBack.ghost} />;
   else if (view === "chats") body = <ChatsView chats={chats} onOpen={openChat} blocked={blocked} onBack={viewBack.chats} unreadOf={(id, ms) => Chat.unread(id, ms)} />;
-  else if (view === "profilo") body = <ProfiloScreen ig={ig} onOpenIg={() => { setIgFrom("profilo"); setView("instagram"); }} aboutMe={aboutMe} onSaveAboutMe={a => Account.updateAbout(a).catch(e => showToast(e && (e.code === "too-young" || e.code === "not-loaded") ? messageOf(e) : NOT_SAVED))} account={account} onSaveName={n => Account.updateName(n)} isAdmin={Account.isAdmin()} trial={trialActive ? trial : null} trialUsed={!!trial} onBack={viewBack.profilo} onNotifiche={() => setView("notifiche")} onPremium={() => setPremiumOpen(true)} onAdmin={() => guest ? needLogin("Accedi per usare il pannello admin.") : setView(adminUnlocked ? "admin" : "adminLock")} onLogout={logout} isPremium={isPremium} onAbout={() => setInfoModal({ title: "Info su B&T", body: ABOUT_TEXT })} onFeedback={() => setFeedbackOpen(true)} onHelp={() => setInfoModal({ title: "Assistenza", body: HELP_TEXT })} favTeam={favTeam} favDriver={favDriver} onPickTeam={() => guest ? needLogin("Per scegliere scuderia e pilota del cuore serve un account.") : setPicker("team")} onPickDriver={() => guest ? needLogin("Per scegliere scuderia e pilota del cuore serve un account.") : setPicker("driver")} guest={guest} onLogin={() => needLogin(null)} onTerms={() => setTermsOpen(true)} blocked={blocked} onUnblock={unblockUser} onDeleteAccount={deleteAccount} savedCount={saved.length} onOpenSaved={openSaved} />;
+  else if (view === "profilo") body = <ProfiloScreen ig={ig} onOpenIg={() => { setIgFrom("profilo"); setView("instagram"); }} aboutMe={aboutMe} onSaveAboutMe={a => Account.updateAbout(a).catch(e => showToast(e && (e.code === "too-young" || e.code === "not-loaded") ? messageOf(e) : NOT_SAVED))} account={account} onSaveName={n => Account.updateName(n)} isAdmin={Account.isAdmin()} trial={trialActive ? trial : null} trialUsed={!!trial} onBack={viewBack.profilo} onNotifiche={() => setView("notifiche")} onPremium={() => setPremiumOpen(true)} onAdmin={() => guest ? needLogin("Accedi per usare il pannello admin.") : setView(adminUnlocked ? "admin" : "adminLock")} onLogout={logout} isPremium={isPremium} onAbout={() => setInfoModal({ title: "Info su B&T", body: ABOUT_TEXT })} onFeedback={() => setFeedbackOpen(true)} onHelp={() => setInfoModal({ title: "Assistenza", body: HELP_TEXT })} favTeam={favTeam} favDriver={favDriver} onPickTeam={() => guest ? needLogin("Per scegliere scuderia e pilota del cuore serve un account.") : setPicker("team")} onPickDriver={() => guest ? needLogin("Per scegliere scuderia e pilota del cuore serve un account.") : setPicker("driver")} guest={guest} onLogin={() => needLogin(null)} onTerms={() => setTermsOpen(true)} blocked={blocked} onUnblock={unblockUser} onDeleteAccount={deleteAccount} savedCount={saved.length} onOpenSaved={openSaved} onTheme={() => setThemeOpen(true)} />;
   else if (view === "notifiche") body = <NotificheScreen onBack={viewBack.notifiche} onAction={a => { if (a === "feedback") { if (feedbackAsk && !feedbackAsk.read) saveAsk({ ...feedbackAsk, read: true }); setFeedbackOpen(true); } }} notifs={notifs} onReadAll={readAll} isPremium={isPremium} onPremium={() => setPremiumOpen(true)} favTeam={favTeam} favDriver={favDriver} prefs={notifPrefs} onPrefs={v => { if (!userDataWait()) setNotifPrefs(v); }} onGoProfilo={() => setView("profilo")} />;
   else {
     if (tab === "home") body = <HomeScreen ig={ig} highlights={highlights} onOpenIg={() => { setIgFrom("tab"); setView("instagram"); }} articles={articles} tagFilter={tagFilter} onTag={filterByTag} onClearTag={() => setTagFilter(null)} onOpenArticle={openArticle} isPremium={isPremium} onPremium={() => setPremiumOpen(true)} onToast={showToast} onLiveTrack={() => setLiveTrackOpen(true)} onGoFanta={() => goTab("fanta")}  saved={saved} onToggleSave={toggleSave} savedOnly={savedOnly} setSavedOnly={setSavedOnly} onOpenCircuit={openCircuit} homePoll={homePoll} homeVote={votes.home || null} onVote={castVote} />;
@@ -7782,6 +7904,7 @@ function App() {
         {lapList && live && liveSt && <LapTimesModal live={live} st={liveSt} carId={lapList} onOpenLap={n => setTelemetry({ carId: lapList, lapNo: n, sector: 0 })} onClose={() => setLapList(null)} />}
         {telemetry && live && liveSt && <TelemetryModal live={live} st={liveSt} carId={telemetry.carId} lapNo={telemetry.lapNo} sector={telemetry.sector} onClose={() => setTelemetry(null)} />}
         {infoModal && <InfoModal title={infoModal.title} body={infoModal.body} onClose={() => setInfoModal(null)} />}
+        {themeOpen && <ThemeSheet theme={theme} favTeam={favTeam} onPick={v => { if (!userDataWait()) setTheme(v); }} onClose={() => setThemeOpen(false)} />}
         {picker === "team" && <PickerModal title="SCUDERIA DEL CUORE" selected={favTeam} onPick={v => { if (!userDataWait()) setFavTeam(v); }} onClose={() => setPicker(null)}
           options={TEAMS.map(t => ({ id: t.id, label: t.name, color: t.color, sub: t.tag }))} />}
         {picker === "driver" && <PickerModal title="PILOTA DEL CUORE" selected={favDriver} onPick={v => { if (!userDataWait()) setFavDriver(v); }} onClose={() => setPicker(null)}

@@ -83,7 +83,9 @@ const KINDS = {
 };
 
 // Dati personali dell'account (users/<email>.app2): ognuno vede e modifica solo i suoi.
-const USER_KEYS = ["saved", "favTeam", "favDriver", "notifPrefs", "votes", "squad", "squadBase", "freeTransfers", "predAnswers", "sillyPreds", "stratPreds", "pitBest", "wxGuess", "ratings", "dotd", "notifSeenAt"];
+// Tappa 3: colori dell'app (theme), suoni e vibrazioni (sounds, haptics), casco (helmet), notizie nascoste (hidden).
+const USER_KEYS = ["saved", "favTeam", "favDriver", "notifPrefs", "votes", "squad", "squadBase", "freeTransfers", "predAnswers", "sillyPreds", "stratPreds", "pitBest", "wxGuess", "ratings", "dotd", "notifSeenAt",
+  "theme", "sounds", "haptics", "helmet", "hidden"];
 const USER_SAVE_MS = 800;
 const pickUser = v => { const out = {}; if (isObj(v)) USER_KEYS.forEach(k => { if (v[k] !== undefined) out[k] = v[k]; }); return out; };
 

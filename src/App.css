@@ -19,7 +19,7 @@
   *{box-sizing:border-box;}
   a{color:inherit;text-decoration:none;}
   button{font-family:inherit;border:none;background:none;padding:0;cursor:pointer;-webkit-tap-highlight-color:transparent;}
-  button:focus-visible, a:focus-visible, input:focus-visible{outline:2px solid #E8121D;outline-offset:2px;}
+  button:focus-visible, a:focus-visible, input:focus-visible{outline:2px solid var(--accent-ink, #FF1801);outline-offset:2px;}
   input::placeholder{color:#86858C;}
   html, body{ overflow-x:hidden; }
   /* Colonna dell'app alta quanto lo schermo: sul telefono larga quanto lo schermo (11/10: con 430 px al massimo i
@@ -30,7 +30,7 @@
     max-width:min(600px, 100vw);
     height:100vh;
     height:100svh;
-    background:#0A0A0C;
+    background:#000;   /* nero puro (G01) */
     position:relative;
     overflow:hidden;
     box-shadow:0 0 0 1px rgba(255,255,255,.06);

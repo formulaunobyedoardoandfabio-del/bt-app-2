@@ -223,7 +223,7 @@ const tests = {
     const want = { sorpasso: 'CHI RAGGIUNGE CHI', strategia: 'STRATEGIE AI BOX', passo: 'RITMO GARA', frenata: 'FRENATA A CONFRONTO', vettura: 'PAGELLA MONOPOSTO' };
     for (const [k, v] of Object.entries(want)) assert(titles[k] && titles[k].includes(v), `${k}: ${titles[k] && titles[k].slice(0, 80)}`);
     assert(Object.values(titles).every(t => !/BRAKING|PERFORMANCE|BATTLE FORECAST|PRESTAZIONI IN FRENATA|PRESTAZIONI VETTURA/.test(t)), 'restano nomi tradotti da quelli di F1');
-    assert(band === 'rgb(232, 18, 29)', 'la fascia non è nel rosso B&T: ' + band);
+    assert(band === 'rgb(255, 24, 1)', 'la fascia non è nel rosso LED dei tasti (Tappa 3, G01): ' + band);
     assert(!errs.length, errs.join(' | '));
   },
 };
