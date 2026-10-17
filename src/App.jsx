@@ -16,6 +16,7 @@ import BtWk from "./logic/bt-weekend";
 import Colors from "./logic/colors";
 import { filterNews, TYRES, LANES } from "./logic/newsfilter";
 import { classifySwipe, SWIPE } from "./logic/gesture";
+import { HELMET_DEFAULT, HELMET_PATTERNS, HELMET_VISORS, HELMET_FINISHES, cleanHelmet } from "./logic/helmet";
 import F1 from "./data/f1-2026";
 import AppData from "./services/appdata";
 import Compat from "./services/compat";
@@ -454,7 +455,7 @@ function SubHeader({ title, onBack, right }) {
   );
 }
 
-function TopHeader({ isPremium, unread, onPremium, onBell, onProfile, trialDays = 0 }) {
+function TopHeader({ isPremium, unread, onPremium, onBell, onProfile, trialDays = 0, helmet = null }) {
   return (
     <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "18px 16px 14px", flexShrink: 0 }}>
       <div style={{ width: 38, height: 38, borderRadius: 11, background: C.accent, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
@@ -477,7 +478,7 @@ function TopHeader({ isPremium, unread, onPremium, onBell, onProfile, trialDays 
         {unread > 0 && <span data-unread-dot="" style={{ position: "absolute", top: 6, right: 7, width: 8, height: 8, borderRadius: "50%", background: C.accentInk, border: "1.5px solid " + C.bg }} />}
       </button>
       <button className="press" aria-label="Profilo" onClick={onProfile} style={{ width: 38, height: 38, borderRadius: "50%", background: C.card, border: `1px solid ${C.border}`, display: "flex", alignItems: "center", justifyContent: "center" }}>
-        <Icon name="person" size={16} />
+        <HelmetArt spec={helmet} size={30} />
       </button>
     </div>
   );
@@ -808,6 +809,131 @@ function Toggle({ on, onChange, disabled, label }) {
       style={{ width: 44, height: 26, borderRadius: 13, background: on && !disabled ? C.accent : "rgba(255,255,255,.14)", position: "relative", flexShrink: 0, opacity: disabled ? .45 : 1, transition: "background .2s" }}>
       <span style={{ position: "absolute", top: 3, left: on && !disabled ? 21 : 3, width: 20, height: 20, borderRadius: "50%", background: "#fff", transition: "left .2s" }} />
     </button>
+  );
+}
+
+// Il casco del profilo (G15), disegnato da noi (niente caschi veri dei piloti): profilo verso destra, il disegno nei due
+// colori, il numero sul fianco, la visiera (che si alza con visorOpen) e la finitura. Senza colore di base vale quello dei
+// tasti. spec: valori come cleanHelmet (src/logic/helmet.js).
+const HELMET_SHELL = "M18 70 C10 52 14 26 34 14 C50 4 74 6 86 20 C94 30 96 44 95 56 L92 70 C91 74 88 76 84 76 L28 76 C22 76 19 74 18 70 Z";
+const HELMET_VISOR = "M52 32 C64 27 82 28 93 34 L95 47 C82 43 66 43 54 47 C50 43 50 36 52 32 Z";
+const VISOR_STOPS = { clear: ["rgba(200,222,238,.55)", "rgba(160,190,210,.35)"], smoke: ["#2A2E36", "#101216"], "iridium-blue": ["#1E3A8A", "#60A5FA"], "iridium-gold": ["#7C4A03", "#FBBF24"], "mirror-red": ["#7F1D1D", "#F87171"] };
+const starPath = (cx, cy, r) => Array.from({ length: 10 }, (_, i) => { const a = Math.PI / 5 * i - Math.PI / 2, rr = i % 2 ? r * .45 : r; return `${i ? "L" : "M"}${(cx + rr * Math.cos(a)).toFixed(1)} ${(cy + rr * Math.sin(a)).toFixed(1)}`; }).join(" ") + "Z";
+function HelmetPattern({ id, c1, c2 }) {
+  switch (id) {
+    case "stripes": return <g><path d="M8 44 C32 30 62 18 100 18 L100 27 C64 27 34 38 8 54 Z" fill={c1} /><path d="M8 58 C32 44 62 32 100 31 L100 36 C64 37 34 48 8 63 Z" fill={c2} /></g>;
+    case "flames": return <g><path d="M100 60 C86 58 80 50 70 54 C74 46 66 44 58 50 C60 42 52 40 44 48 C46 40 38 36 30 46 C30 38 22 38 14 50 L12 80 L100 80 Z" fill={c1} stroke={c2} strokeWidth="1.6" strokeLinejoin="round" /></g>;
+    case "checks": return <g>{Array.from({ length: 30 }, (_, i) => { const x = 8 + (i % 5) * 9, y = 8 + Math.floor(i / 5) * 12; return <rect key={i} x={x} y={y} width="9" height="12" fill={(i % 5 + Math.floor(i / 5)) % 2 ? c1 : c2} />; })}</g>;
+    case "stars": return <g>{[[30, 30, 7], [44, 20, 5], [26, 52, 6], [62, 18, 4.5], [40, 62, 5]].map(([x, y, r], i) => <path key={i} d={starPath(x, y, r)} fill={i % 2 ? c2 : c1} />)}</g>;
+    case "bolt": return <path d="M76 12 L46 42 L62 44 L28 76 L48 50 L34 48 L58 12 Z" fill={c1} stroke={c2} strokeWidth="1.6" strokeLinejoin="round" />;
+    case "pinstripes": return <g fill="none" strokeLinecap="round">{[0, 1, 2, 3].map(i => <path key={i} d={`M10 ${50 + i * 6} C34 ${36 + i * 6} 64 ${24 + i * 5} 100 ${22 + i * 5}`} stroke={i % 2 ? c2 : c1} strokeWidth="1.6" />)}</g>;
+    case "dots": return <g>{[[24, 28], [36, 20], [30, 42], [44, 34], [20, 56], [40, 54], [56, 22], [50, 64], [66, 58], [32, 66]].map(([x, y], i) => <circle key={i} cx={x} cy={y} r="3.6" fill={i % 3 ? c1 : c2} />)}</g>;
+    default: return null;
+  }
+}
+function HelmetArt({ spec, size = 40, visorOpen = false }) {
+  const h = cleanHelmet(spec);
+  const uid = (React.useId ? React.useId() : "h").replace(/[^a-zA-Z0-9]/g, "");
+  const base = h.base || C.accent, [v0, v1] = VISOR_STOPS[h.visor] || VISOR_STOPS.smoke;
+  return (
+    <svg data-helmet="" data-pattern={h.pattern} data-visor={visorOpen ? "open" : "closed"} data-finish={h.finish} viewBox="0 0 100 86" width={size} height={Math.round(size * .86)} aria-hidden="true" style={{ display: "block", overflow: "visible" }}>
+      <defs>
+        <clipPath id={"hc" + uid}><path d={HELMET_SHELL} /></clipPath>
+        <linearGradient id={"hv" + uid} x1="0" y1="0" x2="1" y2="1"><stop offset="0" stopColor={v0} /><stop offset="1" stopColor={v1} /></linearGradient>
+        <linearGradient id={"hg" + uid} x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="#fff" stopOpacity=".5" /><stop offset=".45" stopColor="#fff" stopOpacity="0" /></linearGradient>
+        <linearGradient id={"ha" + uid} x1="0" y1="0" x2="1" y2="0"><stop offset="0" stopColor={h.c1} stopOpacity="0" /><stop offset="1" stopColor={h.c1} stopOpacity=".75" /></linearGradient>
+      </defs>
+      <path d={HELMET_SHELL} fill={base} />
+      <g clipPath={`url(#hc${uid})`}>
+        <HelmetPattern id={h.pattern} c1={h.c1} c2={h.c2} />
+        {h.finish === "airbrush" && <rect x="0" y="0" width="100" height="86" fill={`url(#ha${uid})`} />}
+        {h.finish === "matte" && <rect x="0" y="0" width="100" height="86" fill="rgba(0,0,0,.2)" />}
+        {h.finish !== "matte" && <ellipse cx="46" cy="22" rx="34" ry="16" fill={`url(#hg${uid})`} />}
+        <path d="M16 66 L96 66 L96 80 L16 80 Z" fill="#141418" />
+      </g>
+      <path d={HELMET_SHELL} fill="none" stroke="rgba(0,0,0,.45)" strokeWidth="1.4" />
+      <path d={HELMET_VISOR} fill="#07080A" />
+      <g className="helmet-visor" style={{ transform: visorOpen ? "rotate(-26deg)" : "none", transformOrigin: "54px 40px" }}>
+        <path d={HELMET_VISOR} fill={`url(#hv${uid})`} stroke="#07080A" strokeWidth="1.2" />
+        <path d="M60 34 C70 31 80 31 88 34" fill="none" stroke="#fff" strokeOpacity=".35" strokeWidth="1.6" strokeLinecap="round" />
+        <circle cx="54" cy="40" r="2.6" fill="#2A2A30" stroke="#55555F" strokeWidth=".8" />
+      </g>
+      {h.number != null && <text x="33" y="55" textAnchor="middle" fontFamily={F_HEAD} fontWeight="900" fontStyle="italic" fontSize="17" fill="#fff" stroke="#000" strokeWidth=".8" paintOrder="stroke">{h.number}</text>}
+    </svg>
+  );
+}
+
+// Editor del casco (G15): colore di base (o quello dei tasti), i due colori del disegno, il disegno, il numero (0-99),
+// la visiera e la finitura. Entrando la visiera si alza; salvando si abbassa con il clack (suono e vibrazione), poi
+// l'editor si chiude e il casco va nei dati dell'account.
+const HELMET_EXTRA = [{ name: "Bianco", color: "#FFFFFF" }, { name: "Nero", color: "#111111" }];
+function HelmetEditor({ helmet, onSave, onClose }) {
+  const [d, setD] = useState(() => cleanHelmet(helmet));
+  const [closing, setClosing] = useState(false);
+  const timer = useRef(null);
+  useEffect(() => () => clearTimeout(timer.current), []);
+  const set = (k, v) => setD(x => cleanHelmet({ ...x, [k]: v }));
+  const save = () => {
+    if (closing) return;
+    setClosing(true); fx.play("clack"); fx.buzz("medium");
+    timer.current = setTimeout(() => { onSave && onSave(cleanHelmet(d)); onClose(); }, 520);
+  };
+  const head = { fontFamily: F_BODY, fontWeight: 700, fontSize: 11, color: C.dim, letterSpacing: 1, margin: "16px 0 8px" };
+  const sw = (on, color) => ({ width: 30, height: 30, borderRadius: "50%", background: color, boxShadow: on ? `0 0 0 2px ${C.card}, 0 0 0 4px ${C.text}` : "inset 0 0 0 1px rgba(255,255,255,.2)", flexShrink: 0 });
+  const swatches = (key, list, extra = null) => (
+    <div data-helmet-opt={key} style={{ display: "flex", flexWrap: "wrap", gap: 9 }}>
+      {extra}
+      {list.map(c => <button key={c.color} className="press" aria-label={c.name} aria-pressed={d[key] === c.color ? "true" : "false"} onClick={() => set(key, c.color)} style={sw(d[key] === c.color, c.color)} />)}
+    </div>
+  );
+  const chips = (key, list) => (
+    <div data-helmet-opt={key} style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+      {list.map(o => <button key={o.id} className="press" aria-pressed={d[key] === o.id ? "true" : "false"} onClick={() => { set(key, o.id); fx.play("tick"); fx.buzz("select"); }} style={aChip(d[key] === o.id)}>{o.name}</button>)}
+    </div>
+  );
+  const num = d.number == null ? "" : String(d.number);
+  const step = k => set("number", Math.max(0, Math.min(99, (d.number == null ? (k > 0 ? -1 : 1) : d.number) + k)));
+  return (
+    <div style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,.8)", zIndex: 640, display: "flex", alignItems: "flex-end" }} onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
+      <div className="scrollcol" data-helmet-editor="" style={{ background: C.card, borderRadius: "24px 24px 0 0", width: "100%", maxHeight: "92%", padding: "18px 20px 22px" }}>
+        <div style={{ display: "flex", alignItems: "center", marginBottom: 4 }}>
+          <h2 style={{ flex: 1, fontFamily: F_HEAD, fontWeight: 900, fontStyle: "italic", fontSize: 17, color: C.text, margin: 0 }}>IL TUO CASCO</h2>
+          <button className="press" aria-label="Chiudi" onClick={onClose} style={{ width: 32, height: 32, borderRadius: "50%", background: "rgba(255,255,255,.08)", display: "flex", alignItems: "center", justifyContent: "center" }}><Icon name="close" size={13} sw={2.2} /></button>
+        </div>
+        <div style={{ display: "flex", justifyContent: "center", padding: "10px 0 4px", background: "radial-gradient(60% 70% at 50% 55%, rgba(255,255,255,.07), rgba(255,255,255,0))" }}>
+          <HelmetArt spec={d} size={150} visorOpen={!closing} />
+        </div>
+        <div style={head}>COLORE DI BASE</div>
+        {swatches("base", Colors.PALETTE, (
+          <>
+            <button className="press" aria-label="Colore dei tasti" aria-pressed={d.base == null ? "true" : "false"} onClick={() => set("base", null)} style={{ ...sw(d.base == null, C.accent), display: "flex", alignItems: "center", justifyContent: "center" }}><Icon name="palette" size={14} color={C.onAccent} /></button>
+            <label style={{ position: "relative", ...sw(false, "conic-gradient(#FF1801, #FFD100, #4AE54A, #27F4D2, #3671C6, #A142F4, #FF87BC, #FF1801)"), overflow: "hidden", cursor: "pointer" }}>
+              <input type="color" aria-label="Scegli tu il colore di base" value={(d.base || C.accent).toLowerCase()} onChange={e => set("base", e.target.value)} style={{ position: "absolute", inset: 0, opacity: 0, width: "100%", height: "100%", border: "none", padding: 0 }} />
+            </label>
+          </>
+        ))}
+        <div style={head}>PRIMO COLORE DEL DISEGNO</div>
+        {swatches("c1", [...HELMET_EXTRA, ...Colors.PALETTE])}
+        <div style={head}>SECONDO COLORE DEL DISEGNO</div>
+        {swatches("c2", [...HELMET_EXTRA, ...Colors.PALETTE])}
+        <div style={head}>DISEGNO</div>
+        {chips("pattern", HELMET_PATTERNS)}
+        <div style={head}>NUMERO</div>
+        <div data-helmet-opt="number" style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <button className="press" aria-label="Numero più basso" onClick={() => step(-1)} style={{ ...aChip(false), width: 38, justifyContent: "center", fontSize: 16 }}>−</button>
+          <input data-helmet-number="" type="number" inputMode="numeric" min="0" max="99" aria-label="Numero (0-99)" placeholder="–" value={num} onChange={e => set("number", e.target.value === "" ? null : e.target.value)}
+            style={{ width: 92, padding: "9px 12px", borderRadius: 11, background: C.bg, border: `1px solid ${C.border}`, fontFamily: F_HEAD, fontWeight: 900, fontStyle: "italic", fontSize: 18, color: C.text, textAlign: "center" }} />
+          <button className="press" aria-label="Numero più alto" onClick={() => step(1)} style={{ ...aChip(false), width: 38, justifyContent: "center", fontSize: 16 }}>+</button>
+          <span style={{ fontFamily: F_BODY, fontSize: 11.5, color: C.dim }}>da 0 a 99, vuoto = senza</span>
+        </div>
+        <div style={head}>VISIERA</div>
+        {chips("visor", HELMET_VISORS)}
+        <div style={head}>FINITURA</div>
+        {chips("finish", HELMET_FINISHES)}
+        <button className="press" onClick={save} style={{ display: "block", width: "100%", marginTop: 20, padding: "14px 0", borderRadius: 14, background: C.accent, fontFamily: F_HEAD, fontWeight: 900, fontStyle: "italic", fontSize: 14, color: C.onAccent }}>SALVA IL CASCO</button>
+        <button className="press" onClick={onClose} style={{ display: "block", width: "100%", padding: "12px 0", fontFamily: F_BODY, fontWeight: 600, fontSize: 13, color: C.muted }}>Annulla</button>
+      </div>
+    </div>
   );
 }
 
@@ -5791,7 +5917,7 @@ function FantaScreen({ squad, setSquad, base, freeTransfers, budget, stats, race
   );
 }
 
-function ProfiloScreen({ ig, onOpenIg, trial = null, trialUsed = false, onBack, onNotifiche, onPremium, onAdmin, onLogout, isPremium, onAbout, onHelp, onFeedback, aboutMe, onSaveAboutMe, favTeam, favDriver, onPickTeam, onPickDriver, guest, onLogin, onTerms, blocked = [], onUnblock, onDeleteAccount, savedCount = 0, onOpenSaved, account = null, onSaveName, isAdmin = false, onTheme, sounds = true, haptics = true, onSounds, onHaptics }) {
+function ProfiloScreen({ ig, onOpenIg, trial = null, trialUsed = false, onBack, onNotifiche, onPremium, onAdmin, onLogout, isPremium, onAbout, onHelp, onFeedback, aboutMe, onSaveAboutMe, favTeam, favDriver, onPickTeam, onPickDriver, guest, onLogin, onTerms, blocked = [], onUnblock, onDeleteAccount, savedCount = 0, onOpenSaved, account = null, onSaveName, isAdmin = false, onTheme, sounds = true, haptics = true, onSounds, onHaptics, helmet = null, onHelmet }) {
   const ft = favTeam ? teamById(favTeam) : null;
   const fd = favDriver ? driverById(favDriver) : null;
   const favRows = [
@@ -5837,7 +5963,6 @@ function ProfiloScreen({ ig, onOpenIg, trial = null, trialUsed = false, onBack, 
     { icon: "lock", label: "Privacy Policy", onClick: () => openUrl(PRIVACY_URL), chevron: true },
     { icon: "doc", label: "Termini e Condizioni", onClick: onTerms, chevron: true },
   ];
-  const initials = (((account && account.name) || "").trim().slice(0, 2) || "B&T").toUpperCase();
   return (
     <div className="scrollcol" style={{ height: "100%" }}>
       <SubHeader title="PROFILO" onBack={onBack} />
@@ -5852,7 +5977,9 @@ function ProfiloScreen({ ig, onOpenIg, trial = null, trialUsed = false, onBack, 
       <div style={{ display: "flex", flexDirection: "column", alignItems: "center", padding: "14px 24px 22px" }}>
         <div style={{ position: "relative" }}>
           <div data-profile-avatar="" style={{ width: 84, height: 84, borderRadius: "50%", background: C.accent, display: "flex", alignItems: "center", justifyContent: "center" }}>
-            <span style={{ fontFamily: F_HEAD, fontWeight: 900, fontStyle: "italic", fontSize: 26, color: "#fff" }}>{initials}</span>
+            <button className="press" aria-label="Modifica il casco" onClick={onHelmet} style={{ width: 78, height: 78, borderRadius: "50%", background: "#111114", display: "flex", alignItems: "center", justifyContent: "center" }}>
+              <HelmetArt spec={helmet} size={64} />
+            </button>
           </div>
           {!waiting && <button className="press" aria-label={editing ? "Salva profilo" : "Modifica profilo"} onClick={() => (editing ? saveName() : (setName(account ? account.name : ""), setEditing(true)))} style={{ position: "absolute", bottom: -2, right: -2, width: 30, height: 30, borderRadius: "50%", background: editing ? C.accent : C.card, border: `2px solid ${C.bg}`, display: "flex", alignItems: "center", justifyContent: "center" }}>
             <Icon name={editing ? "check" : "edit"} size={13} color={editing ? "#fff" : C.text} sw={2.3} />
@@ -7465,6 +7592,7 @@ function App() {
   const [helmet, setHelmet] = useState(USER_INIT.helmet);
   const [hidden, setHidden] = useState(USER_INIT.hidden);
   const [themeOpen, setThemeOpen] = useState(false);
+  const [helmetOpen, setHelmetOpen] = useState(false);
   const [picker, setPicker] = useState(null); // 'team' | 'driver'
   const [adminUnlocked, setAdminUnlocked] = useState(false);
   const [guest, setGuest] = useState(false);
@@ -7640,7 +7768,7 @@ function App() {
     freeTransfers: setFreeTransfers, predAnswers: setPredAnswers, sillyPreds: setSillyPreds, stratPreds: setStratPreds, pitBest: setPitBest, wxGuess: setWxGuess,
     ratings: setRatings, dotd: setDotd, notifSeenAt: setNotifSeenAt,
     theme: v => setTheme(cleanTheme(v) || USER_INIT.theme), sounds: v => setSounds(v !== false), haptics: v => setHaptics(v !== false),
-    helmet: setHelmet, hidden: v => setHidden(Array.isArray(v) ? v : []) };
+    helmet: v => setHelmet(v == null ? null : cleanHelmet(v)), hidden: v => setHidden(Array.isArray(v) ? v : []) };
   // Dati dell'account arrivati (per quale email): finché non arrivano, il colore dell'app resta quello del telefono.
   const [userLoaded, setUserLoaded] = useState(null);
   const loadUser = em => AppData.loadUserData(em).then(data => {
@@ -8162,6 +8290,7 @@ function App() {
   useBack(!!infoModal, () => setInfoModal(null));
   useBack(!!picker, () => setPicker(null));
   useBack(themeOpen, () => setThemeOpen(false));
+  useBack(helmetOpen, () => setHelmetOpen(false));
   useBack(shareId != null, () => setShareId(null));
   useBack(termsOpen, () => setTermsOpen(false));
   useBack(feedbackOpen, () => setFeedbackOpen(false));
@@ -8280,7 +8409,7 @@ function App() {
   else if (view === "instagram") body = <InstagramView ig={ig} onToast={showToast} onBack={viewBack.instagram} />;
   else if (view === "ghost") body = <GhostLap onBack={viewBack.ghost} />;
   else if (view === "chats") body = <ChatsView chats={chats} onOpen={openChat} blocked={blocked} onBack={viewBack.chats} unreadOf={(id, ms) => Chat.unread(id, ms)} />;
-  else if (view === "profilo") body = <ProfiloScreen ig={ig} onOpenIg={() => { setIgFrom("profilo"); setView("instagram"); }} aboutMe={aboutMe} onSaveAboutMe={a => Account.updateAbout(a).catch(e => showToast(e && (e.code === "too-young" || e.code === "not-loaded") ? messageOf(e) : NOT_SAVED))} account={account} onSaveName={n => Account.updateName(n)} isAdmin={Account.isAdmin()} trial={trialActive ? trial : null} trialUsed={!!trial} onBack={viewBack.profilo} onNotifiche={() => setView("notifiche")} onPremium={() => setPremiumOpen(true)} onAdmin={() => guest ? needLogin("Accedi per usare il pannello admin.") : setView(adminUnlocked ? "admin" : "adminLock")} onLogout={logout} isPremium={isPremium} onAbout={() => setInfoModal({ title: "Info su B&T", body: ABOUT_TEXT })} onFeedback={() => setFeedbackOpen(true)} onHelp={() => setInfoModal({ title: "Assistenza", body: HELP_TEXT })} favTeam={favTeam} favDriver={favDriver} onPickTeam={() => guest ? needLogin("Per scegliere scuderia e pilota del cuore serve un account.") : setPicker("team")} onPickDriver={() => guest ? needLogin("Per scegliere scuderia e pilota del cuore serve un account.") : setPicker("driver")} guest={guest} onLogin={() => needLogin(null)} onTerms={() => setTermsOpen(true)} blocked={blocked} onUnblock={unblockUser} onDeleteAccount={deleteAccount} savedCount={saved.length} onOpenSaved={openSaved} onTheme={() => setThemeOpen(true)}
+  else if (view === "profilo") body = <ProfiloScreen ig={ig} onOpenIg={() => { setIgFrom("profilo"); setView("instagram"); }} aboutMe={aboutMe} onSaveAboutMe={a => Account.updateAbout(a).catch(e => showToast(e && (e.code === "too-young" || e.code === "not-loaded") ? messageOf(e) : NOT_SAVED))} account={account} onSaveName={n => Account.updateName(n)} isAdmin={Account.isAdmin()} trial={trialActive ? trial : null} trialUsed={!!trial} onBack={viewBack.profilo} onNotifiche={() => setView("notifiche")} onPremium={() => setPremiumOpen(true)} onAdmin={() => guest ? needLogin("Accedi per usare il pannello admin.") : setView(adminUnlocked ? "admin" : "adminLock")} onLogout={logout} isPremium={isPremium} onAbout={() => setInfoModal({ title: "Info su B&T", body: ABOUT_TEXT })} onFeedback={() => setFeedbackOpen(true)} onHelp={() => setInfoModal({ title: "Assistenza", body: HELP_TEXT })} favTeam={favTeam} favDriver={favDriver} onPickTeam={() => guest ? needLogin("Per scegliere scuderia e pilota del cuore serve un account.") : setPicker("team")} onPickDriver={() => guest ? needLogin("Per scegliere scuderia e pilota del cuore serve un account.") : setPicker("driver")} guest={guest} onLogin={() => needLogin(null)} onTerms={() => setTermsOpen(true)} blocked={blocked} onUnblock={unblockUser} onDeleteAccount={deleteAccount} savedCount={saved.length} onOpenSaved={openSaved} onTheme={() => setThemeOpen(true)} helmet={helmet} onHelmet={() => setHelmetOpen(true)}
     sounds={sounds} haptics={haptics} onSounds={v => { if (userDataWait()) return; setSounds(v); fx.setSounds(v); if (v) fx.play("tick"); }} onHaptics={v => { if (userDataWait()) return; setHaptics(v); fx.setHaptics(v); if (v) fx.buzz("light"); }} />;
   else if (view === "notifiche") body = <NotificheScreen onBack={viewBack.notifiche} onAction={a => { if (a === "feedback") { if (feedbackAsk && !feedbackAsk.read) saveAsk({ ...feedbackAsk, read: true }); setFeedbackOpen(true); } }} notifs={notifs} onReadAll={readAll} isPremium={isPremium} onPremium={() => setPremiumOpen(true)} favTeam={favTeam} favDriver={favDriver} prefs={notifPrefs} onPrefs={v => { if (!userDataWait()) setNotifPrefs(v); }} onGoProfilo={() => setView("profilo")} />;
   else {
@@ -8297,7 +8426,7 @@ function App() {
 
   return shell(
       <div data-bg={pageBg || undefined} style={{ height: "100%", display: "flex", flexDirection: "column", position: "relative", background: pageBg && PAGE_BG[pageBg] ? PAGE_BG[pageBg] : undefined, transition: "background .3s" }}>
-        {showTopHeader && <TopHeader trialDays={trialActive ? trialDaysLeft(trial) : 0} isPremium={isPremium} unread={unreadCount} onPremium={() => setPremiumOpen(true)} onBell={() => setView("notifiche")} onProfile={() => setView("profilo")} />}
+        {showTopHeader && <TopHeader trialDays={trialActive ? trialDaysLeft(trial) : 0} isPremium={isPremium} unread={unreadCount} onPremium={() => setPremiumOpen(true)} onBell={() => setView("notifiche")} onProfile={() => setView("profilo")} helmet={helmet} />}
         {showTopHeader && offline && <div role="status" data-offline="" style={{ margin: "-6px 16px 10px", padding: "8px 12px", borderRadius: 10, background: "rgba(231,179,76,.12)", border: "1px solid rgba(231,179,76,.35)", fontFamily: F_BODY, fontSize: 12, color: C.text, lineHeight: 1.4, flexShrink: 0 }}>{OFFLINE_LINE}</div>}
         <div style={{ flex: 1, minHeight: 0 }}>{body}</div>
         {showBottomNav && <BottomNav active={tab} onChange={goTab} />}
@@ -8308,6 +8437,7 @@ function App() {
         {lapList && live && liveSt && <LapTimesModal live={live} st={liveSt} carId={lapList} onOpenLap={n => setTelemetry({ carId: lapList, lapNo: n, sector: 0 })} onClose={() => setLapList(null)} />}
         {telemetry && live && liveSt && <TelemetryModal live={live} st={liveSt} carId={telemetry.carId} lapNo={telemetry.lapNo} sector={telemetry.sector} onClose={() => setTelemetry(null)} />}
         {infoModal && <InfoModal title={infoModal.title} body={infoModal.body} onClose={() => setInfoModal(null)} />}
+        {helmetOpen && <HelmetEditor helmet={helmet} onSave={v => { if (!userDataWait()) setHelmet(v); }} onClose={() => setHelmetOpen(false)} />}
         {themeOpen && <ThemeSheet theme={theme} favTeam={favTeam} onPick={v => { if (!userDataWait()) setTheme(v); }} onClose={() => setThemeOpen(false)} />}
         {picker === "team" && <PickerModal title="SCUDERIA DEL CUORE" selected={favTeam} onPick={v => { if (!userDataWait()) setFavTeam(v); }} onClose={() => setPicker(null)}
           options={TEAMS.map(t => ({ id: t.id, label: t.name, color: t.color, sub: t.tag }))} />}
