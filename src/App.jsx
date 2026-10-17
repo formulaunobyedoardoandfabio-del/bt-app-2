@@ -1190,6 +1190,78 @@ function PollCard({ poll, vote, onVote, title = "SONDAGGIO" }) {
   );
 }
 
+// Tira giù per aggiornare (G14): dall'inizio della pagina il dito che tira fa salire il contagiri; oltre la soglia
+// (fuorigiri) al rilascio la cambiata (suono e vibrazione) e onRefresh rilegge le notizie da Firebase. Col dito si usano
+// gli eventi touch (touchmove non passivo: mentre si tira la pagina non rimbalza), col mouse i pointer events.
+const PULL_MAX = 96;   // px di tirata (dopo la resistenza) per arrivare al fuorigiri
+function usePullRefresh(ref, onRefresh) {
+  const [pull, setPull] = useState(0);
+  const [busy, setBusy] = useState(false);
+  const [dragging, setDragging] = useState(false);
+  const st = useRef(null), pullRef = useRef(0), busyRef = useRef(false);
+  pullRef.current = pull; busyRef.current = busy;
+  const start = (x, y) => { const el = ref.current; if (!el || el.scrollTop > 0 || busyRef.current) return; st.current = { x, y, active: false }; };
+  const move = (x, y, e) => {
+    const s = st.current; if (!s) return;
+    const dy = y - s.y, dx = x - s.x;
+    if (!s.active) {
+      if (Math.abs(dy) < 8 && Math.abs(dx) < 8) return;
+      if (dy > 0 && Math.abs(dx) < dy * SWIPE.ratio && ref.current && ref.current.scrollTop <= 0) { s.active = true; setDragging(true); try { window.getSelection().removeAllRanges(); } catch (err) {} }
+      else { st.current = null; return; }
+    }
+    if (e && e.cancelable) e.preventDefault();
+    setPull(Math.max(0, Math.min(PULL_MAX * 1.35, (dy - 8) * 0.6)));
+  };
+  const end = () => {
+    const s = st.current; st.current = null; setDragging(false);
+    if (!s || !s.active) return;
+    if (pullRef.current >= PULL_MAX) {
+      fx.play("shift"); fx.buzz("medium");
+      setBusy(true); setPull(56);
+      Promise.resolve(onRefresh && onRefresh()).catch(() => {}).then(() => { setBusy(false); setPull(0); });
+    } else setPull(0);
+  };
+  const fns = useRef({});
+  fns.current = { start, move, end };
+  useEffect(() => {
+    const el = ref.current; if (!el) return undefined;
+    const ts = e => { const t = e.touches[0]; if (t && e.touches.length === 1) fns.current.start(t.clientX, t.clientY); };
+    const tm = e => { const t = e.touches[0]; if (t) fns.current.move(t.clientX, t.clientY, e); };
+    const te = () => fns.current.end();
+    el.addEventListener("touchstart", ts, { passive: true });
+    el.addEventListener("touchmove", tm, { passive: false });
+    el.addEventListener("touchend", te); el.addEventListener("touchcancel", te);
+    return () => { el.removeEventListener("touchstart", ts); el.removeEventListener("touchmove", tm); el.removeEventListener("touchend", te); el.removeEventListener("touchcancel", te); };
+  }, []);
+  const mouse = e => e.pointerType === "mouse";
+  return {
+    pull, busy, dragging, rev: Math.min(1, pull / PULL_MAX),
+    handlers: {
+      onPointerDown: e => { if (mouse(e) && e.button === 0) start(e.clientX, e.clientY); },
+      onPointerMove: e => { if (mouse(e)) move(e.clientX, e.clientY, e); },
+      onPointerUp: e => { if (mouse(e)) end(); },
+      onPointerCancel: e => { if (mouse(e)) end(); },
+    },
+  };
+}
+// Il contagiri di "tira giù per aggiornare": la lancetta sale con la tirata (rev da 0 a 1), l'ultimo tratto è rosso.
+function PullGauge({ rev, busy, pull }) {
+  const ang = -120 + 240 * rev, red = rev >= 1;
+  const arc = (a0, a1) => { const p = a => [24 + 18 * Math.sin(a * Math.PI / 180), 26 - 18 * Math.cos(a * Math.PI / 180)]; const [x0, y0] = p(a0), [x1, y1] = p(a1); return `M${x0.toFixed(2)} ${y0.toFixed(2)}A18 18 0 ${a1 - a0 > 180 ? 1 : 0} 1 ${x1.toFixed(2)} ${y1.toFixed(2)}`; };
+  return (
+    <div data-rev={rev.toFixed(2)} role="status" aria-live="polite" style={{ position: "absolute", left: 0, right: 0, top: 0, height: Math.max(pull, 56), display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "flex-end", gap: 2, paddingBottom: 4, pointerEvents: "none", opacity: busy ? 1 : Math.min(1, .35 + rev) }}>
+      <svg viewBox="0 0 48 44" width="52" height="48" aria-hidden="true" className={busy ? "gauge-busy" : undefined}>
+        <path d={arc(-120, 72)} fill="none" stroke="rgba(255,255,255,.22)" strokeWidth="4" strokeLinecap="round" />
+        <path d={arc(72, 120)} fill="none" stroke={C.red} strokeWidth="4" strokeLinecap="round" />
+        {[-120, -72, -24, 24, 72, 120].map(a => <line key={a} x1="24" y1="11" x2="24" y2="14" stroke="rgba(255,255,255,.4)" strokeWidth="1.4" transform={`rotate(${a} 24 26)`} />)}
+        <g style={{ transform: `rotate(${ang}deg)`, transformOrigin: "24px 26px" }}><line x1="24" y1="26" x2="24" y2="11" stroke={red ? C.red : C.text} strokeWidth="2.4" strokeLinecap="round" /></g>
+        <circle cx="24" cy="26" r="3" fill={C.text} />
+      </svg>
+      <span style={{ fontFamily: F_HEAD, fontWeight: 800, fontSize: 10.5, letterSpacing: .8, color: red || busy ? C.text : C.dim }}>{busy ? "Aggiornamento…" : red ? "Rilascia per aggiornare" : "Tira per aggiornare"}</span>
+    </div>
+  );
+}
+
 // Riga di una notizia dell'elenco che si trascina (G11): a destra si salva (la pistola pneumatica avvita il dado), a
 // sinistra si nasconde (il fumo del bloccaggio). La riga segue il dito (solo transform); lo swipe vale come dice
 // classifySwipe; se il dito va in verticale la pagina scorre come sempre (touch-action: pan-y). Dopo un trascinamento
@@ -1317,8 +1389,10 @@ function TyreFilter({ value, onChange }) {
   );
 }
 
-function HomeScreen({ ig, onOpenIg, highlights = [], articles, tagFilter, onTag, onClearTag, onOpenArticle, isPremium, onPremium, onToast, onLiveTrack, onGoFanta, saved = [], onToggleSave, savedOnly = false, setSavedOnly, onOpenCircuit, homePoll = null, homeVote = null, onVote, hidden = [], onHide, onUnhideAll, onSwipeSave }) {
+function HomeScreen({ ig, onOpenIg, highlights = [], articles, tagFilter, onTag, onClearTag, onOpenArticle, isPremium, onPremium, onToast, onLiveTrack, onGoFanta, saved = [], onToggleSave, savedOnly = false, setSavedOnly, onOpenCircuit, homePoll = null, homeVote = null, onVote, hidden = [], onHide, onUnhideAll, onSwipeSave, onRefresh }) {
   const [q, setQ] = useState("");
+  const homeRef = useRef(null);
+  const pullRev = usePullRefresh(homeRef, onRefresh);
   const [tyre, setTyre] = useState(null);     // filtro a gomma (G09): soft | medium | hard | inter
   const [lane, setLane] = useState("all");    // Pit Lane (G10): all | teams | drivers | tech
   const published = articles.filter(a => a.published !== false);
@@ -1346,7 +1420,9 @@ function HomeScreen({ ig, onOpenIg, highlights = [], articles, tagFilter, onTag,
     { name: "GP del Bahrain 2025", winner: "O. Piastri" },
   ];
   return (
-    <div className="scrollcol" style={{ height: "100%" }}>
+    <div ref={homeRef} data-home="" className="scrollcol" {...pullRev.handlers} style={{ height: "100%", position: "relative", overscrollBehaviorY: "contain", userSelect: pullRev.dragging ? "none" : undefined, WebkitUserSelect: pullRev.dragging ? "none" : undefined }}>
+      {(pullRev.pull > 0 || pullRev.busy) && <PullGauge rev={pullRev.rev} busy={pullRev.busy} pull={pullRev.pull} />}
+      <div style={{ transform: pullRev.pull ? `translateY(${pullRev.pull}px)` : undefined, transition: pullRev.dragging ? "none" : "transform .25s ease" }}>
       <div style={{ display: "flex", gap: 10, padding: "4px 16px 20px" }}>
         <button className="press" onClick={() => isPremium ? onLiveTrack() : onPremium()} style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 8, padding: "14px 0", borderRadius: 14, background: C.accent, boxShadow: `0 10px 22px -10px ${C.accent}` }}>
           <span style={{ width: 8, height: 8, borderRadius: "50%", background: "#fff" }} />
@@ -1505,6 +1581,7 @@ function HomeScreen({ ig, onOpenIg, highlights = [], articles, tagFilter, onTag,
       </div>
       <p style={{ fontFamily: F_BODY, fontSize: 10, color: C.dim, lineHeight: 1.55, textAlign: "center", margin: "18px 24px 6px" }}>{F1_DISCLAIMER}</p>
       <div style={{ height: 8 }} />
+      </div>
     </div>
   );
 }
@@ -8208,7 +8285,8 @@ function App() {
   else if (view === "notifiche") body = <NotificheScreen onBack={viewBack.notifiche} onAction={a => { if (a === "feedback") { if (feedbackAsk && !feedbackAsk.read) saveAsk({ ...feedbackAsk, read: true }); setFeedbackOpen(true); } }} notifs={notifs} onReadAll={readAll} isPremium={isPremium} onPremium={() => setPremiumOpen(true)} favTeam={favTeam} favDriver={favDriver} prefs={notifPrefs} onPrefs={v => { if (!userDataWait()) setNotifPrefs(v); }} onGoProfilo={() => setView("profilo")} />;
   else {
     if (tab === "home") body = <HomeScreen ig={ig} highlights={highlights} onOpenIg={() => { setIgFrom("tab"); setView("instagram"); }} articles={articles} tagFilter={tagFilter} onTag={filterByTag} onClearTag={() => setTagFilter(null)} onOpenArticle={openArticle} isPremium={isPremium} onPremium={() => setPremiumOpen(true)} onToast={showToast} onLiveTrack={() => setLiveTrackOpen(true)} onGoFanta={() => goTab("fanta")}  saved={saved} onToggleSave={toggleSave} savedOnly={savedOnly} setSavedOnly={setSavedOnly} onOpenCircuit={openCircuit} homePoll={homePoll} homeVote={votes.home || null} onVote={castVote}
-      hidden={hidden} onHide={hideArticle} onUnhideAll={() => { if (!userDataWait()) setHidden([]); }} onSwipeSave={saveFromSwipe} />;
+      hidden={hidden} onHide={hideArticle} onUnhideAll={() => { if (!userDataWait()) setHidden([]); }} onSwipeSave={saveFromSwipe}
+      onRefresh={() => refreshShared(["news", "highlights", "ig", "homePoll"]).catch(() => {})} />;
     else if (tab === "race") body = <RaceScreen dotdVote={live ? votesNow.dotd[live.raceId] : null} onDotdVote={(k, id) => live && voteDotd(live.raceId, k, id)} ratings={votesNow.ratings} onRate={rateDriver} onOpenChats={() => setView("chats")} onOpenGhost={() => setView("ghost")} races={races} standings={standings} isPremium={isPremium} onPremium={() => setPremiumOpen(true)} onSelectDriver={setSelectedDriver} live={live} liveSt={liveSt} onExpandMap={() => setLiveTrackOpen(true)} onTelemetry={(carId, lapNo, sector) => setTelemetry({ carId, lapNo, sector })} onOpenCircuit={openCircuit} wxGuess={wxGuess} wxResult={wxResult} onGuessWeather={guessWeather} onLapTimes={setLapList} onSecondScreen={() => setSsOpen(true)} lastRace={lastRace} of1={of1} onOf1Refresh={() => of1TickRef.current && of1TickRef.current()} replay={replayCtl} />;
     else if (tab === "garage") body = <GarageScreen races={races} pitBest={pitBest} onPitResult={t => { if (!userDataWait()) setPitBest(b => b == null || t < b ? t : b); }} sillyPreds={sillyPreds} onPredict={predictSeat} sillyOfficial={sillyOfficial} live={live} stratPreds={stratPreds} onStrat={(id, st) => { if (!userDataWait()) setStratPreds(x => ({ ...x, [id]: { stints: st, at: nowMs() } })); }} bluffTags={bluffNow} onBluffRefresh={loadBluffTags} />;
     else if (tab === "fanta") body = <FantaScreen squad={squad} setSquad={setSquad} base={squadBase} freeTransfers={freeTransfers} budget={FANTA_BUDGET} stats={fantaStats} race={fantaRace} lock={teamLockInfo} weekends={fantaWeekends} isPremium={isPremium} onPremium={() => setPremiumOpen(true)} onToast={showToast} bonus={bonus} leagues={leagues} setLeagues={setLeagues} needAccount={needAccount} predictions={predictions} predAnswers={predAnswers} predLockOf={predLockOf} onAnswerPrediction={answerPrediction} />;
