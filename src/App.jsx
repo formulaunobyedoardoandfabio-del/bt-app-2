@@ -977,6 +977,23 @@ function AboutCard({ about, onSave }) {
 
 // Accesso e registrazione con Firebase Authentication (src/services/account.js); i messaggi sono quelli dell'app di oggi.
 // auth = { login(email, pw), register({ name, email, pw, pw2, about }), resetPassword(email) }.
+// Password sbagliata (G07): i 5 semafori della partenza, rossi, che lampeggiano gialli, e "PARTENZA ABORTITA". Con
+// "Rimuovi animazioni" restano gialli fermi (App.css): il colore dell'errore resta, il movimento no.
+function AbortLights() {
+  return (
+    <div data-abort-lights="" role="status" style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 8, marginBottom: 12 }}>
+      <div style={{ display: "flex", gap: 9, padding: "9px 14px", borderRadius: 14, background: "#0B0B0E", border: "1px solid rgba(255,255,255,.08)" }}>
+        {[0, 1, 2, 3, 4].map(i => (
+          <span key={i} data-abort-light={i} style={{ position: "relative", width: 18, height: 18, borderRadius: "50%", background: C.red, boxShadow: `0 0 10px ${alpha(C.red, .7)}` }}>
+            <span className="abort-yellow" style={{ position: "absolute", inset: 0, borderRadius: "50%", background: "#FFD21F", boxShadow: "0 0 12px rgba(255,210,31,.8)" }} />
+          </span>
+        ))}
+      </div>
+      <span style={{ fontFamily: F_HEAD, fontWeight: 900, fontStyle: "italic", fontSize: 14, letterSpacing: 1.5, color: "#FFD21F" }}>PARTENZA ABORTITA</span>
+    </div>
+  );
+}
+
 function LoginScreen({ auth, onDone, onGuest, onBack, reason }) {
   const [mode, setMode] = useState("login");
   const [name, setName] = useState("");
@@ -990,19 +1007,28 @@ function LoginScreen({ auth, onDone, onGuest, onBack, reason }) {
   const [follow, setFollow] = useState(ABOUT_INIT.follow);
   const [fan, setFan] = useState(null);
   const [adult, setAdult] = useState(false);   // "Ho almeno 14 anni" (Task 22)
+  const [aborts, setAborts] = useState(0);      // password sbagliata (G07): ogni volta ripartono semafori e tremolio
+  const [kerbTried, setKerbTried] = useState(false);   // CREA ACCOUNT toccato con le password diverse
   const isLogin = mode === "login";
   useBack(!isLogin, () => setMode("login"));   // da REGISTRATI il tasto indietro torna ad ACCEDI
+  // Password diverse (G08): fuori pista quando la conferma è lunga almeno quanto la password (o dopo CREA ACCOUNT).
+  const offTrack = !isLogin && pw2 !== "" && pw !== pw2 && (pw2.length >= pw.length || kerbTried);
+  const typePw = v => { setPw(v); if (aborts) setAborts(0); };
 
   const submit = async () => {
     if (busy) return;
+    if (!isLogin && pw && pw2 && pw !== pw2) { setKerbTried(true); setErr(""); fx.buzz("error"); return; }
     if (!isLogin && name.trim() && email.trim() && pw && pw2 && pw === pw2 && pw.length >= 6 && !fan) { setErr("Scegli che tifoso sei."); return; }
-    setErr(""); setInfo(""); setBusy(true);
+    setErr(""); setInfo(""); setBusy(true); setAborts(0);
     try {
       if (isLogin) await auth.login(email, pw);
       else await auth.register({ name, email, pw, pw2, about: { birth, follow, fan }, adult });
       setBusy(false);
       onDone && onDone({ created: !isLogin });
-    } catch (e) { setBusy(false); setErr(messageOf(e)); }
+    } catch (e) {
+      setBusy(false); setErr(messageOf(e));
+      if (isLogin && e && e.code === "wrong-password") { setAborts(n => n + 1); fx.buzz("error"); fx.play("abort"); }
+    }
   };
   const forgot = async () => {
     if (busy) return;
@@ -1056,12 +1082,14 @@ function LoginScreen({ auth, onDone, onGuest, onBack, reason }) {
         </div>
         <div style={{ marginBottom: 14 }}>
           <label style={labelStyle} htmlFor="authPw">Password</label>
-          <div style={fieldStyle}><Icon name="lock" size={15} color={C.dim} /><input id="authPw" type="password" style={inputStyle} placeholder="••••••••" value={pw} onChange={e => setPw(e.target.value)} /></div>
+          <div style={fieldStyle}><Icon name="lock" size={15} color={C.dim} /><input id="authPw" type="password" style={inputStyle} placeholder="••••••••" value={pw} onChange={e => typePw(e.target.value)} /></div>
         </div>
         {!isLogin && (
           <div style={{ marginBottom: 14 }}>
             <label style={labelStyle} htmlFor="regPw2">Conferma password</label>
-            <div style={fieldStyle}><Icon name="lock" size={15} color={C.dim} /><input id="regPw2" type="password" style={inputStyle} placeholder="••••••••" value={pw2} onChange={e => setPw2(e.target.value)} /></div>
+            {/* Fuori pista: il bordo diventa un cordolo bianco e rosso (stesso campo, così chi scrive non perde il punto). */}
+            <div data-kerb={offTrack ? "" : undefined} style={offTrack ? { ...fieldStyle, padding: "12px 13px", border: "2px solid transparent", background: `linear-gradient(${C.card}, ${C.card}) padding-box, repeating-linear-gradient(135deg, #FFFFFF 0 9px, ${C.red} 9px 18px) border-box` } : fieldStyle}><Icon name="lock" size={15} color={C.dim} /><input id="regPw2" type="password" style={inputStyle} placeholder="••••••••" value={pw2} onChange={e => setPw2(e.target.value)} aria-invalid={offTrack ? "true" : undefined} aria-describedby={offTrack ? "regPw2Err" : undefined} /></div>
+            {offTrack && <p id="regPw2Err" role="alert" style={{ margin: "7px 2px 0", fontFamily: F_BODY, fontSize: 12, fontWeight: 600, color: "#ff6b6b" }}><b style={{ fontFamily: F_HEAD, fontWeight: 900, fontStyle: "italic" }}>Track Limits Exceeded:</b> le password non coincidono</p>}
           </div>
         )}
         {!isLogin && (
@@ -1085,8 +1113,9 @@ function LoginScreen({ auth, onDone, onGuest, onBack, reason }) {
         )}
         {isLogin && <div style={{ textAlign: "right", marginBottom: 18 }}><button className="press" onClick={forgot} style={{ fontFamily: F_BODY, fontWeight: 600, fontSize: 12, color: C.accentInk, padding: "6px 0" }}>Password dimenticata?</button></div>}
         {info && <p style={{ background: "rgba(255,255,255,.05)", border: `1px solid ${C.border}`, borderRadius: 10, padding: "9px 14px", marginTop: 0, marginBottom: 14, color: C.text, fontSize: 12, lineHeight: 1.5 }}>{info}</p>}
+        {isLogin && aborts > 0 && <AbortLights key={aborts} />}
         {err && <p style={{ background: "#E1060018", border: `1px solid ${C.red}`, borderRadius: 10, padding: "9px 14px", marginTop: 0, marginBottom: 14, color: "#ff6b6b", fontSize: 12, lineHeight: 1.5 }}>{err}</p>}
-        <button className="press" onClick={submit} disabled={busy} style={{ display: "block", width: "100%", padding: "15px 0", borderRadius: 14, background: busy ? "#555" : C.accent, boxShadow: busy ? "none" : `0 10px 22px -10px ${C.accent}`, fontFamily: F_HEAD, fontWeight: 900, fontStyle: "italic", fontSize: 14, color: "#fff", letterSpacing: .3, textAlign: "center", marginBottom: 16 }}>
+        <button key={"go-" + aborts} className={aborts && isLogin ? "press abort-shake" : "press"} data-shake={aborts && isLogin ? "1" : undefined} onClick={submit} disabled={busy} style={{ display: "block", width: "100%", padding: "15px 0", borderRadius: 14, background: busy ? "#555" : C.accent, boxShadow: busy ? "none" : `0 10px 22px -10px ${C.accent}`, fontFamily: F_HEAD, fontWeight: 900, fontStyle: "italic", fontSize: 14, color: "#fff", letterSpacing: .3, textAlign: "center", marginBottom: 16 }}>
           {isLogin ? "ACCEDI" : "CREA ACCOUNT"}
         </button>
         <p style={{ textAlign: "center", fontFamily: F_BODY, fontSize: 12, color: C.muted, margin: 0 }}>

@@ -83,4 +83,9 @@
   /* Tappa 3 (G06, G25): la luce posteriore a LED; "seq" = si accendono una riga alla volta. */
   .led-seq > span{ animation:ledseq .84s linear infinite both; }
   @keyframes ledseq{ 0%{ opacity:.16; } 10%,45%{ opacity:1; } 62%,100%{ opacity:.16; } }
-  @media (prefers-reduced-motion:reduce){ .press, .toast, .live-notice{ transition:none; animation:none; } .track-dot{ animation:none !important; } .cta-shine::after{ animation:none; display:none; } .led-seq > span, .pit-zoom, .pit-out, .pit-lines > span > i{ animation:none; } }
+  /* Tappa 3 (G07): partenza abortita. I semafori rossi diventano gialli lampeggianti; il tasto ACCEDI trema. */
+  .abort-yellow{ opacity:0; animation:abortblink 1.6s linear .35s forwards; }
+  @keyframes abortblink{ 0%,12%{ opacity:1; } 13%,25%{ opacity:0; } 26%,38%{ opacity:1; } 39%,51%{ opacity:0; } 52%,64%{ opacity:1; } 65%,77%{ opacity:0; } 78%,100%{ opacity:1; } }
+  .abort-shake{ animation:abortshake .42s cubic-bezier(.36,.07,.19,.97); }
+  @keyframes abortshake{ 10%,90%{ transform:translateX(-2px); } 20%,80%{ transform:translateX(4px); } 30%,50%,70%{ transform:translateX(-7px); } 40%,60%{ transform:translateX(7px); } }
+  @media (prefers-reduced-motion:reduce){ .press, .toast, .live-notice{ transition:none; animation:none; } .track-dot{ animation:none !important; } .cta-shine::after{ animation:none; display:none; } .led-seq > span, .pit-zoom, .pit-out, .pit-lines > span > i{ animation:none; } .abort-yellow{ animation:none; opacity:1; } .abort-shake{ animation:none; } }
