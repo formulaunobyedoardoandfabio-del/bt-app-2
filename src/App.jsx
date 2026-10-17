@@ -456,12 +456,34 @@ function SubHeader({ title, onBack, right }) {
   );
 }
 
-function TopHeader({ isPremium, unread, onPremium, onBell, onProfile, trialDays = 0, helmet = null }) {
+// Logo in alto con la luce posteriore a LED (G25). Easter egg (G26): tre tocchi veloci (ognuno entro EGG_GAP_MS dal
+// precedente) e i LED lampeggiano tre volte, con la sgasata e la vibrazione. onTrack: c'è una sessione in pista, il
+// badge "IN PISTA" con i LED che pulsano.
+const EGG_GAP_MS = 450, EGG_SHOW_MS = 1100;
+function TopHeader({ isPremium, unread, onPremium, onBell, onProfile, trialDays = 0, helmet = null, onTrack = false, onLogoEgg }) {
+  const [egg, setEgg] = useState(false);
+  const taps = useRef({ n: 0, at: 0 }), eggT = useRef(null);
+  useEffect(() => () => clearTimeout(eggT.current), []);
+  const tapLogo = () => {
+    const t = performance.now(), k = taps.current;
+    k.n = t - k.at <= EGG_GAP_MS ? k.n + 1 : 1; k.at = t;
+    if (k.n < 3) return;
+    k.n = 0;
+    setEgg(true); fx.play("rev"); fx.buzz("success"); if (onLogoEgg) onLogoEgg();
+    clearTimeout(eggT.current); eggT.current = setTimeout(() => setEgg(false), EGG_SHOW_MS);
+  };
   return (
     <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "18px 16px 14px", flexShrink: 0 }}>
-      <div style={{ width: 38, height: 38, borderRadius: 11, background: C.accent, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+      <button className="press" data-logo="" aria-label={"B&T"} onClick={tapLogo} style={{ height: 38, padding: "0 11px 0 7px", borderRadius: 11, background: C.accent, display: "flex", alignItems: "center", gap: 7, flexShrink: 0 }}>
+        <span style={{ display: "flex", padding: 3, borderRadius: 5, background: "#0B0B0D" }}><LedGrid mode={egg ? "flash3" : "idle"} size={4} /></span>
         <span style={{ fontFamily: F_HEAD, fontWeight: 900, fontStyle: "italic", fontSize: 14, color: "#fff", letterSpacing: -.5 }}>B&amp;T</span>
-      </div>
+      </button>
+      {onTrack && (
+        <span data-on-track="" role="status" style={{ display: "flex", alignItems: "center", gap: 6, padding: "6px 9px", borderRadius: 999, background: alpha(C.red, .12), border: `1px solid ${alpha(C.red, .45)}`, flexShrink: 0 }}>
+          <LedGrid mode="pulse" size={3} />
+          <span style={{ fontFamily: F_HEAD, fontWeight: 900, fontSize: 10.5, letterSpacing: .8, color: C.text }}>IN PISTA</span>
+        </span>
+      )}
       <div style={{ flexGrow: 1 }} />
       {isPremium ? (
         <div data-premium-chip="on" style={{ display: "flex", alignItems: "center", gap: 6, padding: "8px 14px", borderRadius: 20, background: `linear-gradient(rgba(231,179,76,.16), rgba(231,179,76,.16)) ${C.bg}`, border: `1px solid ${C.gold}` }}>
@@ -1212,6 +1234,20 @@ function AboutCard({ about, onSave }) {
 // auth = { login(email, pw), register({ name, email, pw, pw2, about }), resetPassword(email) }.
 // Password sbagliata (G07): i 5 semafori della partenza, rossi, che lampeggiano gialli, e "PARTENZA ABORTITA". Con
 // "Rimuovi animazioni" restano gialli fermi (App.css): il colore dell'errore resta, il movimento no.
+// Shift Light (G24): al posto delle rotelline e dei "Caricamento…" brevi (accesso, salvataggi, invii). 15 LED come sul
+// volante: 5 verdi, 5 rossi, 5 blu. "run": verdi e rossi si accendono in sequenza finché si aspetta; "done": tutti accesi
+// e i blu lampeggiano, operazione finita. Solo opacità (R4); con "Rimuovi animazioni" accesi fermi (R5, App.css).
+const SHIFT_COLORS = { g: "#2BE05A", r: "#FF1801", b: "#3D7BFF" };
+const SHIFT_PATTERN = "gggggrrrrrbbbbb".split("");
+const SHIFT_DONE_MS = 650;
+function ShiftLight({ state = "run", size = 7, label }) {
+  return (
+    <span data-shift={state} role="status" aria-label={label || (state === "done" ? "Fatto" : "Attendi")} className={"shift-" + state} style={{ display: "inline-flex", alignItems: "center", verticalAlign: "middle", gap: Math.max(2, Math.round(size * .45)) }}>
+      {SHIFT_PATTERN.map((c, i) => <span key={i} data-shift-led={c} style={{ width: size, height: size, borderRadius: "50%", background: SHIFT_COLORS[c], boxShadow: `0 0 ${size}px ${alpha(SHIFT_COLORS[c], .7)}`, animationDelay: state === "run" && c !== "b" ? `${i * 55}ms` : undefined }} />)}
+    </span>
+  );
+}
+
 function AbortLights() {
   return (
     <div data-abort-lights="" role="status" style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 8, marginBottom: 12 }}>
@@ -1227,7 +1263,7 @@ function AbortLights() {
   );
 }
 
-function LoginScreen({ auth, onDone, onGuest, onBack, reason }) {
+function LoginScreen({ auth, onDone, onGuest, onBack, reason, onHold }) {
   const [mode, setMode] = useState("login");
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -1236,6 +1272,7 @@ function LoginScreen({ auth, onDone, onGuest, onBack, reason }) {
   const [err, setErr] = useState("");
   const [info, setInfo] = useState("");
   const [busy, setBusy] = useState(false);
+  const [shiftDone, setShiftDone] = useState(false);   // G24: accesso riuscito, i blu della Shift Light lampeggiano
   const [birth, setBirth] = useState(null);
   const [years, setYears] = useState(ABOUT_INIT.years);   // anni da tifoso (G16); la fascia follow si ricava
   const [fan, setFan] = useState(null);
@@ -1253,12 +1290,17 @@ function LoginScreen({ auth, onDone, onGuest, onBack, reason }) {
     if (!isLogin && pw && pw2 && pw !== pw2) { setKerbTried(true); setErr(""); fx.buzz("error"); return; }
     if (!isLogin && name.trim() && email.trim() && pw && pw2 && pw === pw2 && pw.length >= 6 && !fan) { setErr("Scegli che tifoso sei."); return; }
     setErr(""); setInfo(""); setBusy(true); setAborts(0);
+    if (onHold) onHold(true);   // l'app aspetta la fine della Shift Light prima di entrare
     try {
       if (isLogin) await auth.login(email, pw);
       else await auth.register({ name, email, pw, pw2, about: { birth, follow: followOf(years), fan, years }, adult });
-      setBusy(false);
+      setShiftDone(true); fx.play("done"); fx.buzz("success");
+      await new Promise(r => setTimeout(r, SHIFT_DONE_MS));
+      setBusy(false); setShiftDone(false);
+      if (onHold) onHold(false);
       onDone && onDone({ created: !isLogin });
     } catch (e) {
+      if (onHold) onHold(false);
       setBusy(false); setErr(messageOf(e));
       if (isLogin && e && e.code === "wrong-password") { setAborts(n => n + 1); fx.buzz("error"); fx.play("abort"); }
     }
@@ -1345,8 +1387,8 @@ function LoginScreen({ auth, onDone, onGuest, onBack, reason }) {
         {info && <p style={{ background: "rgba(255,255,255,.05)", border: `1px solid ${C.border}`, borderRadius: 10, padding: "9px 14px", marginTop: 0, marginBottom: 14, color: C.text, fontSize: 12, lineHeight: 1.5 }}>{info}</p>}
         {isLogin && aborts > 0 && <AbortLights key={aborts} />}
         {err && <p style={{ background: "#E1060018", border: `1px solid ${C.red}`, borderRadius: 10, padding: "9px 14px", marginTop: 0, marginBottom: 14, color: "#ff6b6b", fontSize: 12, lineHeight: 1.5 }}>{err}</p>}
-        <button key={"go-" + aborts} className={aborts && isLogin ? "press abort-shake" : "press"} data-shake={aborts && isLogin ? "1" : undefined} onClick={submit} disabled={busy} style={{ display: "block", width: "100%", padding: "15px 0", borderRadius: 14, background: busy ? "#555" : C.accent, boxShadow: busy ? "none" : `0 10px 22px -10px ${C.accent}`, fontFamily: F_HEAD, fontWeight: 900, fontStyle: "italic", fontSize: 14, color: "#fff", letterSpacing: .3, textAlign: "center", marginBottom: 16 }}>
-          {isLogin ? "ACCEDI" : "CREA ACCOUNT"}
+        <button key={"go-" + aborts} className={aborts && isLogin ? "press abort-shake" : "press"} data-shake={aborts && isLogin ? "1" : undefined} onClick={submit} disabled={busy} style={{ display: "block", width: "100%", padding: busy ? "14px 0" : "15px 0", borderRadius: 14, background: busy ? "#0E0E12" : C.accent, border: busy ? `1px solid ${C.border}` : "none", boxShadow: busy ? "none" : `0 10px 22px -10px ${C.accent}`, fontFamily: F_HEAD, fontWeight: 900, fontStyle: "italic", fontSize: 14, color: "#fff", letterSpacing: .3, textAlign: "center", marginBottom: 16 }}>
+          {busy ? <ShiftLight state={shiftDone ? "done" : "run"} label={shiftDone ? "Accesso riuscito" : isLogin ? "Accesso in corso" : "Creazione dell'account in corso"} /> : isLogin ? "ACCEDI" : "CREA ACCOUNT"}
         </button>
         <p style={{ textAlign: "center", fontFamily: F_BODY, fontSize: 12, color: C.muted, margin: 0 }}>
           {isLogin ? <>Non hai un account? <button className="press" onClick={() => setMode("register")} style={{ display: "inline", fontFamily: F_BODY, fontWeight: 700, fontSize: 12, color: C.accentInk }}>Registrati</button></>
@@ -1939,7 +1981,7 @@ function ShareSheet({ article, locked, handle, onClose, onToast }) {
         <p style={{ fontFamily: F_BODY, fontSize: 11.5, color: C.dim, lineHeight: 1.45, margin: "8px 2px 12px" }}>L'immagine ha il logo B&amp;T e il nostro Instagram, senza filigrana: perfetta per le storie e per le chat.</p>
         {canDownload && !failed && (
           <button className="press" onClick={download} disabled={!img || saving} style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8, width: "100%", padding: "14px 0", borderRadius: 14, background: C.accent, opacity: img && !saving ? 1 : .6, fontFamily: F_HEAD, fontWeight: 900, fontStyle: "italic", fontSize: 14, color: "#fff", marginBottom: 16 }}>
-            <Icon name="download" size={16} color="#fff" />{saving ? "SALVATAGGIO…" : "SCARICA IMMAGINE"}
+            {saving ? <ShiftLight label="Salvataggio in corso" /> : <><Icon name="download" size={16} color="#fff" />SCARICA IMMAGINE</>}
           </button>
         )}
         <Eyebrow>INVIA A</Eyebrow>
@@ -2612,7 +2654,7 @@ function TelemetryModal({ live, st, carId, lapNo, sector, onClose }) {
           <h2 style={{ flex: 1, minWidth: 0, margin: 0, fontFamily: F_HEAD, fontWeight: 900, fontStyle: "italic", fontSize: 16, color: C.text }}>TELEMETRIA · {code} · GIRO {lapNo}</h2>
           {closeBtn}
         </div>
-        <p role="status" data-tel-state={T.loading ? "loading" : "missing"} style={{ margin: "16px 2px 4px", fontFamily: F_BODY, fontSize: 13, color: C.muted }}>{T.loading ? TEL_LOADING : TEL_MISSING}</p>
+        <p role="status" data-tel-state={T.loading ? "loading" : "missing"} style={{ display: "flex", alignItems: "center", gap: 9, margin: "16px 2px 4px", fontFamily: F_BODY, fontSize: 13, color: C.muted }}>{T.loading && <LedGrid mode="seq" size={4} />}{T.loading ? TEL_LOADING : TEL_MISSING}</p>
       </div>
     </div>
   );
@@ -5011,7 +5053,7 @@ function Of1Status({ of1, standings, onRefresh }) {
   const text = of1.status === "error" ? "Impossibile raggiungere il servizio dati. Riprova tra poco." : of1.status === "empty" ? "Dati non ancora disponibili" : "Caricamento dei dati della sessione…";
   return (
     <div data-of1-status={of1.status} role="status" style={card}>
-      <div style={{ fontFamily: F_HEAD, fontWeight: 800, fontSize: 13.5, color: C.text }}>{text}</div>
+      <div style={{ display: "flex", alignItems: "center", gap: 9, fontFamily: F_HEAD, fontWeight: 800, fontSize: 13.5, color: C.text }}>{of1.status === "loading" && <LedGrid mode="seq" size={4} />}{text}</div>
       {of1.status === "empty" && <p style={{ margin: "4px 0 0", fontFamily: F_BODY, fontSize: 12, color: C.muted, lineHeight: 1.5 }}>I dati veri della sessione arrivano da OpenF1 circa 30 minuti dopo la fine.</p>}
       {of1.status !== "loading" && refresh}
     </div>
@@ -6466,7 +6508,7 @@ function ImagePicker({ id, value, onChange, label = "Allega immagine", changeLab
     <div style={{ flex: 1, minWidth: 0 }}>
       <div style={{ position: "relative", borderRadius: 10, overflow: "hidden" }}>
         <div aria-hidden="true" style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 7, width: "100%", padding: compact ? "9px 0" : "10px 0", borderRadius: 10, background: "rgba(255,255,255,.06)", border: `1px solid ${C.border}`, fontFamily: F_BODY, fontWeight: 600, fontSize: 12.5, color: C.text, opacity: busy ? .6 : 1 }}>
-          <Icon name="image" size={15} />{busy ? "Caricamento…" : value ? changeLabel : label}
+          {busy ? <ShiftLight size={5} label="Caricamento della foto" /> : <><Icon name="image" size={15} />{value ? changeLabel : label}</>}
         </div>
         <input id={id} type="file" accept="image/*" disabled={busy} onChange={onFile} aria-label={value ? changeLabel : label} title={value ? changeLabel : label}
           style={{ position: "absolute", inset: 0, width: "100%", height: "100%", opacity: 0, cursor: "pointer", fontSize: 40, zIndex: 1 }} />
@@ -6549,7 +6591,7 @@ function AdminNewsTab({ articles, setArticles, onPublish, onToast }) {
           <ImagePicker id="adImg" value={f.image} onChange={setImage} />
           <button type="button" className="press" data-chatgpt="" onClick={writeWithChatGPT} disabled={gen.busy} aria-label="Scrivi il contenuto con ChatGPT"
             style={{ flexShrink: 0, display: "flex", alignItems: "center", gap: 6, padding: "10px 13px", borderRadius: 10, background: "rgba(255,255,255,.06)", border: `1px solid ${C.border}`, fontFamily: F_BODY, fontWeight: 600, fontSize: 12.5, color: C.text, opacity: gen.busy ? .6 : 1, whiteSpace: "nowrap" }}>
-            <Icon name="sparkle" size={15} />{gen.busy ? "Scrivo…" : "ChatGPT"}
+            {gen.busy ? <ShiftLight size={4} label="ChatGPT sta scrivendo" /> : <><Icon name="sparkle" size={15} />ChatGPT</>}
           </button>
         </div>
         {gen.err && <p role="alert" style={{ margin: "0 2px 10px", fontFamily: F_BODY, fontSize: 11.5, color: "#ff6b6b" }}>{gen.err}</p>}
@@ -7242,13 +7284,13 @@ function PremiumModal({ onClose, isPremium, plan, setPlan, onSubscribe, subscrib
               ) : <>
               {offer === "trial" ? (<>
                 <button className="press" disabled={subscribing} onClick={onTrial} style={{ display: "block", width: "100%", marginTop: 16, padding: "16px 0", borderRadius: 14, background: subscribing ? "#555" : C.accent, boxShadow: subscribing ? "none" : `0 10px 22px -10px ${C.accent}`, fontFamily: F_HEAD, fontWeight: 900, fontStyle: "italic", fontSize: 14.5, color: "#fff", letterSpacing: .2, textAlign: "center" }}>
-                  {subscribing ? "Attendi…" : "PROVA GRATIS 2 SETTIMANE"}
+                  {subscribing ? <ShiftLight /> : "PROVA GRATIS 2 SETTIMANE"}
                 </button>
                 <p style={{ textAlign: "center", fontFamily: F_BODY, fontSize: 11.5, color: C.muted, margin: "10px 0 0" }}>Poi {price} · disdici quando vuoi, anche durante la prova</p>
                 <button className="press" disabled={subscribing} onClick={onSubscribe} style={{ display: "block", margin: "8px auto 0", padding: "8px 12px", fontFamily: F_BODY, fontWeight: 700, fontSize: 12, color: C.gold }}>Oppure abbonati subito: {price}</button>
               </>) : (<>
                 <button className="press" disabled={subscribing} onClick={onSubscribe} style={{ display: "block", width: "100%", marginTop: 16, padding: "16px 0", borderRadius: 14, background: subscribing ? "#555" : C.accent, boxShadow: subscribing ? "none" : `0 10px 22px -10px ${C.accent}`, fontFamily: F_HEAD, fontWeight: 900, fontStyle: "italic", fontSize: 14.5, color: "#fff", letterSpacing: .2, textAlign: "center" }}>
-                  {subscribing ? "Attendi…" : `ABBONATI · ${price}`}
+                  {subscribing ? <ShiftLight /> : `ABBONATI · ${price}`}
                 </button>
                 {trialUsed && <p style={{ textAlign: "center", fontFamily: F_BODY, fontSize: 11.5, color: C.muted, margin: "10px 0 0" }}>Hai già usato la prova gratuita di 2 settimane.</p>}
               </>)}
@@ -7525,7 +7567,7 @@ function FeedbackModal({ onClose, onSend }) {
             <textarea data-feedback-msg="" aria-label="Il tuo feedback" placeholder="Scrivi qui (opzionale)… cosa ti piace? Cosa manca?" value={msg} onChange={e => setMsg(e.target.value)} rows={3}
               style={{ width: "100%", background: C.bg, border: `1px solid ${C.border}`, borderRadius: 12, padding: "11px 13px", color: C.text, fontFamily: F_BODY, fontSize: 13, outline: "none", resize: "none", marginBottom: 12 }} />
             {err && <p role="alert" style={{ background: "#E1060018", border: `1px solid ${C.red}`, borderRadius: 10, padding: "9px 14px", margin: "0 0 12px", color: "#ff6b6b", fontFamily: F_BODY, fontSize: 12, lineHeight: 1.5 }}>{err}</p>}
-            <button className="press" onClick={send} disabled={!stars || sending} style={{ display: "block", width: "100%", padding: "15px 0", borderRadius: 14, background: stars && !sending ? C.accent : "rgba(255,255,255,.1)", fontFamily: F_HEAD, fontWeight: 900, fontStyle: "italic", fontSize: 14, color: stars ? "#fff" : C.dim }}>{sending ? "Invio…" : "INVIA FEEDBACK"}</button>
+            <button className="press" onClick={send} disabled={!stars || sending} style={{ display: "block", width: "100%", padding: "15px 0", borderRadius: 14, background: stars && !sending ? C.accent : "rgba(255,255,255,.1)", fontFamily: F_HEAD, fontWeight: 900, fontStyle: "italic", fontSize: 14, color: stars ? "#fff" : C.dim }}>{sending ? <ShiftLight label="Invio in corso" /> : "INVIA FEEDBACK"}</button>
           </>
         )}
       </div>
@@ -7715,6 +7757,7 @@ function App() {
   // Account: undefined finché Authentication non dice se c'è una sessione salvata, null = nessun account.
   const [account, setAccount] = useState(undefined);
   const authed = !!account;
+  const [loginHold, setLoginHold] = useState(false);   // G24: la Shift Light dell'accesso finisce prima di entrare
   useEffect(() => {
     const off = Account.onChange(u => setAccount(u));
     Account.start().then(u => setAccount(u || null), () => setAccount(null));
@@ -8547,18 +8590,18 @@ function App() {
 
   if (account === undefined && !guest) {   // si aspetta Authentication: forse c'è già una sessione
     return shell(
-      <div data-auth-wait="" style={{ height: "100%", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: F_BODY, fontSize: 13, color: C.muted }}>Caricamento…</div>
+      <div data-auth-wait="" style={{ height: "100%", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 12, fontFamily: F_BODY, fontSize: 13, color: C.muted }}><LedGrid mode="seq" size={7} />Caricamento…</div>
     );
   }
-  if (!authed && !guest) {
+  if ((!authed || loginHold) && !guest) {
     return shell(
-      <LoginScreen auth={Account} onGuest={() => { setGuest(true); showToast("Stai navigando come ospite"); }} />
+      <LoginScreen auth={Account} onHold={setLoginHold} onGuest={() => { setGuest(true); showToast("Stai navigando come ospite"); }} />
     );
   }
-  if (loginOpen && !authed) {
+  if (loginOpen && (!authed || loginHold)) {
     return shell(
       <>
-        <LoginScreen auth={Account} reason={loginReason} onBack={closeLogin}
+        <LoginScreen auth={Account} onHold={setLoginHold} reason={loginReason} onBack={closeLogin}
           onDone={r => { setGuest(false); setLoginOpen(false); setLoginReason(null); showToast(r && r.created ? "Account creato" : "Accesso effettuato"); }} />
         {toast && <div className="toast">{toast}</div>}
       </>
@@ -8633,7 +8676,7 @@ function App() {
 
   return shell(
       <div data-bg={pageBg || undefined} style={{ height: "100%", display: "flex", flexDirection: "column", position: "relative", background: pageBg && PAGE_BG[pageBg] ? PAGE_BG[pageBg] : undefined, transition: "background .3s" }}>
-        {showTopHeader && <TopHeader trialDays={trialActive ? trialDaysLeft(trial) : 0} isPremium={isPremium} unread={unreadCount} onPremium={() => setPremiumOpen(true)} onBell={() => setView("notifiche")} onProfile={() => setView("profilo")} helmet={helmet} />}
+        {showTopHeader && <TopHeader trialDays={trialActive ? trialDaysLeft(trial) : 0} isPremium={isPremium} unread={unreadCount} onPremium={() => setPremiumOpen(true)} onBell={() => setView("notifiche")} onProfile={() => setView("profilo")} helmet={helmet} onTrack={!!(live || realLiveRace)} />}
         {showTopHeader && offline && <div role="status" data-offline="" style={{ margin: "-6px 16px 10px", padding: "8px 12px", borderRadius: 10, background: "rgba(231,179,76,.12)", border: "1px solid rgba(231,179,76,.35)", fontFamily: F_BODY, fontSize: 12, color: C.text, lineHeight: 1.4, flexShrink: 0 }}>{OFFLINE_LINE}</div>}
         <div style={{ flex: 1, minHeight: 0 }}>{body}</div>
         {showBottomNav && <BottomNav active={tab} onChange={goTab} />}

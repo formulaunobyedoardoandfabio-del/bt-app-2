@@ -83,6 +83,21 @@
   /* Tappa 3 (G06, G25): la luce posteriore a LED; "seq" = si accendono una riga alla volta. */
   .led-seq > span{ animation:ledseq .84s linear infinite both; }
   @keyframes ledseq{ 0%{ opacity:.16; } 10%,45%{ opacity:1; } 62%,100%{ opacity:.16; } }
+  /* Tappa 3 (G25, G26): "pulse" = badge IN PISTA; "flash3" = l'easter egg del logo, tre lampeggi. */
+  .led-pulse > span{ animation:ledpulse 1.4s ease-in-out infinite alternate both; }
+  @keyframes ledpulse{ from{ opacity:.35; } to{ opacity:1; } }
+  .led-flash3 > span{ animation:ledflash3 .32s steps(1, end) 3; }
+  @keyframes ledflash3{ 0%{ opacity:1; } 50%{ opacity:.12; } 100%{ opacity:1; } }
+  /* Tappa 3 (G24): Shift Light. "run": verdi e rossi in sequenza; "done": i blu lampeggiano. */
+  .shift-run > span{ opacity:.14; }
+  .shift-run > span[data-shift-led="g"], .shift-run > span[data-shift-led="r"]{ animation:shiftrun .82s linear infinite both; }
+  @keyframes shiftrun{ 0%{ opacity:.14; } 8%,55%{ opacity:1; } 70%,100%{ opacity:.14; } }
+  .shift-done > span[data-shift-led="b"]{ animation:shiftblue .18s steps(1, end) 3; }
+  @keyframes shiftblue{ 0%{ opacity:1; } 50%{ opacity:.15; } 100%{ opacity:1; } }
+  @media (prefers-reduced-motion:reduce){
+    .led-pulse > span, .led-flash3 > span, .shift-run > span, .shift-done > span{ animation:none !important; }
+    .shift-run > span[data-shift-led="g"], .shift-run > span[data-shift-led="r"]{ opacity:1; }
+  }
   /* Tappa 3 (G07): partenza abortita. I semafori rossi diventano gialli lampeggianti; il tasto ACCEDI trema. */
   .abort-yellow{ opacity:0; animation:abortblink 1.6s linear .35s forwards; }
   @keyframes abortblink{ 0%,12%{ opacity:1; } 13%,25%{ opacity:0; } 26%,38%{ opacity:1; } 39%,51%{ opacity:0; } 52%,64%{ opacity:1; } 65%,77%{ opacity:0; } 78%,100%{ opacity:1; } }
