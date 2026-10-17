@@ -205,13 +205,14 @@ run({
     assert(!errs.length, errs.join(' | '));
   },
 
-  async 'splash senza i video (file mancanti): logo fisso con "Caricamento…" e sotto l\'app che si carica'(b) {
+  // Tappa 3 (G06): senza i video lo splash fisso di prima diventa il Pit Exit Launch (i LED del volante, poi l'app).
+  async 'splash senza i video (file mancanti): Pit Exit Launch e sotto l\'app che si carica'(b) {
     const { ctx, p, errs } = await open(b, { waitSplash: false });   // test.html non ha accanto i video
-    const s = await p.evaluate(() => { const e = document.querySelector('[data-splash]'); return e ? { text: e.innerText, phase: e.dataset.splashPhase } : null; });
+    const s = await p.evaluate(() => { const e = document.querySelector('[data-splash]'); return e ? { leds: e.querySelectorAll('[data-pit-led]').length, phase: e.dataset.splashPhase } : null; });
     const underneath = await p.evaluate(() => !!document.querySelector('#authEmail'));
     await p.waitForFunction(() => !document.querySelector('[data-splash]'), null, { timeout: 8000 }).catch(() => {});
     const gone = await p.evaluate(() => !document.querySelector('[data-splash]')); await ctx.close();
-    assert(s && /Caricamento…/.test(s.text) && s.phase === 'static', 'senza i video manca lo splash fisso con "Caricamento…": ' + JSON.stringify(s));
+    assert(s && s.phase === 'pitexit' && s.leds === 15, 'senza i video manca il Pit Exit Launch: ' + JSON.stringify(s));
     assert(underneath, 'sotto lo splash l\'app deve caricarsi');
     assert(gone, 'lo splash non se ne va');
     assert(!errs.length, errs.join(' | '));

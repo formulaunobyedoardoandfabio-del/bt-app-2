@@ -24,7 +24,6 @@ import { local, IMG_REF, uploadImage, loadImage as loadStoredImage, dropImage } 
 import { generateArticle } from "./services/backend";
 import { fx } from "./services/fx";
 import { createOpenF1, buildReplay, lastRaceFromResult, sessionType as of1SessionType } from "./services/openf1";
-import LOGO from "./data/logo";
 
 /* ── DESIGN TOKENS (matches the B&T concept style) ─────────────────── */
 // Tappa 3 (G01-G02): sfondo nero puro (schermi OLED) e il colore dei tasti scelto da chi usa l'app. applyTheme cambia
@@ -157,7 +156,7 @@ const SPLASH_VIDEO = { intro: "splash/intro.webm", loop: "splash/loop.webm", out
 const SPLASH_POSTER = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADElEQVR42mNgYGAAAAAEAAHI6uv5AAAAAElFTkSuQmCC";
 const OUTRO_REVEAL_S = 40 / 24;
 const SPLASH_VIDEO_START_MS = 3000;   // il primo video non parte (file mancante, formato non supportato): splash fisso
-const SPLASH_MS = 1800, SPLASH_FADE_MS = 600;   // splash fisso come l'app di oggi: logo e "Caricamento…"
+const SPLASH_FADE_MS = 600;   // dissolvenza dello splash dei video quando il finale si inceppa
 const LOAD_MAX_MS = 15000;   // Firebase che non risponde: dopo 15 secondi l'app si apre lo stesso con i contenuti di serie
 
 /* ── ICONS ──────────────────────────────────────────────────────────── */
@@ -6709,43 +6708,54 @@ function TermsSheet({ review, onAccept, onClose }) {
   );
 }
 
-// Avvio: i video dello splash (SPLASH_VIDEO). ready = contenuti di Firebase letti e account noto (o LOAD_MAX_MS passati).
-// Il primo video si vede tutto; se a quel punto i dati non ci sono ancora parte quello d'attesa, che si ripete; appena
-// i dati arrivano parte il finale. Se i video non si possono vedere (file mancante, formato) o il telefono chiede meno
-// animazioni, c'è lo splash fisso dell'app di oggi: logo e "Caricamento…" per almeno 1,8 s, poi 0,6 s di dissolvenza.
-// Lo splash sta sopra l'app, che intanto si carica sotto.
+// Avvio (G06). Al primo avvio in assoluto i video dello splash (VideoSplash); dagli avvii dopo, o se i video non si
+// possono vedere (file mancante, formato) o il telefono chiede meno animazioni, il Pit Exit Launch. Il primo avvio fatto
+// (i video visti fino alla fine) si ricorda sul telefono (bt-intro-seen). ready = contenuti di Firebase letti e account
+// noto (o LOAD_MAX_MS passati). Lo splash sta sopra l'app, che intanto si carica sotto.
+const INTRO_KEY = "bt-intro-seen";
+const prefersReduced = () => { try { return !!(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches); } catch (e) { return false; } };
 function SplashScreen({ ready, onDone }) {
-  const reduce = useRef((() => { try { return !!(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches); } catch (e) { return false; } })()).current;
-  const [phase, setPhase] = useState(reduce ? "static" : "intro");   // intro | loop | outro | static
+  const [mode, setMode] = useState(() => (!prefersReduced() && !local.get(INTRO_KEY) ? "video" : "pitexit"));
+  if (mode === "video") return <VideoSplash ready={ready} onFail={() => setMode("pitexit")} onDone={() => { local.set(INTRO_KEY, true); onDone(); }} />;
+  return <PitExitLaunch ready={ready} onDone={onDone} />;
+}
+
+// I video di Edoardo: il primo si vede tutto; se a quel punto i dati non ci sono ancora parte quello d'attesa, che si
+// ripete; appena i dati arrivano parte il finale, dove le lettere B e T si aprono sull'app vera. Se un video non parte
+// (file mancante, formato non supportato, o il primo non parte entro SPLASH_VIDEO_START_MS) si passa al Pit Exit Launch.
+function VideoSplash({ ready, onDone, onFail }) {
+  const [phase, setPhase] = useState("intro");          // intro | loop | outro
   const [loops, setLoops] = useState(0);              // quante volte è partito il video d'attesa
   const [outroShown, setOutroShown] = useState(false); // il finale è partito: via lo sfondo nero e gli altri video
   const [shown, setShown] = useState("intro");         // il video che si vede: solo quello che sta andando (11/10: il
                                                        // finale fermo stava sopra l'apertura e la copriva)
   const [revealed, setRevealed] = useState(false);     // le lettere si aprono: i tocchi passano all'app
-  const [minDone, setMinDone] = useState(false);
   const [maxDone, setMaxDone] = useState(false);
   const [fading, setFading] = useState(false);
   const vids = { intro: useRef(null), loop: useRef(null), outro: useRef(null) };
   const go = ready || maxDone;
   const goRef = useRef(go);
   goRef.current = go;
+  const phaseRef = useRef(phase);
+  phaseRef.current = phase;
   const started = useRef(false);
+  const failed = useRef(false);
+  const fail = () => { if (failed.current) return; failed.current = true; Object.values(vids).forEach(r => { try { if (r.current) r.current.pause(); } catch (e) {} }); onFail(); };
   const finish = () => setFading(true);
   const play = key => {
     const v = vids[key].current;
     if (!v) return;
     try { v.muted = true; v.currentTime = 0; } catch (e) {}
-    Promise.resolve().then(() => v.play()).catch(() => { if (key === "outro") finish(); else setPhase(ph => (ph === "outro" ? ph : "static")); });
+    Promise.resolve().then(() => v.play()).catch(() => { if (key === "outro") finish(); else fail(); });
   };
   useEffect(() => {
-    const a = setTimeout(() => setMinDone(true), SPLASH_MS), b = setTimeout(() => setMaxDone(true), LOAD_MAX_MS);
-    const c = setTimeout(() => { if (!started.current) setPhase(ph => (ph === "intro" ? "static" : ph)); }, SPLASH_VIDEO_START_MS);
-    return () => { clearTimeout(a); clearTimeout(b); clearTimeout(c); };
+    const b = setTimeout(() => setMaxDone(true), LOAD_MAX_MS);
+    const c = setTimeout(() => { if (!started.current) fail(); }, SPLASH_VIDEO_START_MS);
+    return () => { clearTimeout(b); clearTimeout(c); };
   }, []);
   useEffect(() => {
     if (phase === "intro" || phase === "outro") play(phase);
     else if (phase === "loop") { setLoops(n => n + 1); play("loop"); }
-    else if (phase === "static") Object.values(vids).forEach(r => { try { if (r.current) r.current.pause(); } catch (e) {} });
   }, [phase]);
   useEffect(() => { if (phase === "loop" && go) setPhase("outro"); }, [phase, go]);   // dati arrivati: subito il finale
   useEffect(() => {   // finale partito: gli altri due video si fermano; se il finale si inceppa, lo splash va via lo stesso
@@ -6754,34 +6764,99 @@ function SplashScreen({ ready, onDone }) {
     const t = setTimeout(onDone, 6000);
     return () => clearTimeout(t);
   }, [outroShown]);
-  useEffect(() => { if (phase === "static" && minDone && go) finish(); }, [phase, minDone, go]);
   useEffect(() => { if (!fading) return undefined; const t = setTimeout(onDone, SPLASH_FADE_MS); return () => clearTimeout(t); }, [fading]);
   const onEnded = key => {
     if (key === "intro") setPhase(goRef.current ? "outro" : "loop");
     else if (key === "loop") { if (goRef.current) setPhase("outro"); else { setLoops(n => n + 1); play("loop"); } }
     else onDone();
   };
-  const onError = key => { if (key === "outro") finish(); else setPhase(ph => (ph === "outro" ? ph : "static")); };
+  // Un video che non si carica: se è il finale mentre va, si chiude; altrimenti (anche un file che manca e dà errore
+  // appena si apre l'app) si passa al Pit Exit Launch.
+  const onError = key => { if (key === "outro" && phaseRef.current === "outro") finish(); else fail(); };
   const video = key => (
     <video key={key} ref={vids[key]} src={SPLASH_VIDEO[key]} poster={SPLASH_POSTER} muted playsInline preload="auto" aria-hidden="true"
       onPlaying={() => { started.current = true; setShown(key); if (key === "outro") setOutroShown(true); }}
       onTimeUpdate={key === "outro" ? e => { if (e.currentTarget.currentTime >= OUTRO_REVEAL_S) setRevealed(true); } : undefined}
       onEnded={() => onEnded(key)} onError={() => onError(key)}
-      style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover", opacity: phase === "static" || key !== shown ? 0 : 1, pointerEvents: "none" }} />
+      style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover", opacity: key !== shown ? 0 : 1, pointerEvents: "none" }} />
   );
   const clear = phase === "outro" && outroShown;
   return (
     <div data-splash="" data-splash-phase={phase} data-splash-loops={loops} data-splash-revealed={revealed ? "1" : undefined}
-      style={{ position: "fixed", inset: 0, background: clear ? "transparent" : "#000", zIndex: 9999, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 14, transition: `opacity ${SPLASH_FADE_MS}ms ease`, opacity: fading ? 0 : 1, pointerEvents: revealed || fading ? "none" : "auto" }}>
-      {!reduce && ["intro", "loop", "outro"].map(video)}
-      {phase === "static" && (
-        <>
-          <div style={{ background: C.accent, borderRadius: 16, padding: "18px 24px", boxShadow: `0 0 50px ${C.accent}55`, display: "flex", alignItems: "center", justifyContent: "center" }}>
-            <img src={LOGO} alt="B&T" style={{ height: 38, filter: "brightness(0) invert(1)" }} />
-          </div>
-          <p style={{ fontFamily: F_BODY, fontSize: 13, color: C.dim, margin: 0 }}>Caricamento…</p>
-        </>
+      style={{ position: "fixed", inset: 0, background: clear ? "transparent" : "#000", zIndex: 9999, transition: `opacity ${SPLASH_FADE_MS}ms ease`, opacity: fading ? 0 : 1, pointerEvents: revealed || fading ? "none" : "auto" }}>
+      {["intro", "loop", "outro"].map(video)}
+    </div>
+  );
+}
+
+// Luce posteriore della monoposto, come nel video dell'avvio: 2 colonne × 4 righe di LED rossi. mode "idle": accesi
+// fermi; "seq": si accendono una riga alla volta dal basso (caricamenti lunghi). Con "Rimuovi animazioni" la sequenza
+// resta ferma (App.css). Il Task 15 aggiunge i modi "pulse" e "flash3".
+function LedGrid({ mode = "idle", size = 10 }) {
+  const gap = Math.max(1, Math.round(size / 5));
+  return (
+    <span data-led-grid="" data-mode={mode} className={"led-grid led-" + mode} aria-hidden="true" style={{ display: "inline-grid", gridTemplateColumns: `repeat(2, ${size}px)`, gap, flexShrink: 0 }}>
+      {Array.from({ length: 8 }, (_, i) => (
+        <span key={i} data-led={i} style={{ width: size, height: size, borderRadius: Math.max(1, Math.round(size / 5)), background: C.red, boxShadow: `0 0 ${Math.round(size * .8)}px ${alpha(C.red, .65)}`, animationDelay: mode === "seq" ? `${(3 - Math.floor(i / 2)) * 140}ms` : undefined }} />
+      ))}
+    </span>
+  );
+}
+
+// Pit Exit Launch (G06, dagli avvii dopo il primo; circa 1,5 s): i LED del volante si accendono da sinistra a destra
+// (5 verdi, 5 rossi, 5 blu, come le luci del cambio), compare "PIT EXIT OPEN", poi zoom con le linee della velocità e
+// l'app. Se i dati non sono ancora arrivati, i LED rossi del logo si accendono in sequenza con "Caricamento…" fino a
+// quando arrivano (al massimo LOAD_MAX_MS). Con "Rimuovi animazioni": LED accesi fermi e la scritta, niente zoom.
+const PIT_LEDS = 15, PIT_LED_MS = 45, PIT_OPEN_MS = 760, PIT_GO_MS = 1100, PIT_ZOOM_MS = 420, PIT_REDUCED_MS = 900;
+const pitLedColor = i => (i < 5 ? "#3ED66B" : i < 10 ? C.red : "#4C8DFF");
+function PitExitLaunch({ ready, onDone }) {
+  const reduce = useRef(prefersReduced()).current;
+  const [lit, setLit] = useState(reduce ? PIT_LEDS : 0);
+  const [open, setOpen] = useState(reduce);
+  const [armed, setArmed] = useState(false);          // finita la partenza: si esce appena ci sono i dati
+  const [out, setOut] = useState(false);              // zoom (o dissolvenza breve) verso l'app
+  const [maxDone, setMaxDone] = useState(false);
+  const go = ready || maxDone;
+  useEffect(() => {
+    const ts = [setTimeout(() => setMaxDone(true), LOAD_MAX_MS), setTimeout(() => setArmed(true), reduce ? PIT_REDUCED_MS : PIT_GO_MS)];
+    if (!reduce) {
+      for (let i = 1; i <= PIT_LEDS; i++) ts.push(setTimeout(() => setLit(i), i * PIT_LED_MS));
+      ts.push(setTimeout(() => setOpen(true), PIT_OPEN_MS));
+    }
+    return () => ts.forEach(clearTimeout);
+  }, []);
+  useEffect(() => { if (armed && go) setOut(true); }, [armed, go]);
+  useEffect(() => { if (!out) return undefined; const t = setTimeout(onDone, reduce ? 220 : PIT_ZOOM_MS); return () => clearTimeout(t); }, [out]);
+  const waiting = armed && !go;
+  return (
+    <div data-splash="" data-splash-phase="pitexit" data-pit-step={out ? "out" : waiting ? "wait" : open ? "open" : "leds"} data-reduced={reduce ? "1" : undefined}
+      className={out ? (reduce ? "pit-fade" : "pit-out") : undefined}
+      style={{ position: "fixed", inset: 0, background: "#000", zIndex: 9999, overflow: "hidden", display: "flex", alignItems: "center", justifyContent: "center", pointerEvents: out ? "none" : "auto" }}>
+      {out && !reduce && (
+        <div data-pit-zoom="" className="pit-lines" aria-hidden="true">
+          {Array.from({ length: 14 }, (_, i) => <span key={i} style={{ transform: `rotate(${i * (360 / 14) + 8}deg)` }}><i /></span>)}
+        </div>
       )}
+      <div className={out && !reduce ? "pit-zoom" : undefined} style={{ position: "relative", display: "flex", flexDirection: "column", alignItems: "center", gap: 18 }}>
+        {waiting ? (
+          <>
+            <LedGrid mode={reduce ? "idle" : "seq"} size={14} />
+            <p style={{ fontFamily: F_BODY, fontSize: 13, color: C.dim, margin: 0 }}>Caricamento…</p>
+          </>
+        ) : (
+          <>
+            <div data-pit-leds="" style={{ display: "flex", gap: 6, padding: "10px 14px", borderRadius: 14, background: "#0B0B0E", border: "1px solid rgba(255,255,255,.08)" }}>
+              {Array.from({ length: PIT_LEDS }, (_, i) => (
+                <span key={i} data-pit-led={i} data-on={i < lit ? "1" : "0"} style={{ width: 12, height: 12, borderRadius: "50%", background: pitLedColor(i), boxShadow: `0 0 9px ${pitLedColor(i)}`, opacity: i < lit ? 1 : .13, transition: reduce ? "none" : "opacity .08s linear" }} />
+              ))}
+            </div>
+            <div style={{ display: "flex", alignItems: "center", gap: 9, opacity: open ? 1 : 0, transform: open ? "none" : "translateY(6px)", transition: reduce ? "none" : "opacity .18s ease, transform .18s ease" }}>
+              <span style={{ width: 10, height: 10, borderRadius: "50%", background: "#3ED66B", boxShadow: "0 0 10px #3ED66B" }} />
+              <span style={{ fontFamily: F_HEAD, fontWeight: 900, fontStyle: "italic", fontSize: 20, letterSpacing: 2, color: C.text }}>PIT EXIT OPEN</span>
+            </div>
+          </>
+        )}
+      </div>
     </div>
   );
 }
