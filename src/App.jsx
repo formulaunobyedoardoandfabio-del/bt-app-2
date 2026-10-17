@@ -653,12 +653,19 @@ function drawArticle(ctx, paint, a, { locked, handle, photo }) {
   y += 92 + 44;
   if (paint) { ctx.fillStyle = "rgba(255,255,255,.08)"; ctx.fillRect(IMG_PAD, y, IMG_TW, 2); }
   y += 54;
+  // Tappa 3 (G13): la fascia del Team Radio e il titolo come messaggio radio, tra le virgolette.
+  if (paint) {
+    ctx.fillStyle = C.accent; roundRect(ctx, IMG_PAD, y, IMG_TW, 72, 18); ctx.fill();
+    ctx.fillStyle = "#fff"; ctx.font = `italic 900 32px ${CF_HEAD}`; ctx.fillText("TEAM RADIO // BREAKING NEWS", IMG_PAD + 28, y + 47);
+    [18, 34, 50, 26, 42, 20, 36].forEach((h, i) => { ctx.fillStyle = "rgba(255,255,255,.85)"; roundRect(ctx, IMG_W - IMG_PAD - 150 + i * 18, y + 36 - h / 2, 8, h, 4); ctx.fill(); });
+  }
+  y += 72 + 26;
   ctx.font = `800 24px ${CF_HEAD}`;
   const catW = ctx.measureText(a.cat).width + 44;
-  if (paint) { ctx.fillStyle = C.accent; roundRect(ctx, IMG_PAD, y, catW, 48, 12); ctx.fill(); ctx.fillStyle = "#fff"; ctx.fillText(a.cat, IMG_PAD + 22, y + 33); }
+  if (paint) { ctx.fillStyle = "rgba(255,255,255,.08)"; roundRect(ctx, IMG_PAD, y, catW, 48, 12); ctx.fill(); ctx.fillStyle = C.text; ctx.fillText(a.cat, IMG_PAD + 22, y + 33); }
   y += 48 + 12;
   ctx.font = `italic 900 66px ${CF_HEAD}`;
-  for (const l of wrapText(ctx, a.title, IMG_TW)) { y += 76; if (paint) { ctx.fillStyle = C.text; ctx.fillText(l, IMG_PAD, y); } }
+  for (const l of wrapText(ctx, "«" + a.title + "»", IMG_TW)) { y += 76; if (paint) { ctx.fillStyle = C.text; ctx.fillText(l, IMG_PAD, y); } }
   if (a.excerpt) {
     y += 16; ctx.font = `500 34px ${CF_BODY}`;
     for (const l of wrapText(ctx, a.excerpt, IMG_TW)) { y += 48; if (paint) { ctx.fillStyle = C.muted; ctx.fillText(l, IMG_PAD, y); } }
@@ -1509,8 +1516,15 @@ function ArticleScreen({ article, onBack, isPremium, onPremium, onTag, saved = f
   const locked = article.premium && !isPremium;
   const tags = articleTags(article);
   const round = { width: 38, height: 38, borderRadius: "50%", background: C.card, border: `1px solid ${C.border}`, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 };
+  // Barra ERS (G12): si riempie mentre si legge (quanto si è scesi nella pagina); si misura al massimo una volta per
+  // fotogramma, solo quando si scorre.
+  const scRef = useRef(null), ersRaf = useRef(0);
+  const [ers, setErs] = useState(0);
+  const measureErs = () => { const el = scRef.current; if (!el) return; const max = el.scrollHeight - el.clientHeight; const v = max <= 2 ? 100 : Math.round(Math.min(1, Math.max(0, el.scrollTop / max)) * 100); setErs(x => (x === v ? x : v)); };
+  const onScroll = () => { if (ersRaf.current) return; ersRaf.current = requestAnimationFrame(() => { ersRaf.current = 0; measureErs(); }); };
+  useEffect(() => { measureErs(); const t = setTimeout(measureErs, 450); return () => { clearTimeout(t); cancelAnimationFrame(ersRaf.current); ersRaf.current = 0; }; }, [article.id, photo, locked]);
   return (
-    <div className="scrollcol" style={{ height: "100%" }}>
+    <div ref={scRef} onScroll={onScroll} className="scrollcol" style={{ height: "100%" }}>
       <SubHeader title="ARTICOLO" onBack={onBack} right={
         <div style={{ display: "flex", gap: 8 }}>
           <button className="press" aria-label="Condividi articolo" onClick={onShare} style={round}><Icon name="share" size={16} /></button>
@@ -1518,6 +1532,14 @@ function ArticleScreen({ article, onBack, isPremium, onPremium, onTag, saved = f
             <Icon name={saved ? "bookmark-fill" : "bookmark"} size={16} color={saved ? C.gold : C.text} />
           </button>
         </div>} />
+      <div data-ers={ers} role="progressbar" aria-label="ERS: quanto hai letto dell'articolo" aria-valuemin={0} aria-valuemax={100} aria-valuenow={ers}
+        style={{ position: "sticky", top: 0, zIndex: 5, display: "flex", alignItems: "center", gap: 10, padding: "8px 20px", marginBottom: 12, background: "rgba(0,0,0,.92)", borderBottom: `1px solid ${C.border}` }}>
+        <span style={{ minWidth: 76, fontFamily: F_HEAD, fontWeight: 900, fontStyle: "italic", fontSize: 11, letterSpacing: .6, color: ers >= 100 ? C.green : C.muted, whiteSpace: "nowrap" }}>ERS: {ers}%</span>
+        <span style={{ position: "relative", flex: 1, height: 8, borderRadius: 4, background: "rgba(255,255,255,.08)", overflow: "hidden" }}>
+          <span style={{ position: "absolute", inset: 0, transformOrigin: "0 50%", transform: `scaleX(${ers / 100})`, background: `linear-gradient(90deg, #4C8DFF, ${C.green})`, transition: "transform .12s linear" }} />
+          {[1, 2, 3, 4, 5, 6, 7, 8, 9].map(k => <span key={k} style={{ position: "absolute", top: 0, bottom: 0, left: `${k * 10}%`, width: 2, background: "rgba(0,0,0,.55)" }} />)}
+        </span>
+      </div>
       <div style={{ padding: "0 20px 28px" }}>
         <span style={{ display: "inline-block", padding: "5px 11px", borderRadius: 7, background: C.accent, fontFamily: F_HEAD, fontWeight: 800, fontSize: 10, letterSpacing: 1, color: "#fff", marginBottom: 12 }}>{article.cat}</span>
         <h1 style={{ fontFamily: F_HEAD, fontWeight: 900, fontStyle: "italic", fontSize: 22, color: C.text, lineHeight: 1.25, margin: "0 0 8px" }}>{article.title}</h1>
@@ -1567,6 +1589,7 @@ function ShareSheet({ article, locked, handle, onClose, onToast }) {
   const [saving, setSaving] = useState(false);
   const [canDownload, setCanDownload] = useState(!IS_FRAMED);
   const [manual, setManual] = useState(null);
+  useEffect(() => { fx.play("radio"); fx.buzz("light"); }, []);   // Team Radio (G13): il bip all'apertura
   useEffect(() => {
     let alive = true;
     renderArticleImage(article, { locked, handle }).then(r => { if (alive) setImg(r); }, () => { if (alive) setFailed(true); });
@@ -1581,7 +1604,8 @@ function ShareSheet({ article, locked, handle, onClose, onToast }) {
   const msg = shareMessage(article, handle), full = msg + "\n" + SHARE_URL;
   const native = nativeShareKind();
   const copy = () => copyText(full).then(ok => { if (ok) { onToast("Link copiato"); onClose(); } else setManual(full); });
-  const other = () => shareNative({ title: article.title, text: msg, url: SHARE_URL }).then(r => { if (r === "ok") onClose(); else if (r === "fail") setManual(full); });
+  const SENT = "Radio Check: notizia inviata";
+  const other = () => shareNative({ title: article.title, text: msg, url: SHARE_URL }).then(r => { if (r === "ok") { onToast(SENT); onClose(); } else if (r === "fail") setManual(full); });
   const download = () => {
     if (!img || saving) return;
     setSaving(true);
@@ -1598,6 +1622,13 @@ function ShareSheet({ article, locked, handle, onClose, onToast }) {
   return (
     <div style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,.72)", zIndex: 620, display: "flex", alignItems: "flex-end" }} onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
       <div className="scrollcol" style={{ background: C.card, borderRadius: "24px 24px 0 0", width: "100%", maxHeight: "92%", padding: "18px 18px 22px" }}>
+        <div data-team-radio="" style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 12px", marginBottom: 12, borderRadius: 12, background: C.accent }}>
+          <span style={{ fontFamily: F_HEAD, fontWeight: 900, fontStyle: "italic", fontSize: 12.5, letterSpacing: 1, color: C.onAccent }}>TEAM RADIO</span>
+          <span data-radio-wave="" className="radio-wave" aria-hidden="true" style={{ display: "flex", alignItems: "center", gap: 3, height: 18 }}>
+            {[9, 15, 18, 12, 16, 8, 13].map((h, i) => <i key={i} style={{ display: "block", width: 3, height: h, borderRadius: 2, background: C.onAccent, animationDelay: `${i * 90}ms` }} />)}
+          </span>
+          <span style={{ marginLeft: "auto", fontFamily: F_HEAD, fontWeight: 800, fontSize: 10.5, letterSpacing: 1, color: C.onAccent, opacity: .85 }}>IN ONDA</span>
+        </div>
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
           <h2 style={{ flex: 1, fontFamily: F_HEAD, fontWeight: 900, fontStyle: "italic", fontSize: 17, color: C.text, margin: 0 }}>CONDIVIDI ARTICOLO</h2>
           <button className="press" aria-label="Chiudi" onClick={onClose} style={{ width: 32, height: 32, borderRadius: "50%", background: "rgba(255,255,255,.08)", display: "flex", alignItems: "center", justifyContent: "center" }}><Icon name="close" size={13} sw={2.2} /></button>
@@ -1616,7 +1647,7 @@ function ShareSheet({ article, locked, handle, onClose, onToast }) {
         <Eyebrow>INVIA A</Eyebrow>
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
           {shareTargets(article, handle).map(t => (
-            <a key={t.id} className="press" href={t.href} target="_blank" rel="noopener noreferrer" onClick={() => setTimeout(onClose, 0)} style={pill}>{t.label}<Icon name="external" size={13} color={C.dim} /></a>
+            <a key={t.id} className="press" href={t.href} target="_blank" rel="noopener noreferrer" onClick={() => { onToast(SENT); setTimeout(onClose, 0); }} style={pill}>{t.label}<Icon name="external" size={13} color={C.dim} /></a>
           ))}
           <button className="press" onClick={copy} style={{ ...pill, gridColumn: native ? "auto" : "1 / -1" }}><Icon name="link" size={14} />Copia link</button>
           {native && <button className="press" onClick={other} style={pill}><Icon name="share" size={14} />Altre app</button>}
