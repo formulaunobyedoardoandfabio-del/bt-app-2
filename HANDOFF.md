@@ -1,5 +1,5 @@
 # Handoff
-Updated: 2026-10-17 21:55 by Claude (claude-opus-5-5)   Branch: tappa-3   Commit: c671109 (+ questo commit)
+Updated: 2026-10-17 22:30 by Claude (claude-opus-5-5)   Branch: tappa-3   Commit: 416d580 (+ questo commit)
 
 ## Goal
 Tappa 3 della 2.0: "fai prima tutti gli easter egg e le nuove grafiche, poi vedo l'apk di prova e poi ci sono altre
@@ -11,18 +11,18 @@ Progetto: `docs/superpowers/specs/2026-10-11-tappa3-grafica-design.md` (G01-G31,
 Piano (20 task): `docs/superpowers/plans/2026-10-17-tappa3-grafica.md`.
 
 ## State
-- Done: Task 1-14 (commit 4fd7f86 … c671109): colori e rosso LED, suoni e vibrazioni, icone Tabler e testi,
+- Done: Task 1-16 (commit 4fd7f86 … Task 16): colori e rosso LED, suoni e vibrazioni, icone Tabler e testi,
   avvio Pit Exit Launch, partenza abortita e cordoli, filtri a gomma e Pit Lane, swipe sulle notizie, barra ERS e
   Team Radio, tira giù per aggiornare, casco del profilo, contachilometri e manettino, Centro Notifiche e interruttori
-  a capsula, podio a sollevatore e frecce, Parc fermé, zone Q1/Q2 e carte 3D.
+  a capsula, podio a sollevatore e frecce, Parc fermé, zone Q1/Q2 e carte 3D, Shift Light, LED del logo ed easter
+  egg dei tre tocchi, Pit Board e gomma che si rovina.
 - In progress: nessuno.
-- Not started: Task 15 (Shift Light, LED del logo, easter egg), 16 (Pit Board e usura gomme), 17 (swipe tra le
-  schede, G29), 18 (foto di Commons, G30), 19 (trofei, G31), 20 (prove complete, revisione, push su tappa-3 e
-  apk-prova, APK).
+- Not started: Task 17 (swipe tra le schede, G29), 18 (foto di Commons, G30), 19 (trofei, G31), 20 (prove
+  complete, revisione, push su tappa-3 e apk-prova, APK).
 
 ## Next action
-Task 15: leggere la sezione "Task 15" del piano e le voci G24-G26 del progetto; scrivere prima
-`test/e2e/run64-led.js` (deve fallire), poi il codice.
+Task 17: leggere la sezione "Task 17" del piano e la voce G29 del progetto; scrivere prima
+`test/e2e/run66-schede.js` (deve fallire), poi il codice. Gli elementi con gesti propri hanno `data-swipe-own`.
 
 ## Decisions (and why)
 - Anni da tifoso esatti in `about.years` più la fascia di oggi in `about.follow`: l'app di oggi legge ancora la fascia.

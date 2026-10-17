@@ -2375,6 +2375,8 @@ function DnfRow({ c, width = 92, style }) {
 }
 
 // Tabella dei tempi: posizione, casco, distacco, giro, settori e minisettori colorati. I ritirati in fondo, col disegno della causa.
+// Distacco come nella tabella dei tempi (i = posto nell'ordine di st.cars); lo usa anche la Pit Board (G27).
+const timingGap = (st, c, i) => c.dnf ? "RIT" : isRaceType(st.type) ? (i === 0 ? (st.finished ? "VINCITORE" : "LEADER") : c.lapsDown > 0 ? `+${c.lapsDown} ${c.lapsDown === 1 ? "GIRO" : "GIRI"}` : fmtGap(c.gap)) : (i === 0 ? (c.best ? "MIGLIOR TEMPO" : "–") : fmtGap(c.gap));
 function TimingTable({ st, onTelemetry, onSelectDriver, onLapTimes }) {
   const race = isRaceType(st.type);
   const lapColor = rec => rec && rec.st === "purple" ? TIMING.purple : rec && rec.st === "green" ? TIMING.green : C.text;
@@ -2384,7 +2386,7 @@ function TimingTable({ st, onTelemetry, onSelectDriver, onLapTimes }) {
         if (race && st.finished && c.pos <= 3) return null;   // i primi tre sono sul podio qui sopra
         const d = driverById(c.id);
         const main = race ? c.last : c.best ? { ...c.best, st: i === 0 ? "purple" : "none" } : null;
-        const gap = c.dnf ? "RIT" : race ? (i === 0 ? (st.finished ? "VINCITORE" : "LEADER") : c.lapsDown > 0 ? `+${c.lapsDown} ${c.lapsDown === 1 ? "GIRO" : "GIRI"}` : fmtGap(c.gap)) : (i === 0 ? (c.best ? "MIGLIOR TEMPO" : "–") : fmtGap(c.gap));
+        const gap = timingGap(st, c, i);
         return (
           <div key={c.id} data-timing-row="" data-timing-pos={c.pos} data-timing-id={c.id} data-dnf={c.dnf ? c.dnf.cause : undefined} style={{ padding: "10px 12px 11px", borderBottom: i < st.cars.length - 1 ? `1px solid ${C.divider}` : "none", opacity: c.out ? .45 : 1, background: c.dnf ? "rgba(255,24,1,.05)" : "transparent" }}>
             <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
@@ -2395,7 +2397,7 @@ function TimingTable({ st, onTelemetry, onSelectDriver, onLapTimes }) {
                 {c.pit && !c.out && <span style={{ padding: "1px 6px", borderRadius: 5, background: "rgba(76,141,255,.18)", fontFamily: F_HEAD, fontWeight: 800, fontSize: 9, color: TIMING.pit }}>BOX</span>}
                 {c.out && <span style={{ fontFamily: F_BODY, fontWeight: 700, fontSize: 9.5, color: C.dim }}>ELIM. {c.outIn}</span>}
               </button>
-              <span style={{ fontFamily: F_BODY, fontWeight: c.dnf ? 800 : 600, fontSize: 11.5, color: c.dnf ? "#FF5A5F" : C.muted, fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap" }}>{gap}</span>
+              <span data-timing-gap="" style={{ fontFamily: F_BODY, fontWeight: c.dnf ? 800 : 600, fontSize: 11.5, color: c.dnf ? "#FF5A5F" : C.muted, fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap" }}>{gap}</span>
               {main ? (
                 <button className="press" aria-label={`Tempi sul giro di ${c.code}`} onClick={() => onLapTimes ? onLapTimes(c.id) : onTelemetry(c.id, main.lapNo, 0)}
                   style={{ padding: "4px 7px", borderRadius: 7, background: "rgba(255,255,255,.05)", fontFamily: F_HEAD, fontWeight: 800, fontSize: 13, color: c.dnf ? C.dim : lapColor(main), fontVariantNumeric: "tabular-nums" }}>{LiveSim.fmtLap(main.time)}</button>
@@ -2405,6 +2407,32 @@ function TimingTable({ st, onTelemetry, onSelectDriver, onLapTimes }) {
           </div>
         );
       })}
+    </div>
+  );
+}
+
+// Pit Board (G27): scorrendo i tempi l'intestazione diventa il tabellone del muretto con posizione, distacco e giro del
+// pilota preferito (o del primo, senza preferito). Sta in cima alla pagina (sticky, alta 0) e appare solo con transform
+// e opacità (R4).
+function PitBoard({ st, driverId, visible }) {
+  const i0 = st.cars.findIndex(c => c.id === driverId), i = i0 >= 0 ? i0 : 0, c = st.cars[i];
+  if (!c) return null;
+  const cell = (label, value, color, big) => (
+    <span style={{ display: "flex", flexDirection: "column", alignItems: "center", minWidth: 0 }}>
+      <span style={{ fontFamily: F_BODY, fontWeight: 700, fontSize: 8, letterSpacing: .8, color: "#77767D" }}>{label}</span>
+      <span style={{ fontFamily: F_HEAD, fontWeight: 900, fontStyle: "italic", fontSize: big ? 20 : 15, lineHeight: 1.05, color, whiteSpace: "nowrap", fontVariantNumeric: "tabular-nums" }}>{value}</span>
+    </span>
+  );
+  return (
+    <div data-pit-board={c.id} data-visible={visible ? "1" : "0"} aria-hidden={visible ? undefined : "true"} style={{ position: "sticky", top: 0, zIndex: 6, height: 0 }}>
+      <div className="pit-board" role="status" aria-label={`Pit Board: ${c.code}, posizione ${c.pos}, ${timingGap(st, c, i)}, ${liveCounter(st)}`}
+        style={{ margin: "0 16px", padding: "7px 12px 8px", borderRadius: "0 0 14px 14px", background: "linear-gradient(180deg, #121215, #070708)", border: "2px solid #2C2C33", borderTop: "none", boxShadow: "0 12px 26px rgba(0,0,0,.65)", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8,
+          transform: visible ? "translateY(0)" : "translateY(-115%)", opacity: visible ? 1 : 0, pointerEvents: visible ? "auto" : "none" }}>
+        {cell("PILOTA", c.code, "#FFFFFF", true)}
+        {cell("POS", "P" + c.pos, "#FFD23F", true)}
+        {cell("DISTACCO", timingGap(st, c, i), "#FFFFFF")}
+        {cell(isRaceType(st.type) ? "GIRO" : "SESSIONE", liveCounter(st), "#FFFFFF")}
+      </div>
     </div>
   );
 }
@@ -4524,6 +4552,43 @@ function DegChart({ s }) {
     </svg>
   );
 }
+// La gomma che si rovina (G28): scorrendo i giri dello stint la gomma disegnata passa da lucida a graining e poi a
+// blistering secondo il degrado vero calcolato: tempo perso dalla retta del degrado (s.slope a giro) da 0,3 s graining,
+// da 0,8 s blistering; dopo il crollo rilevato, blistering. Gli strati cambiano solo opacità (R4).
+const WEAR_GRAIN_S = 0.3, WEAR_BLISTER_S = 0.8;
+const WEAR_UI = { lucida: "Gomma lucida", graining: "Graining", blistering: "Blistering" };
+function wearOf(s, age) {
+  const a0 = Math.min(...s.pts.map(p => p.age)), cliff = !!(s.cliff && age >= s.cliff.age);
+  const loss = Math.max(0, (s.slope || 0) * (age - a0)) + (cliff ? Math.max(0, s.cliff.loss || 0) : 0);   // dopo il crollo, in più quello che perde
+  const wear = cliff || loss >= WEAR_BLISTER_S ? "blistering" : loss >= WEAR_GRAIN_S ? "graining" : "lucida";
+  return { loss, wear };
+}
+function WearTyre({ s }) {
+  const ages = s.pts.map(p => p.age), min = Math.min(...ages), max = Math.max(...ages);
+  const [age, setAge] = useState(min);
+  const { loss, wear } = wearOf(s, age);
+  const col = compUi(s.c)[0];
+  const op = { gloss: wear === "lucida" ? 1 - Math.min(1, loss / WEAR_GRAIN_S) * .35 : wear === "graining" ? .3 : .08, graining: wear === "graining" ? .9 : wear === "blistering" ? .55 : 0, blistering: wear === "blistering" ? 1 : 0 };
+  const R = 44, ring = n => Array.from({ length: n }, (_, k) => k * 2 * Math.PI / n);
+  return (
+    <div data-wear="" style={{ display: "flex", alignItems: "center", gap: 14, marginTop: 12, paddingTop: 12, borderTop: `1px solid ${C.divider}` }}>
+      <svg data-wear-tyre="" data-wear={wear} data-loss={loss.toFixed(2)} data-cliff-age={s.cliff ? s.cliff.age : undefined} viewBox="0 0 100 100" width="92" height="92" role="img" aria-label={`${WEAR_UI[wear]} al giro ${age} dello stint`} style={{ flexShrink: 0 }}>
+        <circle cx="50" cy="50" r={R} fill="#151517" stroke="#000" strokeWidth="1" />
+        <circle cx="50" cy="50" r="33" fill="none" stroke={col} strokeWidth="3" />
+        <circle cx="50" cy="50" r="27" fill="#2A2A2F" />
+        <circle cx="50" cy="50" r="9" fill="#3A3A40" />
+        <g data-wear-layer="gloss" style={{ opacity: op.gloss, transition: "opacity .25s" }}><path d="M18 38 A34 34 0 0 1 46 12" fill="none" stroke="rgba(255,255,255,.55)" strokeWidth="3.4" strokeLinecap="round" /></g>
+        <g data-wear-layer="graining" style={{ opacity: op.graining, transition: "opacity .25s" }}>{ring(36).map((a, k) => <line key={k} x1={(50 + 37 * Math.cos(a)).toFixed(1)} y1={(50 + 37 * Math.sin(a)).toFixed(1)} x2={(50 + 42 * Math.cos(a + .05)).toFixed(1)} y2={(50 + 42 * Math.sin(a + .05)).toFixed(1)} stroke="#6E6E76" strokeWidth="1.3" strokeLinecap="round" />)}</g>
+        <g data-wear-layer="blistering" style={{ opacity: op.blistering, transition: "opacity .25s" }}>{ring(9).map((a, k) => <circle key={k} cx={(50 + 39.5 * Math.cos(a + .3)).toFixed(1)} cy={(50 + 39.5 * Math.sin(a + .3)).toFixed(1)} r={k % 3 ? 2.2 : 3} fill="#4A4A52" stroke="#8A8A92" strokeWidth=".8" />)}</g>
+      </svg>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div data-wear-label="" style={{ fontFamily: F_HEAD, fontWeight: 900, fontSize: 13.5, color: wear === "blistering" ? "#FF5A5F" : wear === "graining" ? C.gold : C.text }}>Giro {age} dello stint · {WEAR_UI[wear]}</div>
+        <div style={{ fontFamily: F_BODY, fontSize: 11.5, color: C.muted, margin: "2px 0 8px" }}>{loss > 0.005 ? `+${fmtDec(loss)} s al giro rispetto all'inizio dello stint` : "Nessun tempo perso rispetto all'inizio dello stint"}</div>
+        <input type="range" data-wear-slider="" data-swipe-own="" aria-label="Giro dello stint" min={min} max={max} step={1} value={age} onChange={e => setAge(+e.target.value)} style={{ width: "100%", accentColor: C.accent }} />
+      </div>
+    </div>
+  );
+}
 function TyreDegTool({ races, live, onBack }) {
   const RS = BtWeekend.races.slice().sort((a, b) => b.round - a.round), liveRace = !!(live && live.type === "RACE");
   const [src0, setSrc] = useState(liveRace ? "live" : "real");
@@ -4552,6 +4617,7 @@ function TyreDegTool({ races, live, onBack }) {
           <div style={{ fontFamily: F_HEAD, fontWeight: 900, fontSize: 13.5, color: C.text, marginBottom: 2 }}>{ghostInfo(cur.code).name} · {compUi(cur.c)[1]} dal giro {cur.from} al {cur.to}</div>
           <div style={{ fontFamily: F_BODY, fontSize: 11.5, color: C.muted, marginBottom: 4 }}>Tempi corretti per la benzina (puntini) e retta del degrado (oro){cur.cliff ? "; in rosso i giri del crollo" : ""}.</div>
           <DegChart s={cur} />
+          <WearTyre key={cur.code + ":" + cur.si} s={cur} />
         </div>
       )}
       <div style={WK_CARD}>
@@ -5060,8 +5126,12 @@ function Of1Status({ of1, standings, onRefresh }) {
   );
 }
 
-function RaceScreen({ isPremium, onPremium, onSelectDriver, races, standings, live, liveSt, onExpandMap, onTelemetry, onOpenCircuit, wxGuess, wxResult, onGuessWeather, onLapTimes, onSecondScreen, lastRace, dotdVote, onDotdVote, ratings = {}, onRate, onOpenChats, onOpenGhost, of1 = null, onOf1Refresh, replay = null }) {
+function RaceScreen({ isPremium, onPremium, onSelectDriver, races, standings, live, liveSt, onExpandMap, onTelemetry, onOpenCircuit, wxGuess, wxResult, onGuessWeather, onLapTimes, onSecondScreen, lastRace, dotdVote, onDotdVote, ratings = {}, onRate, onOpenChats, onOpenGhost, of1 = null, onOf1Refresh, replay = null, favDriver = null }) {
   const [tab, setTab] = useState("classifica");
+  // Pit Board (G27): si vede quando la tabella dei tempi arriva in cima alla pagina (stato cambiato solo al passaggio).
+  const scRef = useRef(null), tblRef = useRef(null);
+  const [board, setBoard] = useState(false);
+  const checkBoard = () => { const sc = scRef.current, tb = tblRef.current; const v = !!(sc && tb && tb.getBoundingClientRect().top < sc.getBoundingClientRect().top + 4); setBoard(b => (b === v ? b : v)); };
   const [champ, setChamp] = useState("piloti");
   const st = live ? liveSt : null;
   const tabs = st ? [["classifica", "Tempi"], ["radio", "Radio"], ["meteo", "Meteo"], ["gomme", "Gomme"], ["messaggi", "Direzione gara"], ["mondiale", "Mondiale"]]
@@ -5073,8 +5143,10 @@ function RaceScreen({ isPremium, onPremium, onSelectDriver, races, standings, li
   const shown = liveRace || realLive || next;
   const done = races.filter(r => r.status === "CONCLUSA").length;
   const card = { margin: "0 16px 16px", borderRadius: 18, background: C.card, border: `1px solid ${C.border}`, overflow: "hidden" };
+  useEffect(checkBoard, [curTab, !!st]);
   return (
-    <div className="scrollcol" style={{ height: "100%" }}>
+    <div className="scrollcol" ref={scRef} onScroll={checkBoard} style={{ height: "100%" }}>
+      {st && curTab === "classifica" && <PitBoard st={st} driverId={favDriver} visible={board} />}
       {st && liveRace && st.finished && isRaceType(st.type) && <FinishPodium st={st} race={liveRace} onSelectDriver={onSelectDriver} />}
       {st && liveRace ? <LiveCard race={liveRace} st={st} track={live.track} source={live.source} onExpand={onExpandMap} replay={replay} /> : (
       <div style={{ position: "relative", margin: "4px 16px 14px", borderRadius: 18, overflow: "hidden", background: C.card, border: `1px solid ${C.border}` }}>
@@ -5129,7 +5201,7 @@ function RaceScreen({ isPremium, onPremium, onSelectDriver, races, standings, li
         ))}
       </div>
 
-      {curTab === "classifica" && st && <TimingTable st={st} onTelemetry={onTelemetry} onSelectDriver={onSelectDriver} onLapTimes={onLapTimes} />}
+      {curTab === "classifica" && st && <div ref={tblRef}><TimingTable st={st} onTelemetry={onTelemetry} onSelectDriver={onSelectDriver} onLapTimes={onLapTimes} /></div>}
       {curTab === "messaggi" && st && <RaceControlList messages={st.messages} />}
       {curTab === "meteo" && <WeatherPanel race={shown} st={st} live={live} guesses={wxGuess} results={wxResult} onGuess={onGuessWeather} />}
 
@@ -8666,7 +8738,7 @@ function App() {
     if (tab === "home") body = <HomeScreen ig={ig} highlights={highlights} onOpenIg={() => { setIgFrom("tab"); setView("instagram"); }} articles={articles} tagFilter={tagFilter} onTag={filterByTag} onClearTag={() => setTagFilter(null)} onOpenArticle={openArticle} isPremium={isPremium} onPremium={() => setPremiumOpen(true)} onToast={showToast} onLiveTrack={() => setLiveTrackOpen(true)} onGoFanta={() => goTab("fanta")}  saved={saved} onToggleSave={toggleSave} savedOnly={savedOnly} setSavedOnly={setSavedOnly} onOpenCircuit={openCircuit} homePoll={homePoll} homeVote={votes.home || null} onVote={castVote}
       hidden={hidden} onHide={hideArticle} onUnhideAll={() => { if (!userDataWait()) setHidden([]); }} onSwipeSave={saveFromSwipe}
       onRefresh={() => refreshShared(["news", "highlights", "ig", "homePoll"]).catch(() => {})} />;
-    else if (tab === "race") body = <RaceScreen dotdVote={live ? votesNow.dotd[live.raceId] : null} onDotdVote={(k, id) => live && voteDotd(live.raceId, k, id)} ratings={votesNow.ratings} onRate={rateDriver} onOpenChats={() => setView("chats")} onOpenGhost={() => setView("ghost")} races={races} standings={standings} isPremium={isPremium} onPremium={() => setPremiumOpen(true)} onSelectDriver={setSelectedDriver} live={live} liveSt={liveSt} onExpandMap={() => setLiveTrackOpen(true)} onTelemetry={(carId, lapNo, sector) => setTelemetry({ carId, lapNo, sector })} onOpenCircuit={openCircuit} wxGuess={wxGuess} wxResult={wxResult} onGuessWeather={guessWeather} onLapTimes={setLapList} onSecondScreen={() => setSsOpen(true)} lastRace={lastRace} of1={of1} onOf1Refresh={() => of1TickRef.current && of1TickRef.current()} replay={replayCtl} />;
+    else if (tab === "race") body = <RaceScreen favDriver={favDriver} dotdVote={live ? votesNow.dotd[live.raceId] : null} onDotdVote={(k, id) => live && voteDotd(live.raceId, k, id)} ratings={votesNow.ratings} onRate={rateDriver} onOpenChats={() => setView("chats")} onOpenGhost={() => setView("ghost")} races={races} standings={standings} isPremium={isPremium} onPremium={() => setPremiumOpen(true)} onSelectDriver={setSelectedDriver} live={live} liveSt={liveSt} onExpandMap={() => setLiveTrackOpen(true)} onTelemetry={(carId, lapNo, sector) => setTelemetry({ carId, lapNo, sector })} onOpenCircuit={openCircuit} wxGuess={wxGuess} wxResult={wxResult} onGuessWeather={guessWeather} onLapTimes={setLapList} onSecondScreen={() => setSsOpen(true)} lastRace={lastRace} of1={of1} onOf1Refresh={() => of1TickRef.current && of1TickRef.current()} replay={replayCtl} />;
     else if (tab === "garage") body = <GarageScreen races={races} pitBest={pitBest} onPitResult={t => { if (!userDataWait()) setPitBest(b => b == null || t < b ? t : b); }} sillyPreds={sillyPreds} onPredict={predictSeat} sillyOfficial={sillyOfficial} live={live} stratPreds={stratPreds} onStrat={(id, st) => { if (!userDataWait()) setStratPreds(x => ({ ...x, [id]: { stints: st, at: nowMs() } })); }} bluffTags={bluffNow} onBluffRefresh={loadBluffTags} />;
     else if (tab === "fanta") body = <FantaScreen standings={standings} squad={squad} setSquad={setSquad} base={squadBase} freeTransfers={freeTransfers} budget={FANTA_BUDGET} stats={fantaStats} race={fantaRace} lock={teamLockInfo} weekends={fantaWeekends} isPremium={isPremium} onPremium={() => setPremiumOpen(true)} onToast={showToast} bonus={bonus} leagues={leagues} setLeagues={setLeagues} needAccount={needAccount} predictions={predictions} predAnswers={predAnswers} predLockOf={predLockOf} onAnswerPrediction={answerPrediction} />;
   }

@@ -159,4 +159,7 @@
   /* Tappa 3 (G23): la carta del FantaF1 si gira in 3D. */
   .flip-inner{ transition:transform .6s cubic-bezier(.3,.9,.4,1); }
   @media (prefers-reduced-motion:reduce){ .parc-ferme, .flip-inner{ animation:none; transition:none; } }
+  /* Tappa 3 (G27): la Pit Board scende quando la tabella dei tempi arriva in cima. */
+  .pit-board{ transition:transform .28s cubic-bezier(.3,1.2,.5,1), opacity .2s ease; }
+  @media (prefers-reduced-motion:reduce){ .pit-board{ transition:none; } [data-wear-layer]{ transition:none !important; } }
   @media (prefers-reduced-motion:reduce){ .press, .toast, .live-notice{ transition:none; animation:none; } .track-dot{ animation:none !important; } .cta-shine::after{ animation:none; display:none; } .led-seq > span, .pit-zoom, .pit-out, .pit-lines > span > i{ animation:none; } .abort-yellow{ animation:none; opacity:1; } .abort-shake{ animation:none; } }
