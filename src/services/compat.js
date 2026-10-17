@@ -217,6 +217,10 @@ function driverIdOf(name) {
 }
 const teamById = id => F1.TEAMS.find(t => t.id === id) || null;
 const num = v => (v == null || v === "" ? null : Number(v));
+// Tappa 3 (G20): prevPosition = la posizione prima dell'ultima gara (la salva la 2.0 quando l'admin mette i punti di una
+// gara nuova), per le frecce del mondiale. L'app di oggi non la scrive: senza, il campo non c'è e le frecce nemmeno.
+const withPrev = (row, prev) => { const n = num(prev); if (Number.isInteger(n) && n > 0) row.prev = n; return row; };
+const prevField = r => (Number.isInteger(r.prev) && r.prev > 0 ? { prevPosition: r.prev } : {});
 function standingsFromStore({ piloti, costruttori } = {}) {
   const guests = {};
   const drivers = (Array.isArray(piloti) ? piloti : []).filter(isObj).map(p => {
@@ -231,10 +235,10 @@ function standingsFromStore({ piloti, costruttori } = {}) {
         teamId, team: t ? t.name : p.team || "", color: t ? t.color : "#9AA0A6",
       };
     }
-    return { id, position: num(p.position), points: num(p.points), oldId: p.id };
+    return withPrev({ id, position: num(p.position), points: num(p.points), oldId: p.id }, p.prevPosition);
   });
   const teams = (Array.isArray(costruttori) ? costruttori : []).filter(isObj)
-    .map(c => ({ id: teamIdOf(c.name), position: num(c.position), points: num(c.points), oldId: c.id }))
+    .map(c => withPrev({ id: teamIdOf(c.name), position: num(c.position), points: num(c.points), oldId: c.id }, c.prevPosition))
     .filter(c => c.id);   // una scuderia che non c'è nel 2026 non si mostra
   return { drivers, teams, guests };
 }
@@ -249,11 +253,12 @@ function standingsToStore(st = {}) {
       team: t ? t.name.toUpperCase() : g && g.team ? String(g.team).toUpperCase() : "",
       position: num(r.position),
       points: num(r.points),
+      ...prevField(r),
     };
   });
   const costruttori = (st.teams || []).map(r => {
     const t = teamById(r.id);
-    return { id: r.oldId || "c-" + r.id, name: t ? t.name : r.id, position: num(r.position), points: num(r.points) };
+    return { id: r.oldId || "c-" + r.id, name: t ? t.name : r.id, position: num(r.position), points: num(r.points), ...prevField(r) };
   });
   return { piloti, costruttori };
 }

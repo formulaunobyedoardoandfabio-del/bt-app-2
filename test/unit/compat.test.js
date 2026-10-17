@@ -116,6 +116,18 @@ t('classifiche: Antonelli p1 → antonelli; "RB F1 Team" → racingbulls; pilota
   assert.deepStrictEqual(nuovo.piloti[0], { id: 'p-bottas', name: 'Valtteri Bottas', team: 'CADILLAC', position: 22, points: 0 });
 });
 
+// Tappa 3 (G20): la posizione prima dell'ultima gara (prevPosition) per le frecce del mondiale; senza, niente campo.
+t('classifiche: prevPosition passa dal documento alla 2.0 e ritorna', () => {
+  const st = C.standingsFromStore({ piloti: [{ id: 'p1', name: 'Andrea Kimi Antonelli', team: 'MERCEDES', position: 1, points: 302, prevPosition: 2 }, { id: 'p2', name: 'George Russell', team: 'MERCEDES', position: 2, points: 236 }], costruttori: [{ id: 'c1', name: 'Mercedes', position: 1, points: 538, prevPosition: 1 }] });
+  assert.strictEqual(st.drivers[0].prev, 2);
+  assert.ok(!('prev' in st.drivers[1]));
+  assert.strictEqual(st.teams[0].prev, 1);
+  const back = C.standingsToStore(st);
+  assert.deepStrictEqual(back.piloti[0], { id: 'p1', name: 'Andrea Kimi Antonelli', team: 'MERCEDES', position: 1, points: 302, prevPosition: 2 });
+  assert.deepStrictEqual(back.piloti[1], { id: 'p2', name: 'George Russell', team: 'MERCEDES', position: 2, points: 236 });
+  assert.deepStrictEqual(back.costruttori[0], { id: 'c1', name: 'Mercedes', position: 1, points: 538, prevPosition: 1 });
+});
+
 t('classifiche: points null resta null', () => {
   const st = C.standingsFromStore({ piloti: [{ id: 'p1', name: 'Andrea Kimi Antonelli', team: 'MERCEDES', position: 1, points: null }], costruttori: null });
   assert.strictEqual(st.drivers[0].points, null);

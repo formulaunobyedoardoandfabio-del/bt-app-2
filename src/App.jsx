@@ -5123,8 +5123,9 @@ function RaceScreen({ isPremium, onPremium, onSelectDriver, races, standings, li
           </div>
           {!st && (() => {
             const top = (champ === "piloti" ? standings.drivers : standings.teams).slice().sort((a, b) => a.position - b.position).slice(0, 3);
-            const items = champ === "piloti" ? driverPodium(top.map(r => ({ id: r.id, value: r.points + " pt" })), onSelectDriver)
-              : top.map((r, i) => { const t = teamById(r.id); return t ? { title: t.name, value: r.points + " pt", figure: <TeamFigure team={t} place={i + 1} /> } : null; }).filter(Boolean);
+            const tr = r => ({ trend: <PosTrend pos={r.position} prev={r.prev} />, trendLabel: posTrendLabel(r.position, r.prev) });
+            const items = champ === "piloti" ? driverPodium(top.map(r => ({ id: r.id, value: r.points + " pt", ...tr(r) })), onSelectDriver)
+              : top.map((r, i) => { const t = teamById(r.id); return t ? { title: t.name, value: r.points + " pt", ...tr(r), figure: <TeamFigure team={t} place={i + 1} /> } : null; }).filter(Boolean);
             return (
               <div data-champ-podium={champ} style={{ padding: "14px 12px 0", marginBottom: 10, borderRadius: 18, background: C.card, border: `1px solid ${C.border}`, overflow: "hidden" }}>
                 <Podium label={champ === "piloti" ? "Podio del mondiale piloti" : "Podio del mondiale costruttori"} items={items} />
@@ -5139,7 +5140,10 @@ function RaceScreen({ isPremium, onPremium, onSelectDriver, races, standings, li
               return (
                 <div key={row.id} data-champ-row={row.position}>
                   <button className="press" onClick={() => d && !d.guest && onSelectDriver(d)} disabled={!d || d.guest} style={{ display: "flex", alignItems: "center", gap: 10, width: "100%", padding: "10px 14px", textAlign: "left" }}>
-                    <span style={{ width: 22, fontFamily: F_HEAD, fontWeight: 800, fontSize: 14, color: row.position <= 3 ? C.gold : C.text }}>{row.position}</span>
+                    <span style={{ width: 26, display: "flex", flexDirection: "column", alignItems: "flex-start", flexShrink: 0 }}>
+                      <span style={{ fontFamily: F_HEAD, fontWeight: 800, fontSize: 14, color: row.position <= 3 ? C.gold : C.text }}>{row.position}</span>
+                      <PosTrend pos={row.position} prev={row.prev} size={9.5} />
+                    </span>
                     {d ? <Headshot driver={d} size={32} /> : <span style={{ width: 32, height: 32, borderRadius: 10, background: t.color + "33", border: `2px solid ${t.color}`, flexShrink: 0 }} />}
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div style={{ fontFamily: F_BODY, fontWeight: 600, fontSize: 13, color: C.text }}>{d ? d.full : t.name}</div>
@@ -5338,25 +5342,32 @@ const initialsOf = u => String(u.me ? "Tu" : (u.nick || u.name || "?")).replace(
 /* ── PODIO ─────────────────────────────────────────────────────────── */
 const MEDAL = { 1: "#E7B34C", 2: "#C9CDD4", 3: "#CD8A4E" };
 // Podio: il 1° al centro sul gradino più alto, il 2° a sinistra a metà, il 3° a destra più in basso.
+// Sollevatore idraulico (G19): quando il podio compare i gradini, con chi ci sta sopra, salgono dal pavimento uno alla
+// volta (il 3°, il 2°, poi il 1°), solo con transform (R4); con "Rimuovi animazioni" sono già al loro posto (R5). Il
+// podio di un'altra classifica (label diversa) è un podio nuovo e risale. it.trend: la freccia accanto al valore (G20).
+const PODIUM_LIFT = { 3: 1, 2: 2, 1: 3 };
+const PODIUM_LIFT_GAP_S = .38;
 function Podium({ items, label }) {
   const H = { 1: 70, 2: 50, 3: 34 };
   return (
-    <div role="list" aria-label={label} data-podium={label} style={{ display: "flex", alignItems: "flex-end", gap: 6 }}>
+    <div key={label} role="list" aria-label={label} data-podium={label} style={{ display: "flex", alignItems: "flex-end", gap: 6, overflow: "hidden" }}>
       {[2, 1, 3].map(place => {
         const it = items[place - 1];
         if (!it) return <div key={place} style={{ flex: 1 }} />;
         return (
-          <div key={place} role="listitem" data-podium-place={place} aria-label={`${place}° posto: ${it.title}${it.value ? ", " + it.value : ""}`} style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", alignItems: "center" }}>
-            {(() => {
-              const body = <>
-                {it.figure}
-                <div style={{ marginTop: 5, maxWidth: "100%", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontFamily: F_HEAD, fontWeight: 800, fontSize: place === 1 ? 13.5 : 12.5, color: C.text, textAlign: "center" }}>{it.title}</div>
-                <div style={{ minHeight: 16, marginBottom: 5, fontFamily: F_BODY, fontWeight: 600, fontSize: 11, color: C.muted, textAlign: "center", whiteSpace: "nowrap" }}>{it.value || ""}</div>
-              </>;
-              return it.onClick ? <button className="press" onClick={it.onClick} style={{ display: "flex", flexDirection: "column", alignItems: "center", width: "100%", minWidth: 0, padding: 0, background: "none" }}>{body}</button> : body;
-            })()}
-            <div data-podium-step={place} style={{ width: "100%", height: H[place], borderRadius: "10px 10px 0 0", background: `linear-gradient(180deg, ${MEDAL[place]}59, ${MEDAL[place]}12)`, borderTop: `3px solid ${MEDAL[place]}`, display: "flex", justifyContent: "center", paddingTop: 5, boxSizing: "border-box" }}>
-              <span style={{ fontFamily: F_HEAD, fontWeight: 900, fontStyle: "italic", fontSize: place === 1 ? 28 : 22, lineHeight: 1, color: MEDAL[place] }}>{place}</span>
+          <div key={place} role="listitem" data-podium-place={place} aria-label={`${place}° posto: ${it.title}${it.value ? ", " + it.value : ""}${it.trendLabel ? ", " + it.trendLabel : ""}`} style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", alignItems: "center" }}>
+            <div data-lift={PODIUM_LIFT[place]} className="podium-lift" style={{ width: "100%", minWidth: 0, display: "flex", flexDirection: "column", alignItems: "center", animationDelay: (PODIUM_LIFT[place] - 1) * PODIUM_LIFT_GAP_S + "s" }}>
+              {(() => {
+                const body = <>
+                  {it.figure}
+                  <div style={{ marginTop: 5, maxWidth: "100%", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontFamily: F_HEAD, fontWeight: 800, fontSize: place === 1 ? 13.5 : 12.5, color: C.text, textAlign: "center" }}>{it.title}</div>
+                  <div style={{ minHeight: 16, marginBottom: 5, display: "flex", alignItems: "center", justifyContent: "center", gap: 5, fontFamily: F_BODY, fontWeight: 600, fontSize: 11, color: C.muted, textAlign: "center", whiteSpace: "nowrap" }}>{it.value || ""}{it.trend || null}</div>
+                </>;
+                return it.onClick ? <button className="press" onClick={it.onClick} style={{ display: "flex", flexDirection: "column", alignItems: "center", width: "100%", minWidth: 0, padding: 0, background: "none" }}>{body}</button> : body;
+              })()}
+              <div data-podium-step={place} style={{ width: "100%", height: H[place], borderRadius: "10px 10px 0 0", background: `linear-gradient(180deg, ${MEDAL[place]}59, ${MEDAL[place]}12)`, borderTop: `3px solid ${MEDAL[place]}`, display: "flex", justifyContent: "center", paddingTop: 5, boxSizing: "border-box" }}>
+                <span style={{ fontFamily: F_HEAD, fontWeight: 900, fontStyle: "italic", fontSize: place === 1 ? 28 : 22, lineHeight: 1, color: MEDAL[place] }}>{place}</span>
+              </div>
             </div>
           </div>
         );
@@ -5390,7 +5401,7 @@ function UserFigure({ user, place }) {
   const s = place === 1 ? 60 : 50;
   return <span aria-hidden="true" style={{ width: s, height: s, borderRadius: "50%", background: user.color, border: `3px solid ${MEDAL[place]}`, display: "flex", alignItems: "center", justifyContent: "center", fontFamily: F_HEAD, fontWeight: 900, fontSize: Math.round(s * .34), color: "#fff", boxSizing: "border-box" }}>{initialsOf(user)}</span>;
 }
-const driverPodium = (ids, onSelect) => ids.slice(0, 3).map((x, i) => { const d = standingsDriver(x.id); return { title: d ? d.name : x.id, value: x.value, figure: <DriverFigure driver={d} place={i + 1} />, onClick: onSelect && d && !d.guest ? () => onSelect(d) : null }; });
+const driverPodium = (ids, onSelect) => ids.slice(0, 3).map((x, i) => { const d = standingsDriver(x.id); return { title: d ? d.name : x.id, value: x.value, trend: x.trend, trendLabel: x.trendLabel, figure: <DriverFigure driver={d} place={i + 1} />, onClick: onSelect && d && !d.guest ? () => onSelect(d) : null }; });
 
 // Ultima gara: podio con le foto di chi ha vinto e classifica completa.
 function LastRaceCard({ race, onSelectDriver }) {
@@ -5443,11 +5454,30 @@ function FinishPodium({ st, race, onSelectDriver }) {
 
 /* ── FANTAF1 COME F1 FANTASY ───────────────────────────────────────── */
 const fmtM = (v, dec = false) => { const r = Math.round((Number(v) || 0) * 10) / 10; return "$" + (dec || r % 1 ? r.toFixed(1) : String(r)) + "M"; };
-const PRICE_UP = "#4FA8FF", PRICE_DOWN = "#FF5A5F";
+// Frecce animate (G20): verde che scatta in su, rossa che scende, trattino grigio se uguale; se non si sa, niente.
+const TREND_UP = C.green, TREND_DOWN = "#FF5A5F";
+const trendStyle = (size, color) => ({ display: "inline-block", fontFamily: F_HEAD, fontWeight: 800, fontSize: size, lineHeight: 1.2, color, whiteSpace: "nowrap" });
 function PriceChange({ v, size = 11 }) {
-  if (v == null || !Number(v)) return null;
-  const up = v > 0;
-  return <span data-price-change={up ? "up" : "down"} aria-label={(up ? "prezzo salito di " : "prezzo sceso di ") + fmtM(Math.abs(v), true)} style={{ fontFamily: F_HEAD, fontWeight: 800, fontSize: size, color: up ? PRICE_UP : PRICE_DOWN, whiteSpace: "nowrap" }}>{up ? "▲" : "▼"}{fmtM(Math.abs(v), true)}</span>;
+  if (v == null || v === "" || !isFinite(Number(v))) return null;
+  const n = Number(v);
+  if (!n) return <span data-price-change="same" className="trend-same" aria-label="prezzo uguale dopo l'ultima gara" style={trendStyle(size, C.dim)}>–</span>;
+  const up = n > 0;
+  return <span data-price-change={up ? "up" : "down"} className={up ? "trend-up" : "trend-down"} aria-label={(up ? "prezzo salito di " : "prezzo sceso di ") + fmtM(Math.abs(n), true)} style={trendStyle(size, up ? TREND_UP : TREND_DOWN)}>{up ? "▲" : "▼"}{fmtM(Math.abs(n), true)}</span>;
+}
+// Posizione nel mondiale rispetto alla gara prima: prev = posizione prima dell'ultima gara (prevPosition, la salva
+// l'admin con i punti di una gara nuova); senza prev niente freccia.
+const posTrendLabel = (pos, prev) => {
+  if (!Number.isInteger(pos) || !Number.isInteger(prev)) return "";
+  const d = prev - pos, n = Math.abs(d);
+  if (!d) return "stessa posizione della gara prima";
+  return (d > 0 ? (n === 1 ? "guadagnata 1 posizione" : `guadagnate ${n} posizioni`) : (n === 1 ? "persa 1 posizione" : `perse ${n} posizioni`)) + " rispetto alla gara prima";
+};
+function PosTrend({ pos, prev, size = 10.5 }) {
+  const label = posTrendLabel(pos, prev);
+  if (!label) return null;
+  const d = prev - pos;
+  if (!d) return <span data-trend="same" className="trend-same" aria-label={label} style={trendStyle(size, C.dim)}>–</span>;
+  return <span data-trend={d > 0 ? "up" : "down"} className={d > 0 ? "trend-up" : "trend-down"} aria-label={label} style={trendStyle(size, d > 0 ? TREND_UP : TREND_DOWN)}>{d > 0 ? "▲" : "▼"}{Math.abs(d)}</span>;
 }
 const cardName = d => d.name.replace(/ (.+)$/, (m, sur) => " " + sur.toUpperCase());   // "K. ANTONELLI", come sulle carte di F1 Fantasy
 // Contorno del tracciato, per l'intestazione della squadra.
@@ -6682,7 +6712,14 @@ function AdminStandingsTab({ standings, setStandings, onToast }) {
   const reorder = () => setDraft(d => ({ ...d, [which]: d[which].slice().sort((a, b) => (parseInt(b.points) || 0) - (parseInt(a.points) || 0)).map((r, i) => ({ ...r, position: String(i + 1) })) }));
   const save = () => {
     const conv = list => list.map(r => ({ ...r, position: parseInt(r.position) || 99, points: parseInt(r.points) || 0 }));   // ...r: resta l'id di oggi (oldId)
-    setStandings({ note: draft.note, drivers: conv(draft.drivers), teams: conv(draft.teams) }).then(ok => ok && onToast("Classifiche salvate"));
+    // Frecce del mondiale (G20): se cambiano dei punti è arrivata una gara nuova e la posizione di prima (prev) di tutte
+    // le righe diventa quella salvata finora; se cambiano solo posizioni o nota (una correzione) prev resta com'era.
+    const withPrev = (list, old) => {
+      const byId = new Map((old || []).map(o => [o.id, o]));
+      const race = list.some(r => { const o = byId.get(r.id); return o && o.points !== r.points; });
+      return list.map(r => { const { prev: _p, ...rest } = r, o = byId.get(r.id), prev = o ? (race ? o.position : o.prev) : null; return Number.isInteger(prev) && prev > 0 ? { ...rest, prev } : rest; });
+    };
+    setStandings({ note: draft.note, drivers: withPrev(conv(draft.drivers), standings.drivers), teams: withPrev(conv(draft.teams), standings.teams) }).then(ok => ok && onToast("Classifiche salvate"));
   };
   return (
     <div>
