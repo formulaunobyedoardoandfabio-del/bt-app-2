@@ -288,7 +288,23 @@ crediti), `src/services/appdata.js` (`bt-commons-photos`); Create `test/e2e/run6
   da Commons'`, `'loghi solo con SHOW_TEAM_LOGOS'`.
 - [ ] **Step 2-4.** **Step 5: Commit** "Foto da Wikimedia Commons con licenza e autore, scelte dal Pannello Admin".
 
-### Task 19: Verifica finale e APK di prova
+### Task 19: Trofei (G31, richiesta del 17/10)
+
+**Files:** Create `src/logic/trophies.js` + `test/unit/trophies.test.js`, `test/e2e/run68-trofei.js`; Modify
+`src/App.jsx` (bacheca "I miei trofei" nel Profilo, medaglia, chat, assegnazione), `src/services/appdata.js`
+(`USER_KEYS` + `trophies`), `src/services/compat.js` (`medal` nei messaggi della chat).
+
+**Interfaces:** `TROPHIES` (15: `{ id, name, how, goal?, secret? }`); `trophyProgress(input) -> { [id]: { done, value?,
+goal? } }` con `input = { about, helmet, squad, saved, pitBest, sillyPreds, ratings, dotd, correctPreds, correctWx,
+correctPolls, events }`; `medalOf(count) -> null | "bronzo" | "argento" | "oro"` (1, 5, 10).
+
+- [ ] **Step 1: Prove (falliscono):** unit `'medalOf: 1 bronzo, 5 argento, 10 oro'`, `'trophyProgress: condizioni sui
+  dati veri'`; e2e `'previsione giusta: "Trofeo sbloccato: Indovino"'`, `'bacheca nel Profilo: casco, medaglia, vinti
+  con la data, da vincere con quanto manca'`, `'chat: la medaglia accanto al nome, anche nei messaggi degli altri'`,
+  `'tre tocchi sul logo: il trofeo segreto'`.
+- [ ] **Step 2-4.** **Step 5: Commit** "Trofei: bacheca nel Profilo, medaglia in chat e avviso del trofeo".
+
+### Task 20: Verifica finale e APK di prova
 
 - [ ] **Step 1:** `bash test/all.sh` → TUTTO VERDE.
 - [ ] **Step 2:** schermate di tutte le pagine nuove (telefono 390 e 540 px) e controllo a occhio.

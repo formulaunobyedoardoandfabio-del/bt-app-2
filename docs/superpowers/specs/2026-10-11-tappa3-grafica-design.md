@@ -129,7 +129,26 @@ l'APK; dopo arrivano i trofei e le altre funzioni che manderà.
   - Loghi: sono marchi delle scuderie (decisione del 29/9: non nella versione per il Play Store). Si vedono nelle
     versioni di prova; un interruttore nel codice li toglie dalla versione per il Play Store.
 
+### Trofei (richiesta di Edoardo del 17/10, ore 21:43: "l'unica nuova cosa interattiva sono i trofei")
+Scelte di Edoardo dell'11/10 (C, C): obiettivi e trofei, la medaglia accanto al nome in chat e la scheda con il casco
+e i trofei. Il resto delle idee vecchie (giochi, strumenti, simulatori) non si fa ora: solo grafica, UX e correzioni.
+- **G31. Trofei.** Si vincono con quello che si fa davvero nell'app, letto dai dati che l'app ha già (nessun numero
+  inventato). Elenco: Superlicenza ("Su di te" completo), Il mio casco (casco cambiato), Griglia completa (squadra
+  FantaF1 con 5 piloti e 2 scuderie), Indovino (1 previsione avanzata giusta), Oracolo (5 giuste), Uomo radar (1
+  pronostico meteo giusto), Sondaggista (1 sondaggio indovinato), Pit crew (Pit Stop Challenge sotto 2,5 s), Pit stop
+  perfetto (sotto 2,0 s), Mercato piloti (1 previsione della Silly Season), Pagellone (1 pagella data), Voce del
+  paddock (1 voto per il pilota del giorno), Archivio (5 notizie salvate), Radio aperta (primo messaggio in chat) e un
+  trofeo segreto (l'easter egg del logo, G26), che si vede come "Trofeo segreto" finché non lo si trova.
+  - Medaglia: bronzo da 1 trofeo, argento da 5, oro da 10. Accanto al nome nei messaggi della chat (anche per gli
+    altri tifosi: la medaglia viaggia con il messaggio) e nel Profilo.
+  - Bacheca nel Profilo ("I miei trofei"): il casco, la medaglia, "N di 15 trofei", i trofei vinti con la data e
+    quelli da vincere con cosa serve e, dove si conta, quanto manca ("3 di 5").
+  - Trofeo vinto: avviso "Trofeo sbloccato: <nome>" con il suono della Shift Light e la vibrazione.
+
 ## Dati
+- Trofei: `trophies` nei dati dell'account ({ id: data in ms }); la medaglia nei messaggi della chat (`medal`:
+  "bronzo" | "argento" | "oro", campo in più che l'app di oggi ignora; le regole di Firebase della Tappa 1, Task 19,
+  devono lasciarlo passare).
 - Nei dati dell'account (`users/<email>.app2`, elenco `USER_KEYS`): `theme` ({ mode: "team" | "custom", color }),
   `sounds`, `haptics`, `helmet`, `hidden`. Sul telefono anche una copia di `theme`, `sounds`, `haptics` per l'avvio e
   per l'ospite, e il primo avvio fatto.
@@ -138,8 +157,7 @@ l'APK; dopo arrivano i trofei e le altre funzioni che manderà.
   logos: { teamId: file } }; licenza e autore letti da Commons e tenuti sul telefono per 7 giorni.
 
 ## Fuori da questa parte (dopo l'APK)
-- Obiettivi e trofei, medaglia accanto al nome in chat e scheda con casco e trofei (scelte di Edoardo: C, C).
-- Le altre funzioni che Edoardo manderà.
+- Le altre funzioni che Edoardo manderà (i trofei sono passati dentro: G31).
 - Della Tappa 1: revisione della Fase D, regole di Firebase (Task 19) prima che la 2.0 vada a tutti, controllo finale
   (Task 20), pubblicità, Premium e foto (rimandati).
 
