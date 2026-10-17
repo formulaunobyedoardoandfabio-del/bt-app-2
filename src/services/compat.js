@@ -339,11 +339,13 @@ function reportFromStore(r) {
 function profileFromStore(doc) {
   if (!isObj(doc)) return null;
   const a = isObj(doc.about) ? doc.about : {};
+  const about = { birth: a.birth == null ? null : a.birth, follow: a.follow == null ? null : a.follow, fan: a.fan == null ? null : a.fan };
+  if (Number.isInteger(a.years) && a.years >= 0) about.years = a.years;   // Tappa 3 (G16): anni da tifoso esatti
   return {
     name: doc.name || "",
     nick: doc.nick || doc.name || "",
     email: doc.email || "",
-    about: { birth: a.birth == null ? null : a.birth, follow: a.follow == null ? null : a.follow, fan: a.fan == null ? null : a.fan },
+    about,
     app2: isObj(doc.app2) ? doc.app2 : {},
     isPremium: !!doc.isPremium,
   };

@@ -1030,24 +1030,108 @@ function SectionLabel({ icon, children }) {
 }
 
 /* ── SCREENS ────────────────────────────────────────────────────────── */
-/* ── ABOUT YOU: da quanto segui la F1 e che tifoso sei (registrazione e profilo) ── */
+/* ── SU DI TE: da quanto segui la F1 e che tifoso sei (registrazione e profilo) ── */
 const FOLLOW_STEPS = ["Meno di 1 anno", "1 – 3 anni", "4 – 6 anni", "7 – 10 anni", "Più di 10 anni"];
 const FAN_TYPES = [["vivo", "Vivo e respiro F1!"], ["vroom", "Se fa Vroom è bello"], ["matricola", "Matricola delle 4 ruote"], ["nuovo", "Nuovo sport da seguire"]];
-const ABOUT_INIT = { birth: null, follow: 1, fan: "vivo" };   // valori di partenza dei moduli "Su di te"
+const ABOUT_INIT = { birth: null, follow: 1, fan: "vivo", years: 1 };   // valori di partenza dei moduli "Su di te"
+// Tappa 3 (G16): gli anni da tifoso si scelgono esatti (years); follow, la fascia che legge anche l'app di oggi, si
+// ricava da years. Per chi ha solo la fascia, il contachilometri parte da un valore dentro la fascia.
+const YEARS_MAX = 60;
+const followOf = y => (y == null ? null : y < 1 ? 0 : y <= 3 ? 1 : y <= 6 ? 2 : y <= 10 ? 3 : 4);
+const yearsOf = a => (a && Number.isInteger(a.years) ? a.years : a && a.follow != null ? [0, 2, 5, 8, 12][a.follow] ?? 1 : ABOUT_INIT.years);
+const yearsLabel = y => `${y} ${y === 1 ? "anno" : "anni"}`;
+const DEFAULT_BIRTH = 2000;   // primo scatto del manettino quando l'anno non è ancora indicato
 const BIRTH_YEARS = Array.from({ length: 2016 - 1935 + 1 }, (_, i) => 2016 - i);
 const fanLabel = id => (FAN_TYPES.find(f => f[0] === id) || [null, "–"])[1];
-function FollowSlider({ id, value, onChange }) {
+// Anni da tifoso (G16): il contachilometri a rulli. Le cifre girano (transform) quando il valore cambia; si cambia con −
+// e +, trascinando i rulli in su o in giù (16 px = un anno) o con le frecce della tastiera (role="spinbutton").
+function OdometerYears({ id, value, onChange }) {
+  const v = Math.max(0, Math.min(YEARS_MAX, value == null ? 0 : value));
+  const set = n => { const x = Math.max(0, Math.min(YEARS_MAX, n)); if (x !== v) { onChange(x); fx.play("tick"); fx.buzz("select"); } };
+  const drag = useRef(null);
+  const down = e => { drag.current = { y: e.clientY, v }; try { e.currentTarget.setPointerCapture(e.pointerId); } catch (err) {} };
+  const move = e => { const d = drag.current; if (!d) return; set(d.v + Math.round((d.y - e.clientY) / 16)); };
+  const up = () => { drag.current = null; };
+  const key = e => {
+    const k = { ArrowUp: 1, ArrowRight: 1, ArrowDown: -1, ArrowLeft: -1, PageUp: 5, PageDown: -5 }[e.key];
+    if (k) { e.preventDefault(); set(v + k); } else if (e.key === "Home") { e.preventDefault(); set(0); } else if (e.key === "End") { e.preventDefault(); set(YEARS_MAX); }
+  };
+  const btn = { width: 34, height: 34, borderRadius: 10, background: "rgba(255,255,255,.07)", border: `1px solid ${C.border}`, fontFamily: F_HEAD, fontWeight: 900, fontSize: 17, color: C.text, flexShrink: 0 };
   return (
     <div>
-      <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 10, marginBottom: 6 }}>
-        <label htmlFor={id} style={{ fontFamily: F_BODY, fontWeight: 600, fontSize: 12, color: C.muted }}>Da quanto segui la F1</label>
-        <span data-follow-label="" style={{ fontFamily: F_HEAD, fontWeight: 800, fontSize: 13.5, color: C.text }}>{FOLLOW_STEPS[value]}</span>
+      <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 10, marginBottom: 8 }}>
+        <span id={id + "Label"} style={{ fontFamily: F_BODY, fontWeight: 600, fontSize: 12, color: C.muted }}>Da quanti anni segui la F1</span>
+        <span data-follow-label="" style={{ fontFamily: F_HEAD, fontWeight: 800, fontSize: 13.5, color: C.text }}>{yearsLabel(v)}</span>
       </div>
-      <input id={id} type="range" min="0" max={FOLLOW_STEPS.length - 1} step="1" value={value} aria-valuetext={FOLLOW_STEPS[value]} onChange={e => onChange(Number(e.target.value))} style={{ width: "100%", accentColor: C.accentInk, margin: "4px 0" }} />
-      <div style={{ display: "flex", justifyContent: "space-between", fontFamily: F_BODY, fontSize: 10, color: C.dim }}><span>meno di 1 anno</span><span>più di 10 anni</span></div>
+      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+        <button type="button" className="press" aria-label="Un anno in meno" onClick={() => set(v - 1)} style={btn}>−</button>
+        <div id={id} data-odometer={v} data-swipe-own="" role="spinbutton" tabIndex={0} aria-labelledby={id + "Label"} aria-valuemin={0} aria-valuemax={YEARS_MAX} aria-valuenow={v} aria-valuetext={yearsLabel(v)}
+          onKeyDown={key} onPointerDown={down} onPointerMove={move} onPointerUp={up} onPointerCancel={up}
+          style={{ display: "flex", gap: 3, padding: 5, borderRadius: 10, background: "#0B0B0E", border: `1px solid ${C.border}`, boxShadow: "inset 0 2px 6px rgba(0,0,0,.8)", touchAction: "none", cursor: "ns-resize", userSelect: "none" }}>
+          {[Math.floor(v / 10), v % 10].map((dg, i) => (
+            <span key={i} style={{ position: "relative", width: 26, height: 36, overflow: "hidden", borderRadius: 5, background: "linear-gradient(#26262E, #101014 45%, #101014 55%, #26262E)" }}>
+              <span data-odo-strip="" className="odo-strip" style={{ position: "absolute", left: 0, right: 0, top: 0, transform: `translateY(${-dg * 36}px)` }}>
+                {[0, 1, 2, 3, 4, 5, 6, 7, 8, 9].map(n => <span key={n} style={{ display: "block", height: 36, lineHeight: "36px", textAlign: "center", fontFamily: F_HEAD, fontWeight: 900, fontSize: 22, color: "#F4F2EF" }}>{n}</span>)}
+              </span>
+              <span aria-hidden="true" style={{ position: "absolute", inset: 0, background: "linear-gradient(rgba(0,0,0,.55), rgba(0,0,0,0) 30%, rgba(0,0,0,0) 70%, rgba(0,0,0,.55))", pointerEvents: "none" }} />
+            </span>
+          ))}
+        </div>
+        <button type="button" className="press" aria-label="Un anno in più" onClick={() => set(v + 1)} style={btn}>+</button>
+        <span style={{ fontFamily: F_HEAD, fontWeight: 800, fontSize: 11, letterSpacing: 1, color: C.dim }}>ANNI</span>
+      </div>
     </div>
   );
 }
+
+// Anno di nascita (G17): un manettino rotante, come quelli del volante. Ogni anno è uno scatto (tic e vibrazione); si
+// gira trascinando (in su o a destra = anno dopo, 14 px a scatto), con le frecce della tastiera o con i tasti accanto.
+// role="slider"; senza anno: "Non indicato" (il primo scatto porta al DEFAULT_BIRTH).
+const KNOB_DEG = 15;
+function BirthKnob({ id, value, onChange, min = 1935, max }) {
+  const set = y => { const v = y == null ? null : Math.max(min, Math.min(max, y)); if (v !== value) { onChange(v); if (v != null) { fx.play("tick"); fx.buzz("select"); } } };
+  const step = k => set(value == null ? Math.min(max, DEFAULT_BIRTH) : value + k);
+  const drag = useRef(null);
+  const down = e => { drag.current = { x: e.clientX, y: e.clientY, v: value == null ? Math.min(max, DEFAULT_BIRTH) : value, moved: false }; try { e.currentTarget.setPointerCapture(e.pointerId); } catch (err) {} };
+  const move = e => {
+    const d = drag.current; if (!d) return;
+    const n = Math.round(((e.clientX - d.x) - (e.clientY - d.y)) / 14);
+    if (n !== 0 || d.moved) { d.moved = true; set(d.v + n); }
+  };
+  const up = () => { drag.current = null; };
+  const key = e => {
+    const k = { ArrowUp: 1, ArrowRight: 1, ArrowDown: -1, ArrowLeft: -1, PageUp: 10, PageDown: -10 }[e.key];
+    if (k) { e.preventDefault(); step(k); }
+    else if (e.key === "Home") { e.preventDefault(); set(min); } else if (e.key === "End") { e.preventDefault(); set(max); }
+    else if (e.key === "Delete" || e.key === "Backspace") { e.preventDefault(); set(null); }
+  };
+  const rot = value == null ? -30 : (value - min) * KNOB_DEG;
+  const small = { width: 30, height: 30, borderRadius: 9, background: "rgba(255,255,255,.07)", border: `1px solid ${C.border}`, fontFamily: F_HEAD, fontWeight: 900, fontSize: 15, color: C.text, flexShrink: 0 };
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+      <div id={id} data-knob="" data-swipe-own="" role="slider" tabIndex={0} aria-label="Anno di nascita" aria-valuemin={min} aria-valuemax={max} aria-valuenow={value == null ? undefined : value} aria-valuetext={value == null ? "Non indicato" : String(value)}
+        onKeyDown={key} onPointerDown={down} onPointerMove={move} onPointerUp={up} onPointerCancel={up}
+        style={{ position: "relative", width: 70, height: 70, flexShrink: 0, borderRadius: "50%", touchAction: "none", cursor: "grab", userSelect: "none", outlineOffset: 3 }}>
+        <svg viewBox="0 0 70 70" width="70" height="70" aria-hidden="true" style={{ position: "absolute", inset: 0 }}>
+          {Array.from({ length: 24 }, (_, i) => <line key={i} x1="35" y1="2" x2="35" y2={i % 6 ? 6 : 8} stroke={i % 6 ? "rgba(255,255,255,.25)" : "rgba(255,255,255,.55)"} strokeWidth="1.4" transform={`rotate(${i * 15} 35 35)`} />)}
+        </svg>
+        <span data-knob-dial="" className="knob-dial" style={{ position: "absolute", inset: 10, borderRadius: "50%", background: "radial-gradient(circle at 40% 35%, #3A3A44, #15151A 70%)", boxShadow: "0 4px 10px rgba(0,0,0,.7), inset 0 0 0 2px #2C2C34", transform: `rotate(${rot}deg)` }}>
+          {Array.from({ length: 12 }, (_, i) => <span key={i} style={{ position: "absolute", left: "50%", top: 1, width: 2, height: 6, marginLeft: -1, borderRadius: 1, background: "rgba(255,255,255,.12)", transformOrigin: "1px 24px", transform: `rotate(${i * 30}deg)` }} />)}
+          <span style={{ position: "absolute", left: "50%", top: 5, width: 4, height: 14, marginLeft: -2, borderRadius: 2, background: C.accentInk }} />
+        </span>
+      </div>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ fontFamily: F_HEAD, fontWeight: 900, fontStyle: "italic", fontSize: value == null ? 15 : 24, color: value == null ? C.muted : C.text }}>{value == null ? "Non indicato" : value}</div>
+        <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 6 }}>
+          <button type="button" className="press" aria-label="Anno prima" onClick={() => step(-1)} style={small}>−</button>
+          <button type="button" className="press" aria-label="Anno dopo" onClick={() => step(1)} style={small}>+</button>
+          {value != null && <button type="button" className="press" onClick={() => set(null)} style={{ fontFamily: F_BODY, fontWeight: 600, fontSize: 11.5, color: C.dim, textDecoration: "underline", marginLeft: 4 }}>Non indicare</button>}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function FanTypePicker({ value, onChange }) {
   return (
     <div role="radiogroup" aria-label="Che tifoso sei" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
@@ -1058,7 +1142,7 @@ function FanTypePicker({ value, onChange }) {
     </div>
   );
 }
-// Scheda "About You" del profilo, come nell'app ufficiale: anno di nascita, da quanto segui la F1, tipo di tifoso.
+// Scheda "Su di te" del profilo: anno di nascita (manettino), da quanti anni segui la F1 (contachilometri), tipo di tifoso.
 function AboutCard({ about, onSave }) {
   const a = about || ABOUT_INIT;
   const [edit, setEdit] = useState(false);
@@ -1074,34 +1158,31 @@ function AboutCard({ about, onSave }) {
   return (
     <div data-about="" style={{ margin: "0 20px 22px" }}>
       <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8, padding: "0 2px" }}>
-        <span style={{ fontFamily: F_BODY, fontWeight: 600, fontSize: 15, color: C.muted }}>About You</span>
+        <span style={{ fontFamily: F_BODY, fontWeight: 600, fontSize: 15, color: C.muted }}>Su di te</span>
         <div style={{ flex: 1 }} />
-        {!edit && <button className="press" aria-label="Modifica About You" onClick={() => { setDraft({ ...a, follow: a.follow == null ? ABOUT_INIT.follow : a.follow }); setEdit(true); }} style={{ display: "flex", alignItems: "center", gap: 6, fontFamily: F_HEAD, fontWeight: 800, fontSize: 14, color: C.gold }}><Icon name="edit" size={14} color={C.gold} sw={2.2} />Modifica</button>}
+        {!edit && <button className="press" aria-label="Modifica Su di te" onClick={() => { setDraft({ ...a, years: yearsOf(a) }); setEdit(true); }} style={{ display: "flex", alignItems: "center", gap: 6, fontFamily: F_HEAD, fontWeight: 800, fontSize: 14, color: C.gold }}><Icon name="edit" size={14} color={C.gold} sw={2.2} />Modifica</button>}
       </div>
       <div style={{ borderRadius: 18, background: C.card, border: `1px solid ${C.border}`, overflow: "hidden" }}>
         {edit ? (
           <div style={{ padding: 14, display: "flex", flexDirection: "column", gap: 14 }}>
             <div>
-              <label htmlFor="aboutBirth" style={{ ...small, display: "block", marginBottom: 6 }}>Anno di nascita</label>
-              <select id="aboutBirth" value={draft.birth ? String(draft.birth) : ""} onChange={e => { const v = e.target.value; setDraft(d => ({ ...d, birth: v ? Number(v) : null })); }} style={{ width: "100%", padding: "11px 12px", borderRadius: 12, background: C.bg, border: `1px solid ${C.border}`, fontFamily: F_BODY, fontSize: 14, color: C.text }}>
-                <option value="">Non indicato</option>
-                {BIRTH_YEARS.filter(y => y <= new Date(nowMs()).getFullYear() - MIN_AGE).map(y => <option key={y} value={String(y)}>{y}</option>)}
-              </select>
+              <div style={{ ...small, marginBottom: 8 }}>Anno di nascita</div>
+              <BirthKnob id="aboutBirth" value={draft.birth || null} min={BIRTH_YEARS[BIRTH_YEARS.length - 1]} max={new Date(nowMs()).getFullYear() - MIN_AGE} onChange={v => setDraft(d => ({ ...d, birth: v }))} />
             </div>
-            <FollowSlider id="aboutFollow" value={draft.follow} onChange={v => setDraft(d => ({ ...d, follow: v }))} />
+            <OdometerYears id="aboutFollow" value={draft.years} onChange={v => setDraft(d => ({ ...d, years: v }))} />
             <div>
               <div style={{ ...small, marginBottom: 8 }}>Che tifoso sei?</div>
               <FanTypePicker value={draft.fan} onChange={v => setDraft(d => ({ ...d, fan: v }))} />
             </div>
             <div style={{ display: "flex", gap: 8 }}>
               <button className="press" onClick={() => setEdit(false)} style={{ flex: 1, padding: "12px 0", borderRadius: 12, background: "rgba(255,255,255,.06)", border: `1px solid ${C.border}`, fontFamily: F_HEAD, fontWeight: 800, fontSize: 13, color: C.muted }}>Annulla</button>
-              <button className="press" onClick={() => { onSave && onSave(draft); setEdit(false); }} style={{ flex: 1, padding: "12px 0", borderRadius: 12, background: C.accent, fontFamily: F_HEAD, fontWeight: 800, fontSize: 13, color: "#fff" }}>Salva</button>
+              <button className="press" onClick={() => { onSave && onSave({ birth: draft.birth || null, follow: followOf(draft.years), fan: draft.fan, years: draft.years }); setEdit(false); }} style={{ flex: 1, padding: "12px 0", borderRadius: 12, background: C.accent, fontFamily: F_HEAD, fontWeight: 800, fontSize: 13, color: "#fff" }}>Salva</button>
             </div>
           </div>
         ) : (
           <>
             {row("birth", "Anno di nascita", a.birth || "Non indicato", true)}
-            {row("follow", "Segue F1", FOLLOW_STEPS[a.follow] || "Non indicato")}
+            {row("follow", "Segue F1", Number.isInteger(a.years) ? yearsLabel(a.years) : FOLLOW_STEPS[a.follow] || "Non indicato")}
             {row("fan", "Tipo fan", fanLabel(a.fan))}
           </>
         )}
@@ -1139,7 +1220,7 @@ function LoginScreen({ auth, onDone, onGuest, onBack, reason }) {
   const [info, setInfo] = useState("");
   const [busy, setBusy] = useState(false);
   const [birth, setBirth] = useState(null);
-  const [follow, setFollow] = useState(ABOUT_INIT.follow);
+  const [years, setYears] = useState(ABOUT_INIT.years);   // anni da tifoso (G16); la fascia follow si ricava
   const [fan, setFan] = useState(null);
   const [adult, setAdult] = useState(false);   // "Ho almeno 14 anni" (Task 22)
   const [aborts, setAborts] = useState(0);      // password sbagliata (G07): ogni volta ripartono semafori e tremolio
@@ -1157,7 +1238,7 @@ function LoginScreen({ auth, onDone, onGuest, onBack, reason }) {
     setErr(""); setInfo(""); setBusy(true); setAborts(0);
     try {
       if (isLogin) await auth.login(email, pw);
-      else await auth.register({ name, email, pw, pw2, about: { birth, follow, fan }, adult });
+      else await auth.register({ name, email, pw, pw2, about: { birth, follow: followOf(years), fan, years }, adult });
       setBusy(false);
       onDone && onDone({ created: !isLogin });
     } catch (e) {
@@ -1230,12 +1311,9 @@ function LoginScreen({ auth, onDone, onGuest, onBack, reason }) {
         {!isLogin && (
           <div style={{ marginBottom: 16, padding: 14, borderRadius: 14, background: "rgba(255,255,255,.03)", border: `1px solid ${C.border}` }}>
             <div style={{ fontFamily: F_HEAD, fontWeight: 800, fontSize: 13.5, color: C.text, marginBottom: 12 }}>Su di te</div>
-            <label style={labelStyle} htmlFor="regBirth">Anno di nascita</label>
-            <select id="regBirth" value={birth ? String(birth) : ""} onChange={e => setBirth(e.target.value ? Number(e.target.value) : null)} style={{ width: "100%", padding: "11px 12px", marginBottom: 16, borderRadius: 12, background: C.bg, border: `1px solid ${C.border}`, fontFamily: F_BODY, fontSize: 14, color: C.text }}>
-              <option value="">Non indicato</option>
-              {BIRTH_YEARS.map(y => <option key={y} value={String(y)}>{y}</option>)}
-            </select>
-            <FollowSlider id="regFollow" value={follow} onChange={setFollow} />
+            <div style={labelStyle}>Anno di nascita</div>
+            <div style={{ marginBottom: 16 }}><BirthKnob id="regBirth" value={birth} min={BIRTH_YEARS[BIRTH_YEARS.length - 1]} max={BIRTH_YEARS[0]} onChange={setBirth} /></div>
+            <OdometerYears id="regFollow" value={years} onChange={setYears} />
             <div style={{ ...labelStyle, marginTop: 16, marginBottom: 8 }}>Che tifoso sei?</div>
             <FanTypePicker value={fan} onChange={setFan} />
           </div>

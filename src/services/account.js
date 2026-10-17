@@ -63,7 +63,11 @@ const randomPw = () => {
 const cleanAbout = a => {
   const x = a && typeof a === "object" ? a : {};
   const birth = Number(x.birth), follow = Number(x.follow);
-  return { birth: x.birth == null || x.birth === "" || isNaN(birth) ? null : birth, follow: x.follow == null || isNaN(follow) ? null : follow, fan: x.fan ? String(x.fan) : null };
+  const out = { birth: x.birth == null || x.birth === "" || isNaN(birth) ? null : birth, follow: x.follow == null || isNaN(follow) ? null : follow, fan: x.fan ? String(x.fan) : null };
+  // Tappa 3 (G16): gli anni da tifoso esatti, solo se chi salva li manda (da 0 a 99). Un valore non valido diventa null:
+  // con la scrittura "merge" di Firestore non resta quello di prima.
+  if ("years" in x) { const y = Math.round(Number(x.years)); out.years = x.years == null || x.years === "" || !isFinite(y) || y < 0 ? null : Math.min(99, y); }
+  return out;
 };
 
 function createAccount({

@@ -218,13 +218,14 @@ const tests = {
     assert(!errs.length, errs.join(' | '));
   },
   // ── About You ─────────────────────────────────────────────────────────
-  async 'registrazione: da quanto segui la F1 con una barra e tipo di tifoso, poi si vedono nel profilo'(b) {
+  // Tappa 3 (G16): la barra degli anni da tifoso è diventata il contachilometri a rulli (anni esatti).
+  async 'registrazione: da quanti anni segui la F1 con il contachilometri e tipo di tifoso, poi si vedono nel profilo'(b) {
     const { ctx, p, errs } = await open(b);
     await tapText(p, 'REGISTRATI', { exact: true }); await w(p, 300);
     const lbl0 = await inner(p, '[data-follow-label]');
     const fans = await p.evaluate(() => [...document.querySelectorAll('[data-fan-option]')].map(e => e.textContent.replace(/\s+/g, ' ').trim()));
     await p.fill('#regName', 'Gino'); await p.fill('#authEmail', 'g@b.it'); await p.fill('#authPw', 'abcdef'); await p.fill('#regPw2', 'abcdef');   // Task 7: almeno 6 caratteri
-    await p.focus('#regFollow'); await p.keyboard.press('ArrowRight'); await p.keyboard.press('ArrowRight'); await w(p, 200);
+    await p.focus('#regFollow'); await p.keyboard.press('ArrowRight'); await p.keyboard.press('ArrowRight'); await w(p, 400);
     const lbl = await inner(p, '[data-follow-label]');
     await tapSel(p, '[data-fan-option="vroom"]'); await w(p, 150);
     await p.check('#regAdult');   // Task 22: "Ho almeno 14 anni"
@@ -232,26 +233,27 @@ const tests = {
     await tapSel(p, '[aria-label="Profilo"]'); await w(p, 400);
     const follow = await inner(p, '[data-about-row="follow"]'), fan = await inner(p, '[data-about-row="fan"]'), birth = await inner(p, '[data-about-row="birth"]');
     await ctx.close();
-    assert(lbl0 === '1 – 3 anni', 'valore iniziale della barra: ' + lbl0);
+    assert(lbl0 === '1 anno', 'valore iniziale del contachilometri: ' + lbl0);
     for (const f of ['Vivo e respiro F1!', 'Se fa Vroom è bello', 'Matricola delle 4 ruote', 'Nuovo sport da seguire']) assert(fans.includes(f), 'manca il tipo di tifoso: ' + f + ' — ' + fans.join(' | '));
-    assert(lbl === '7 – 10 anni', 'la barra non cambia gli anni: ' + lbl);
-    assert(follow && /7 – 10 anni/.test(follow), 'profilo, segue F1: ' + follow);
+    assert(lbl === '3 anni', 'il contachilometri non cambia gli anni: ' + lbl);
+    assert(follow && /3 anni/.test(follow), 'profilo, segue F1: ' + follow);
     assert(fan && /Se fa Vroom è bello/.test(fan), 'profilo, tipo fan: ' + fan);
     assert(birth && /Non indicato/.test(birth), 'profilo, anno di nascita non scelto: ' + birth);   // Tappa 3 (G05): niente lineetta lunga
     assert(!errs.length, errs.join(' | '));
   },
-  async 'profilo: About You si modifica (anno di nascita, anni di F1, tipo di tifoso)'(b) {
+  // Tappa 3 (G16-G17): "Su di te" (prima "About You") con il manettino dell'anno e il contachilometri degli anni.
+  async 'profilo: "Su di te" si modifica (anno di nascita, anni di F1, tipo di tifoso)'(b) {
     const { ctx, p } = await open(b); await login(p);
     await tapSel(p, '[aria-label="Profilo"]'); await w(p, 400);
-    await tapSel(p, '[aria-label="Modifica About You"]'); await w(p, 300);
-    await p.selectOption('#aboutBirth', '2004'); await w(p, 100);
+    await tapSel(p, '[aria-label="Modifica Su di te"]'); await w(p, 300);
+    await p.focus('#aboutBirth'); for (let i = 0; i < 5; i++) await p.keyboard.press('ArrowUp'); await w(p, 100);   // primo scatto 2000, poi 2004
     await p.focus('#aboutFollow'); await p.keyboard.press('End'); await w(p, 150);
     await tapSel(p, '[data-about] [data-fan-option="matricola"]'); await w(p, 150);
     await tapText(p, 'Salva', { exact: true, sel: '[data-about] button' }); await w(p, 300);
     const rows = await p.evaluate(() => Object.fromEntries([...document.querySelectorAll('[data-about-row]')].map(e => [e.getAttribute('data-about-row'), e.innerText.replace(/\s+/g, ' ').trim()])));
     await ctx.close();
     assert(/2004/.test(rows.birth || ''), 'anno di nascita: ' + rows.birth);
-    assert(/Più di 10 anni/.test(rows.follow || ''), 'anni di F1: ' + rows.follow);
+    assert(/60 anni/.test(rows.follow || ''), 'anni di F1: ' + rows.follow);
     assert(/Matricola delle 4 ruote/.test(rows.fan || ''), 'tipo di tifoso: ' + rows.fan);
   },
 };

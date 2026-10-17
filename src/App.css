@@ -116,4 +116,8 @@
   /* Tappa 3 (G15): la visiera del casco si alza e si abbassa. */
   .helmet-visor{ transition:transform .38s cubic-bezier(.3,1.35,.5,1); }
   @media (prefers-reduced-motion:reduce){ .helmet-visor{ transition:none; } }
+  /* Tappa 3 (G16-G17): i rulli del contachilometri girano; il manettino scatta. */
+  .odo-strip{ transition:transform .32s cubic-bezier(.3,1.3,.5,1); }
+  .knob-dial{ transition:transform .12s cubic-bezier(.3,1.6,.5,1); }
+  @media (prefers-reduced-motion:reduce){ .odo-strip, .knob-dial{ transition:none; } }
   @media (prefers-reduced-motion:reduce){ .press, .toast, .live-notice{ transition:none; animation:none; } .track-dot{ animation:none !important; } .cta-shine::after{ animation:none; display:none; } .led-seq > span, .pit-zoom, .pit-out, .pit-lines > span > i{ animation:none; } .abort-yellow{ animation:none; opacity:1; } .abort-shake{ animation:none; } }

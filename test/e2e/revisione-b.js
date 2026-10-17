@@ -208,8 +208,8 @@ run({
   async 'minori 5 e 11: in "Su di te" niente anni sotto i 14; i Termini (§8) dicono anche "Su di te" e feedback'(b) {
     const { ctx, p, errs } = await open(b); await login(p);
     await tapSel(p, '[aria-label="Profilo"]'); await w(p, 400);
-    await tapSel(p, '[aria-label="Modifica About You"]'); await w(p, 300);
-    const years = await p.evaluate(() => [...document.querySelectorAll('#aboutBirth option')].map(o => +o.value).filter(Boolean));
+    await tapSel(p, '[aria-label="Modifica Su di te"]'); await w(p, 300);   // Tappa 3 (G17): l'anno è un manettino
+    const years = await p.evaluate(() => { const k = document.querySelector('#aboutBirth'); return k ? [+k.getAttribute('aria-valuemax')] : []; });
     await tapText(p, 'Annulla', { exact: true }).catch(() => {}); await w(p, 200);
     await tapText(p, 'Termini e Condizioni'); await w(p, 500);
     const terms = norm(await text(p)); await ctx.close();

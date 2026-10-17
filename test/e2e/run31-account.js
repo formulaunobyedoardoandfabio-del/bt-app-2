@@ -9,7 +9,8 @@ const authState = p => p.evaluate(() => window.firebase.__fake.authState());
 async function register(p, { name = 'Fabio', email = 'fabio@b.it', pw = 'abcdef', birth = null, steps = 0, fan = 'vivo', adult = true } = {}) {
   await tapText(p, 'REGISTRATI', { exact: true }); await w(p, 300);
   await p.fill('#regName', name); await p.fill('#authEmail', email); await p.fill('#authPw', pw); await p.fill('#regPw2', pw);
-  if (birth) await p.selectOption('#regBirth', String(birth));
+  // Tappa 3 (G16-G17): l'anno col manettino (il primo scatto porta al 2000) e gli anni col contachilometri (parte da 1).
+  if (birth) { await p.focus('#regBirth'); await p.keyboard.press('ArrowUp'); for (let i = 0; i < Math.abs(birth - 2000); i++) await p.keyboard.press(birth > 2000 ? 'ArrowUp' : 'ArrowDown'); }
   if (steps) { await p.focus('#regFollow'); for (let i = 0; i < steps; i++) await p.keyboard.press('ArrowRight'); }
   await tapSel(p, `[data-fan-option="${fan}"]`); await w(p, 150);
   if (adult) await p.check('#regAdult');
@@ -22,7 +23,7 @@ run({
     const { ctx, p, errs } = await open(b);
     await register(p, { adult: false });
     const t1 = await text(p), u1 = await doc(p, 'users/fabio@b.it');
-    await p.selectOption('#regBirth', '2015'); await p.check('#regAdult');
+    await p.focus('#regBirth'); await p.keyboard.press('End'); await p.keyboard.press('ArrowDown'); await p.check('#regAdult');   // Tappa 3 (G17): manettino, 2016 poi 2015
     await tapText(p, 'CREA ACCOUNT', { exact: true }); await w(p, 1500);
     const t2 = await text(p), u2 = await doc(p, 'users/fabio@b.it'), auth = await authState(p); await ctx.close();
     assert(/Conferma di avere almeno 14 anni\./.test(t1) && !u1, 'senza la casella si è creato l\'account (o manca l\'avviso)');
@@ -32,12 +33,12 @@ run({
 
   async 'registrazione: "Su di te" (che tifoso sei, da quanti anni segui la F1, anno di nascita) nel profilo'(b) {
     const { ctx, p, errs } = await open(b);
-    await register(p, { birth: 2001, steps: 1, fan: 'vroom' });
+    await register(p, { birth: 2001, steps: 4, fan: 'vroom' });   // 5 anni da tifoso
     await tapSel(p, '[aria-label="Profilo"]'); await w(p, 400);
     const rows = await p.evaluate(() => Object.fromEntries([...document.querySelectorAll('[data-about-row]')].map(e => [e.getAttribute('data-about-row'), e.innerText.replace(/\s+/g, ' ').trim()])));
     const user = await doc(p, 'users/fabio@b.it'), auth = await authState(p); await ctx.close();
-    assert(/2001/.test(rows.birth || '') && /4 – 6 anni/.test(rows.follow || '') && /Se fa Vroom è bello/.test(rows.fan || ''), 'Su di te nel profilo: ' + JSON.stringify(rows));
-    assert(user && JSON.stringify(user.about) === JSON.stringify({ birth: 2001, follow: 2, fan: 'vroom' }), 'users/fabio@b.it.about: ' + JSON.stringify(user && user.about));
+    assert(/2001/.test(rows.birth || '') && /5 anni/.test(rows.follow || '') && /Se fa Vroom è bello/.test(rows.fan || ''), 'Su di te nel profilo: ' + JSON.stringify(rows));
+    assert(user && JSON.stringify(user.about) === JSON.stringify({ birth: 2001, follow: 2, fan: 'vroom', years: 5 }), 'users/fabio@b.it.about: ' + JSON.stringify(user && user.about));   // follow = la fascia "4 – 6 anni" per l'app di oggi
     assert(user.pw === undefined && auth.users['fabio@b.it'], 'la password deve stare in Authentication, non nel profilo');
     assert(!errs.length, errs.join(' | '));
   },

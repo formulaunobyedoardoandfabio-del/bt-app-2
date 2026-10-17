@@ -159,6 +159,14 @@ t('account vecchio senza about: profilo con about a null e nessun errore', () =>
   assert.strictEqual(C.profileFromStore(null), null);
 });
 
+// Tappa 3 (G16): gli anni da tifoso esatti (years) passano dal documento al profilo; senza, il profilo resta com'era.
+t('profileFromStore: tiene gli anni da tifoso esatti (years) se ci sono', () => {
+  const p = C.profileFromStore({ email: 'f@b.it', name: 'Fabio', about: { birth: 2001, follow: 2, fan: 'vroom', years: 5 } });
+  assert.deepStrictEqual(p.about, { birth: 2001, follow: 2, fan: 'vroom', years: 5 });
+  const q = C.profileFromStore({ email: 'f@b.it', name: 'Fabio', about: { follow: 2, years: 'tanti' } });
+  assert.deepStrictEqual(q.about, { birth: null, follow: 2, fan: null });
+});
+
 // ── Date ────────────────────────────────────────────────────────────────
 t('relTime: Adesso, 5 min fa, 3 h fa, Ieri, 4 giorni fa, data', () => {
   assert.strictEqual(C.relTime('2026-10-07T09:59:30Z', NOW), 'Adesso');

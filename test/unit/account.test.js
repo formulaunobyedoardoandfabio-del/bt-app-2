@@ -281,6 +281,20 @@ t('profilo: nome e "Su di te" si modificano; account vecchio senza "Su di te" ha
   assert.deepStrictEqual(A.current().about, { birth: 1999, follow: 4, fan: 'vroom' });
   assert.ok(/^u[0-9a-f]{16}$/.test(A.current().aid));
 });
+// Tappa 3 (G16): gli anni da tifoso esatti (years) si salvano accanto alla fascia di oggi (follow, che l'app di oggi legge).
+t('"Su di te": gli anni da tifoso esatti (years) restano accanto alla fascia di oggi', async () => {
+  const c = ctx({ docs: { 'users/v@b.it': { email: 'v@b.it', name: 'Edo', pw: 'segreta' } } });
+  const A = make();
+  await A.login('v@b.it', 'segreta');
+  await A.updateAbout({ birth: 2001, follow: 3, fan: 'vivo', years: 8 });
+  assert.deepStrictEqual(c.fs('users/v@b.it').about, { birth: 2001, follow: 3, fan: 'vivo', years: 8 });
+  await A.updateAbout({ birth: 2001, follow: 4, fan: 'vivo', years: '250' });
+  assert.strictEqual(c.fs('users/v@b.it').about.years, 99, 'più di 99 anni non vale');
+  await A.updateAbout({ birth: 2001, follow: 1, fan: 'vivo', years: 'tanti' });
+  assert.deepStrictEqual(c.fs('users/v@b.it').about, { birth: 2001, follow: 1, fan: 'vivo', years: null }, 'senza un numero years è null (con merge non resta quello di prima)');
+  await A.updateAbout({ birth: 2001, follow: 2, fan: 'vivo' });
+  assert.deepStrictEqual(A.current().about, { birth: 2001, follow: 2, fan: 'vivo' }, 'chi non manda years (l\'app di oggi) non lo tocca');
+});
 
 (async () => {
   const filter = process.argv[2] ? new RegExp(process.argv[2], 'i') : null;
