@@ -15,6 +15,7 @@ import BtGhost from "./logic/bt-ghost";
 import BtWk from "./logic/bt-weekend";
 import Colors from "./logic/colors";
 import { filterNews, TYRES, LANES } from "./logic/newsfilter";
+import { classifySwipe, SWIPE } from "./logic/gesture";
 import F1 from "./data/f1-2026";
 import AppData from "./services/appdata";
 import Compat from "./services/compat";
@@ -1182,6 +1183,72 @@ function PollCard({ poll, vote, onVote, title = "SONDAGGIO" }) {
   );
 }
 
+// Riga di una notizia dell'elenco che si trascina (G11): a destra si salva (la pistola pneumatica avvita il dado), a
+// sinistra si nasconde (il fumo del bloccaggio). La riga segue il dito (solo transform); lo swipe vale come dice
+// classifySwipe; se il dito va in verticale la pagina scorre come sempre (touch-action: pan-y). Dopo un trascinamento
+// il tocco non apre la notizia. data-swipe-own: da qui non parte lo swipe tra le schede (G29).
+function SwipeRow({ id, onSave, onHide, children }) {
+  const ref = useRef(null);
+  const st = useRef(null);          // { x, y, t, pid, h } del dito giù (h: orizzontale sì/no, deciso dopo 8 px)
+  const dragged = useRef(false);
+  const timers = useRef([]);
+  const [dx, setDx] = useState(0);
+  const [effect, setEffect] = useState(null);   // "gun" | "smoke"
+  useEffect(() => () => timers.current.forEach(clearTimeout), []);
+  const later = (fn, ms) => timers.current.push(setTimeout(fn, ms));
+  const down = e => { if (effect || (e.button != null && e.button > 0)) return; st.current = { x: e.clientX, y: e.clientY, t: e.timeStamp, pid: e.pointerId, h: null }; dragged.current = false; };
+  const move = e => {
+    const s = st.current; if (!s) return;
+    const ddx = e.clientX - s.x, ddy = e.clientY - s.y;
+    if (s.h == null && (Math.abs(ddx) > 8 || Math.abs(ddy) > 8)) {
+      s.h = Math.abs(ddy) < Math.abs(ddx) * SWIPE.ratio;
+      if (s.h) { try { ref.current.setPointerCapture(s.pid); } catch (err) {} }
+    }
+    if (s.h) { dragged.current = true; setDx(ddx); }
+    else if (s.h === false) { st.current = null; }
+  };
+  const up = e => {
+    const s = st.current; st.current = null; setDx(0);
+    if (!s || !s.h) return;
+    const width = (ref.current && ref.current.offsetWidth) || 360;
+    const dir = classifySwipe({ dx: e.clientX - s.x, dy: e.clientY - s.y, dt: e.timeStamp - s.t, width });
+    if (dir === "right") { setEffect("gun"); fx.play("clack"); fx.buzz("medium"); if (onSave) onSave(id); later(() => setEffect(null), 950); }
+    else if (dir === "left") { setEffect("smoke"); fx.buzz("light"); later(() => { if (onHide) onHide(id); }, 700); }
+  };
+  const cancel = () => { st.current = null; setDx(0); };
+  return (
+    <div ref={ref} data-news-row={id} data-swipe-own="" onPointerDown={down} onPointerMove={move} onPointerUp={up} onPointerCancel={cancel}
+      onClickCapture={e => { if (dragged.current) { e.stopPropagation(); e.preventDefault(); dragged.current = false; } }}
+      style={{ position: "relative", touchAction: "pan-y" }}>
+      {dx !== 0 && (
+        <div aria-hidden="true" style={{ position: "absolute", inset: "0 16px 12px", borderRadius: 16, display: "flex", alignItems: "center", justifyContent: dx > 0 ? "flex-start" : "flex-end", padding: "0 18px", background: dx > 0 ? "rgba(231,179,76,.12)" : "rgba(255,255,255,.05)", gap: 8 }}>
+          <Icon name={dx > 0 ? "bookmark" : "close"} size={16} color={dx > 0 ? C.gold : C.muted} />
+          <span style={{ fontFamily: F_HEAD, fontWeight: 800, fontSize: 11, letterSpacing: 1, color: dx > 0 ? C.gold : C.muted }}>{dx > 0 ? "SALVA" : "NASCONDI"}</span>
+        </div>
+      )}
+      <div className={effect === "smoke" ? "row-out" : undefined} style={{ position: "relative", transform: dx ? `translateX(${dx}px)` : undefined }}>{children}</div>
+      {effect === "gun" && (
+        <div data-swipe-fx="gun" aria-hidden="true" className="fx-gun" style={{ position: "absolute", left: 22, top: "50%", marginTop: -22, display: "flex", alignItems: "center", gap: 6, pointerEvents: "none", zIndex: 3 }}>
+          <svg viewBox="0 0 60 44" width="60" height="44">
+            <path d="M2 14h26l6 4v8l-6 4H2z" fill="#2E2E36" stroke="#55555F" strokeWidth="1.2" />
+            <rect x="8" y="30" width="9" height="13" rx="2" fill="#2E2E36" stroke="#55555F" strokeWidth="1.2" />
+            <rect x="34" y="19" width="8" height="6" rx="1" fill="#77777F" />
+            <g className="nut-spin" style={{ transformOrigin: "50px 22px" }}><path d="M50 14l7 4v8l-7 4-7-4v-8z" fill={C.gold} stroke="#8A6A20" strokeWidth="1" /><circle cx="50" cy="22" r="2.6" fill="#2E2E36" /></g>
+          </svg>
+          <span style={{ padding: "3px 8px", borderRadius: 6, background: "rgba(231,179,76,.92)", fontFamily: F_HEAD, fontWeight: 900, fontStyle: "italic", fontSize: 11, color: "#15120A", letterSpacing: .5 }}>SALVATA</span>
+        </div>
+      )}
+      {effect === "smoke" && (
+        <div data-swipe-fx="smoke" aria-hidden="true" style={{ position: "absolute", inset: "0 16px 12px", pointerEvents: "none", zIndex: 3 }}>
+          {[[14, 60, 0], [32, 40, 60], [52, 64, 120], [70, 38, 40], [86, 58, 160]].map(([x, y, d], i) => (
+            <span key={i} className="smoke-puff" style={{ position: "absolute", left: x + "%", top: y + "%", width: 54, height: 54, marginLeft: -27, marginTop: -27, borderRadius: "50%", background: "radial-gradient(circle, rgba(200,200,206,.55), rgba(200,200,206,0) 70%)", animationDelay: d + "ms" }} />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // Monoposto vista dall'alto, col muso a destra (disegno nostro), nel colore dei tasti.
 function TopCar({ w = 38 }) {
   return (
@@ -1243,11 +1310,13 @@ function TyreFilter({ value, onChange }) {
   );
 }
 
-function HomeScreen({ ig, onOpenIg, highlights = [], articles, tagFilter, onTag, onClearTag, onOpenArticle, isPremium, onPremium, onToast, onLiveTrack, onGoFanta, saved = [], onToggleSave, savedOnly = false, setSavedOnly, onOpenCircuit, homePoll = null, homeVote = null, onVote }) {
+function HomeScreen({ ig, onOpenIg, highlights = [], articles, tagFilter, onTag, onClearTag, onOpenArticle, isPremium, onPremium, onToast, onLiveTrack, onGoFanta, saved = [], onToggleSave, savedOnly = false, setSavedOnly, onOpenCircuit, homePoll = null, homeVote = null, onVote, hidden = [], onHide, onUnhideAll, onSwipeSave }) {
   const [q, setQ] = useState("");
   const [tyre, setTyre] = useState(null);     // filtro a gomma (G09): soft | medium | hard | inter
   const [lane, setLane] = useState("all");    // Pit Lane (G10): all | teams | drivers | tech
-  const visible = articles.filter(a => a.published !== false);
+  const published = articles.filter(a => a.published !== false);
+  const visible = published.filter(a => !hidden.includes(a.id));   // notizie nascoste con lo swipe (G11)
+  const hiddenCount = published.length - visible.length;
   const byTag = tagFilter ? visible.filter(a => articleTags(a).some(t => t.key === tagFilter.key)) : visible;
   const bySaved = savedOnly ? byTag.filter(a => saved.includes(a.id)) : byTag;
   const byPit = filterNews(bySaved, { tyre, lane, now: nowMs() });
@@ -1366,7 +1435,7 @@ function HomeScreen({ ig, onOpenIg, highlights = [], articles, tagFilter, onTag,
       {ig && onOpenIg && <IgBigButton ig={ig} onOpen={onOpenIg} />}
 
       {rest.map(a => (
-        <div key={a.id} style={{ position: "relative" }}>
+        <SwipeRow key={a.id} id={a.id} onSave={onSwipeSave} onHide={onHide}>
         <SaveBtn a={a} saved={saved.includes(a.id)} onToggle={onToggleSave} style={{ top: 8, right: 24 }} />
         <button className="press" data-news-item={a.id} data-age={String(BtLogic.newsAge(a))} onClick={() => onOpenArticle(a.id)} style={{ display: "flex", textAlign: "left", width: "calc(100% - 32px)", margin: "0 16px 12px", borderRadius: 16, overflow: "hidden", background: C.card, border: `1px solid ${C.border}` }}>
           <div style={{ width: 92, minHeight: 92, flexShrink: 0, position: "relative", background: a.image ? "#111" : "linear-gradient(155deg,#1a1a2e 0%,#0f0f12 70%)" }}>
@@ -1379,8 +1448,13 @@ function HomeScreen({ ig, onOpenIg, highlights = [], articles, tagFilter, onTag,
             <span style={{ fontFamily: F_BODY, fontSize: 11, color: C.dim }}>{a.time}</span>
           </div>
         </button>
-        </div>
+        </SwipeRow>
       ))}
+      {hiddenCount > 0 && (
+        <p data-hidden-footer="" style={{ margin: "0 16px 18px", fontFamily: F_BODY, fontSize: 12, color: C.dim, textAlign: "center" }}>
+          Notizie nascoste: {hiddenCount} · <button className="press" onClick={() => onUnhideAll && onUnhideAll()} style={{ display: "inline", fontFamily: F_BODY, fontWeight: 700, fontSize: 12, color: C.accentInk, textDecoration: "underline" }}>Mostra</button>
+        </p>
+      )}
 
       <SectionLabel icon="star">CONTENUTI PREMIUM</SectionLabel>
       <div style={{ display: "flex", flexDirection: "column", gap: 10, padding: "0 16px 20px" }}>
@@ -7736,6 +7810,19 @@ function App() {
     setSaved(s => was ? s.filter(x => x !== id) : [id, ...s]);
     showToast(was ? "Tolto dai preferiti" : "Salvato tra i preferiti");
   };
+  // Swipe sulle notizie (G11): a destra si salva (senza togliere chi è già salvata), a sinistra si nasconde.
+  const saveFromSwipe = (id) => {
+    if (guest) { needLogin(SAVE_NEEDS_ACCOUNT); return; }
+    if (userDataWait()) return;
+    if (saved.includes(id)) { showToast("Già tra i preferiti"); return; }
+    setSaved(s => [id, ...s]);
+    showToast("Salvato tra i preferiti");
+  };
+  const hideArticle = (id) => {
+    if (userDataWait()) return;
+    setHidden(h => (h.includes(id) ? h : [...h, id].slice(-200)));
+    showToast("Notizia nascosta");
+  };
   const openSaved = () => { if (guest) { needLogin(SAVE_NEEDS_ACCOUNT); return; } setTagFilter(null); setSavedOnly(true); setTab("home"); setView("tab"); };
 
   // Pubblica (o salva in bozza) una notizia in shared/bt-news. Restituisce true se è salvata: solo allora il modulo
@@ -8089,7 +8176,8 @@ function App() {
     sounds={sounds} haptics={haptics} onSounds={v => { if (userDataWait()) return; setSounds(v); fx.setSounds(v); if (v) fx.play("tick"); }} onHaptics={v => { if (userDataWait()) return; setHaptics(v); fx.setHaptics(v); if (v) fx.buzz("light"); }} />;
   else if (view === "notifiche") body = <NotificheScreen onBack={viewBack.notifiche} onAction={a => { if (a === "feedback") { if (feedbackAsk && !feedbackAsk.read) saveAsk({ ...feedbackAsk, read: true }); setFeedbackOpen(true); } }} notifs={notifs} onReadAll={readAll} isPremium={isPremium} onPremium={() => setPremiumOpen(true)} favTeam={favTeam} favDriver={favDriver} prefs={notifPrefs} onPrefs={v => { if (!userDataWait()) setNotifPrefs(v); }} onGoProfilo={() => setView("profilo")} />;
   else {
-    if (tab === "home") body = <HomeScreen ig={ig} highlights={highlights} onOpenIg={() => { setIgFrom("tab"); setView("instagram"); }} articles={articles} tagFilter={tagFilter} onTag={filterByTag} onClearTag={() => setTagFilter(null)} onOpenArticle={openArticle} isPremium={isPremium} onPremium={() => setPremiumOpen(true)} onToast={showToast} onLiveTrack={() => setLiveTrackOpen(true)} onGoFanta={() => goTab("fanta")}  saved={saved} onToggleSave={toggleSave} savedOnly={savedOnly} setSavedOnly={setSavedOnly} onOpenCircuit={openCircuit} homePoll={homePoll} homeVote={votes.home || null} onVote={castVote} />;
+    if (tab === "home") body = <HomeScreen ig={ig} highlights={highlights} onOpenIg={() => { setIgFrom("tab"); setView("instagram"); }} articles={articles} tagFilter={tagFilter} onTag={filterByTag} onClearTag={() => setTagFilter(null)} onOpenArticle={openArticle} isPremium={isPremium} onPremium={() => setPremiumOpen(true)} onToast={showToast} onLiveTrack={() => setLiveTrackOpen(true)} onGoFanta={() => goTab("fanta")}  saved={saved} onToggleSave={toggleSave} savedOnly={savedOnly} setSavedOnly={setSavedOnly} onOpenCircuit={openCircuit} homePoll={homePoll} homeVote={votes.home || null} onVote={castVote}
+      hidden={hidden} onHide={hideArticle} onUnhideAll={() => { if (!userDataWait()) setHidden([]); }} onSwipeSave={saveFromSwipe} />;
     else if (tab === "race") body = <RaceScreen dotdVote={live ? votesNow.dotd[live.raceId] : null} onDotdVote={(k, id) => live && voteDotd(live.raceId, k, id)} ratings={votesNow.ratings} onRate={rateDriver} onOpenChats={() => setView("chats")} onOpenGhost={() => setView("ghost")} races={races} standings={standings} isPremium={isPremium} onPremium={() => setPremiumOpen(true)} onSelectDriver={setSelectedDriver} live={live} liveSt={liveSt} onExpandMap={() => setLiveTrackOpen(true)} onTelemetry={(carId, lapNo, sector) => setTelemetry({ carId, lapNo, sector })} onOpenCircuit={openCircuit} wxGuess={wxGuess} wxResult={wxResult} onGuessWeather={guessWeather} onLapTimes={setLapList} onSecondScreen={() => setSsOpen(true)} lastRace={lastRace} of1={of1} onOf1Refresh={() => of1TickRef.current && of1TickRef.current()} replay={replayCtl} />;
     else if (tab === "garage") body = <GarageScreen races={races} pitBest={pitBest} onPitResult={t => { if (!userDataWait()) setPitBest(b => b == null || t < b ? t : b); }} sillyPreds={sillyPreds} onPredict={predictSeat} sillyOfficial={sillyOfficial} live={live} stratPreds={stratPreds} onStrat={(id, st) => { if (!userDataWait()) setStratPreds(x => ({ ...x, [id]: { stints: st, at: nowMs() } })); }} bluffTags={bluffNow} onBluffRefresh={loadBluffTags} />;
     else if (tab === "fanta") body = <FantaScreen squad={squad} setSquad={setSquad} base={squadBase} freeTransfers={freeTransfers} budget={FANTA_BUDGET} stats={fantaStats} race={fantaRace} lock={teamLockInfo} weekends={fantaWeekends} isPremium={isPremium} onPremium={() => setPremiumOpen(true)} onToast={showToast} bonus={bonus} leagues={leagues} setLeagues={setLeagues} needAccount={needAccount} predictions={predictions} predAnswers={predAnswers} predLockOf={predLockOf} onAnswerPrediction={answerPrediction} />;
