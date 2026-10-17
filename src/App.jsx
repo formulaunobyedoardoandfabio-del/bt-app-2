@@ -22,6 +22,7 @@ import { createChat, CHAT_MSG, ROOM_IDS } from "./services/chat";
 import { createFeedback, FEEDBACK_CATS, FEEDBACK_MSG } from "./services/feedback";
 import { local, IMG_REF, uploadImage, loadImage as loadStoredImage, dropImage } from "./services/firebase";
 import { generateArticle } from "./services/backend";
+import { fx } from "./services/fx";
 import { createOpenF1, buildReplay, lastRaceFromResult, sessionType as of1SessionType } from "./services/openf1";
 import LOGO from "./data/logo";
 
@@ -210,6 +211,8 @@ function Icon({ name, size = 18, color = C.text, sw = 2 }) {
     case "link": return <svg {...s}><path d="M10 13a5 5 0 0 0 7.07 0l3-3a5 5 0 0 0-7.07-7.07l-1.5 1.5" /><path d="M14 11a5 5 0 0 0-7.07 0l-3 3a5 5 0 0 0 7.07 7.07l1.5-1.5" /></svg>;
     case "rotate": return <svg {...s}><path d="M20 12a8 8 0 1 1-2.34-5.66" /><polyline points="20,4 20,9 15,9" /></svg>;
     case "external": return <svg {...s}><path d="M14 4h6v6" /><path d="M20 4l-9 9" /><path d="M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5" /></svg>;
+    case "sound": return <svg {...s}><path d="M4 9h4l5-4v14l-5-4H4z" /><path d="M16.5 9.5a3.5 3.5 0 0 1 0 5" /><path d="M19 7a7 7 0 0 1 0 10" /></svg>;
+    case "vibrate": return <svg {...s}><rect x="8" y="4" width="8" height="16" rx="2" /><path d="M4.5 9v6M19.5 9v6" /><path d="M11 17h2" /></svg>;
     case "palette": return <svg {...s}><path d="M12 3a9 9 0 0 0 0 18c1.2 0 1.8-.9 1.8-1.8 0-.5-.2-.9-.5-1.2-.3-.3-.5-.7-.5-1.2 0-1 .8-1.8 1.8-1.8H17a4 4 0 0 0 4-4c0-4.4-4-8-9-8Z" /><circle cx="7.5" cy="11.5" r="1.1" /><circle cx="10.5" cy="7.5" r="1.1" /><circle cx="15" cy="8" r="1.1" /></svg>;
     default: return null;
   }
@@ -5499,7 +5502,7 @@ function FantaScreen({ squad, setSquad, base, freeTransfers, budget, stats, race
   );
 }
 
-function ProfiloScreen({ ig, onOpenIg, trial = null, trialUsed = false, onBack, onNotifiche, onPremium, onAdmin, onLogout, isPremium, onAbout, onHelp, onFeedback, aboutMe, onSaveAboutMe, favTeam, favDriver, onPickTeam, onPickDriver, guest, onLogin, onTerms, blocked = [], onUnblock, onDeleteAccount, savedCount = 0, onOpenSaved, account = null, onSaveName, isAdmin = false, onTheme }) {
+function ProfiloScreen({ ig, onOpenIg, trial = null, trialUsed = false, onBack, onNotifiche, onPremium, onAdmin, onLogout, isPremium, onAbout, onHelp, onFeedback, aboutMe, onSaveAboutMe, favTeam, favDriver, onPickTeam, onPickDriver, guest, onLogin, onTerms, blocked = [], onUnblock, onDeleteAccount, savedCount = 0, onOpenSaved, account = null, onSaveName, isAdmin = false, onTheme, sounds = true, haptics = true, onSounds, onHaptics }) {
   const ft = favTeam ? teamById(favTeam) : null;
   const fd = favDriver ? driverById(favDriver) : null;
   const favRows = [
@@ -5536,6 +5539,8 @@ function ProfiloScreen({ ig, onOpenIg, trial = null, trialUsed = false, onBack, 
   const rows = [
     { icon: "bell", label: "Notifiche", onClick: onNotifiche, chevron: true },
     { icon: "palette", label: "Colori dell'app", onClick: onTheme, chevron: true },
+    { icon: "sound", label: "Suoni", toggle: { on: sounds, onChange: onSounds } },
+    { icon: "vibrate", label: "Vibrazioni", toggle: { on: haptics, onChange: onHaptics } },
     ...(isAdmin ? [{ icon: "gear", label: "Pannello Admin · Pubblica notizia", onClick: onAdmin, badge: "ADMIN" }] : []),
     { icon: "help", label: "Assistenza", onClick: onHelp, chevron: true },
     { icon: "chat", label: "Invia feedback", onClick: onFeedback, chevron: true },   // come oggi, ma dal Profilo (niente pulsante fluttuante)
@@ -5639,12 +5644,20 @@ function ProfiloScreen({ ig, onOpenIg, trial = null, trialUsed = false, onBack, 
       <div style={{ margin: "0 20px 18px", borderRadius: 18, background: C.card, border: `1px solid ${C.border}`, overflow: "hidden" }}>
         {rows.map((r, i) => (
           <div key={r.label}>
+            {r.toggle ? (
+              <div style={{ display: "flex", alignItems: "center", gap: 12, width: "100%", padding: 14 }}>
+                <div style={{ width: 36, height: 36, borderRadius: 10, background: "rgba(255,255,255,.06)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}><Icon name={r.icon} size={16} /></div>
+                <span style={{ flex: 1, fontFamily: F_BODY, fontWeight: 600, fontSize: 14, color: C.text }}>{r.label}</span>
+                <Toggle on={!!r.toggle.on} onChange={v => r.toggle.onChange && r.toggle.onChange(v)} label={r.label} />
+              </div>
+            ) : (
             <button className="press" onClick={r.onClick || undefined} style={{ display: "flex", alignItems: "center", gap: 12, width: "100%", padding: 14, textAlign: "left" }}>
               <div style={{ width: 36, height: 36, borderRadius: 10, background: "rgba(255,255,255,.06)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}><Icon name={r.icon} size={16} /></div>
               <span style={{ flex: 1, fontFamily: F_BODY, fontWeight: 600, fontSize: 14, color: C.text }}>{r.label}</span>
               {r.badge && <span style={{ padding: "2px 8px", borderRadius: 6, background: "rgba(231,179,76,.16)", fontFamily: F_HEAD, fontWeight: 800, fontSize: 9, color: C.gold, letterSpacing: .4 }}>{r.badge}</span>}
               {r.chevron && <Icon name="chevron" size={16} color={C.dim} />}
             </button>
+            )}
             {i < rows.length - 1 && <div style={{ height: 1, background: C.divider, margin: "0 14px" }} />}
           </div>
         ))}
@@ -6990,7 +7003,7 @@ const USER_INIT = {
   theme: { mode: "team", color: null }, sounds: true, haptics: true, helmet: null, hidden: [],
 };
 // Dati dell'account che restano anche sul telefono: uscendo dall'account non tornano quelli di serie.
-const PHONE_KEYS = ["theme"];
+const PHONE_KEYS = ["theme", "sounds", "haptics"];
 const NOT_SAVED = "Non salvato: controlla la connessione e riprova.";
 const USER_WAIT = "I tuoi dati non sono ancora arrivati: controlla la connessione e riprova tra poco.";
 const DATA_CHANGED = "Non salvato: nel frattempo i dati sono stati cambiati. Ora vedi quelli aggiornati: rifai la modifica e salva di nuovo.";
@@ -7082,8 +7095,8 @@ function App() {
   // Tappa 3: colori dell'app (sul telefono e nell'account), suoni, vibrazioni, casco e notizie nascoste (account).
   const [theme, setTheme] = useState(() => cleanTheme(local.get(THEME_KEY)) || USER_INIT.theme);
   const [bootColor] = useState(() => { const t = local.get(THEME_KEY); return (t && Colors.normHex(t.color)) || null; });
-  const [sounds, setSounds] = useState(USER_INIT.sounds);
-  const [haptics, setHaptics] = useState(USER_INIT.haptics);
+  const [sounds, setSounds] = useState(() => fx.sounds());     // suoni e vibrazioni: la scelta del telefono (fx)
+  const [haptics, setHaptics] = useState(() => fx.haptics());
   const [helmet, setHelmet] = useState(USER_INIT.helmet);
   const [hidden, setHidden] = useState(USER_INIT.hidden);
   const [themeOpen, setThemeOpen] = useState(false);
@@ -7283,6 +7296,16 @@ function App() {
     st.setProperty("--accent", tones.accent); st.setProperty("--accent-ink", tones.ink);
   }, [tones.accent, tones.ink]);
   useEffect(() => { if (!themePending) local.set(THEME_KEY, { mode: theme.mode, color: tones.base }); }, [themePending, theme.mode, tones.base]);
+  // Suoni e vibrazioni (G03): la scelta va a fx (che la tiene sul telefono). L'audio parte al primo tocco dell'app.
+  useEffect(() => { fx.setSounds(sounds); }, [sounds]);
+  useEffect(() => { fx.setHaptics(haptics); }, [haptics]);
+  useEffect(() => {
+    const evs = ["pointerup", "touchend", "keydown", "click"];
+    const off = () => evs.forEach(e => window.removeEventListener(e, go, true));
+    const go = () => { fx.unlock(); if (fx.ready()) off(); };
+    evs.forEach(e => window.addEventListener(e, go, true));
+    return off;
+  }, []);
   const enterAccount = email => {
     const em = String(email || "").trim().toLowerCase();
     if (!em) return;
@@ -7879,7 +7902,8 @@ function App() {
   else if (view === "instagram") body = <InstagramView ig={ig} onToast={showToast} onBack={viewBack.instagram} />;
   else if (view === "ghost") body = <GhostLap onBack={viewBack.ghost} />;
   else if (view === "chats") body = <ChatsView chats={chats} onOpen={openChat} blocked={blocked} onBack={viewBack.chats} unreadOf={(id, ms) => Chat.unread(id, ms)} />;
-  else if (view === "profilo") body = <ProfiloScreen ig={ig} onOpenIg={() => { setIgFrom("profilo"); setView("instagram"); }} aboutMe={aboutMe} onSaveAboutMe={a => Account.updateAbout(a).catch(e => showToast(e && (e.code === "too-young" || e.code === "not-loaded") ? messageOf(e) : NOT_SAVED))} account={account} onSaveName={n => Account.updateName(n)} isAdmin={Account.isAdmin()} trial={trialActive ? trial : null} trialUsed={!!trial} onBack={viewBack.profilo} onNotifiche={() => setView("notifiche")} onPremium={() => setPremiumOpen(true)} onAdmin={() => guest ? needLogin("Accedi per usare il pannello admin.") : setView(adminUnlocked ? "admin" : "adminLock")} onLogout={logout} isPremium={isPremium} onAbout={() => setInfoModal({ title: "Info su B&T", body: ABOUT_TEXT })} onFeedback={() => setFeedbackOpen(true)} onHelp={() => setInfoModal({ title: "Assistenza", body: HELP_TEXT })} favTeam={favTeam} favDriver={favDriver} onPickTeam={() => guest ? needLogin("Per scegliere scuderia e pilota del cuore serve un account.") : setPicker("team")} onPickDriver={() => guest ? needLogin("Per scegliere scuderia e pilota del cuore serve un account.") : setPicker("driver")} guest={guest} onLogin={() => needLogin(null)} onTerms={() => setTermsOpen(true)} blocked={blocked} onUnblock={unblockUser} onDeleteAccount={deleteAccount} savedCount={saved.length} onOpenSaved={openSaved} onTheme={() => setThemeOpen(true)} />;
+  else if (view === "profilo") body = <ProfiloScreen ig={ig} onOpenIg={() => { setIgFrom("profilo"); setView("instagram"); }} aboutMe={aboutMe} onSaveAboutMe={a => Account.updateAbout(a).catch(e => showToast(e && (e.code === "too-young" || e.code === "not-loaded") ? messageOf(e) : NOT_SAVED))} account={account} onSaveName={n => Account.updateName(n)} isAdmin={Account.isAdmin()} trial={trialActive ? trial : null} trialUsed={!!trial} onBack={viewBack.profilo} onNotifiche={() => setView("notifiche")} onPremium={() => setPremiumOpen(true)} onAdmin={() => guest ? needLogin("Accedi per usare il pannello admin.") : setView(adminUnlocked ? "admin" : "adminLock")} onLogout={logout} isPremium={isPremium} onAbout={() => setInfoModal({ title: "Info su B&T", body: ABOUT_TEXT })} onFeedback={() => setFeedbackOpen(true)} onHelp={() => setInfoModal({ title: "Assistenza", body: HELP_TEXT })} favTeam={favTeam} favDriver={favDriver} onPickTeam={() => guest ? needLogin("Per scegliere scuderia e pilota del cuore serve un account.") : setPicker("team")} onPickDriver={() => guest ? needLogin("Per scegliere scuderia e pilota del cuore serve un account.") : setPicker("driver")} guest={guest} onLogin={() => needLogin(null)} onTerms={() => setTermsOpen(true)} blocked={blocked} onUnblock={unblockUser} onDeleteAccount={deleteAccount} savedCount={saved.length} onOpenSaved={openSaved} onTheme={() => setThemeOpen(true)}
+    sounds={sounds} haptics={haptics} onSounds={v => { if (userDataWait()) return; setSounds(v); fx.setSounds(v); if (v) fx.play("tick"); }} onHaptics={v => { if (userDataWait()) return; setHaptics(v); fx.setHaptics(v); if (v) fx.buzz("light"); }} />;
   else if (view === "notifiche") body = <NotificheScreen onBack={viewBack.notifiche} onAction={a => { if (a === "feedback") { if (feedbackAsk && !feedbackAsk.read) saveAsk({ ...feedbackAsk, read: true }); setFeedbackOpen(true); } }} notifs={notifs} onReadAll={readAll} isPremium={isPremium} onPremium={() => setPremiumOpen(true)} favTeam={favTeam} favDriver={favDriver} prefs={notifPrefs} onPrefs={v => { if (!userDataWait()) setNotifPrefs(v); }} onGoProfilo={() => setView("profilo")} />;
   else {
     if (tab === "home") body = <HomeScreen ig={ig} highlights={highlights} onOpenIg={() => { setIgFrom("tab"); setView("instagram"); }} articles={articles} tagFilter={tagFilter} onTag={filterByTag} onClearTag={() => setTagFilter(null)} onOpenArticle={openArticle} isPremium={isPremium} onPremium={() => setPremiumOpen(true)} onToast={showToast} onLiveTrack={() => setLiveTrackOpen(true)} onGoFanta={() => goTab("fanta")}  saved={saved} onToggleSave={toggleSave} savedOnly={savedOnly} setSavedOnly={setSavedOnly} onOpenCircuit={openCircuit} homePoll={homePoll} homeVote={votes.home || null} onVote={castVote} />;
