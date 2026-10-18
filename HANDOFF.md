@@ -85,3 +85,9 @@ poi push di tappa-3 e di `tappa-3:refs/heads/apk-prova` e controllo della build 
 
 ## Open questions for the user
 - Nessuna per ora.
+
+## 18/10 sera: AAB per il test chiuso
+- codemagic.yaml, workflow play-store: prima della build mette SHOW_TEAM_LOGOS a false. I loghi delle scuderie restano solo nelle versioni di prova (APK).
+- Test chiuso: Edoardo compila l'AAB da Codemagic ("B&T - Play Store (AAB firmato)", ramo tappa-3).
+- OpenF1: tutti e due i piani (gratis e sponsor) dicono "personal use". Edoardo chiede a OpenF1 (Contact, "Custom projects") se va bene per l'app pubblica con pubblicità e Premium. Finché non rispondono, niente diretta a pagamento nell'app. Le credenziali solo nelle variabili di Vercel, mai nel codice.
+- Prima della produzione: audio team radio e Premium (Google Play Billing) da sistemare.
