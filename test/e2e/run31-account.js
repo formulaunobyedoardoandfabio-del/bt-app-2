@@ -142,6 +142,30 @@ run({
     assert(!errs.length, errs.join(' | '));
   },
 
+  // 18/10 (Edoardo): "se non c'è connessione per molto mi disconnette". Riaperta senza rete l'app non scarica Firebase:
+  // si resta dentro con l'account di prima ("Profilo in caricamento…"); tornata la rete, il profilo vero.
+  async 'riaperta senza rete e senza Firebase: si resta dentro; tornata la rete il profilo vero'(b) {
+    const { ctx, p, errs } = await open(b); await login(p); await w(p, 600);
+    await ctx.addInitScript(() => {
+      let fb; window.__hideFb = true;
+      Object.defineProperty(window, 'firebase', { configurable: true, get: () => (window.__hideFb ? undefined : fb), set: v => { fb = v; } });
+    });
+    await ctx.route('https://www.gstatic.com/**', r => r.abort());
+    await p.reload();
+    await p.waitForFunction(() => !document.querySelector('[data-splash]'), null, { timeout: 30000 }).catch(() => {});
+    await w(p, 900);
+    const off = await p.evaluate(() => ({ login: !!document.querySelector('#authEmail'), nav: !!document.querySelector('[aria-label="Profilo"]') }));
+    await tapSel(p, '[aria-label="Profilo"]'); await w(p, 400);
+    const prof1 = await text(p);
+    await p.evaluate(() => { window.__hideFb = false; window.dispatchEvent(new Event('online')); }); await w(p, 2000);
+    const name = await p.evaluate(() => { const h = document.querySelector('[data-profile-name]'); return h ? h.textContent : null; });
+    await ctx.close();
+    assert(!off.login && off.nav, 'senza rete e senza Firebase si vede l\'accesso: ' + JSON.stringify(off));
+    assert(/Profilo in caricamento/.test(prof1), 'profilo senza rete: ' + prof1.slice(0, 200));
+    assert(name === 'Tester', 'tornata la rete il profilo vero: ' + name);
+    assert(!errs.length, errs.join(' | '));
+  },
+
   async 'offline: "Errore di connessione, riprova tra poco"'(b) {
     const { ctx, p, errs } = await open(b, { query: '?nofake', routes: { 'https://www.gstatic.com/**': r => r.abort() } });
     await login(p);

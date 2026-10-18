@@ -82,6 +82,23 @@ t('registrazione: About you salvato, niente pw, almeno 6 caratteri', async () =>
   assert.strictEqual(MESSAGES.mismatch, 'Le password non coincidono');
 });
 
+// 18/10 (Edoardo): creando l'account "Errore di connessione, riprova tra poco" senza codice: era il salvataggio del
+// profilo (users/<email>) dopo Authentication. Ora si riprova una volta e, se non va, il messaggio dice il codice vero.
+t('registrazione: profilo che non si salva al primo colpo, si riprova; se non va il codice vero nel messaggio', async () => {
+  const c = ctx();
+  let fails = 1;
+  const flaky = async (...a) => { if (fails > 0) { fails--; throw Object.assign(new Error('no'), { code: 'unavailable' }); } return F.dbSet(...a); };
+  const u = await make({ dbSet: flaky }).register({ name: 'Gino', email: 'g@b.it', pw: 'abcdef', pw2: 'abcdef', about: { birth: 2000, follow: 2, fan: 'vivo' }, adult: true });
+  assert.strictEqual(u.name, 'Gino');
+  assert.strictEqual(c.fs('users/g@b.it').name, 'Gino');
+  const deny = async () => { throw Object.assign(new Error('Missing or insufficient permissions.'), { code: 'permission-denied' }); };
+  let err = null;
+  try { await make({ dbSet: deny }).register({ name: 'Ugo', email: 'u@b.it', pw: 'abcdef', pw2: 'abcdef', about: {}, adult: true }); } catch (e) { err = e; }
+  assert.ok(err && err.code === 'offline', 'errore: ' + (err && err.code));
+  assert.ok(/permission-denied/.test(messageOf(err)), 'il messaggio deve dire il codice vero: ' + messageOf(err));
+  assert.strictEqual(c.auth().users['u@b.it'], undefined, 'senza profilo l\'account Authentication si toglie');
+});
+
 t('registrazione con un account di oggi non ancora passato: Email già registrata', async () => {
   ctx({ docs: { 'users/v@b.it': { email: 'v@b.it', name: 'Edo', pw: 'segreta' } } });
   await assert.rejects(make().register({ name: 'Altro', email: 'v@b.it', pw: 'abcdef', pw2: 'abcdef', about: {}, adult: true }), e => e.code === 'exists');
@@ -210,6 +227,45 @@ t('sessione senza rete: profilo "non letto", nessun nome preso dall\'email; retr
   assert.deepStrictEqual(seen, ['Tester']);
   await A.retry();                       // già letto: non fa niente
   assert.deepStrictEqual(seen, ['Tester']);
+});
+// 18/10 (Edoardo): "se non c'è connessione per molto mi disconnette". L'app riaperta senza rete non riesce a scaricare
+// l'SDK di Firebase: prima si vedeva l'accesso; ora si resta dentro con l'account usato l'ultima volta e, tornata la
+// rete, si legge la sessione vera.
+t('avvio senza rete e senza SDK: si resta dentro con l\'ultimo account; tornata la rete la sessione vera', async () => {
+  const first = setupWindow();
+  await make().login('a@b.it', 'x');
+  setupWindow({ storage: first.localStorage });   // l'app riaperta senza rete: l'SDK non arriva
+  let sdk = false;
+  const A = make({ getAuth: async () => (sdk ? F.getAuth() : null) });
+  await A.start();
+  const u = A.current();
+  assert.ok(u && u.email === 'a@b.it' && u.loaded === false && u.name === '', 'account ricordato: ' + JSON.stringify(u));
+  await A.retry();                       // ancora senza rete
+  assert.strictEqual(A.current().loaded, false);
+  sdk = true;
+  await A.retry();
+  assert.strictEqual(A.current().loaded, true);
+  assert.strictEqual(A.current().name, 'Tester');
+});
+t('avvio senza rete e senza SDK: dopo "Esci" (anche senza rete) nessun account ricordato', async () => {
+  const first = setupWindow();
+  const A0 = make();
+  await A0.login('a@b.it', 'x');
+  await A0.logout();
+  setupWindow({ storage: first.localStorage });
+  assert.strictEqual(await make({ getAuth: async () => null }).start(), null, 'dopo Esci non si entra da soli');
+  // Esci senza rete: alla prossima apertura con la rete la sessione salvata di Firebase si chiude.
+  const w2 = setupWindow();
+  await make().login('a@b.it', 'x');
+  setupWindow({ storage: w2.localStorage });
+  let sdk = false;
+  const B = make({ getAuth: async () => (sdk ? F.getAuth() : null) });
+  await B.start();
+  await B.logout();
+  assert.strictEqual(B.current(), null);
+  sdk = true;
+  setupWindow({ storage: w2.localStorage });
+  assert.strictEqual(await make().start(), null, 'uscito senza rete: con la rete non si rientra da soli');
 });
 t('profilo non letto: nome e "Su di te" non si possono cambiare (non si sovrascrivono quelli veri)', async () => {
   const { A, fake } = await offlineStart();

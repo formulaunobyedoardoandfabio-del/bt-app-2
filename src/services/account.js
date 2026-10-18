@@ -30,6 +30,7 @@ const MESSAGES = {
 };
 // Età minima per iscriversi, come dice la privacy policy (in Italia 14 anni per i servizi online, D.Lgs. 101/2018).
 const MIN_AGE = 14;
+const LAST_KEY = "bt-last-account", LOGOUT_KEY = "bt-logout-pending";
 // Con "Errore di connessione" si scrive anche il codice vero (raw), quando c'è: sul telefono di Edoardo l'accesso lo
 // diceva sempre con la rete che funzionava (11/10), e senza il codice non si capisce cosa risponde Firebase.
 const messageOf = e => {
@@ -102,6 +103,7 @@ function createAccount({
     if (doc === undefined) {
       admin = false; adminKnown = false;
       current = { name: "", nick: "", email, about: cleanAbout(null), app2: {}, isPremium: false, aid, uid: uid || null, loaded: false };
+      remember(current);
       notify();
       return current;
     }
@@ -114,11 +116,26 @@ function createAccount({
     }
     await readAdmin(email);
     current = { ...C.profileFromStore(doc), email, aid, uid: uid || doc.uid || null, loaded: true };
+    remember(current);
     notify();
     return current;
   }
+  // Ultimo account usato su questo telefono (solo email e ID, niente password): senza rete all'avvio l'SDK di Firebase
+  // non arriva e la sessione salvata non si legge; si resta dentro con questo account (offline) finché torna la rete
+  // (18/10: "se non c'è connessione per molto mi disconnette"). "Esci" lo dimentica.
+  function remember(u) { try { local.set(LAST_KEY, { email: u.email, aid: u.aid, uid: u.uid || null }); } catch (e) {} }
+  function offlineUser() {
+    const l = local.get(LAST_KEY);
+    if (!l || typeof l.email !== "string" || !l.email) return null;
+    const email = normEmail(l.email);
+    return { name: "", nick: "", email, about: cleanAbout(null), app2: {}, isPremium: false, aid: C.authorId(email), uid: l.uid || null, loaded: false, offline: true };
+  }
   // Rilegge quello che non si era potuto leggere (profilo o admin), per esempio quando torna la rete.
   function retry() {
+    if (current && current.offline && !busy) {
+      if (!retrying) retrying = (async () => { started = null; return start(); })().finally(() => { retrying = null; });
+      return retrying;
+    }
     if (!current || busy) return Promise.resolve(current);
     if (current.loaded && adminKnown) return Promise.resolve(current);
     if (!retrying) {
@@ -177,11 +194,17 @@ function createAccount({
     try { res = await auth.createUserWithEmailAndPassword(em, pw); } catch (e) { throw authErr(e); }
     const uid = res && res.user ? res.user.uid : null;
     const profile = { name: nm, nick: nm, email: em, isPremium: false, premium: false, plan: "free", notif: { news: true, live: true, fanta: true }, ts: Date.now(), uid, about: cleanAbout(about), app2: {} };
-    try { await dbSet("users", em, profile); }
-    catch (e) {
+    // Il profilo si salva subito dopo Authentication: se non va al primo colpo si riprova una volta (18/10: creando
+    // l'account Edoardo vedeva "Errore di connessione" senza codice). Se non va, il messaggio dice il codice vero.
+    let saveErr = null;
+    for (let i = 0; i < 2; i++) {
+      try { await dbSet("users", em, profile); saveErr = null; break; }
+      catch (e) { saveErr = e; if (i === 0) await new Promise(r => setTimeout(r, 1200)); }
+    }
+    if (saveErr) {
       // Senza profilo l'account non serve: si toglie, così si può riprovare con la stessa email.
       try { if (auth.currentUser) await auth.currentUser.delete(); } catch (e2) {}
-      throw mkErr("offline");
+      throw mkErr("offline", "profilo/" + ((saveErr && (saveErr.code || saveErr.message)) || "errore"));
     }
     return loadProfile(em, uid);
   }
@@ -206,6 +229,8 @@ function createAccount({
   async function logout() {
     const auth = await getAuth();
     if (auth) { try { await auth.signOut(); } catch (e) {} }
+    else local.set(LOGOUT_KEY, true);   // senza rete: la sessione di Firebase si chiude alla prossima apertura
+    local.del(LAST_KEY);
     current = null; admin = false; adminKnown = false;
     notify();
   }
@@ -230,6 +255,7 @@ function createAccount({
     } catch (e) { throw mkErr("delete-failed"); }
     try { await fbUser.delete(); } catch (e) { throw mkErr("delete-failed"); }
     local.del("bt-blocked");
+    local.del(LAST_KEY);
     const ls = storage();
     if (ls) {
       const keys = [];
@@ -246,13 +272,15 @@ function createAccount({
     if (started) return started;
     started = (async () => {
       const auth = await getAuth();
-      if (!auth) { current = null; notify(); return null; }
+      if (!auth) { current = offlineUser(); notify(); return current; }
+      // "Esci" senza rete: la sessione salvata di Firebase si chiude ora.
+      if (local.get(LOGOUT_KEY)) { try { await auth.signOut(); local.del(LOGOUT_KEY); } catch (e) {} }
       await new Promise(res => {
         let first = true;
         auth.onAuthStateChanged(async fbUser => {
           if (busy && !first) return;
           const email = fbUser && fbUser.email ? normEmail(fbUser.email) : null;
-          if (email && (!current || current.email !== email)) await loadProfile(email, fbUser.uid);
+          if (email && (!current || current.email !== email || current.offline)) await loadProfile(email, fbUser.uid);
           else if (!email && current) { current = null; admin = false; adminKnown = false; notify(); }
           else if (first && !email) notify();
           if (first) { first = false; res(); }
