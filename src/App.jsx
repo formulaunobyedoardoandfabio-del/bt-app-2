@@ -90,8 +90,16 @@ const F1_DISCLAIMER = APP_NAME + " è un'app non ufficiale e non è associata in
 const PAYMENTS_ENABLED = false;
 // Prova del Premium dell'anteprima 2.0: si attiva con un tocco, senza pagare. La toglie il Task 11 (D44, Premium come oggi).
 const PREMIUM_DEMO = true;
-// Prova gratuita di 2 settimane, una sola volta per account (sul Play Store si imposta come offerta dell'abbonamento).
-const TRIAL_DAYS = 14;
+// Prova gratuita per un GP (18/10, Edoardo), una sola volta per account: fino alla fine del prossimo GP (4 ore dopo la
+// partenza della gara); senza GP in calendario 7 giorni. Sul Play Store si imposta come offerta dell'abbonamento.
+const trialEndFor = (races, now) => {
+  const r = (races || []).map(x => ({ x, t: raceStartMs(x) })).filter(o => isFinite(o.t) && o.t + 4 * 3600e3 > now).sort((a, b) => a.t - b.t)[0];
+  return r ? r.t + 4 * 3600e3 : now + 7 * 86400000;
+};
+// Premium a stagione (18/10): 6 € la prima, ogni stagione dopo 1 € in meno, fino a 1 €.
+const SEASON_PRICE = 6;
+// Link di Buy Me a Coffee: finché manca, nel Profilo "Offrici un caffè" è "in arrivo".
+const COFFEE_URL = "";
 const premiumOffer = ({ trialUsed, isPremium }) => isPremium ? "premium" : trialUsed ? "subscribe" : "trial";
 const trialDaysLeft = trial => trial ? Math.max(0, Math.ceil((trial.end - Date.now()) / 86400000)) : 0;
 const fmtDay = ms => new Date(ms).toLocaleDateString("it-IT", { day: "numeric", month: "long", year: "numeric" });
@@ -452,12 +460,6 @@ const CHAT_ROOMS = [
 // Le notifiche dell'admin stanno in shared/bt-notifs, nel formato di oggi (src/services/appdata.js).
 
 const PREMIUM_CATEGORIES = [
-  { name: "In gara", items: [
-    { icon: "stopwatch", title: "Tempi su giro in tempo reale" },
-    { icon: "tire", title: "Gomme: usura e strategia" },
-    { icon: "radio", title: "Team radio audio live" },
-    { icon: "flag", title: "Pit stop e distacchi completi" },
-  ]},
   { name: "Fanta F1", items: [
     { icon: "trophy", title: "Fanta F1 completo con leghe" },
     { icon: "group", title: "Leghe private illimitate" },
@@ -467,14 +469,11 @@ const PREMIUM_CATEGORIES = [
     { icon: "doc", title: "News esclusive e in anteprima" },
     { icon: "history", title: "Archivio storico dei GP" },
     { icon: "play", title: "Video highlights esclusivi" },
-    { icon: "poll", title: "Sondaggi e contenuti della redazione" },
   ]},
   { name: "Esperienza B&T", items: [
     { icon: "no", title: "Zero pubblicità" },
     { icon: "star", title: "Distintivo Premium in chat", starIcon: true },
-    { icon: "bell", title: "Notifiche personalizzate in tempo reale" },
     { icon: "unlock", title: "Accesso anticipato alle nuove funzioni" },
-    { icon: "grid", title: "Modalità Second Screen durante la gara" },
   ]},
 ];
 
@@ -1727,7 +1726,11 @@ function HomeScreen({ ig, onOpenIg, highlights = [], articles, tagFilter, onTag,
   const bySaved = savedOnly ? byTag.filter(a => saved.includes(a.id)) : byTag;
   const byPit = filterNews(bySaved, { tyre, lane, now: nowMs() });
   const nq = normText(q.trim());
-  const matches = nq ? byPit.filter(a => articleText(a).includes(nq)) : byPit;
+  // "#soggetto" (18/10): le notizie con quell'hashtag (pilota, scuderia, circuito) e quelle che lo nominano nel testo,
+  // anche senza spazi ("#redbull" trova "Red Bull").
+  const hq = nq.startsWith("#") ? nq.slice(1).replace(/\s+/g, "") : null;
+  const hashHit = a => articleTags(a).some(t => normText(t.label).replace(/^#/, "").startsWith(hq)) || articleText(a).replace(/\s+/g, "").includes(hq);
+  const matches = !nq ? byPit : hq != null ? (hq ? byPit.filter(hashHit) : byPit) : byPit.filter(a => articleText(a).includes(nq));
   const pitOn = !!tyre || lane !== "all";
   // Anche i circuiti si cercano: per nome, città, paese, GP o hashtag (#Monza).
   const cq = nq.replace(/^#/, "");
@@ -1748,17 +1751,6 @@ function HomeScreen({ ig, onOpenIg, highlights = [], articles, tagFilter, onTag,
     <div ref={homeRef} data-home="" className="scrollcol" {...pullRev.handlers} style={{ height: "100%", position: "relative", overscrollBehaviorY: "contain", userSelect: pullRev.dragging ? "none" : undefined, WebkitUserSelect: pullRev.dragging ? "none" : undefined }}>
       {(pullRev.pull > 0 || pullRev.busy) && <PullGauge rev={pullRev.rev} busy={pullRev.busy} pull={pullRev.pull} />}
       <div style={{ transform: pullRev.pull ? `translateY(${pullRev.pull}px)` : undefined, transition: pullRev.dragging ? "none" : "transform .25s ease" }}>
-      <div style={{ display: "flex", gap: 10, padding: "4px 16px 20px" }}>
-        <button className="press" onClick={() => isPremium ? onLiveTrack() : onPremium()} style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 8, padding: "14px 0", borderRadius: 14, background: C.accent, boxShadow: `0 10px 22px -10px ${C.accent}` }}>
-          <span style={{ width: 8, height: 8, borderRadius: "50%", background: "#fff" }} />
-          <span style={{ fontFamily: F_HEAD, fontWeight: 900, fontStyle: "italic", fontSize: 14, color: "#fff", letterSpacing: .3 }}>LIVE RACE</span>
-          {!isPremium && <Icon name="lock" size={11} color="#fff" />}
-        </button>
-        <button className="press" onClick={onGoFanta} style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 8, padding: "14px 0", borderRadius: 14, background: C.card, border: `1px solid ${C.border}` }}>
-          <Icon name="trophy" size={15} />
-          <span style={{ fontFamily: F_HEAD, fontWeight: 900, fontStyle: "italic", fontSize: 14, color: C.text, letterSpacing: .3 }}>FANTA F1</span>
-        </button>
-      </div>
 
       {!isPremium && (
         <button className="press" onClick={onPremium} style={{ display: "flex", alignItems: "center", gap: 10, width: "calc(100% - 32px)", margin: "0 16px 16px", padding: "10px 14px", borderRadius: 12, background: "rgba(255,255,255,.04)", border: `1px dashed ${C.border}`, textAlign: "left" }}>
@@ -1866,11 +1858,7 @@ function HomeScreen({ ig, onOpenIg, highlights = [], articles, tagFilter, onTag,
 
       <SectionLabel icon="star">CONTENUTI PREMIUM</SectionLabel>
       <div style={{ display: "flex", flexDirection: "column", gap: 10, padding: "0 16px 20px" }}>
-        {homePoll && (isPremium ? (
-          <PollCard poll={homePoll} vote={homeVote} onVote={onVote} title="SONDAGGIO DELLA REDAZIONE" />
-        ) : (
-          <PremiumLockCard icon="poll" title="Sondaggio della redazione" desc="Chi vincerà il prossimo GP? Vota e scopri cosa pensa la community." onPremium={onPremium} />
-        ))}
+        {homePoll && <PollCard poll={homePoll} vote={homeVote} onVote={onVote} title="SONDAGGIO DELLA REDAZIONE" />}
 
         {isPremium ? (
           <div style={{ padding: 16, borderRadius: 16, background: C.card, border: `1px solid ${C.border}` }}>
@@ -4806,6 +4794,20 @@ function BluffTool({ races, live, tags = [], onRefresh, onBack }) {
   );
 }
 
+// Giochi e strumenti annunciati nel Garage ("In arrivo"): non si aprono ancora.
+const GARAGE_SOON = [
+  ["reaction", "Reaction Test 1v1", "Il duello dei semafori: sfida un amico sui millisecondi della partenza."],
+  ["cutoff", "Quiz Cut-Off", "Stessa domanda per due: chi risponde giusto per primo ruba un decimo all'altro."],
+  ["delta", "Delta Time Trial", "Il tuo tempo su F1 24 o GT7 contro quello di un amico, settore per settore."],
+  ["crew", "Pit Stop Crew Challenge", "Il pit stop in due, in tempo reale: l'ordine sbagliato costa 1,5 secondi."],
+  ["telemetry", "Guess the Telemetry", "Un grafico di telemetria vero: indovina pilota e pista in 15 secondi."],
+  ["engineer", "Pilota & Ingegnere", "In due: uno guida, l'altro dal muretto decide gomme e soste."],
+  ["stewards", "Tribunale dei Commissari", "Un incidente, due difese: decide la community."],
+  ["radar", "Setup Radar", "Distribuisci i punti dell'assetto e avvicinati al setup ideale della pista."],
+  ["attack", "B&T Time Attack", "La sfida della settimana su F1 24 o GT7, con la classifica stile tabellone F1."],
+  ["stint", "Stint Analyzer & Fuel Calculator", "Durata della gara e consumi: calo delle gomme e benzina da imbarcare."],
+];
+
 function GarageScreen({ races, pitBest, onPitResult, sillyPreds, onPredict, sillyOfficial, live, stratPreds = {}, onStrat, bluffTags = [], onBluffRefresh }) {
   const [game, setGame] = useState(null);
   const back = () => setGame(null);
@@ -4866,6 +4868,17 @@ function GarageScreen({ races, pitBest, onPitResult, sillyPreds, onPredict, sill
       {card("clash", "Circuit Spec Clash", "Due piste a confronto: Safety Car, sorpassi, frenate, gas a tavoletta e carico aerodinamico.", null)}
       <div style={{ padding: "6px 18px 8px", fontFamily: F_BODY, fontWeight: 700, fontSize: 11, letterSpacing: 1.2, color: C.gold }}>ANALISI CON DATI VERI</div>
       {card("ghost", `Ghost Lap · qualifiche di ${ghostSessions().length ? ghostSessions()[0][1] : "Baku"}`, "Due giri veri a confronto: velocità, frenate e replay 2D di ogni curva.", "Dati veri")}
+      {/* Idee di Edoardo del 3-6/10 (documento "Idee nuove"): per ora solo annunciate (18/10: "creale ma mettile come in arrivo"). */}
+      <div style={{ padding: "6px 18px 8px", fontFamily: F_BODY, fontWeight: 700, fontSize: 11, letterSpacing: 1.2, color: C.gold }}>IN ARRIVO</div>
+      {GARAGE_SOON.map(([id, title, sub]) => (
+        <div key={id} data-soon={id} style={{ display: "flex", alignItems: "center", gap: 12, margin: "0 16px 10px", padding: "12px 14px", borderRadius: 16, background: "transparent", border: `1px dashed ${C.border}` }}>
+          <span style={{ flex: 1, minWidth: 0 }}>
+            <span style={{ display: "block", fontFamily: F_HEAD, fontWeight: 800, fontStyle: "italic", fontSize: 14.5, color: C.muted }}>{title}</span>
+            <span style={{ display: "block", marginTop: 3, fontFamily: F_BODY, fontSize: 11.5, color: C.dim, lineHeight: 1.35 }}>{sub}</span>
+          </span>
+          <span style={{ flexShrink: 0, padding: "3px 8px", borderRadius: 6, background: "rgba(231,179,76,.14)", fontFamily: F_BODY, fontWeight: 700, fontSize: 10, letterSpacing: .4, color: C.gold }}>IN ARRIVO</span>
+        </div>
+      ))}
     </div>
   );
 }
@@ -4960,6 +4973,19 @@ function GhostReplay({ A, B, IA, IB, duel }) {
 // Qualifiche con i dati veri, dalla più recente: il Ghost Lap si apre sempre sull'ultima.
 const GHOST_SESSIONS = [["sepang2026q", "Sepang"], ["baku2026q", "Baku"]];
 const ghostSessions = () => GHOST_SESSIONS.filter(([id]) => typeof BtRealData !== "undefined" && BtRealData && BtRealData[id]);
+// Ghost Lap nella pagina Race (18/10): solo dopo le qualifiche di quel GP. Si guarda il GP delle ultime qualifiche
+// corse: se l'app ha i suoi giri veri si vede, altrimenti (qualifiche di un GP dopo) no.
+const GHOST_CIRCUIT = { sepang2026q: "my-1999", baku2026q: "az-2016" };
+function ghostForNow(races, now) {
+  let last = null;
+  (races || []).forEach(r => {
+    const w = CIRCUIT_INFO[r.circuitId] && CIRCUIT_INFO[r.circuitId].weekend;
+    const q = Array.isArray(w) ? w.find(x => x.key === "QUALI") : null;
+    const t = q ? Date.parse(q.utc) : Date.parse(String(r.date || "").slice(0, 10) + "T12:00:00Z") - 86400000;
+    if (isFinite(t) && t <= now && (!last || t > last.t)) last = { r, t };
+  });
+  return last ? ghostSessions().find(([id]) => GHOST_CIRCUIT[id] === last.r.circuitId) || null : null;
+}
 function GhostLap({ sessionId, onBack }) {
   const list = ghostSessions();
   const [sid, setSid] = useState(sessionId && BtRealData[sessionId] ? sessionId : list[0][0]);
@@ -5189,7 +5215,7 @@ function Of1Status({ of1, standings, onRefresh }) {
 }
 
 function RaceScreen({ isPremium, onPremium, onSelectDriver, races, standings, live, liveSt, onExpandMap, onTelemetry, onOpenCircuit, wxGuess, wxResult, onGuessWeather, onLapTimes, onSecondScreen, lastRace, dotdVote, onDotdVote, ratings = {}, onRate, onOpenChats, onOpenGhost, of1 = null, onOf1Refresh, replay = null, favDriver = null }) {
-  const [tab, setTab] = useState("classifica");
+  const [tab, setTab] = useState(null);
   // Pit Board (G27): si vede quando la tabella dei tempi arriva in cima alla pagina (stato cambiato solo al passaggio).
   const scRef = useRef(null), tblRef = useRef(null);
   const [board, setBoard] = useState(false);
@@ -5197,8 +5223,9 @@ function RaceScreen({ isPremium, onPremium, onSelectDriver, races, standings, li
   const [champ, setChamp] = useState("piloti");
   const st = live ? liveSt : null;
   const tabs = st ? [["classifica", "Tempi"], ["radio", "Radio"], ["meteo", "Meteo"], ["gomme", "Gomme"], ["messaggi", "Direzione gara"], ["mondiale", "Mondiale"]]
-    : [["classifica", "Gara"], ["radio", "Radio"], ["meteo", "Meteo"], ["gomme", "Gomme"], ["mondiale", "Mondiale"]];
-  const curTab = tabs.some(t => t[0] === tab) ? tab : "classifica";
+    : [["mondiale", "Mondiale"], ["classifica", "Ultima gara"], ["radio", "Radio"], ["meteo", "Meteo"], ["gomme", "Gomme"]];
+  // Senza sessione (18/10): di serie il mondiale; l'ultima gara nella sua scheda.
+  const curTab = tab && tabs.some(t => t[0] === tab) ? tab : tabs[0][0];
   const liveRace = live ? races.find(r => r.id === live.raceId) : null;
   const next = races.find(r => r.status === "IN ARRIVO");
   const realLive = races.find(r => r.status === "LIVE") || null;
@@ -5236,12 +5263,12 @@ function RaceScreen({ isPremium, onPremium, onSelectDriver, races, standings, li
       ); })()}
       {st && liveRace && isRaceType(st.type) && <InsightsCard live={live} st={st} race={liveRace} />}
 
-      <button className="press" onClick={() => isPremium ? onSecondScreen && onSecondScreen() : onPremium()} style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 6, width: "calc(100% - 32px)", margin: "0 16px 14px", padding: "11px 14px", borderRadius: 12, background: `linear-gradient(rgba(231,179,76,.1), rgba(231,179,76,.1)) ${C.bg}`, border: "1px solid rgba(231,179,76,.3)" }}>
+      <button className="press" onClick={() => onSecondScreen && onSecondScreen()} style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 6, width: "calc(100% - 32px)", margin: "0 16px 14px", padding: "11px 14px", borderRadius: 12, background: `linear-gradient(rgba(231,179,76,.1), rgba(231,179,76,.1)) ${C.bg}`, border: "1px solid rgba(231,179,76,.3)" }}>
         <Icon name="grid" size={14} color={C.gold} />
         <span style={{ fontFamily: F_HEAD, fontWeight: 800, fontSize: 12, color: C.gold }}>Modalità Second Screen</span>
-        {isPremium ? <span style={{ fontFamily: F_BODY, fontSize: 10.5, color: C.muted }}>· in orizzontale</span> : <Icon name="lock" size={11} color={C.gold} />}
+        <span style={{ fontFamily: F_BODY, fontSize: 10.5, color: C.muted }}>· in orizzontale</span>
       </button>
-      {onOpenGhost && !st && ghostSessions().length > 0 && (() => { const [gid, gname] = ghostSessions()[0], gc = Object.keys(BtRealData[gid].laps), surn = c => ghostInfo(c).name.split(" ").slice(-1)[0]; return (
+      {onOpenGhost && !st && ghostForNow(races, nowMs()) && (() => { const [gid, gname] = ghostForNow(races, nowMs()), gc = Object.keys(BtRealData[gid].laps), surn = c => ghostInfo(c).name.split(" ").slice(-1)[0]; return (
         <button className="press" data-ghost-open={gid} onClick={onOpenGhost} style={{ display: "block", width: "calc(100% - 32px)", margin: "0 16px 14px", padding: 14, borderRadius: 16, textAlign: "left", background: `linear-gradient(120deg, ${alpha(C.accentInk, .24)}, rgba(24,24,28,1) 62%)`, border: `1px solid ${alpha(C.accentInk, .45)}` }}>
           <span style={{ display: "flex", alignItems: "center", gap: 8 }}><span style={{ flexShrink: 0, whiteSpace: "nowrap", padding: "2px 7px", borderRadius: 6, background: C.accent, fontFamily: F_HEAD, fontWeight: 900, fontSize: 10, color: "#fff" }}>DATI VERI</span><span style={{ fontFamily: F_HEAD, fontWeight: 900, fontStyle: "italic", fontSize: 15, color: C.text }}>GHOST LAP · QUALIFICHE DI {gname.toUpperCase()}</span></span>
           <span style={{ display: "block", marginTop: 5, fontFamily: F_BODY, fontSize: 12, color: C.muted, lineHeight: 1.4 }}>Il giro più veloce di {surn(gc[0])} contro {gc.slice(1, 4).map(surn).join(", ")} e gli altri: velocità metro per metro, curva per curva e replay 2D.</span>
@@ -6433,6 +6460,8 @@ function ProfiloScreen({ ig, onOpenIg, trial = null, trialUsed = false, onBack, 
     ...(isAdmin ? [{ icon: "gear", label: "Pannello Admin · Pubblica notizia", onClick: onAdmin, badge: "ADMIN" }] : []),
     { icon: "help", label: "Assistenza", onClick: onHelp, chevron: true },
     { icon: "chat", label: "Invia feedback", onClick: onFeedback, chevron: true },   // come oggi, ma dal Profilo (niente pulsante fluttuante)
+    // Buy Me a Coffee (18/10): finché il link non c'è, "in arrivo".
+    { icon: "star", label: "Offrici un caffè", onClick: COFFEE_URL ? () => openUrl(COFFEE_URL) : undefined, ...(COFFEE_URL ? { chevron: true } : { badge: "IN ARRIVO" }) },
     { icon: "info", label: "Info su B&T", onClick: onAbout, chevron: true },
     { icon: "lock", label: "Privacy Policy", onClick: () => openUrl(PRIVACY_URL), chevron: true },
     { icon: "doc", label: "Termini e Condizioni", onClick: onTerms, chevron: true },
@@ -6493,7 +6522,7 @@ function ProfiloScreen({ ig, onOpenIg, trial = null, trialUsed = false, onBack, 
         <p style={{ margin: 0, fontFamily: F_BODY, fontSize: 12, color: "#D8C8A8", lineHeight: 1.5 }}>{isPremium && trial
           ? `${trialDaysLeft(trial)} giorni rimasti · fino al ${fmtDay(trial.end)}. Poi puoi abbonarti o disdire quando vuoi.`
           : isPremium ? "Grazie per il supporto: tutti i contenuti esclusivi sono sbloccati."
-          : trialUsed ? "Rimuovi la pubblicità e sblocca tutti i contenuti esclusivi B&T." : "Prova gratis per 2 settimane: niente pubblicità e tutti i contenuti esclusivi B&T."}</p>
+          : trialUsed ? "Rimuovi la pubblicità e sblocca tutti i contenuti esclusivi B&T." : "Prova gratis per un GP: niente pubblicità e tutti i contenuti esclusivi B&T."}</p>
       </button>
 
       <div style={{ padding: "0 24px 10px" }}><span style={{ fontFamily: F_BODY, fontWeight: 700, fontSize: 11, color: C.dim, letterSpacing: 1 }}>I MIEI PREFERITI</span></div>
@@ -6624,15 +6653,11 @@ function NotificheScreen({ onBack, notifs, onReadAll, isPremium, onPremium, favT
         <button className="press" onClick={onReadAll} style={{ fontFamily: F_BODY, fontWeight: 600, fontSize: 12, color: C.accentInk }}>Segna tutte come lette</button>
       </div>
       <div style={{ padding: "0 20px 16px" }}>
-        {isPremium ? (
           <div style={{ display: "flex", alignItems: "center", gap: 10, padding: 12, borderRadius: 12, background: C.card, border: `1px solid ${C.border}` }}>
             <Icon name="bell" size={15} color={C.gold} />
             <span style={{ flex: 1, fontFamily: F_BODY, fontWeight: 600, fontSize: 12.5, color: C.text }}>Avvisi in gara sul tuo pilota attivi</span>
             <Icon name="check" size={14} color={C.green} sw={2.4} />
           </div>
-        ) : (
-          <PremiumLockCard icon="bell" title="Avvisi in tempo reale" desc="Sorpassi, pit stop e giri veloci del tuo pilota durante la gara." onPremium={onPremium} />
-        )}
       </div>
       {notifs.map((n, i) => {
         const Row = n.action ? "button" : "div";   // le notifiche con un'azione (es. il feedback) si toccano
@@ -7523,7 +7548,7 @@ function AdminScreen({ photos, setPhotos, silly = {}, onSilly, highlights = [], 
 
 function PremiumModal({ onClose, isPremium, plan, setPlan, onSubscribe, subscribing, subscribed, trialUsed, onTrial, trial }) {
   const offer = premiumOffer({ trialUsed, isPremium });
-  const price = plan === "monthly" ? "2,99€/mese" : "24,99€/anno";
+  const price = SEASON_PRICE + " € a stagione";
   const heroGradient = `linear-gradient(135deg, ${shade(C.accent, .11)}, ${alpha(C.accentInk, .27)}, ${shade(C.accent, .11)})`;
   if (subscribed) {
     return (
@@ -7532,7 +7557,7 @@ function PremiumModal({ onClose, isPremium, plan, setPlan, onSubscribe, subscrib
           <Icon name="star" size={50} color={C.gold} />
           {subscribed === "trial" && trial ? (<>
             <h2 style={{ fontFamily: F_HEAD, fontWeight: 900, fontStyle: "italic", fontSize: 22, color: C.text, margin: "16px 0 8px" }}>Prova gratuita attiva!</h2>
-            <p style={{ color: C.muted, fontSize: 14, lineHeight: 1.6, margin: "0 0 24px" }}>Hai B&amp;T Premium gratis per {TRIAL_DAYS} giorni, fino al {fmtDay(trial.end)}. Poi {price}: puoi disdire quando vuoi.</p>
+            <p style={{ color: C.muted, fontSize: 14, lineHeight: 1.6, margin: "0 0 24px" }}>Hai B&amp;T Premium gratis per il prossimo GP, fino al {fmtDay(trial.end)}. Poi {price}: puoi disdire quando vuoi.</p>
           </>) : (<>
             <h2 style={{ fontFamily: F_HEAD, fontWeight: 900, fontStyle: "italic", fontSize: 22, color: C.text, margin: "16px 0 8px" }}>Sei Premium!</h2>
             <p style={{ color: C.muted, fontSize: 14, lineHeight: 1.6, margin: "0 0 24px" }}>Tutte le funzioni avanzate sono ora sbloccate. Buona gara!</p>
@@ -7566,18 +7591,11 @@ function PremiumModal({ onClose, isPremium, plan, setPlan, onSubscribe, subscrib
                 </React.Fragment>
               ))}
 
-              <div style={{ display: "flex", gap: 10, margin: "18px 0 0" }}>
-                <button className="press" onClick={() => setPlan("monthly")} style={{ flex: 1, padding: "14px 12px", borderRadius: 14, background: plan === "monthly" ? "rgba(231,179,76,.12)" : C.raised, border: plan === "monthly" ? `2px solid ${C.gold}` : `1px solid ${C.border}`, textAlign: "center" }}>
-                  <span style={{ display: "block", fontFamily: F_BODY, fontWeight: 700, fontSize: 10, color: C.muted, letterSpacing: .6, marginBottom: 6 }}>MENSILE</span>
-                  <span style={{ display: "block", fontFamily: F_HEAD, fontWeight: 900, fontSize: 17, color: C.text }}>2,99€</span>
-                  <span style={{ display: "block", fontFamily: F_BODY, fontSize: 10, color: C.dim, marginTop: 2 }}>al mese</span>
-                </button>
-                <button className="press" onClick={() => setPlan("annual")} style={{ flex: 1, position: "relative", padding: "14px 12px", borderRadius: 14, background: plan === "annual" ? "rgba(231,179,76,.12)" : C.raised, border: plan === "annual" ? `2px solid ${C.gold}` : `1px solid ${C.border}`, textAlign: "center" }}>
-                  <span style={{ position: "absolute", top: -9, right: 10, padding: "3px 7px", borderRadius: 6, background: C.green, fontFamily: F_HEAD, fontWeight: 800, fontSize: 9, color: "#0A2B0A" }}>−30%</span>
-                  <span style={{ display: "block", fontFamily: F_BODY, fontWeight: 700, fontSize: 10, color: C.muted, letterSpacing: .6, marginBottom: 6 }}>ANNUALE</span>
-                  <span style={{ display: "block", fontFamily: F_HEAD, fontWeight: 900, fontSize: 17, color: C.text }}>24,99€</span>
-                  <span style={{ display: "block", fontFamily: F_BODY, fontSize: 10, color: C.dim, marginTop: 2 }}>all'anno</span>
-                </button>
+              <div data-season-plan="" style={{ margin: "18px 0 0", padding: "14px 16px", borderRadius: 14, background: "rgba(231,179,76,.12)", border: `1.5px solid ${C.gold}`, textAlign: "center" }}>
+                <span style={{ display: "block", fontFamily: F_BODY, fontWeight: 700, fontSize: 10, color: C.muted, letterSpacing: .6, marginBottom: 6 }}>STAGIONE</span>
+                <span style={{ display: "block", fontFamily: F_HEAD, fontWeight: 900, fontSize: 22, color: C.text }}>{SEASON_PRICE} €</span>
+                <span style={{ display: "block", fontFamily: F_BODY, fontSize: 11, color: C.dim, marginTop: 2 }}>per tutta la stagione</span>
+                <span style={{ display: "block", fontFamily: F_BODY, fontSize: 11.5, color: C.gold, marginTop: 8, lineHeight: 1.4 }}>Ogni stagione dopo costa 1 € in meno, fino a 1 €</span>
               </div>
 
               {!PREMIUM_DEMO ? (
@@ -7588,7 +7606,7 @@ function PremiumModal({ onClose, isPremium, plan, setPlan, onSubscribe, subscrib
               ) : <>
               {offer === "trial" ? (<>
                 <button className="press" disabled={subscribing} onClick={onTrial} style={{ display: "block", width: "100%", marginTop: 16, padding: "16px 0", borderRadius: 14, background: subscribing ? "#555" : C.accent, boxShadow: subscribing ? "none" : `0 10px 22px -10px ${C.accent}`, fontFamily: F_HEAD, fontWeight: 900, fontStyle: "italic", fontSize: 14.5, color: "#fff", letterSpacing: .2, textAlign: "center" }}>
-                  {subscribing ? <ShiftLight /> : "PROVA GRATIS 2 SETTIMANE"}
+                  {subscribing ? <ShiftLight /> : "PROVA GRATIS PER UN GP"}
                 </button>
                 <p style={{ textAlign: "center", fontFamily: F_BODY, fontSize: 11.5, color: C.muted, margin: "10px 0 0" }}>Poi {price} · disdici quando vuoi, anche durante la prova</p>
                 <button className="press" disabled={subscribing} onClick={onSubscribe} style={{ display: "block", margin: "8px auto 0", padding: "8px 12px", fontFamily: F_BODY, fontWeight: 700, fontSize: 12, color: C.gold }}>Oppure abbonati subito: {price}</button>
@@ -7596,7 +7614,7 @@ function PremiumModal({ onClose, isPremium, plan, setPlan, onSubscribe, subscrib
                 <button className="press" disabled={subscribing} onClick={onSubscribe} style={{ display: "block", width: "100%", marginTop: 16, padding: "16px 0", borderRadius: 14, background: subscribing ? "#555" : C.accent, boxShadow: subscribing ? "none" : `0 10px 22px -10px ${C.accent}`, fontFamily: F_HEAD, fontWeight: 900, fontStyle: "italic", fontSize: 14.5, color: "#fff", letterSpacing: .2, textAlign: "center" }}>
                   {subscribing ? <ShiftLight /> : `ABBONATI · ${price}`}
                 </button>
-                {trialUsed && <p style={{ textAlign: "center", fontFamily: F_BODY, fontSize: 11.5, color: C.muted, margin: "10px 0 0" }}>Hai già usato la prova gratuita di 2 settimane.</p>}
+                {trialUsed && <p style={{ textAlign: "center", fontFamily: F_BODY, fontSize: 11.5, color: C.muted, margin: "10px 0 0" }}>Hai già usato la prova gratuita di un GP.</p>}
               </>)}
               <p style={{ textAlign: "center", fontFamily: F_BODY, fontSize: 10.5, color: C.dim, lineHeight: 1.7, margin: "14px 0 0" }}>
                 Annulla in qualsiasi momento · Rinnovo automatico<br /><span style={{ color: C.accentInk }}>Anteprima demo: nessun pagamento reale</span>
@@ -7632,7 +7650,7 @@ function TermsSheet({ review, onAccept, onClose }) {
     ["1. Accettazione dei Termini", `Utilizzando l'app ${APP_NAME} (“l'App”), l'utente accetta di essere vincolato ai presenti Termini e Condizioni. Se non si accettano questi termini, si prega di non utilizzare l'App.`],
     ["2. Descrizione del Servizio", `${APP_NAME} è un'app di informazione e intrattenimento dedicata alla Formula 1. Offre notizie, classifiche, dati live delle gare tramite OpenF1 API, una sezione community (chat) e funzionalità Fanta F1.`],
     ["3. Account Utente", "Per accedere a tutte le funzionalità è necessario creare un account. L'utente è responsabile della riservatezza delle proprie credenziali. Ogni attività effettuata dall'account è responsabilità dell'utente."],
-    ["4. Abbonamento Premium", PAYMENTS_ENABLED ? "L'abbonamento Premium (2,99€/mese o 24,99€/anno) sblocca funzionalità avanzate e rimuove la pubblicità. Il rinnovo è automatico e può essere annullato in qualsiasi momento dal profilo. Non sono previsti rimborsi per il periodo in corso." : "L'abbonamento Premium non è ancora disponibile. Quando verrà attivato, prezzi, rinnovo e modalità di disdetta saranno indicati in questa sezione e nella schermata di acquisto."],
+    ["4. Abbonamento Premium", PAYMENTS_ENABLED ? "L'abbonamento Premium (6 € a stagione, ogni stagione dopo 1 € in meno, fino a 1 €) sblocca funzionalità avanzate e rimuove la pubblicità. Il rinnovo è automatico e può essere annullato in qualsiasi momento dal profilo. Non sono previsti rimborsi per il periodo in corso." : "L'abbonamento Premium non è ancora disponibile. Quando verrà attivato, prezzi, rinnovo e modalità di disdetta saranno indicati in questa sezione e nella schermata di acquisto."],
     ["5. Contenuti e Proprietà Intellettuale", "Tutti i contenuti pubblicati dal Team B&T (articoli, immagini, video) sono di proprietà del Team B&T. I dati di gara sono forniti da OpenF1 API. I loghi e i marchi di Formula 1, FIA e team sono di proprietà dei rispettivi titolari.", `${F1_DISCLAIMER} ${APP_NAME} non è associata nemmeno alla FIA, alle scuderie o ai piloti.`],
     ["6. Condotta degli Utenti", "Nella chat community è vietato pubblicare contenuti offensivi, discriminatori, sessualmente espliciti, spam, materiale illegale o informazioni personali altrui. Con il tasto ⋯ su ogni messaggio puoi segnalarlo o bloccare chi l'ha scritto: i messaggi segnalati vengono controllati dai moderatori e rimossi se violano queste regole. Le violazioni possono comportare la sospensione dalla chat o dell'account."],
     ["7. Pubblicità", "Gli utenti non abbonati visualizzeranno annunci pubblicitari forniti tramite Google AdMob. Nell'Unione Europea ti chiediamo il consenso con il messaggio di Google e puoi cambiare le tue scelte in qualsiasi momento da Profilo → Preferenze privacy annunci."],
@@ -8873,7 +8891,7 @@ function App() {
     if (guest) { setPremiumOpen(false); needLogin("Per la prova gratuita di B&T Premium serve un account."); return; }
     if (trial) return;
     setSubscribing(true);
-    setTimeout(() => { const now = Date.now(); setTrial({ start: now, end: now + TRIAL_DAYS * 86400000 }); setSubscribing(false); setSubscribed("trial"); setIsPremium(true); }, 900);
+    setTimeout(() => { const now = Date.now(); setTrial({ start: now, end: trialEndFor(races, now) }); setSubscribing(false); setSubscribed("trial"); setIsPremium(true); }, 900);
   };
   const closePremium = () => { setPremiumOpen(false); setTimeout(() => setSubscribed(false), 300); };
 
@@ -9075,7 +9093,7 @@ function App() {
         {premiumOpen && <PremiumModal onClose={closePremium} isPremium={isPremium} plan={plan} setPlan={setPlan} onSubscribe={doSubscribe} subscribing={subscribing} subscribed={subscribed} trialUsed={!!trial} onTrial={doTrial} trial={trial} />}
         {selectedDriver && <DriverDetailModal driver={selectedDriver} lastRace={lastRace} races={races} onClose={() => setSelectedDriver(null)} />}
         {liveTrackOpen && <LiveMapView race={live ? races.find(r => r.id === live.raceId) : (races.find(r => r.status === "IN ARRIVO") || null)} live={live} st={liveSt} onClose={() => setLiveTrackOpen(false)} />}
-        {ssOpen && isPremium && <SecondScreen chat={chats.find(c => c.id === "generale")} blocked={blocked} onChatSend={guest ? () => needLogin("Per scrivere in chat serve un account.") : t => sendMessage("generale", t)} race={live ? races.find(r => r.id === live.raceId) : (races.find(r => r.status === "IN ARRIVO") || null)} live={live} st={liveSt} standings={standings} layout={ssLayout} setLayout={setSsLayout} prefs={ssPrefs} setPrefs={setSsPrefs} vote={live ? votesNow.dotd[live.raceId] || {} : {}} onVote={(k, id) => live && voteDotd(live.raceId, k, id)} notice={notice} onCloseNotice={nextNotice} onClose={() => setSsOpen(false)} />}
+        {ssOpen && <SecondScreen chat={chats.find(c => c.id === "generale")} blocked={blocked} onChatSend={guest ? () => needLogin("Per scrivere in chat serve un account.") : t => sendMessage("generale", t)} race={live ? races.find(r => r.id === live.raceId) : (races.find(r => r.status === "IN ARRIVO") || null)} live={live} st={liveSt} standings={standings} layout={ssLayout} setLayout={setSsLayout} prefs={ssPrefs} setPrefs={setSsPrefs} vote={live ? votesNow.dotd[live.raceId] || {} : {}} onVote={(k, id) => live && voteDotd(live.raceId, k, id)} notice={notice} onCloseNotice={nextNotice} onClose={() => setSsOpen(false)} />}
         {lapList && live && liveSt && <LapTimesModal live={live} st={liveSt} carId={lapList} onOpenLap={n => setTelemetry({ carId: lapList, lapNo: n, sector: 0 })} onClose={() => setLapList(null)} />}
         {telemetry && live && liveSt && <TelemetryModal live={live} st={liveSt} carId={telemetry.carId} lapNo={telemetry.lapNo} sector={telemetry.sector} onClose={() => setTelemetry(null)} />}
         {infoModal && <InfoModal title={infoModal.title} body={infoModal.body} extra={infoModal.credits ? <CommonsCredits /> : null} onClose={() => setInfoModal(null)} />}
@@ -9089,7 +9107,7 @@ function App() {
         {termsAccepted && termsOpen && <TermsSheet review onClose={() => setTermsOpen(false)} />}
         {feedbackOpen && <FeedbackModal onClose={() => setFeedbackOpen(false)} onSend={sendFeedback} />}
         {toast && <div className="toast">{toast}</div>}
-        {notice && !(ssOpen && isPremium) && <LiveNotice n={notice} onClose={nextNotice} />}
+        {notice && !ssOpen && <LiveNotice n={notice} onClose={nextNotice} />}
         {trophyNotice && <TrophyNotice n={trophyNotice} />}
       </div>
   );

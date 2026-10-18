@@ -49,6 +49,17 @@ run({
   },
 
   // Sul telefono il gesto arriva come eventi touch (CDP Input.dispatchTouchEvent, come un dito vero).
+  // Revisione del 18/10: finita la scivolata la scheda non deve restare "trasformata" (con transform le finestre aperte
+  // dentro la scheda non coprirebbero tutto lo schermo e finirebbero sotto la barra in basso).
+  async 'finito lo swipe la scheda non ha più transform'(b) {
+    const { ctx, p, errs } = await open(b); await login(p);
+    await drag(p, await freeSpot(p), -220); await w(p, 500);
+    const tr = await p.evaluate(() => { const e = document.querySelector('[data-tab-enter]'); return e ? getComputedStyle(e).transform : 'nessuna scheda'; });
+    await ctx.close();
+    assert(tr === 'none', 'dopo lo swipe la scheda resta con transform: ' + tr);
+    assert(!errs.length, errs.join(' | '));
+  },
+
   async 'col dito (eventi touch): da HOME swipe a sinistra porta a GARAGE'(b) {
     const { ctx, p, errs } = await open(b); await login(p);
     const at = await freeSpot(p);

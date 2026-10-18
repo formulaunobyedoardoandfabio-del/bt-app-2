@@ -171,7 +171,7 @@ run({
   async 'prova diretta: solo sul telefono dell\'admin, con la scritta DEMO; l\'ultima gara resta quella vera'(b) {
     const { ctx, p, errs } = await open(b); await login(p); await w(p, 1000);
     await goTab(p, 'FANTA'); const total0 = await inner(p, '[data-fanta-total]');
-    await goTab(p, 'RACE'); const last0 = await podium(p, '[data-last-race="real"]');
+    await goTab(p, 'RACE'); await tapSel(p, '[data-race-tab="classifica"]').catch(() => {}); await w(p, 300); const last0 = await podium(p, '[data-last-race="real"]');
     const docs0 = await allDocs(p);
     await openAdmin(p, 'GARA LIVE'); const card = norm(await text(p)); await backHome(p);
     await startDemo(p, 'QUALIFICHE'); await goTab(p, 'FANTA');
@@ -182,7 +182,7 @@ run({
     for (let i = 0; i < 40 && !(await has(p, '[data-finish-podium]')); i++) { await advance(p, 20); await w(p, 120); }
     const finished = await has(p, '[data-finish-podium]');
     await stopDemo(p); await goTab(p, 'RACE');
-    const last1 = await podium(p, '[data-last-race="real"]'), demoLast = await has(p, '[data-last-race="demo"]');
+    await tapSel(p, '[data-race-tab="classifica"]').catch(() => {}); await w(p, 300); const last1 = await podium(p, '[data-last-race="real"]'), demoLast = await has(p, '[data-last-race="demo"]');
     await goTab(p, 'FANTA'); const total1 = await inner(p, '[data-fanta-total]'), rows = await count(p, '[data-weekend-row]');
     const docs1 = await allDocs(p); await ctx.close();
     assert(/PROVA DIRETTA \(DEMO\)/.test(card) && /solo tu/.test(card), 'nel Pannello Admin manca il riquadro "PROVA DIRETTA (DEMO)": ' + card.slice(0, 200));

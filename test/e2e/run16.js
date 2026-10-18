@@ -92,7 +92,7 @@ const tests = {
   },
   async 'ultima gara: sotto il podio la classifica parte dal 4° (ritirati in fondo)'(b) {
     const { ctx, p } = await open(b); await login(p); await goTab(p, 'RACE');
-    const pos = await attrs(p, '[data-last-race="real"] [data-result-pos]', 'data-result-pos'); await ctx.close();
+    await tapSel(p, '[data-race-tab="classifica"]').catch(() => {}); await w(p, 300); const pos = await attrs(p, '[data-last-race="real"] [data-result-pos]', 'data-result-pos'); await ctx.close();
     assert(pos.length === 19 && pos[0] === '4' && !pos.some(x => ['1', '2', '3'].includes(x)), 'classifica ultima gara: ' + pos.join(','));
     assert(pos[pos.length - 1] === 'RIT', 'i ritirati non sono in fondo: ' + pos.join(','));
   },

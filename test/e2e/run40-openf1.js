@@ -191,7 +191,7 @@ run({
     const of1 = of1Route('ok', { lastRace: true });
     const { ctx, p, errs } = await open(b, { routes: of1.routes }); await login(p); await w(p, 3000);
     await goTab(p, 'RACE'); await w(p, 400);
-    const src = await p.evaluate(() => { const e = document.querySelector('[data-last-race]'); return e ? e.getAttribute('data-last-race-src') : null; });
+    await tapSel(p, '[data-race-tab="classifica"]').catch(() => {}); await w(p, 300); const src = await p.evaluate(() => { const e = document.querySelector('[data-last-race]'); return e ? e.getAttribute('data-last-race-src') : null; });
     const bor = await p.evaluate(() => { const e = document.querySelector('[data-result-row="bortoleto"]'); return e ? [e.getAttribute('data-result-pos'), e.innerText.replace(/\s+/g, ' ')] : null; });
     const cached = await p.evaluate(() => { try { return JSON.parse(localStorage.getItem('bt_bt-of1-last-race')); } catch (e) { return null; } });
     const asked = of1.calls.filter(c => c.path === 'sessions' && /session_name=Race/.test(c.q) && /year=2026/.test(c.q)).length;

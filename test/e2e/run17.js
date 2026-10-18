@@ -312,7 +312,7 @@ const tests = {
   },
   async 'ritiri: nell\'ultima gara i ritirati hanno l\'immagine del ritiro'(b) {
     const { ctx, p } = await open(b); await login(p); await goTab(p, 'RACE');
-    const arts = await attrs(p, '[data-last-race="real"] [data-result-pos="RIT"] [data-dnf-art]', 'data-dnf-art');
+    await tapSel(p, '[data-race-tab="classifica"]').catch(() => {}); await w(p, 300); const arts = await attrs(p, '[data-last-race="real"] [data-result-pos="RIT"] [data-dnf-art]', 'data-dnf-art');
     const rit = await count(p, '[data-last-race="real"] [data-result-pos="RIT"]'); await ctx.close();
     assert(rit > 0 && arts.length === rit, `ritirati ${rit}, immagini ${arts.length}`);
     assert(arts.every(a => ['incidente', 'motore', 'incendio', 'penalita', 'altro'].includes(a)), 'immagini: ' + arts.join(','));

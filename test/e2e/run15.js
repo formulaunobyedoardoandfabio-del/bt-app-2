@@ -122,7 +122,7 @@ const tests = {
   },
   async 'ultima gara: podio con Russell, Verstappen e Hadjar (Baku) e sotto la classifica dal 4°'(b) {
     const { ctx, p } = await open(b); await login(p); await goTab(p, 'RACE');
-    const pd = await podium(p, '[data-last-race="real"]');
+    await tapSel(p, '[data-race-tab="classifica"]').catch(() => {}); await w(p, 300); const pd = await podium(p, '[data-last-race="real"]');
     const rows = await p.evaluate(() => document.querySelectorAll('[data-result-row]').length);
     const t = await text(p); await ctx.close();
     assert(pd && pd.map(x => x.who).join() === 'M. Verstappen,G. Russell,I. Hadjar', 'podio ultima gara: ' + JSON.stringify(pd));
@@ -143,7 +143,7 @@ const tests = {
     const pd = await podium(p, '[data-finish-podium]');
     const top = await p.evaluate(() => [...document.querySelectorAll('[aria-label^="Tempi sul giro di"]')].slice(0, 3).map(e => e.getAttribute('aria-label')));
     await stopLive(p); await goTab(p, 'RACE');
-    const last = await podium(p, '[data-last-race="real"]'), demoLast = await has(p, '[data-last-race="demo"]'); await ctx.close();
+    await tapSel(p, '[data-race-tab="classifica"]').catch(() => {}); await w(p, 300); const last = await podium(p, '[data-last-race="real"]'), demoLast = await has(p, '[data-last-race="demo"]'); await ctx.close();
     assert(pd, 'a fine gara non compare il podio');
     assert(pd.map(x => x.place).join() === '2,1,3' && pd.every(x => x.who), 'podio di fine gara: ' + JSON.stringify(pd));
     assert(last && last.map(x => x.who).join() === 'M. Verstappen,G. Russell,I. Hadjar' && !demoLast, 'finita la prova DEMO l\'ultima gara deve restare Baku: ' + JSON.stringify(last));

@@ -146,7 +146,7 @@ const tests = {
     await enter(p);
     await tapSel(p, '[aria-label="Profilo"]'); await w(p); await tapText(p, 'Passa a Premium'); await w(p, 400);
     const t = await text(p); await ctx.close();
-    assert(/PROVA GRATIS 2 SETTIMANE/.test(t) && /abbonati subito/i.test(t), 'mancano i bottoni per la prova gratuita e per abbonarsi');   // dalla versione 16
+    assert(/PROVA GRATIS PER UN GP/.test(t) && /abbonati subito/i.test(t), 'mancano i bottoni per la prova gratuita e per abbonarsi');   // dalla versione 16; prova per un GP dal 18/10
     assert(/nessun pagamento reale/.test(t), 'non è chiaro che è una prova senza pagamento');
   },
   async 'dicitura non ufficiale su Home e Profilo, email di contatto giusta'(b) {

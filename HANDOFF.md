@@ -1,5 +1,5 @@
 # Handoff
-Updated: 2026-10-18 12:00 by Claude (claude-opus-5-5)   Branch: tappa-3   Commit: ffe0958 (+ questo commit)
+Updated: 2026-10-18 17:00 by Claude (claude-opus-5-5)   Branch: tappa-3   Commit: 99a92a4 (+ lavoro in corso)
 
 ## Goal
 Tappa 3 della 2.0: "fai prima tutti gli easter egg e le nuove grafiche, poi vedo l'apk di prova e poi ci sono altre
@@ -19,6 +19,21 @@ Piano (20 task): `docs/superpowers/plans/2026-10-17-tappa3-grafica.md`.
   trofei con bacheca nel Profilo e medaglia in chat (G31).
 - In progress: nessuno.
 - Not started: Task 20 (prove complete, revisione di un revisore nuovo, push su tappa-3 e apk-prova, APK).
+
+## Richieste del 18/10 (ore 16:08), in corso
+Token di Edoardo al 75%: prima le cose importanti e veloci.
+- Fatto: pacchetto `com.bt.app` (Play Console); account: niente disconnessione dopo tanto offline (ultimo account
+  ricordato, `bt-last-account`); creazione account: si riprova il salvataggio del profilo e "Errore di connessione"
+  mostra il codice vero (Edoardo vede "Errore di connessione, riprova tra poco" creando l'account: causa vera ancora
+  da vedere col codice).
+- Fatto (da provare tutto insieme): Home senza LIVE RACE/FANTA F1; ricerca `#soggetto`; Race senza sessione: di serie il
+  Mondiale, "Ultima gara" in una scheda; Ghost Lap solo dopo le qualifiche di quel GP (GP delle ultime qualifiche con
+  dati: ora Sepang/Baku, dopo Singapore nessuno); Premium: gratis tempi, gomme, radio, pit stop, Second Screen, avvisi,
+  sondaggi; prova per un GP; 6 € a stagione (1 € in meno ogni stagione, fino a 1 €); "Offrici un caffè" (link da
+  mettere in `COFFEE_URL`); giochi "In arrivo" nel Garage; finita la scivolata tra le schede niente transform.
+- Da fare: pubblicità native tra le notizie e con premio (servono codice nativo e le unità AdMob di Edoardo); accesso
+  con Google (Firebase: provider Google, SHA-1/SHA-256 delle chiavi, google-services.json per com.bt.app); Apple no
+  (serve l'Apple Developer Program a pagamento). Revisione finale con un revisore nuovo: rimandata (token).
 
 ## Next action
 Task 20: `JOBS=1 bash test/all.sh` in una copia separata (`/home/claude/bt-t3-suite`), screenshot delle pagine nuove,

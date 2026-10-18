@@ -393,7 +393,8 @@ const tests = {
     assert(r && r.map && /Nessuna sessione in corso/.test(t2), 'senza diretta non si vede la mappa della prossima gara');
   },
   // ── Premium: prova gratuita di 2 settimane ────────────────────────────
-  async 'premium: prova gratuita di 2 settimane, poi si vedono i giorni rimasti'(b) {
+  // 18/10 (Edoardo): la prova gratuita dura un GP (fino alla fine del prossimo GP), non più 2 settimane.
+  async 'premium: prova gratuita per un GP, poi si vedono i giorni rimasti'(b) {
     const { ctx, p, errs } = await open(b); await login(p);
     await tapSel(p, '[aria-label="Profilo"]'); await w(p); await tapText(p, 'Passa a Premium'); await w(p, 300);
     const t0 = norm(await text(p));
@@ -404,10 +405,10 @@ const tests = {
     await tapSel(p, '[aria-label="Indietro"]'); await w(p, 300);
     const chip = await p.evaluate(() => { const e = document.querySelector('[data-premium-chip]'); return e ? e.innerText.replace(/\s+/g, ' ') : ''; });
     await ctx.close();
-    assert(/PROVA GRATIS 2 SETTIMANE/.test(t0) && /poi/i.test(t0), 'nel Premium manca la prova gratuita di 2 settimane');
-    assert(/Prova gratuita attiva/.test(t1) && /14 giorni/.test(t1), 'dopo la prova non dice che è attiva per 14 giorni');
-    assert(/Prova gratuita/.test(prof) && /14 giorni rimasti/.test(prof), 'nel profilo non si vedono i giorni rimasti');
-    assert(/PROVA/.test(chip) && /14/.test(chip), 'in alto non si vede la prova con i giorni: ' + chip);
+    assert(/PROVA GRATIS PER UN GP/.test(t0) && /poi/i.test(t0), 'nel Premium manca la prova gratuita per un GP');
+    assert(/Prova gratuita attiva/.test(t1) && /prossimo GP/.test(t1), 'dopo la prova non dice che è attiva per il prossimo GP');
+    assert(/Prova gratuita/.test(prof) && /\d+ giorni rimasti/.test(prof), 'nel profilo non si vedono i giorni rimasti');
+    assert(/PROVA/.test(chip) && /\d/.test(chip), 'in alto non si vede la prova con i giorni: ' + chip);
     assert(!errs.length, 'errori JS: ' + errs.join(' | '));
   },
   async 'premium: la prova gratuita si usa una volta sola'(b) {
