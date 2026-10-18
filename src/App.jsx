@@ -18,6 +18,7 @@ import { filterNews, TYRES, LANES } from "./logic/newsfilter";
 import { classifySwipe, SWIPE } from "./logic/gesture";
 import { HELMET_DEFAULT, HELMET_PATTERNS, HELMET_VISORS, HELMET_FINISHES, cleanHelmet } from "./logic/helmet";
 import { qZones, zoneOf } from "./logic/qzones";
+import CommonsData from "./data/commons-candidates";
 import F1 from "./data/f1-2026";
 import AppData from "./services/appdata";
 import Compat from "./services/compat";
@@ -27,6 +28,7 @@ import { createFeedback, FEEDBACK_CATS, FEEDBACK_MSG } from "./services/feedback
 import { local, IMG_REF, uploadImage, loadImage as loadStoredImage, dropImage } from "./services/firebase";
 import { generateArticle } from "./services/backend";
 import { fx } from "./services/fx";
+import { createCommons, normFile as commonsFileOf } from "./services/commons";
 import { createOpenF1, buildReplay, lastRaceFromResult, sessionType as of1SessionType } from "./services/openf1";
 
 /* ── DESIGN TOKENS (matches the B&T concept style) ─────────────────── */
@@ -259,6 +261,50 @@ const DRIVERS = DRIVER_DATA.map(([id, name, full, teamId, born, nat, wins, podiu
     helmet: HELMETS[id] || null, helmetNote: HELMET_NOTES[id] || null };
 });
 const driverById = (id) => DRIVERS.find(d => d.id === id);
+
+/* ── FOTO DI WIKIMEDIA COMMONS (G30) ─────────────────────────────────── */
+// L'app carica le foto dal link di Commons (anteprima di 480 px) e le mostra solo con licenza libera, con i crediti
+// "Foto: autore, licenza, Wikimedia Commons" (src/services/commons.js). Vale la scelta dell'admin (Pannello Admin →
+// FOTO, shared/bt-commons-photos), altrimenti la prima candidata (src/data/commons-candidates.js). Finché la foto non
+// arriva, senza rete o senza licenza libera: le iniziali, la sagoma o il disegno di sempre.
+const CommonsApi = createCommons({ local });
+const commons = { choice: { drivers: {}, cars: {}, logos: {} }, info: {}, queue: new Set(), timer: null, subs: new Set() };
+const commonsNotify = () => commons.subs.forEach(fn => { try { fn(); } catch (e) {} });
+const commonsCandidates = (kind, id) => (id && CommonsData.COMMONS_CANDIDATES[kind] && CommonsData.COMMONS_CANDIDATES[kind][id]) || [];
+const commonsFile = (kind, id) => (id && (commons.choice[kind] || {})[id]) || commonsCandidates(kind, id)[0] || null;
+function commonsRequest(files) {
+  files.forEach(f => { if (f && !(f in commons.info)) commons.queue.add(f); });
+  if (!commons.queue.size || commons.timer) return;
+  commons.timer = setTimeout(async () => {
+    const list = [...commons.queue]; commons.queue.clear(); commons.timer = null;
+    const got = await CommonsApi.info(list);
+    list.forEach(f => { commons.info[f] = got[f] || null; });
+    commonsNotify();
+  }, 30);
+}
+const commonsCredit = x => `Foto: ${x.author || "autore non indicato"}, ${x.license}, Wikimedia Commons`;
+// Info di un file per il Pannello Admin (anche senza licenza libera): undefined finché non arriva.
+function commonsInfoOf(file) { if (!file) return null; if (!(file in commons.info)) { commonsRequest([file]); return undefined; } return commons.info[file]; }
+// La foto da mostrare: null finché non arriva, senza licenza libera o senza rete.
+function commonsPhotoOf(file) {
+  const x = commonsInfoOf(file);
+  return x && x.free && x.thumb ? { thumb: x.thumb, credit: commonsCredit(x), page: x.page, file } : null;
+}
+// Tornata la rete: si riprovano le foto rimaste senza risposta (i file che mancano su Commons restano senza).
+if (typeof window !== "undefined" && window.addEventListener) window.addEventListener("online", () => {
+  let n = 0;
+  Object.keys(commons.info).forEach(f => { if (commons.info[f] === null) { delete commons.info[f]; n++; } });
+  if (n) commonsNotify();
+});
+function useCommonsTick() {
+  const [, set] = useState(0);
+  useEffect(() => { const fn = () => set(n => n + 1); commons.subs.add(fn); return () => { commons.subs.delete(fn); }; }, []);
+}
+function useCommonsPhoto(kind, id) {
+  useCommonsTick();
+  if (kind === "logos" && !CommonsData.SHOW_TEAM_LOGOS) return null;
+  return commonsPhotoOf(commonsFile(kind, id));
+}
 
 /* ── DIRETTA: tracciati, numeri di gara e simulatore ─────────────────── */
 // Tracciati dei circuiti: "f1-circuits" di Tomislav Bacinger (licenza MIT), lisciati e ruotati per la mappa.
@@ -823,13 +869,15 @@ function HashtagChips({ tags, onTag, size = "md" }) {
 
 // Foto tonda del pilota (volto), con anello del colore della scuderia
 function Headshot({ driver, size = 32 }) {
+  const ph = useCommonsPhoto("drivers", driver ? driver.id : null);   // G30: la foto di Commons, se c'è
   if (!driver) return <span style={{ width: size, height: size, borderRadius: "50%", background: "rgba(255,255,255,.1)", flexShrink: 0 }} />;
   const ring = Math.max(2, Math.round(size / 14));
-  // Foto piccola = il casco del pilota; se manca, il volto; altrimenti le iniziali.
-  const kind = driver.helmet ? "casco" : driver.avatar ? "volto" : driver.photo ? "foto" : "iniziali";
+  // Foto piccola = il casco del pilota; se manca, il volto; poi la foto di Commons; altrimenti le iniziali.
+  const kind = driver.helmet ? "casco" : driver.avatar ? "volto" : driver.photo ? "foto" : ph ? "commons" : "iniziali";
   const bg = driver.helmet ? `#1c1c20 url(${driver.helmet}) 50% 55% / 86% auto no-repeat`
     : driver.avatar ? `#1c1c20 url(${driver.avatar}) center / cover no-repeat`
-    : driver.photo ? `#1c1c20 url(${driver.photo}) 50% 3% / 190% auto no-repeat` : "#26262b";
+    : driver.photo ? `#1c1c20 url(${driver.photo}) 50% 3% / 190% auto no-repeat`
+    : ph ? `#1c1c20 url("${ph.thumb}") 50% 22% / cover no-repeat` : "#26262b";
   return (
     <span aria-hidden="true" style={{ width: size, height: size, borderRadius: "50%", flexShrink: 0, padding: ring, background: driver.color, display: "inline-block", boxSizing: "border-box" }}>
       <span data-img={kind} style={{ display: "flex", alignItems: "center", justifyContent: "center", width: "100%", height: "100%", borderRadius: "50%", background: bg, overflow: "hidden" }}>
@@ -5272,7 +5320,7 @@ function RaceScreen({ isPremium, onPremium, onSelectDriver, races, standings, li
                       <span style={{ fontFamily: F_HEAD, fontWeight: 800, fontSize: 14, color: row.position <= 3 ? C.gold : C.text }}>{row.position}</span>
                       <PosTrend pos={row.position} prev={row.prev} size={9.5} />
                     </span>
-                    {d ? <Headshot driver={d} size={32} /> : <span style={{ width: 32, height: 32, borderRadius: 10, background: t.color + "33", border: `2px solid ${t.color}`, flexShrink: 0 }} />}
+                    {d ? <Headshot driver={d} size={32} /> : <TeamBadge team={t} size={32} />}
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div style={{ fontFamily: F_BODY, fontWeight: 600, fontSize: 13, color: C.text }}>{d ? d.full : t.name}</div>
                       <div style={{ fontFamily: F_BODY, fontSize: 10, color: C.dim }}>{d ? t.name : t.tag}</div>
@@ -5523,7 +5571,16 @@ function CarSilhouette({ color, width = 132 }) {
   );
 }
 function TeamFigure({ team, place }) {
-  return <div style={{ height: place === 1 ? 64 : 54, display: "flex", alignItems: "flex-end" }}><CarSilhouette color={team.color} width={place === 1 ? 104 : 88} /></div>;
+  const ph = useCommonsPhoto("cars", team.id);   // G30: la monoposto vera di lato, se c'è una foto libera
+  const w = place === 1 ? 104 : 88, h = place === 1 ? 64 : 54;
+  if (ph) return <img data-commons-car={team.id} src={ph.thumb} alt={"Monoposto " + team.name} title={ph.credit} style={{ display: "block", width: w, height: h, objectFit: "cover", borderRadius: 8, border: `2px solid ${team.color}` }} />;
+  return <div style={{ height: h, display: "flex", alignItems: "flex-end" }}><CarSilhouette color={team.color} width={w} /></div>;
+}
+// Logo della scuderia (G30, solo con SHOW_TEAM_LOGOS: versioni di prova), altrimenti il quadratino col colore.
+function TeamBadge({ team, size = 32 }) {
+  const ph = useCommonsPhoto("logos", team.id);
+  if (ph) return <img data-team-logo={team.id} src={ph.thumb} alt={team.name} title={ph.credit} style={{ width: size, height: size, padding: 3, boxSizing: "border-box", objectFit: "contain", borderRadius: 10, background: "#F4F2EF", flexShrink: 0 }} />;
+  return <span style={{ width: size, height: size, borderRadius: 10, background: team.color + "33", border: `2px solid ${team.color}`, flexShrink: 0 }} />;
 }
 function UserFigure({ user, place }) {
   const s = place === 1 ? 60 : 50;
@@ -5643,6 +5700,7 @@ function ParcFerme({ kind, at, liftable = false, compact = false }) {
 // nel mondiale. Dal retro "Cambia" apre la scelta (con la squadra chiusa è spento).
 function FantaSlot({ kind, index, id, stats, boost, locked, standings, onOpen, onRemove, onBoost }) {
   const [flip, setFlip] = useState(false);
+  const ph = useCommonsPhoto(kind === "drivers" ? "drivers" : "cars", id);   // G30: pilota o monoposto veri
   useEffect(() => { setFlip(false); }, [id]);
   const isD = kind === "drivers";
   const d = isD && id ? driverById(id) : null;
@@ -5671,7 +5729,8 @@ function FantaSlot({ kind, index, id, stats, boost, locked, standings, onOpen, o
         <div data-card-front="" style={{ ...face, position: "relative", background: "#0B0B0E", pointerEvents: flip ? "none" : "auto" }}>
           <button className="press" onClick={() => setFlip(true)} aria-label={`Gira la carta di ${label}`} style={{ display: "block", width: "100%", textAlign: "left" }}>
             {isD
-              ? <div style={{ height: 70, background: d.photo ? `${t.color} url(${d.photo}) 50% 0 / 100% auto no-repeat` : t.color }} />
+              ? <div data-card-photo={ph ? "commons" : d.photo ? "foto" : "colore"} style={{ height: 70, background: d.photo ? `${t.color} url(${d.photo}) 50% 0 / 100% auto no-repeat` : ph ? `${t.color} url("${ph.thumb}") 50% 20% / cover no-repeat` : t.color }} />
+              : ph ? <div data-card-photo="commons" style={{ height: 62, background: `${t.color} url("${ph.thumb}") center / cover no-repeat` }} />
               : <div style={{ height: 62, background: t.color, display: "flex", alignItems: "flex-end", justifyContent: "center", paddingBottom: 2 }}><CarSilhouette color="#F4F2EF" width={118} /></div>}
             <div style={{ padding: "6px 8px 8px" }}>
               <div style={{ fontFamily: F_HEAD, fontWeight: 900, fontSize: isD ? (cardName(d).length > 12 ? 10.5 : 11.5) : 13, color: C.text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{isD ? cardName(d) : t.name.toUpperCase()}</div>
@@ -6546,7 +6605,7 @@ function AdminKeypad({ onOk, onCancel }) {
 }
 
 /* ── PANNELLO ADMIN (stesse sezioni della versione vecchia) ─────────── */
-const ADMIN_TABS = ["NEWS", "SONDAGGI", "FANTA F1", "PREVISIONI", "CLASSIFICHE", "GARA LIVE", "MERCATO", "INSTAGRAM", "VIDEO", "NOTIFICHE", "CHAT"];
+const ADMIN_TABS = ["NEWS", "SONDAGGI", "FANTA F1", "PREVISIONI", "CLASSIFICHE", "GARA LIVE", "MERCATO", "INSTAGRAM", "VIDEO", "FOTO", "NOTIFICHE", "CHAT"];
 const aInput = { width: "100%", padding: "10px 12px", borderRadius: 10, background: "#101013", border: `1px solid ${C.border}`, fontFamily: F_BODY, fontSize: 13, color: C.text, boxSizing: "border-box" };
 const aNum = { ...aInput, padding: "8px 6px", textAlign: "center", fontSize: 12.5 };
 const aLabel = { display: "block", fontFamily: F_BODY, fontWeight: 700, fontSize: 10.5, letterSpacing: .8, color: C.dim, margin: "0 0 6px" };
@@ -7132,6 +7191,68 @@ function AdminRacesTab({ races, setRaces, extra = [], setExtra, onToast, live, l
 
 // Profilo Instagram e video virali (shared/bt-ig-config): ogni video ha il suo link (url), che si apre toccandolo
 // nella pagina Instagram (D06); le copertine si caricano su Firebase (fsimg:) o con un link.
+// Foto di Commons (G30): per ogni pilota, monoposto e logo le candidate trovate su Commons (fino a 3, la prima è di
+// serie) con autore e licenza letti da Commons; si usa solo una foto con licenza libera. Oppure il link di un file di
+// Commons. La scelta va su Firebase (shared/bt-commons-photos) e la vedono tutti.
+const PHOTO_KINDS = [["drivers", "PILOTI"], ["cars", "MONOPOSTO"], ["logos", "LOGHI"]];
+function AdminPhotosTab({ photos = {}, setPhotos, onToast }) {
+  useCommonsTick();
+  const [kind, setKind] = useState("drivers");
+  const [open, setOpen] = useState(null);
+  const [link, setLink] = useState("");
+  const [err, setErr] = useState("");
+  const list = kind === "drivers" ? DRIVERS.map(d => ({ id: d.id, name: d.full, color: d.color })) : TEAMS.map(t => ({ id: t.id, name: t.name, color: t.color }));
+  const choose = (id, file) => Promise.resolve(setPhotos(d => ({ ...d, [kind]: { ...((d && d[kind]) || {}), [id]: file } }))).then(ok => { if (ok) { setLink(""); setErr(""); onToast("Foto salvata: la vedono tutti"); } });
+  const useLink = id => { const f = commonsFileOf(link); if (!f) { setErr("Link non valido: incolla il link di un file di Wikimedia Commons"); return; } choose(id, f); };
+  return (
+    <div>
+      <p style={{ margin: "0 0 12px", fontFamily: F_BODY, fontSize: 12, color: C.muted, lineHeight: 1.5 }}>Le foto si vedono nell'app solo con licenza libera (CC0, pubblico dominio, CC BY, CC BY-SA), con autore e licenza nei crediti. I loghi sono marchi delle scuderie: si vedono solo nelle versioni di prova.</p>
+      <div style={{ display: "flex", gap: 8, margin: "0 0 12px" }}>
+        {PHOTO_KINDS.map(([id, l]) => <button key={id} className="press" data-photo-kind={id} onClick={() => { setKind(id); setOpen(null); setLink(""); setErr(""); }} style={aChip(kind === id)}>{l}</button>)}
+      </div>
+      <div style={{ ...aCard, padding: 0 }}>
+        {list.map((e, i) => {
+          const cur = (photos[kind] || {})[e.id] || null, eff = cur || commonsCandidates(kind, e.id)[0] || null, ph = commonsPhotoOf(eff), isOpen = open === e.id;
+          const files = [...new Set([...commonsCandidates(kind, e.id), ...(cur ? [cur] : [])])];
+          return (
+            <div key={e.id} style={{ borderTop: i ? `1px solid ${C.divider}` : "none" }}>
+              <button className="press" data-photo-entry={kind + ":" + e.id} aria-expanded={isOpen ? "true" : "false"} onClick={() => { setOpen(isOpen ? null : e.id); setLink(""); setErr(""); }} style={{ display: "flex", alignItems: "center", gap: 10, width: "100%", padding: "9px 12px", textAlign: "left" }}>
+                <span aria-hidden="true" style={{ width: 40, height: 40, borderRadius: 10, flexShrink: 0, boxSizing: "border-box", background: ph ? `#1c1c20 url("${ph.thumb}") center / cover no-repeat` : e.color + "33", border: `2px solid ${e.color}` }} />
+                <span style={{ flex: 1, minWidth: 0 }}>
+                  <span style={{ display: "block", fontFamily: F_BODY, fontWeight: 600, fontSize: 13, color: C.text }}>{e.name}</span>
+                  <span style={{ display: "block", fontFamily: F_BODY, fontSize: 10.5, color: C.dim, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{eff ? (cur ? "Scelta: " : "Di serie: ") + eff.replace(/^File:/, "") : "Nessuna foto: iniziali o disegno"}</span>
+                </span>
+                <Icon name="chevron" size={13} color={C.dim} />
+              </button>
+              {isOpen && (
+                <div style={{ padding: "2px 12px 12px" }}>
+                  {!files.length && <p style={{ margin: "6px 0", fontFamily: F_BODY, fontSize: 12, color: C.dim }}>Nessuna candidata: incolla il link di un file di Commons.</p>}
+                  {files.map(f => { const x = commonsInfoOf(f), free = !!(x && x.free), using = f === eff; return (
+                    <div key={f} data-photo-candidate={f} data-free={x === undefined ? "?" : free ? "1" : "0"} style={{ display: "flex", gap: 10, alignItems: "center", padding: "8px 0", borderTop: `1px solid ${C.divider}` }}>
+                      {x && x.thumb ? <img src={x.thumb} alt="" style={{ width: 72, height: 54, objectFit: "cover", borderRadius: 8, opacity: free ? 1 : .35, flexShrink: 0 }} /> : <span style={{ width: 72, height: 54, borderRadius: 8, background: "#1c1c20", flexShrink: 0 }} />}
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontFamily: F_BODY, fontWeight: 600, fontSize: 11.5, color: C.text, wordBreak: "break-word" }}>{f.replace(/^File:/, "")}</div>
+                        <div style={{ fontFamily: F_BODY, fontSize: 10.5, lineHeight: 1.35, color: x && !free ? "#FF5A5F" : C.muted }}>{x === undefined ? "Lettura da Commons…" : !x ? "Non trovata su Commons (o Commons non risponde)" : free ? `${x.author || "autore non indicato"} · ${x.license}${x.date ? " · " + x.date : ""}` : `Licenza non libera (${x.license || "sconosciuta"}): non si può usare`}</div>
+                      </div>
+                      <button className="press" disabled={!free || using} onClick={() => choose(e.id, f)} style={{ ...aChip(using), flexShrink: 0, opacity: !free ? .45 : 1 }}>{using ? "In uso" : "Usa questa"}</button>
+                    </div>
+                  ); })}
+                  <label style={{ ...aLabel, marginTop: 10 }} htmlFor={"photoLink-" + e.id}>OPPURE IL LINK DI UN FILE DI COMMONS</label>
+                  <div style={{ display: "flex", gap: 8 }}>
+                    <input id={"photoLink-" + e.id} data-photo-link="" value={link} onChange={ev => { setLink(ev.target.value); setErr(""); }} placeholder="https://commons.wikimedia.org/wiki/File:…" style={{ ...aInput, flex: 1, minWidth: 0 }} />
+                    <ABtn onClick={() => useLink(e.id)} disabled={!link.trim()} style={{ width: "auto", flex: "none", padding: "12px 16px" }}>Usa il link</ABtn>
+                  </div>
+                  {err && <p role="alert" style={{ margin: "8px 0 0", fontFamily: F_BODY, fontSize: 12, color: "#FF5A5F" }}>{err}</p>}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 function AdminInstagramTab({ ig, setIg, onToast }) {
   const [d, setD] = useState(() => ({ ...ig, followers: ig.followers == null ? "" : String(ig.followers), posts: ig.posts == null ? "" : String(ig.posts), videos: ig.videos.map(v => ({ ...v, url: v.url || "" })) }));
   const setV = (id, k, val) => setD(p => ({ ...p, videos: p.videos.map(v => v.id === id ? { ...v, [k]: val } : v) }));
@@ -7278,7 +7399,7 @@ function AdminChatTab({ chats, reports, banned, onDeleteMsg, onSuspend, onUnsusp
 // Impronta di un valore: le schede con la bozza (classifiche, prezzi FantaF1, Instagram) si rifanno da capo quando i
 // dati sotto cambiano (riletti da Firebase o appena salvati), così SALVA non riscrive valori vecchi (revisione Fase B, C2).
 const versionOf = v => { const s = JSON.stringify(v) || ""; let h = 5381; for (let i = 0; i < s.length; i++) h = (Math.imul(h, 33) + s.charCodeAt(i)) | 0; return (h >>> 0).toString(36) + "." + s.length; };
-function AdminScreen({ silly = {}, onSilly, highlights = [], setHighlights, onBack, onPublish, articles, setArticles, fantaStats, setFantaStats, standings, setStandings, races, setRaces, extraRaces = [], setExtraRaces, ig, setIg, sentNotifs, onSendNotif, onDeleteNotif, onToast, tab, setTab, chats, reports, banned, onDeleteMsg, onSuspend, onUnsuspend, onIgnoreReport, liveProps = {}, polls = [], votes = {}, onPollAnswer, predictions = [], setPredictions, predAnswers = {} }) {
+function AdminScreen({ photos, setPhotos, silly = {}, onSilly, highlights = [], setHighlights, onBack, onPublish, articles, setArticles, fantaStats, setFantaStats, standings, setStandings, races, setRaces, extraRaces = [], setExtraRaces, ig, setIg, sentNotifs, onSendNotif, onDeleteNotif, onToast, tab, setTab, chats, reports, banned, onDeleteMsg, onSuspend, onUnsuspend, onIgnoreReport, liveProps = {}, polls = [], votes = {}, onPollAnswer, predictions = [], setPredictions, predAnswers = {} }) {
   return (
     <div className="scrollcol" style={{ height: "100%" }}>
       <SubHeader title="PANNELLO ADMIN" onBack={onBack} />
@@ -7295,6 +7416,7 @@ function AdminScreen({ silly = {}, onSilly, highlights = [], setHighlights, onBa
         {tab === "INSTAGRAM" && <AdminInstagramTab key={"ig:" + versionOf(ig)} ig={ig} setIg={setIg} onToast={onToast} />}
         {tab === "MERCATO" && <AdminSillyTab official={silly} onOfficial={onSilly} onToast={onToast} />}
         {tab === "VIDEO" && <AdminHighlightsTab items={highlights} setItems={setHighlights} onToast={onToast} />}
+        {tab === "FOTO" && <AdminPhotosTab photos={photos || {}} setPhotos={setPhotos} onToast={onToast} />}
         {tab === "NOTIFICHE" && <AdminNotifTab sent={sentNotifs} onSend={onSendNotif} onDelete={onDeleteNotif} />}
         {tab === "CHAT" && <AdminChatTab chats={chats} reports={reports} banned={banned} onDeleteMsg={onDeleteMsg} onSuspend={onSuspend} onUnsuspend={onUnsuspend} onIgnore={onIgnoreReport} />}
       </div>
@@ -7660,7 +7782,7 @@ function FeedbackModal({ onClose, onSend }) {
   );
 }
 
-function InfoModal({ title, body, onClose }) {
+function InfoModal({ title, body, extra = null, onClose }) {
   return (
     <div style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,.75)", zIndex: 600, display: "flex", alignItems: "flex-end" }} onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
       <div className="scrollcol" style={{ background: C.card, borderRadius: "24px 24px 0 0", width: "100%", maxHeight: "80%", padding: "22px 22px 28px", position: "relative" }}>
@@ -7671,7 +7793,28 @@ function InfoModal({ title, body, onClose }) {
         {body.split("\n\n").map((p, i) => (
           <p key={i} style={{ fontFamily: F_BODY, fontSize: 13.5, color: "#D8D8DA", lineHeight: 1.7, margin: "0 0 12px" }}>{p}</p>
         ))}
+        {extra}
       </div>
+    </div>
+  );
+}
+
+// Crediti delle foto di Commons in "Info su B&T" (G30): le foto piccole (classifiche, carte, loghi) non li hanno
+// accanto. Solo le foto che si vedono davvero: licenza libera, arrivate da Commons.
+function CommonsCredits() {
+  useCommonsTick();
+  const rows = [];
+  DRIVERS.forEach(d => rows.push({ key: "drivers:" + d.id, who: d.full, file: commonsFile("drivers", d.id) }));
+  TEAMS.forEach(t => rows.push({ key: "cars:" + t.id, who: "Monoposto " + t.name, file: commonsFile("cars", t.id) }));
+  if (CommonsData.SHOW_TEAM_LOGOS) TEAMS.forEach(t => rows.push({ key: "logos:" + t.id, who: "Logo " + t.name, file: commonsFile("logos", t.id) }));
+  const shown = rows.map(r => ({ ...r, ph: commonsPhotoOf(r.file) })).filter(r => r.ph);
+  if (!shown.length) return null;
+  return (
+    <div data-photo-credits style={{ borderTop: "1px solid rgba(255,255,255,.08)", paddingTop: 14, marginTop: 4 }}>
+      <h3 style={{ fontFamily: F_HEAD, fontWeight: 800, fontStyle: "italic", fontSize: 14, color: C.text, margin: "0 0 8px" }}>Foto da Wikimedia Commons</h3>
+      {shown.map(r => (
+        <p key={r.key} data-photo-credit-row={r.key} style={{ fontFamily: F_BODY, fontSize: 12, color: "#A9A9AD", lineHeight: 1.5, margin: "0 0 6px" }}>{r.who}: {r.ph.credit.replace(/^Foto: /, "").replace(/, Wikimedia Commons$/, "")}</p>
+      ))}
     </div>
   );
 }
@@ -7679,6 +7822,7 @@ function InfoModal({ title, body, onClose }) {
 // Scheda del pilota: bio, statistiche della carriera e i dati veri dell'ultimo weekend (D19): posizione e distacco
 // nell'ultima gara (lastRace) e il miglior giro in qualifica dello stesso round (TracingInsights, dati FastF1).
 function DriverDetailModal({ driver, lastRace = null, races = [], onClose }) {
+  const ph = useCommonsPhoto("drivers", driver.id);   // G30
   const row = lastRace && Array.isArray(lastRace.rows) ? lastRace.rows.find(r => r.id === driver.id) || null : null;
   const race = lastRace ? races.find(r => r.id === lastRace.raceId) || null : null;
   const Q = race ? (BtWeekend.quali || []).find(q => q.round === race.round) || null : null;
@@ -7697,6 +7841,10 @@ function DriverDetailModal({ driver, lastRace = null, races = [], onClose }) {
         <div style={{ position: "relative", height: 230, borderRadius: "24px 24px 0 0", overflow: "hidden", background: `linear-gradient(160deg, ${driver.color} 0%, ${driver.color}55 45%, ${C.card} 100%)` }}>
           {driver.photo ? (
             <img src={driver.photo} alt={driver.full} style={{ position: "absolute", right: 8, bottom: 0, height: 222, width: "auto", maxWidth: "50%", objectFit: "contain", objectPosition: "right bottom" }} />
+          ) : ph ? (
+            <>
+              <img data-commons-photo="" src={ph.thumb} alt={driver.full} style={{ position: "absolute", right: 0, top: 0, height: "100%", width: "56%", objectFit: "cover", objectPosition: "50% 18%", WebkitMaskImage: "linear-gradient(90deg, transparent 0%, #000 34%)", maskImage: "linear-gradient(90deg, transparent 0%, #000 34%)" }} />
+            </>
           ) : (
             <svg viewBox="0 0 120 150" style={{ position: "absolute", right: 22, bottom: 0, height: 190 }} aria-hidden="true">
               <circle cx="60" cy="42" r="28" fill="rgba(0,0,0,.28)" />
@@ -7712,6 +7860,7 @@ function DriverDetailModal({ driver, lastRace = null, races = [], onClose }) {
           </div>
         </div>
         <div style={{ padding: "16px 22px 28px" }}>
+        {!driver.photo && ph && <span data-photo-credit="" style={{ display: "block", fontFamily: F_BODY, fontSize: 10, lineHeight: 1.35, color: C.dim, textAlign: "right", margin: "-8px 0 10px" }}>{ph.credit}</span>}
         <span style={{ display: "block", fontFamily: F_BODY, fontSize: 11.5, color: C.dim, marginBottom: 10 }}>{driver.born} · {driver.nat}</span>
         <p style={{ fontFamily: F_BODY, fontSize: 13, lineHeight: 1.55, color: C.muted, margin: "0 0 16px" }}>{driver.bio}</p>
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8, marginBottom: 6 }}>
@@ -7863,6 +8012,9 @@ function App() {
   const [stratPreds, setStratPreds] = useState(USER_INIT.stratPreds);       // Tire Strategy Predictor: { gara: { stints, at } }
   const [sillyOfficial, setSillyOfficial] = useState(shared0.silly);       // comunicati ufficiali registrati dall'admin
   const [driverPhotos, setDriverPhotos] = useState(shared0.driverPhotos);  // foto dei piloti caricate dall'admin (Task 14)
+  const [commonsPhotos, setCommonsPhotos] = useState(shared0.commonsPhotos);   // G30: foto di Commons scelte dall'admin
+  commons.choice = commonsPhotos || commons.choice;
+  useEffect(() => { commonsNotify(); }, [commonsPhotos]);
   const predictSeat = (id, pr) => { if (userDataWait()) return; setSillyPreds(x => x[id] ? x : { ...x, [id]: pr }); };
   const [articleId, setArticleId] = useState(null);
   const [chatId, setChatId] = useState(null);
@@ -8060,7 +8212,7 @@ function App() {
     news: keep(setArticles), races: keep(setRacesDoc), notifs: keep(setNotifsRaw), ig: keep(setIg),
     standings: v => { addStandingsGuests(v.guests); keep(setStandings)(v); },
     highlights: keep(setHighlights), silly: keep(setSillyOfficial), predictions: keep(setPredictions),
-    homePoll: keep(setHomePoll), fantaStats: keep(setFantaStats), driverPhotos: keep(setDriverPhotos),
+    homePoll: keep(setHomePoll), fantaStats: keep(setFantaStats), driverPhotos: keep(setDriverPhotos), commonsPhotos: keep(setCommonsPhotos),
   };
   // Rilegge i contenuti indicati (tutti, all'avvio) e mette nello stato quelli letti davvero.
   const refreshShared = kinds => AppData.loadShared(nowMs(), kinds ? { kinds } : undefined).then(r => {
@@ -8086,6 +8238,7 @@ function App() {
     ig: u => commitShared("ig", u),
     highlights: u => commitShared("highlights", u),
     predictions: u => commitShared("predictions", u),
+    commonsPhotos: u => commitShared("commonsPhotos", u),
   };
   const officialSeat = (id, o) => commitShared("silly", s => ({ ...s, [id]: o }));
 
@@ -8755,12 +8908,12 @@ function App() {
   if (view === "article" && activeArticle) body = <ArticleScreen article={activeArticle} onBack={viewBack.article} isPremium={isPremium} onPremium={() => setPremiumOpen(true)} onTag={filterByTag} saved={saved.includes(activeArticle.id)} onToggleSave={() => toggleSave(activeArticle.id)} onShare={() => setShareId(activeArticle.id)} vote={votes["art-" + activeArticle.id] || null} onVote={castVote} />;
   else if (view === "circuit" && circuitId) body = <CircuitScreen circuitId={circuitId} races={races} articles={articles} onBack={viewBack.circuit} onTag={filterByTag} onOpenArticle={openArticle} />;
   else if (view === "adminLock") body = <AdminKeypad onOk={() => { setAdminUnlocked(true); setView("admin"); }} onCancel={viewBack.adminLock} />;
-  else if (view === "admin" && adminUnlocked && Account.isAdmin()) body = <AdminScreen silly={sillyOfficial} onSilly={officialSeat} highlights={highlights} setHighlights={adminSet.highlights} onBack={viewBack.admin} onPublish={publishArticle} articles={articles} setArticles={adminSet.articles} fantaStats={fantaStats} setFantaStats={adminSet.fantaStats} standings={standings} setStandings={adminSet.standings} races={races} setRaces={adminSet.races} extraRaces={racesDoc.extra} setExtraRaces={adminSet.extraRaces} ig={ig} setIg={adminSet.ig} sentNotifs={sentNotifs} onSendNotif={sendNotif} onDeleteNotif={deleteNotif} onToast={showToast} tab={adminTab} setTab={setAdminTab} chats={chats} reports={reports} banned={banned} onDeleteMsg={deleteChatMsg} onSuspend={suspendUser} onUnsuspend={unsuspendUser} onIgnoreReport={ignoreReport} liveProps={liveProps} polls={allPolls} votes={votes} onPollAnswer={setPollAnswer} predictions={predictions} setPredictions={adminSet.predictions} predAnswers={predAnswers} />;
+  else if (view === "admin" && adminUnlocked && Account.isAdmin()) body = <AdminScreen photos={commonsPhotos} setPhotos={adminSet.commonsPhotos} silly={sillyOfficial} onSilly={officialSeat} highlights={highlights} setHighlights={adminSet.highlights} onBack={viewBack.admin} onPublish={publishArticle} articles={articles} setArticles={adminSet.articles} fantaStats={fantaStats} setFantaStats={adminSet.fantaStats} standings={standings} setStandings={adminSet.standings} races={races} setRaces={adminSet.races} extraRaces={racesDoc.extra} setExtraRaces={adminSet.extraRaces} ig={ig} setIg={adminSet.ig} sentNotifs={sentNotifs} onSendNotif={sendNotif} onDeleteNotif={deleteNotif} onToast={showToast} tab={adminTab} setTab={setAdminTab} chats={chats} reports={reports} banned={banned} onDeleteMsg={deleteChatMsg} onSuspend={suspendUser} onUnsuspend={unsuspendUser} onIgnoreReport={ignoreReport} liveProps={liveProps} polls={allPolls} votes={votes} onPollAnswer={setPollAnswer} predictions={predictions} setPredictions={adminSet.predictions} predAnswers={predAnswers} />;
   else if (view === "chatThread" && activeChat) body = <ChatThreadScreen chat={activeChat} onBack={viewBack.chatThread} onSend={guest ? () => needLogin("Per scrivere in chat serve un account.") : sendMessage} isPremium={isPremium} blocked={blocked} onReport={guest ? () => needLogin("Per segnalare un messaggio serve un account.") : reportMessage} onBlock={blockUser} liveRace={races.find(r => r.status === "LIVE") || null} />;
   else if (view === "instagram") body = <InstagramView ig={ig} onToast={showToast} onBack={viewBack.instagram} />;
   else if (view === "ghost") body = <GhostLap onBack={viewBack.ghost} />;
   else if (view === "chats") body = <ChatsView chats={chats} onOpen={openChat} blocked={blocked} onBack={viewBack.chats} unreadOf={(id, ms) => Chat.unread(id, ms)} />;
-  else if (view === "profilo") body = <ProfiloScreen ig={ig} onOpenIg={() => { setIgFrom("profilo"); setView("instagram"); }} aboutMe={aboutMe} onSaveAboutMe={a => Account.updateAbout(a).catch(e => showToast(e && (e.code === "too-young" || e.code === "not-loaded") ? messageOf(e) : NOT_SAVED))} account={account} onSaveName={n => Account.updateName(n)} isAdmin={Account.isAdmin()} trial={trialActive ? trial : null} trialUsed={!!trial} onBack={viewBack.profilo} onNotifiche={() => setView("notifiche")} onPremium={() => setPremiumOpen(true)} onAdmin={() => guest ? needLogin("Accedi per usare il pannello admin.") : setView(adminUnlocked ? "admin" : "adminLock")} onLogout={logout} isPremium={isPremium} onAbout={() => setInfoModal({ title: "Info su B&T", body: ABOUT_TEXT })} onFeedback={() => setFeedbackOpen(true)} onHelp={() => setInfoModal({ title: "Assistenza", body: HELP_TEXT })} favTeam={favTeam} favDriver={favDriver} onPickTeam={() => guest ? needLogin("Per scegliere scuderia e pilota del cuore serve un account.") : setPicker("team")} onPickDriver={() => guest ? needLogin("Per scegliere scuderia e pilota del cuore serve un account.") : setPicker("driver")} guest={guest} onLogin={() => needLogin(null)} onTerms={() => setTermsOpen(true)} blocked={blocked} onUnblock={unblockUser} onDeleteAccount={deleteAccount} savedCount={saved.length} onOpenSaved={openSaved} onTheme={() => setThemeOpen(true)} helmet={helmet} onHelmet={() => setHelmetOpen(true)}
+  else if (view === "profilo") body = <ProfiloScreen ig={ig} onOpenIg={() => { setIgFrom("profilo"); setView("instagram"); }} aboutMe={aboutMe} onSaveAboutMe={a => Account.updateAbout(a).catch(e => showToast(e && (e.code === "too-young" || e.code === "not-loaded") ? messageOf(e) : NOT_SAVED))} account={account} onSaveName={n => Account.updateName(n)} isAdmin={Account.isAdmin()} trial={trialActive ? trial : null} trialUsed={!!trial} onBack={viewBack.profilo} onNotifiche={() => setView("notifiche")} onPremium={() => setPremiumOpen(true)} onAdmin={() => guest ? needLogin("Accedi per usare il pannello admin.") : setView(adminUnlocked ? "admin" : "adminLock")} onLogout={logout} isPremium={isPremium} onAbout={() => setInfoModal({ title: "Info su B&T", body: ABOUT_TEXT, credits: true })} onFeedback={() => setFeedbackOpen(true)} onHelp={() => setInfoModal({ title: "Assistenza", body: HELP_TEXT })} favTeam={favTeam} favDriver={favDriver} onPickTeam={() => guest ? needLogin("Per scegliere scuderia e pilota del cuore serve un account.") : setPicker("team")} onPickDriver={() => guest ? needLogin("Per scegliere scuderia e pilota del cuore serve un account.") : setPicker("driver")} guest={guest} onLogin={() => needLogin(null)} onTerms={() => setTermsOpen(true)} blocked={blocked} onUnblock={unblockUser} onDeleteAccount={deleteAccount} savedCount={saved.length} onOpenSaved={openSaved} onTheme={() => setThemeOpen(true)} helmet={helmet} onHelmet={() => setHelmetOpen(true)}
     sounds={sounds} haptics={haptics} onSounds={v => { if (userDataWait()) return; setSounds(v); fx.setSounds(v); if (v) fx.play("tick"); }} onHaptics={v => { if (userDataWait()) return; setHaptics(v); fx.setHaptics(v); if (v) fx.buzz("light"); }} />;
   else if (view === "notifiche") body = <NotificheScreen offline={offline} onBack={viewBack.notifiche} onAction={a => { if (a === "feedback") { if (feedbackAsk && !feedbackAsk.read) saveAsk({ ...feedbackAsk, read: true }); setFeedbackOpen(true); } }} notifs={notifs} onReadAll={readAll} isPremium={isPremium} onPremium={() => setPremiumOpen(true)} favTeam={favTeam} favDriver={favDriver} prefs={notifPrefs} onPrefs={v => { if (!userDataWait()) setNotifPrefs(v); }} onGoProfilo={() => setView("profilo")} />;
   else {
@@ -8795,7 +8948,7 @@ function App() {
         {ssOpen && isPremium && <SecondScreen chat={chats.find(c => c.id === "generale")} blocked={blocked} onChatSend={guest ? () => needLogin("Per scrivere in chat serve un account.") : t => sendMessage("generale", t)} race={live ? races.find(r => r.id === live.raceId) : (races.find(r => r.status === "IN ARRIVO") || null)} live={live} st={liveSt} standings={standings} layout={ssLayout} setLayout={setSsLayout} prefs={ssPrefs} setPrefs={setSsPrefs} vote={live ? votesNow.dotd[live.raceId] || {} : {}} onVote={(k, id) => live && voteDotd(live.raceId, k, id)} notice={notice} onCloseNotice={nextNotice} onClose={() => setSsOpen(false)} />}
         {lapList && live && liveSt && <LapTimesModal live={live} st={liveSt} carId={lapList} onOpenLap={n => setTelemetry({ carId: lapList, lapNo: n, sector: 0 })} onClose={() => setLapList(null)} />}
         {telemetry && live && liveSt && <TelemetryModal live={live} st={liveSt} carId={telemetry.carId} lapNo={telemetry.lapNo} sector={telemetry.sector} onClose={() => setTelemetry(null)} />}
-        {infoModal && <InfoModal title={infoModal.title} body={infoModal.body} onClose={() => setInfoModal(null)} />}
+        {infoModal && <InfoModal title={infoModal.title} body={infoModal.body} extra={infoModal.credits ? <CommonsCredits /> : null} onClose={() => setInfoModal(null)} />}
         {helmetOpen && <HelmetEditor helmet={helmet} onSave={v => { if (!userDataWait()) setHelmet(v); }} onClose={() => setHelmetOpen(false)} />}
         {themeOpen && <ThemeSheet theme={theme} favTeam={favTeam} onPick={v => { if (!userDataWait()) setTheme(v); }} onClose={() => setThemeOpen(false)} />}
         {picker === "team" && <PickerModal title="SCUDERIA DEL CUORE" selected={favTeam} onPick={v => { if (!userDataWait()) setFavTeam(v); }} onClose={() => setPicker(null)}

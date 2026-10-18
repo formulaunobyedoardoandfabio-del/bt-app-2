@@ -16,6 +16,9 @@ const F1 = require("../data/f1-2026");
 const isObj = v => v && typeof v === "object" && !Array.isArray(v);
 const list = v => (Array.isArray(v) ? v.filter(isObj) : []);
 const obj = v => (isObj(v) ? v : {});
+// Foto di Commons scelte dall'admin (G30): { drivers, cars, logos } con solo nomi di file ("File:…").
+const fileMap = v => Object.fromEntries(Object.entries(obj(v)).filter(([, f]) => typeof f === "string" && f));
+const commonsOf = v => ({ drivers: fileMap(obj(v).drivers), cars: fileMap(obj(v).cars), logos: fileMap(obj(v).logos) });
 const clone = v => JSON.parse(JSON.stringify(v));
 const mkErr = (code, message) => Object.assign(new Error(message || code), { code });
 
@@ -57,6 +60,7 @@ const SHARED_DOCS = {
   "bt-home-poll": null,                   // riquadro del sondaggio nascosto
   "bt-fanta-stats": FANTA_DEFAULT,
   "bt-driver-photos": {},
+  "bt-commons-photos": { drivers: {}, cars: {}, logos: {} },   // Tappa 3 (G30): foto di Commons scelte dall'admin
 };
 
 // Ogni contenuto dell'app (nome dello stato della 2.0) → i suoi documenti e le conversioni.
@@ -80,6 +84,7 @@ const KINDS = {
   homePoll: { docs: ["bt-home-poll"], from: d => (isObj(d["bt-home-poll"]) && Array.isArray(d["bt-home-poll"].options) ? d["bt-home-poll"] : null), to: v => ({ "bt-home-poll": isObj(v) ? v : null }) },
   fantaStats: { docs: ["bt-fanta-stats"], from: d => fantaOf(d["bt-fanta-stats"]), to: v => ({ "bt-fanta-stats": fantaOf(v) }) },
   driverPhotos: { docs: ["bt-driver-photos"], from: d => obj(d["bt-driver-photos"]), to: v => ({ "bt-driver-photos": obj(v) }) },
+  commonsPhotos: { docs: ["bt-commons-photos"], from: d => commonsOf(d["bt-commons-photos"]), to: v => ({ "bt-commons-photos": commonsOf(v) }) },
 };
 
 // Dati personali dell'account (users/<email>.app2): ognuno vede e modifica solo i suoi.

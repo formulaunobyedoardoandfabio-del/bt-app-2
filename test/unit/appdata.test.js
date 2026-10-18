@@ -60,6 +60,20 @@ t('documenti di oggi: notizie, gare (stato salvato), classifiche, Instagram e no
   assert.deepStrictEqual(values.notifs.map(n => n.id), ['nt1', 'nt2']);   // come sono salvate: l'app le converte con notifSeenAt
 });
 
+// Tappa 3 (G30): foto di Commons scelte dall'admin; dal documento passano solo nomi di file per pilota e scuderia.
+t('commonsPhotos: di serie vuote; dal documento solo i nomi dei file; si salvano in bt-commons-photos', async () => {
+  const { firebase } = seed({ 'shared/bt-commons-photos': { drivers: { leclerc: 'File:Leclerc.jpg', norris: 7 }, cars: { ferrari: 'File:SF-26.jpg' }, logos: null, altro: 1 } });
+  const A = D.createAppData();
+  const { values } = await A.loadShared(NOW);
+  assert.deepStrictEqual(values.commonsPhotos, { drivers: { leclerc: 'File:Leclerc.jpg' }, cars: { ferrari: 'File:SF-26.jpg' }, logos: {} });
+  assert.deepStrictEqual(D.sharedDefaults(NOW).commonsPhotos, { drivers: {}, cars: {}, logos: {} });
+  await A.saveShared('commonsPhotos', { drivers: { hamilton: 'File:Ham.jpg' }, cars: {}, logos: {} });
+  // Firestore unisce le mappe (merge): le scelte di prima restano accanto a quella nuova.
+  assert.strictEqual(firebase.__fake.doc('shared/bt-commons-photos').drivers.hamilton, 'File:Ham.jpg');
+  const again = await D.createAppData().loadShared(NOW);
+  assert.deepStrictEqual(again.values.commonsPhotos.drivers, { leclerc: 'File:Leclerc.jpg', hamilton: 'File:Ham.jpg' });
+});
+
 t('saveShared("news"): bt-news nel formato di oggi; rilette uguali', async () => {
   const { firebase } = setupWindow();
   const A = D.createAppData();
