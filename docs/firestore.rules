@@ -1,22 +1,18 @@
 rules_version = '2';
-// Regole di Firestore per Sector 4 (B&T App 2.0), fatte sulle regole di Edoardo del 18/10: quello che c'era resta, in
-// più quello che serve alla 2.0. Si incollano in Firebase → Firestore Database → Regole → Pubblica.
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // Check se l'utente è autenticato (ha fatto il login)
     function isAuthenticated() {
       return request.auth != null;
     }
     function hasEmail() {
       return isAuthenticated() && request.auth.token.email != null;
     }
-    // Email dell'accesso in minuscolo (la 2.0 salva i documenti con l'email in minuscolo)
     function myEmail() {
       return request.auth.token.email.lower();
     }
 
-    // Admin: come prima (users/<uid> con isAdmin == true) e come la 2.0 (esiste admins/<email>, senza admin: false)
+    // Admin: users/<uid> con isAdmin == true, oppure admins/<email> (senza admin: false)
     function isAdmin() {
       return isAuthenticated() && (
         (hasEmail() && exists(/databases/$(database)/documents/admins/$(myEmail())) &&
@@ -26,62 +22,53 @@ service cloud.firestore {
       );
     }
 
-    // 1. ADMINS: ognuno può leggere il proprio documento (la 2.0 controlla così se è admin); il resto solo gli admin
+    // 1. ADMINS: ognuno legge il proprio documento; il resto solo gli admin
     match /admins/{email} {
       allow get: if hasEmail() && myEmail() == email;
       allow read, write: if isAdmin();
     }
 
-    // 2. USERS: ognuno legge e modifica il proprio profilo; gli Admin possono gestire tutti.
-    //    La 2.0 chiama il documento con l'email (users/<email>), le versioni di prima con l'uid: valgono tutti e due.
-    //    L'elenco di tutti gli utenti lo vedono solo gli admin (nei profili vecchi c'è ancora la password).
+    // 2. USERS: il proprio profilo (users/<email> nella 2.0, users/<uid> prima); elenco solo agli admin
     match /users/{userId} {
       allow get: if true;
       allow list: if isAdmin();
       allow write: if isAuthenticated() && (request.auth.uid == userId || (hasEmail() && myEmail() == userId) || isAdmin());
     }
 
-    // 3. NEWS, RACES & FANTA: Richiedono l'accesso (login) per la lettura. Solo Admin possono modificarli/scriverli
+    // 3. NEWS, RACES, FANTA
     match /news/{document=**} {
       allow read: if isAuthenticated();
       allow write: if isAdmin();
     }
-
     match /races/{document=**} {
       allow read: if isAuthenticated();
       allow write: if isAdmin();
     }
-
     match /fanta/{document=**} {
       allow read, write: if isAuthenticated();
     }
 
-    // 4. CHAT: Accessibile in lettura e scrittura a tutti gli utenti loggati
+    // 4. CHAT
     match /chat/{document=**} {
       allow read, write: if isAuthenticated();
     }
 
-    // 5. COSTRUTTORI & PILOTI: Pubblici per la lettura (classifiche), modificabili solo dagli Admin
+    // 5. COSTRUTTORI E PILOTI
     match /costruttori/{document=**} {
       allow read: if true;
       allow write: if isAdmin();
     }
-
     match /piloti/{document=**} {
       allow read: if true;
       allow write: if isAdmin();
     }
 
-    // 6. SHARED: lettura per tutti, scrittura degli Admin. In più, nella 2.0:
-    //    - la chat dei tifosi (5 stanze e quella di prima) e le segnalazioni: chi ha fatto il login;
-    //    - i feedback: li crea chiunque con la propria email o "anonimo"; li cancella solo chi li ha scritti.
+    // 6. SHARED: lettura per tutti; scrivono gli admin; chat, segnalazioni e feedback della 2.0 anche gli utenti
     match /shared/{doc} {
       allow read: if true;
       allow write: if isAdmin();
-      allow write: if isAuthenticated() && doc in ['bt-chat-generale', 'bt-chat-live-gara', 'bt-chat-fantaf1-talk',
-        'bt-chat-boxradio', 'bt-chat-paddocktalk', 'bt-chat', 'bt-chat-reports'];
-      allow create: if doc.matches('bt-feedback-.*')
-        && (request.resource.data.user == 'anonimo' || (hasEmail() && request.resource.data.user == myEmail()));
+      allow write: if isAuthenticated() && doc in ['bt-chat-generale', 'bt-chat-live-gara', 'bt-chat-fantaf1-talk', 'bt-chat-boxradio', 'bt-chat-paddocktalk', 'bt-chat', 'bt-chat-reports'];
+      allow create: if doc.matches('bt-feedback-.*') && (request.resource.data.user == 'anonimo' || (hasEmail() && request.resource.data.user == myEmail()));
       allow delete: if doc.matches('bt-feedback-.*') && hasEmail() && resource.data.user == myEmail();
     }
     match /shared/{doc}/{rest=**} {
@@ -89,6 +76,7 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
 
+    // 7. RESETS
     match /resets/{document=**} {
       allow read, write: if isAuthenticated();
     }
