@@ -281,6 +281,21 @@ run({
   // 11/10: sul telefono di Edoardo (largo circa 540 px) la chat e le altre pagine avevano due bande nere ai lati:
   // la colonna dell'app era larga al massimo 430 px. Ora riempie lo schermo del telefono; solo sul computer (sito)
   // resta una colonna al centro.
+  // 18/10: in una stanza della chat con messaggi corti la colonna dell'app si stringeva alla larghezza dei messaggi
+  // (bande nere ai lati, anche sul telefono da 390 px): #root si adattava al contenuto.
+  async 'chat con messaggi corti: l\'app resta larga quanto lo schermo (390 e 540 px)'(b) {
+    const ROOM = { 'shared/bt-chat-generale': { __arr: [{ id: 'k1', user: 'Fabio', aid: 'u_fabio', txt: 'ok', t: Date.parse('2026-10-07T09:00:00Z') }] } };
+    const got = [];
+    for (const width of [390, 540]) {
+      const o = await open(b, { width, height: 900, seed: { addDocs: ROOM } }); await login(o.p);
+      await goTab(o.p, 'RACE'); await tapSel(o.p, '[data-race-chat]'); await w(o.p, 500); await tapText(o.p, 'Chat Generale'); await w(o.p, 600);
+      got.push(await o.p.evaluate(() => { const r = document.querySelector('#phone-shell').getBoundingClientRect(); return { left: r.left, width: r.width, vw: innerWidth }; }));
+      assert(!o.errs.length, o.errs.join(' | '));
+      await o.ctx.close();
+    }
+    got.forEach(g => assert(g.left === 0 && g.width === g.vw, 'nella chat l\'app non riempie lo schermo: ' + JSON.stringify(got)));
+  },
+
   async 'telefono largo 540 px: l\'app occupa tutto lo schermo, senza bande nere ai lati; sul computer una colonna'(b) {
     const a = await open(b, { width: 540, height: 1170 }); await login(a.p);
     await tapText(a.p, 'Chat dei tifosi').catch(() => {}); await w(a.p, 400);

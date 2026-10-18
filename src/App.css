@@ -24,6 +24,9 @@
   html, body{ overflow-x:hidden; }
   /* Colonna dell'app alta quanto lo schermo: sul telefono larga quanto lo schermo (11/10: con 430 px al massimo i
      telefoni larghi avevano due bande nere ai lati), sul computer una colonna di 600 px al centro. */
+  /* #root largo quanto lo schermo: altrimenti, come elemento del flex di body, si stringeva al contenuto (18/10: nella
+     chat con messaggi corti l'app era larga 289 px, con bande nere ai lati). */
+  #root{ width:100%; display:flex; justify-content:center; }
   #phone-shell{
     width:100%;
     min-width:0;
