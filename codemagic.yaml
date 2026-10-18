@@ -75,7 +75,7 @@ workflows:
       - name: Versione Play Store senza loghi delle scuderie
         script: |
           set -e
-          sed -i 's/SHOW_TEAM_LOGOS: true/SHOW_TEAM_LOGOS: false/' src/data/commons-candidates.js
+          node -e "const fs=require('fs'),f='src/data/commons-candidates.js';fs.writeFileSync(f,fs.readFileSync(f,'utf8').replace('SHOW_TEAM_LOGOS: true','SHOW_TEAM_LOGOS: false'))"
           grep -q "SHOW_TEAM_LOGOS: false" src/data/commons-candidates.js
       - *build_web
       - *capacitor
