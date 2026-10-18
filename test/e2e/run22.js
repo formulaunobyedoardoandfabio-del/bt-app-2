@@ -99,8 +99,10 @@ const tests = {
     assert(/Formula1\.com/.test(t) && /Brembo/.test(t), 'mancano le fonti');
     assert(!errs.length, errs.join(' | '));
   },
+  // 18/10 (Edoardo): il Ghost Lap si vede solo dopo le qualifiche di quel GP: per vedere Sepang l'orologio va dopo il
+  // 3/10 (prima, il 30/9, ci sono le qualifiche di Baku).
   async 'ghost lap: di serie le qualifiche più recenti (oggi a Sepang), e si passa a Baku'(b) {
-    const { ctx, p, errs } = await open(b); await login(p); await goTab(p, 'RACE');
+    const { ctx, p, errs } = await open(b, { now: '2026-10-05T11:48:00Z' }); await login(p); await goTab(p, 'RACE');
     const card = await inner(p, '[data-ghost-open]');
     await tapSel(p, '[data-ghost-open]'); await w(p, 500);
     const t1 = await inner(p, '[data-ghost]');

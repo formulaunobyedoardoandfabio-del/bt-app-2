@@ -92,6 +92,7 @@ const tests = {
   },
   async 'pagelle: anche per l\'ultima gara (Baku), con un radar per ogni pilota'(b) {
     const { ctx, p, errs } = await open(b); await login(p); await goTab(p, 'RACE');
+    await tapSel(p, '[data-race-tab="classifica"]'); await w(p, 300);   // 18/10: l'ultima gara ha la sua scheda
     const t = await inner(p, '[data-ratings]');
     const pick = async id => { await tapSel(p, `[data-ratings] [data-rating-driver="${id}"]`); await w(p, 200); return { sel: await p.evaluate(() => { const e = document.querySelector('[data-ratings] [data-rating-driver][aria-pressed="true"]'); return e && e.getAttribute('data-rating-driver'); }), name: await inner(p, '[data-ratings] [data-radar-name]'), luck: await paramVal(p, 'fortuna') }; };
     const rus = await pick('russell'), nor = await pick('norris');
