@@ -382,14 +382,12 @@ const tests = {
     assert(/\d+ km\/h/.test(a) && /Marcia/i.test(a) && /Gas/i.test(a) && /Freno/i.test(a), 'nella telemetria mancano velocità, marcia, gas o freno: ' + a);
     assert(code(a) && code(b2) && code(a) !== code(b2), `il pilota non cambia (${code(a)} → ${code(b2)})`);
   },
-  async 'second screen: senza Premium chiede di abbonarsi; senza diretta mostra la prossima gara'(b) {
+  // 18/10 (Edoardo): il Second Screen non è più Premium: si apre per tutti.
+  async 'second screen: si apre anche senza Premium; senza diretta mostra la prossima gara'(b) {
     const { ctx, p } = await open(b); await login(p); await goRace(p);
-    await tapText(p, 'Modalità Second Screen'); await w(p, 400);
-    const t = await text(p);
-    await tapSel(p, '[aria-label="Chiudi"]'); await w(p, 300);
-    await premiumTrial(p); await goRace(p); await tapText(p, 'Modalità Second Screen'); await w(p, 500);
+    await tapText(p, 'Modalità Second Screen'); await w(p, 500);
     const r = await stageInfo(p); const t2 = norm(await text(p)); await ctx.close();
-    assert(/PROVA GRATIS/.test(t), 'senza Premium il Second Screen non chiede di abbonarsi');
+    assert(!/PROVA GRATIS/.test(t2), 'senza Premium il Second Screen chiede ancora di abbonarsi');
     assert(r && r.map && /Nessuna sessione in corso/.test(t2), 'senza diretta non si vede la mappa della prossima gara');
   },
   // ── Premium: prova gratuita di 2 settimane ────────────────────────────
