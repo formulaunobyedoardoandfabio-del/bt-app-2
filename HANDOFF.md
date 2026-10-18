@@ -35,6 +35,17 @@ Token di Edoardo al 75%: prima le cose importanti e veloci.
   con Google (Firebase: provider Google, SHA-1/SHA-256 delle chiavi, google-services.json per com.bt.app); Apple no
   (serve l'Apple Developer Program a pagamento). Revisione finale con un revisore nuovo: rimandata (token).
 
+## Richieste del 18/10 sera (22:20), NON iniziate (token di Edoardo al 93%: niente codice a metà)
+Ordine consigliato per la prossima sessione:
+1. Registrazione: togliere la casella "Ho almeno 14 anni"; manettino dell'anno che funzioni meglio e parta dall'anno
+   minimo consentito (anno di oggi meno 14); il controllo dell'età resta sull'anno scelto.
+2. Mostra/nascondi password "in stile F1" (es. visiera del casco che si alza).
+3. Feedback tattili (vibrazioni) dove mancano.
+4. Ogni pagina: stati di caricamento, riuscito, errore e vuoto (controllo pagina per pagina).
+5. Grafiche come nella foto di Edoardo (la foto non è arrivata: va rimandata).
+6. "Non scollegarti offline": già fatto nell'APK del 18/10 alle 17:40 (ultimo account ricordato); se succede ancora
+   servono i passi esatti.
+
 ## Next action
 Task 20: `JOBS=1 bash test/all.sh` in una copia separata (`/home/claude/bt-t3-suite`), screenshot delle pagine nuove,
 revisione dell'intero ramo con un revisore nuovo (pacchetto con review-package), una sola passata di correzioni,
