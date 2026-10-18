@@ -1,0 +1,48 @@
+rules_version = '2';
+// Regole di Firestore per Sector 4 (B&T App 2.0). Si incollano in Firebase → Firestore Database → Regole → Pubblica.
+// Da quel momento l'app vecchia (senza Authentication) non può più scrivere: registrazione, chat e Pannello Admin
+// funzionano solo con l'app nuova.
+// - Ognuno legge e modifica solo il proprio account (users/<email>); l'email è quella dell'accesso, in minuscolo.
+// - Notizie, gare, classifiche, notifiche, foto, sospensioni della chat e tutto il resto di shared/ li modifica solo
+//   l'admin: chi ha un documento in admins/<email> (lo crea Edoardo nella console).
+// - Chat (5 stanze), segnalazioni e feedback li scrive chi usa l'app.
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() { return request.auth != null && request.auth.token.email != null; }
+    function me() { return request.auth.token.email.lower(); }
+    function isAdmin() { return signedIn() && exists(/databases/$(database)/documents/admins/$(me())); }
+
+    // Admin: lo legge solo il proprietario; dall'app non si scrive.
+    match /admins/{email} {
+      allow get: if signedIn() && me() == email;
+      allow list, write: if false;
+    }
+
+    // Account. "get" è aperto finché dura il passaggio degli account dall'app vecchia (all'accesso si legge il profilo
+    // prima di entrare). Quando tutti sono passati, per chiuderlo: allow get: if signedIn() && me() == email;
+    match /users/{email} {
+      allow get: if true;
+      allow list: if false;
+      allow create, update, delete: if signedIn() && me() == email;
+    }
+
+    // Richieste di password dell'app vecchia: nessuno le legge; chi elimina il proprio account cancella la sua.
+    match /resets/{email} {
+      allow read, create, update: if false;
+      allow delete: if signedIn() && me() == email;
+    }
+
+    match /shared/{doc} {
+      allow read: if true;
+      // Chat dei tifosi (5 stanze, la chat dell'app vecchia) e segnalazioni: chi ha fatto l'accesso.
+      allow write: if signedIn() && doc in ['bt-chat-generale', 'bt-chat-live-gara', 'bt-chat-fantaf1-talk',
+        'bt-chat-boxradio', 'bt-chat-paddocktalk', 'bt-chat', 'bt-chat-reports'];
+      // Feedback: lo crea chiunque con la propria email o "anonimo"; lo cancella solo chi l'ha scritto.
+      allow create: if doc.matches('bt-feedback-.*')
+        && (request.resource.data.user == 'anonimo' || (signedIn() && request.resource.data.user == me()));
+      allow delete: if doc.matches('bt-feedback-.*') && signedIn() && resource.data.user == me();
+      // Tutto il resto: solo l'admin.
+      allow write: if isAdmin();
+    }
+  }
+}
