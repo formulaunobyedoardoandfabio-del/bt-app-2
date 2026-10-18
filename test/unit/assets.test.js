@@ -79,7 +79,8 @@ t('sfondo dell\'icona adattiva nero (scripts/prepare_android.py)', () => {
 t('nome dell\'app "Sector 4": capacitor.config.json (nome sul telefono) e public/index.html', () => {
   const cfg = JSON.parse(fs.readFileSync(path.join(ROOT, 'capacitor.config.json'), 'utf8'));
   assert.strictEqual(cfg.appName, 'Sector 4');
-  assert.strictEqual(cfg.appId, 'it.btapp.app', 'l\'appId non si cambia');
+  // 18/10: la Play Console vuole il pacchetto com.bt.app (richiesta di Edoardo).
+  assert.strictEqual(cfg.appId, 'com.bt.app', 'appId per il Play Store');
   const html = fs.readFileSync(path.join(ROOT, 'public', 'index.html'), 'utf8');
   assert.ok(/<title>Sector 4<\/title>/.test(html), 'titolo della pagina');
   assert.ok(!/B&amp;T App|B&T App/.test(html), 'in public/index.html c\'è ancora "B&T App"');
