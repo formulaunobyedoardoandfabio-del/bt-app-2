@@ -7,6 +7,7 @@
 - con BT_ADMOB_TEST=1 (solo "B&T - APK di prova") accende gli annunci di prova di Google
 """
 import os
+import time
 import re
 import shutil
 import sys
@@ -70,6 +71,9 @@ if "com.google.android.gms.ads.APPLICATION_ID" not in manifest:
 
 gradle = open(GRADLE).read()
 build_number = os.environ.get("BUILD_NUMBER")
+if os.environ.get("CM_KEYSTORE_PATH"):
+    # AAB per il Play Store: codice che cresce sempre (minuti dal 1/1/2020), più alto di quelli già caricati
+    build_number = str(int((time.time() - 1577836800) // 60))
 if build_number and build_number.isdigit():
     gradle = re.sub(r"versionCode\s+\d+", f"versionCode {int(build_number)}", gradle)
     print(f"versionCode = {build_number}")
