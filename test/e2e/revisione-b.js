@@ -159,7 +159,7 @@ run({
   async 'I2: gli script di Firebase non arrivano: ACCEDI dice "Errore di connessione" invece di restare grigio'(b) {
     const { ctx, p, errs } = await open(b, { query: '?nofake', waitSplash: false, waitUntil: 'domcontentloaded', routes: { 'https://www.gstatic.com/**': () => {} } });
     await p.waitForFunction(() => !document.querySelector('[data-splash]') && !!document.querySelector('#authEmail'), null, { timeout: 25000 });
-    await p.fill('#authEmail', 'a@b.it'); await p.fill('#authPw', 'abcdef');
+    await p.fill('#authEmail', 'a@b.it'); await p.fill('#authPw', 'abcdef12');
     await p.evaluate(() => { const bs = [...document.querySelectorAll('button')].filter(b => b.textContent.trim() === 'ACCEDI'); bs[bs.length - 1].click(); });
     const ok = await p.waitForFunction(() => /Errore di connessione, riprova tra poco/.test(document.body.innerText), null, { timeout: 40000 }).then(() => true, () => false);
     const scripts = await p.evaluate(() => document.querySelectorAll('script[src*="gstatic"]').length); await ctx.close();

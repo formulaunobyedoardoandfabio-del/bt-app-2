@@ -69,7 +69,7 @@ run({
   async 'il controllo dei 14 anni resta'(b) {
     const { ctx, p, errs } = await open(b);
     await tapText(p, 'REGISTRATI', { exact: true }); await w(p, 300);
-    await p.fill('#regName', 'Piccolo'); await p.fill('#authEmail', 'piccolo@b.it'); await p.fill('#authPw', 'abcdef'); await p.fill('#regPw2', 'abcdef');
+    await p.fill('#regName', 'Piccolo'); await p.fill('#authEmail', 'piccolo@b.it'); await p.fill('#authPw', 'abcdef12'); await p.fill('#regPw2', 'abcdef12');
     await keys(p, '#regBirth', ['End', 'ArrowDown']);   // 2015
     const k = await knob(p, '#regBirth');
     await tapSel(p, '[data-fan-option="vivo"]'); await p.check('#regAdult');

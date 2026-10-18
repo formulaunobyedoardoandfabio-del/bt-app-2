@@ -35,11 +35,11 @@ run({
     const { ctx, p, errs } = await open(b, { init: VIB });
     await tapText(p, 'REGISTRATI', { exact: true }); await w(p, 300);
     await p.fill('#regName', 'Gino'); await p.fill('#authEmail', 'g@b.it');
-    await p.fill('#authPw', 'abcdef'); await p.fill('#regPw2', 'abc'); await w(p, 200);
+    await p.fill('#authPw', 'abcdef12'); await p.fill('#regPw2', 'abc'); await w(p, 200);
     const typing = await p.evaluate(() => ({ kerb: document.querySelectorAll('[data-kerb]').length, t: document.body.innerText }));
-    await p.fill('#regPw2', 'abcdeg'); await w(p, 200);
+    await p.fill('#regPw2', 'abcdeg12'); await w(p, 200);
     const wrong = await p.evaluate(() => { const k = document.querySelector('[data-kerb]'); return { kerb: !!k, bg: k ? getComputedStyle(k).backgroundImage : '', hasField: !!(k && k.querySelector('#regPw2')), focus: document.activeElement && document.activeElement.id, t: document.body.innerText }; });
-    await p.fill('#regPw2', 'abcdef'); await w(p, 200);
+    await p.fill('#regPw2', 'abcdef12'); await w(p, 200);
     const fixed = await p.evaluate(() => ({ kerb: document.querySelectorAll('[data-kerb]').length, t: document.body.innerText }));
     await ctx.close();
     const MSG = 'Track Limits Exceeded: le password non coincidono';

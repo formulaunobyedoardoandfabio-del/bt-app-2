@@ -190,14 +190,14 @@ run({
   async 'eliminazione account: spariscono anche i feedback'(b) {
     const { ctx, p, errs } = await open(b);
     await tapText(p, 'REGISTRATI', { exact: true }); await w(p, 300);
-    await p.fill('#regName', 'Fabio'); await p.fill('#authEmail', 'fabio@b.it'); await p.fill('#authPw', 'abcdef'); await p.fill('#regPw2', 'abcdef');
+    await p.fill('#regName', 'Fabio'); await p.fill('#authEmail', 'fabio@b.it'); await p.fill('#authPw', 'abcdef12'); await p.fill('#regPw2', 'abcdef12');
     await tapSel(p, '[data-fan-option="vivo"]'); await p.check('#regAdult'); await tapText(p, 'CREA ACCOUNT', { exact: true }); await w(p, 1500);
     await openFeedback(p);
     await tapSel(p, '[data-feedback-star="5"]'); await tapText(p, 'INVIA FEEDBACK'); await w(p, 2500);
     const before = Object.values(await docs(p)).filter(d => d && d.user === 'fabio@b.it' && d.stars).length;
     await tapText(p, 'Elimina account'); await w(p, 300);
     const warn = await text(p);
-    await p.fill('#delPw', 'abcdef'); await tapText(p, 'ELIMINA DEFINITIVAMENTE'); await w(p, 1500);
+    await p.fill('#delPw', 'abcdef12'); await tapText(p, 'ELIMINA DEFINITIVAMENTE'); await w(p, 1500);
     const after = Object.keys(await docs(p)).filter(k => /^shared\/bt-feedback-/.test(k)); await ctx.close();
     assert(/le segnalazioni e i feedback che hai inviato/.test(warn), 'la conferma non dice che si cancellano anche i feedback');
     assert(before === 1, 'feedback non salvato prima dell\'eliminazione');

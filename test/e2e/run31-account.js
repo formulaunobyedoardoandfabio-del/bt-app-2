@@ -6,7 +6,7 @@ const { open, w, text, inner, tapText, tapSel, goTab, login, assert, run } = req
 const doc = (p, path) => p.evaluate(x => window.firebase.__fake.doc(x), path);
 const authState = p => p.evaluate(() => window.firebase.__fake.authState());
 // adult: la casella "Ho almeno 14 anni" (Task 22), spuntata di serie.
-async function register(p, { name = 'Fabio', email = 'fabio@b.it', pw = 'abcdef', birth = null, steps = 0, fan = 'vivo', adult = true } = {}) {
+async function register(p, { name = 'Fabio', email = 'fabio@b.it', pw = 'abcdef12', birth = null, steps = 0, fan = 'vivo', adult = true } = {}) {
   await tapText(p, 'REGISTRATI', { exact: true }); await w(p, 300);
   await p.fill('#regName', name); await p.fill('#authEmail', email); await p.fill('#authPw', pw); await p.fill('#regPw2', pw);
   // Tappa 3 (G16-G17): l'anno col manettino (il primo scatto porta al 2000) e gli anni col contachilometri (parte da 1).
@@ -92,10 +92,10 @@ run({
     await tapText(p, 'Elimina account'); await w(p, 300);
     await tapText(p, 'ELIMINA DEFINITIVAMENTE'); await w(p, 400);
     const ask = await text(p);
-    await p.fill('#delPw', 'abcdef');
+    await p.fill('#delPw', 'abcdef12');
     await tapText(p, 'ELIMINA DEFINITIVAMENTE'); await w(p, 1200);
     const after = await text(p), user = await doc(p, 'users/fabio@b.it'), auth = await authState(p);
-    await login(p, { email: 'fabio@b.it', pw: 'abcdef' });
+    await login(p, { email: 'fabio@b.it', pw: 'abcdef12' });
     const again = await text(p); await ctx.close();
     assert(/Per eliminare l'account scrivi la tua password/.test(ask), 'senza password non deve cancellare: ' + ask.slice(0, 200));
     assert(/ENTRA SENZA ACCOUNT/.test(after), 'dopo l\'eliminazione non torna alla schermata di accesso');

@@ -3,7 +3,7 @@
 const assert = require('assert');
 const { setupWindow } = require('./node-window');
 const F = require('../../src/services/firebase');
-const { createAccount, MESSAGES, messageOf } = require('../../src/services/account');
+const { createAccount, MESSAGES, messageOf, pwStrength } = require('../../src/services/account');
 
 let pass = 0, fail = 0;
 const tests = [];
@@ -39,7 +39,7 @@ t('password sbagliata: wrong-password e nessun passaggio; email sconosciuta: not
   await assert.rejects(A.login('v@b.it', 'no'), e => e.code === 'wrong-password');
   assert.strictEqual(c.auth().users['v@b.it'], undefined);
   assert.strictEqual(c.fs('users/v@b.it').pw, 'segreta');
-  await assert.rejects(A.login('nessuno@b.it', 'abcdef'), e => e.code === 'not-found');
+  await assert.rejects(A.login('nessuno@b.it', 'abcdef12'), e => e.code === 'not-found');
   await assert.rejects(A.login('a@b.it', 'sbagliata'), e => e.code === 'wrong-password');   // già in Authentication
   await assert.rejects(A.login('', 'x'), e => e.code === 'empty');
   await assert.rejects(A.login('edo@', 'x'), e => e.code === 'invalid-email');
@@ -50,24 +50,24 @@ t('password sbagliata: wrong-password e nessun passaggio; email sconosciuta: not
 t('iscrizione: senza "Ho almeno 14 anni" o con meno di 14 anni non si crea l\'account', async () => {
   const c = ctx();
   const A = make();
-  await assert.rejects(A.register({ name: 'Fabio', email: 'f@b.it', pw: 'abcdef', pw2: 'abcdef', about: {} }), e => e.code === 'need-age');
-  await assert.rejects(A.register({ name: 'Fabio', email: 'f@b.it', pw: 'abcdef', pw2: 'abcdef', about: { birth: 2015 }, adult: true }), e => e.code === 'too-young');
+  await assert.rejects(A.register({ name: 'Fabio', email: 'f@b.it', pw: 'abcdef12', pw2: 'abcdef12', about: {} }), e => e.code === 'need-age');
+  await assert.rejects(A.register({ name: 'Fabio', email: 'f@b.it', pw: 'abcdef12', pw2: 'abcdef12', about: { birth: 2015 }, adult: true }), e => e.code === 'too-young');
   assert.strictEqual(c.fs('users/f@b.it'), undefined, 'account creato lo stesso');
   assert.ok(!c.auth().users['f@b.it'], 'account Authentication creato lo stesso');
   assert.strictEqual(MESSAGES['need-age'], 'Conferma di avere almeno 14 anni.');
   assert.strictEqual(MESSAGES['too-young'], 'Per iscriverti a Sector 4 devi avere almeno 14 anni.');
-  const u = await A.register({ name: 'Fabio', email: 'f@b.it', pw: 'abcdef', pw2: 'abcdef', about: { birth: 2012 }, adult: true });   // 14 anni nel 2026
+  const u = await A.register({ name: 'Fabio', email: 'f@b.it', pw: 'abcdef12', pw2: 'abcdef12', about: { birth: 2012 }, adult: true });   // 14 anni nel 2026
   assert.strictEqual(u.email, 'f@b.it');
 });
 
-t('registrazione: About you salvato, niente pw, almeno 6 caratteri', async () => {
+t('registrazione: About you salvato, niente pw, password robusta (8 caratteri, lettere e numeri)', async () => {
   const c = ctx();
   const A = make();
   await assert.rejects(A.register({ name: 'F', email: 'f@b.it', pw: '123', pw2: '123', about: {} }), e => e.code === 'weak');
-  await assert.rejects(A.register({ name: 'F', email: 'f@b.it', pw: 'abcdef', pw2: 'abcdeg', about: {} }), e => e.code === 'mismatch');
-  await assert.rejects(A.register({ name: '', email: 'f@b.it', pw: 'abcdef', pw2: 'abcdef', about: {}, adult: true }), e => e.code === 'empty');
-  await assert.rejects(A.register({ name: 'Doppio', email: 'a@b.it', pw: 'abcdef', pw2: 'abcdef', about: {}, adult: true }), e => e.code === 'exists');
-  const u = await A.register({ name: 'Fabio', email: 'F@b.it ', pw: 'abcdef', pw2: 'abcdef', about: { birth: 2001, follow: 3, fan: 'vivo' }, adult: true });
+  await assert.rejects(A.register({ name: 'F', email: 'f@b.it', pw: 'abcdef12', pw2: 'abcdeg12', about: {} }), e => e.code === 'mismatch');
+  await assert.rejects(A.register({ name: '', email: 'f@b.it', pw: 'abcdef12', pw2: 'abcdef12', about: {}, adult: true }), e => e.code === 'empty');
+  await assert.rejects(A.register({ name: 'Doppio', email: 'a@b.it', pw: 'abcdef12', pw2: 'abcdef12', about: {}, adult: true }), e => e.code === 'exists');
+  const u = await A.register({ name: 'Fabio', email: 'F@b.it ', pw: 'abcdef12', pw2: 'abcdef12', about: { birth: 2001, follow: 3, fan: 'vivo' }, adult: true });
   const doc = c.fs('users/f@b.it');
   assert.deepStrictEqual(doc.about, { birth: 2001, follow: 3, fan: 'vivo' });
   assert.strictEqual(doc.pw, undefined);
@@ -77,7 +77,10 @@ t('registrazione: About you salvato, niente pw, almeno 6 caratteri', async () =>
   assert.ok(doc.ts && doc.uid);
   assert.strictEqual(u.name, 'Fabio');
   assert.strictEqual(A.current().email, 'f@b.it');
-  assert.strictEqual(MESSAGES.weak, 'La password deve avere almeno 6 caratteri');
+  // 18/10: password robusta per gli account nuovi: almeno 8 caratteri, con lettere e numeri.
+  assert.strictEqual(MESSAGES.weak, 'La password deve avere almeno 8 caratteri, con lettere e numeri');
+  for (const pw of ['abcdefgh', '12345678', 'abc1234']) await assert.rejects(A.register({ name: 'F', email: 'w@b.it', pw, pw2: pw, about: {}, adult: true }), e => e.code === 'weak', pw);
+  assert.deepStrictEqual(['', 'abc', 'abcdefgh', 'abcdef12', 'Abcdef12!x'].map(pwStrength), [0, 1, 1, 2, 3]);
   assert.strictEqual(MESSAGES.exists, 'Email già registrata');
   assert.strictEqual(MESSAGES.mismatch, 'Le password non coincidono');
 });
@@ -88,12 +91,12 @@ t('registrazione: profilo che non si salva al primo colpo, si riprova; se non va
   const c = ctx();
   let fails = 1;
   const flaky = async (...a) => { if (fails > 0) { fails--; throw Object.assign(new Error('no'), { code: 'unavailable' }); } return F.dbSet(...a); };
-  const u = await make({ dbSet: flaky }).register({ name: 'Gino', email: 'g@b.it', pw: 'abcdef', pw2: 'abcdef', about: { birth: 2000, follow: 2, fan: 'vivo' }, adult: true });
+  const u = await make({ dbSet: flaky }).register({ name: 'Gino', email: 'g@b.it', pw: 'abcdef12', pw2: 'abcdef12', about: { birth: 2000, follow: 2, fan: 'vivo' }, adult: true });
   assert.strictEqual(u.name, 'Gino');
   assert.strictEqual(c.fs('users/g@b.it').name, 'Gino');
   const deny = async () => { throw Object.assign(new Error('Missing or insufficient permissions.'), { code: 'permission-denied' }); };
   let err = null;
-  try { await make({ dbSet: deny }).register({ name: 'Ugo', email: 'u@b.it', pw: 'abcdef', pw2: 'abcdef', about: {}, adult: true }); } catch (e) { err = e; }
+  try { await make({ dbSet: deny }).register({ name: 'Ugo', email: 'u@b.it', pw: 'abcdef12', pw2: 'abcdef12', about: {}, adult: true }); } catch (e) { err = e; }
   assert.ok(err && err.code === 'offline', 'errore: ' + (err && err.code));
   assert.ok(/permission-denied/.test(messageOf(err)), 'il messaggio deve dire il codice vero: ' + messageOf(err));
   assert.strictEqual(c.auth().users['u@b.it'], undefined, 'senza profilo l\'account Authentication si toglie');
@@ -101,14 +104,14 @@ t('registrazione: profilo che non si salva al primo colpo, si riprova; se non va
 
 t('registrazione con un account di oggi non ancora passato: Email già registrata', async () => {
   ctx({ docs: { 'users/v@b.it': { email: 'v@b.it', name: 'Edo', pw: 'segreta' } } });
-  await assert.rejects(make().register({ name: 'Altro', email: 'v@b.it', pw: 'abcdef', pw2: 'abcdef', about: {}, adult: true }), e => e.code === 'exists');
+  await assert.rejects(make().register({ name: 'Altro', email: 'v@b.it', pw: 'abcdef12', pw2: 'abcdef12', about: {}, adult: true }), e => e.code === 'exists');
 });
 
 t('offline: errore offline e nessun account creato', async () => {
   const c = ctx();
   const A = make();
   c.fake.offline = true;
-  await assert.rejects(A.register({ name: 'X', email: 'x@y.it', pw: 'abcdef', pw2: 'abcdef', about: {}, adult: true }), e => e.code === 'offline');
+  await assert.rejects(A.register({ name: 'X', email: 'x@y.it', pw: 'abcdef12', pw2: 'abcdef12', about: {}, adult: true }), e => e.code === 'offline');
   await assert.rejects(A.login('a@b.it', 'x'), e => e.code === 'offline');
   c.fake.offline = false;
   assert.strictEqual(c.fs('users/x@y.it'), undefined);
@@ -133,10 +136,10 @@ t('password dimenticata di un account non ancora passato: account Authentication
 t('eliminazione: se una pulizia fallisce il profilo resta', async () => {
   const c = ctx();
   const ok = make();
-  await ok.register({ name: 'Fabio', email: 'f@b.it', pw: 'abcdef', pw2: 'abcdef', about: {}, adult: true });
+  await ok.register({ name: 'Fabio', email: 'f@b.it', pw: 'abcdef12', pw2: 'abcdef12', about: {}, adult: true });
   const B = make({ cleanups: [async () => { throw new Error('rete'); }] });
-  await B.login('f@b.it', 'abcdef');
-  await assert.rejects(B.deleteAccount('abcdef'), e => e.code === 'delete-failed');
+  await B.login('f@b.it', 'abcdef12');
+  await assert.rejects(B.deleteAccount('abcdef12'), e => e.code === 'delete-failed');
   assert.ok(c.fs('users/f@b.it'));
   assert.ok(c.auth().users['f@b.it']);
   assert.strictEqual(MESSAGES['delete-failed'], 'Eliminazione non riuscita, controlla la connessione e riprova.');
@@ -146,14 +149,14 @@ t('eliminazione: password chiesta prima di cancellare; poi via profilo, resets, 
   const c = ctx({ requireRecentLogin: true });
   const seen = [];
   const A = make({ cleanups: [async u => { seen.push(u.email); }] });
-  await A.register({ name: 'Fabio', email: 'f@b.it', pw: 'abcdef', pw2: 'abcdef', about: {}, adult: true });
+  await A.register({ name: 'Fabio', email: 'f@b.it', pw: 'abcdef12', pw2: 'abcdef12', about: {}, adult: true });
   c.fake.setDoc('resets/f@b.it', { code: '123456', exp: 1 });
   F.local.set('bt-blocked', [{ aid: 'u1', name: 'Marco' }]);
   F.local.set('bt-chat-seen-bt-chat-generale', 5);
   await assert.rejects(A.deleteAccount(''), e => e.code === 'need-password');
   await assert.rejects(A.deleteAccount('sbagliata'), e => e.code === 'wrong-password');
   assert.ok(c.fs('users/f@b.it'), 'con la password sbagliata non si cancella niente');
-  await A.deleteAccount('abcdef');
+  await A.deleteAccount('abcdef12');
   assert.deepStrictEqual(seen, ['f@b.it']);
   assert.strictEqual(c.fs('users/f@b.it'), undefined);
   assert.strictEqual(c.fs('resets/f@b.it'), undefined);
@@ -161,7 +164,7 @@ t('eliminazione: password chiesta prima di cancellare; poi via profilo, resets, 
   assert.strictEqual(F.local.get('bt-blocked'), null);
   assert.strictEqual(F.local.get('bt-chat-seen-bt-chat-generale'), null);
   assert.strictEqual(A.current(), null);
-  await assert.rejects(A.login('f@b.it', 'abcdef'), e => e.code === 'not-found');
+  await assert.rejects(A.login('f@b.it', 'abcdef12'), e => e.code === 'not-found');
 });
 
 t('accesso con email e password non acceso nella console di Firebase: lo dice (non "errore di connessione")', async () => {
@@ -169,14 +172,14 @@ t('accesso con email e password non acceso nella console di Firebase: lo dice (n
   const off = Object.assign(new Error('off'), { code: 'auth/operation-not-allowed' });
   const A = make({ getAuth: async () => ({ signInWithEmailAndPassword: async () => { throw off; }, createUserWithEmailAndPassword: async () => { throw off; } }) });
   await assert.rejects(A.login('a@b.it', 'x'), e => e.code === 'not-enabled');
-  await assert.rejects(A.register({ name: 'F', email: 'f@b.it', pw: 'abcdef', pw2: 'abcdef', about: {}, adult: true }), e => e.code === 'not-enabled');
+  await assert.rejects(A.register({ name: 'F', email: 'f@b.it', pw: 'abcdef12', pw2: 'abcdef12', about: {}, adult: true }), e => e.code === 'not-enabled');
   assert.ok(/non è ancora attivo/.test(MESSAGES['not-enabled']));
 });
 
 t('isAdmin solo con il documento admins/<email>', async () => {
   ctx();
   const A = make();
-  await A.register({ name: 'Fabio', email: 'f@b.it', pw: 'abcdef', pw2: 'abcdef', about: {}, adult: true });
+  await A.register({ name: 'Fabio', email: 'f@b.it', pw: 'abcdef12', pw2: 'abcdef12', about: {}, adult: true });
   assert.strictEqual(A.isAdmin(), false);
   await A.logout();
   await A.login('a@b.it', 'x');

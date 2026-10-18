@@ -114,7 +114,7 @@ const tests = {
     await tapText(p, 'Elimina account'); await w(p); await p.fill('#delPw', 'x'); await tapText(p, 'ELIMINA DEFINITIVAMENTE'); await w(p, 600);   // Task 7: la password conferma l'eliminazione
     // Task 7: l'account è eliminato davvero, quindi si rientra con un account nuovo con la stessa email.
     await tapText(p, 'REGISTRATI', { exact: true }); await w(p, 300);
-    await p.fill('#regName', 'Tester'); await p.fill('#authEmail', 'a@b.it'); await p.fill('#authPw', 'abcdef'); await p.fill('#regPw2', 'abcdef');
+    await p.fill('#regName', 'Tester'); await p.fill('#authEmail', 'a@b.it'); await p.fill('#authPw', 'abcdef12'); await p.fill('#regPw2', 'abcdef12');
     await tapSel(p, '[data-fan-option="vivo"]'); await w(p, 150);
     await p.check('#regAdult');   // Task 22: "Ho almeno 14 anni"
     await tapText(p, 'CREA ACCOUNT', { exact: true }); await w(p, 1500);

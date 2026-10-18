@@ -23,7 +23,7 @@ import CommonsData from "./data/commons-candidates";
 import F1 from "./data/f1-2026";
 import AppData from "./services/appdata";
 import Compat from "./services/compat";
-import { createAccount, MESSAGES as ACCOUNT_MSG, messageOf, MIN_AGE } from "./services/account";
+import { createAccount, MESSAGES as ACCOUNT_MSG, messageOf, MIN_AGE, pwStrength } from "./services/account";
 import { createChat, CHAT_MSG, ROOM_IDS } from "./services/chat";
 import { createFeedback, FEEDBACK_CATS, FEEDBACK_MSG } from "./services/feedback";
 import { local, IMG_REF, uploadImage, loadImage as loadStoredImage, dropImage } from "./services/firebase";
@@ -1324,6 +1324,18 @@ function AbortLights() {
   );
 }
 
+// Robustezza della password in registrazione (18/10): 3 tacche; serve almeno "buona" (8 caratteri, lettere e numeri).
+const PW_LEVELS = [null, ["Debole: almeno 8 caratteri, con lettere e numeri", "#FF5A5F"], ["Buona", "#E7B34C"], ["Forte", "#3DDC84"]];
+function PwMeter({ level }) {
+  const [label, color] = PW_LEVELS[level] || PW_LEVELS[1];
+  return (
+    <div data-pw-strength={level} style={{ marginTop: 7 }}>
+      <div style={{ display: "flex", gap: 4 }}>{[1, 2, 3].map(i => <span key={i} style={{ flex: 1, height: 4, borderRadius: 2, background: i <= level ? color : "rgba(255,255,255,.1)" }} />)}</div>
+      <span style={{ display: "block", marginTop: 5, fontFamily: F_BODY, fontSize: 11.5, color: level >= 2 ? C.muted : color }}>Password: {label}</span>
+    </div>
+  );
+}
+
 function LoginScreen({ auth, onDone, onGuest, onBack, reason, onHold }) {
   const [mode, setMode] = useState("login");
   const [name, setName] = useState("");
@@ -1419,6 +1431,7 @@ function LoginScreen({ auth, onDone, onGuest, onBack, reason, onHold }) {
         <div style={{ marginBottom: 14 }}>
           <label style={labelStyle} htmlFor="authPw">Password</label>
           <div style={fieldStyle}><Icon name="lock" size={15} color={C.dim} /><input id="authPw" type="password" style={inputStyle} placeholder="••••••••" value={pw} onChange={e => typePw(e.target.value)} /></div>
+          {!isLogin && pw && <PwMeter level={pwStrength(pw)} />}
         </div>
         {!isLogin && (
           <div style={{ marginBottom: 14 }}>
@@ -7608,16 +7621,17 @@ function PremiumModal({ onClose, isPremium, plan, setPlan, onSubscribe, subscrib
                 <button className="press" disabled={subscribing} onClick={onTrial} style={{ display: "block", width: "100%", marginTop: 16, padding: "16px 0", borderRadius: 14, background: subscribing ? "#555" : C.accent, boxShadow: subscribing ? "none" : `0 10px 22px -10px ${C.accent}`, fontFamily: F_HEAD, fontWeight: 900, fontStyle: "italic", fontSize: 14.5, color: "#fff", letterSpacing: .2, textAlign: "center" }}>
                   {subscribing ? <ShiftLight /> : "PROVA GRATIS PER UN GP"}
                 </button>
-                <p style={{ textAlign: "center", fontFamily: F_BODY, fontSize: 11.5, color: C.muted, margin: "10px 0 0" }}>Poi {price} · disdici quando vuoi, anche durante la prova</p>
+                <p style={{ textAlign: "center", fontFamily: F_BODY, fontSize: 11.5, color: C.muted, margin: "10px 0 0" }}>Poi {price}: si rinnova da solo a ogni stagione finché non disdici. Disdici quando vuoi, anche durante la prova.</p>
                 <button className="press" disabled={subscribing} onClick={onSubscribe} style={{ display: "block", margin: "8px auto 0", padding: "8px 12px", fontFamily: F_BODY, fontWeight: 700, fontSize: 12, color: C.gold }}>Oppure abbonati subito: {price}</button>
               </>) : (<>
                 <button className="press" disabled={subscribing} onClick={onSubscribe} style={{ display: "block", width: "100%", marginTop: 16, padding: "16px 0", borderRadius: 14, background: subscribing ? "#555" : C.accent, boxShadow: subscribing ? "none" : `0 10px 22px -10px ${C.accent}`, fontFamily: F_HEAD, fontWeight: 900, fontStyle: "italic", fontSize: 14.5, color: "#fff", letterSpacing: .2, textAlign: "center" }}>
                   {subscribing ? <ShiftLight /> : `ABBONATI · ${price}`}
                 </button>
+                <p style={{ textAlign: "center", fontFamily: F_BODY, fontSize: 11.5, color: C.muted, margin: "10px 0 0" }}>Si rinnova da solo a ogni stagione finché non disdici. Disdici quando vuoi.</p>
                 {trialUsed && <p style={{ textAlign: "center", fontFamily: F_BODY, fontSize: 11.5, color: C.muted, margin: "10px 0 0" }}>Hai già usato la prova gratuita di un GP.</p>}
               </>)}
               <p style={{ textAlign: "center", fontFamily: F_BODY, fontSize: 10.5, color: C.dim, lineHeight: 1.7, margin: "14px 0 0" }}>
-                Annulla in qualsiasi momento · Rinnovo automatico<br /><span style={{ color: C.accentInk }}>Anteprima demo: nessun pagamento reale</span>
+                Rinnovo automatico a ogni stagione al prezzo di quella stagione ({SEASON_PRICE} €, poi 1 € in meno ogni anno, fino a 1 €) finché non disdici. Si disdice quando vuoi da Google Play → Abbonamenti.<br /><span style={{ color: C.accentInk }}>Anteprima demo: nessun pagamento reale</span>
               </p>
               </>}
             </>
@@ -7651,8 +7665,8 @@ function TermsSheet({ review, onAccept, onClose }) {
     ["2. Descrizione del Servizio", `${APP_NAME} è un'app di informazione e intrattenimento dedicata alla Formula 1. Offre notizie, classifiche, dati live delle gare tramite OpenF1 API, una sezione community (chat) e funzionalità Fanta F1.`],
     ["3. Account Utente", "Per accedere a tutte le funzionalità è necessario creare un account. L'utente è responsabile della riservatezza delle proprie credenziali. Ogni attività effettuata dall'account è responsabilità dell'utente."],
     ["4. Abbonamento Premium", PAYMENTS_ENABLED ? "L'abbonamento Premium (6 € a stagione, ogni stagione dopo 1 € in meno, fino a 1 €) sblocca funzionalità avanzate e rimuove la pubblicità. Il rinnovo è automatico e può essere annullato in qualsiasi momento dal profilo. Non sono previsti rimborsi per il periodo in corso." : "L'abbonamento Premium non è ancora disponibile. Quando verrà attivato, prezzi, rinnovo e modalità di disdetta saranno indicati in questa sezione e nella schermata di acquisto."],
-    ["5. Contenuti e Proprietà Intellettuale", "Tutti i contenuti pubblicati dal Team B&T (articoli, immagini, video) sono di proprietà del Team B&T. I dati di gara sono forniti da OpenF1 API. I loghi e i marchi di Formula 1, FIA e team sono di proprietà dei rispettivi titolari.", `${F1_DISCLAIMER} ${APP_NAME} non è associata nemmeno alla FIA, alle scuderie o ai piloti.`],
-    ["6. Condotta degli Utenti", "Nella chat community è vietato pubblicare contenuti offensivi, discriminatori, sessualmente espliciti, spam, materiale illegale o informazioni personali altrui. Con il tasto ⋯ su ogni messaggio puoi segnalarlo o bloccare chi l'ha scritto: i messaggi segnalati vengono controllati dai moderatori e rimossi se violano queste regole. Le violazioni possono comportare la sospensione dalla chat o dell'account."],
+    ["5. Contenuti e Proprietà Intellettuale", "Tutti i contenuti pubblicati dal Team B&T (articoli, immagini, video) sono di proprietà del Team B&T. I dati di gara sono forniti da OpenF1 API. I loghi e i marchi di Formula 1, FIA e team sono di proprietà dei rispettivi titolari. Le foto di piloti e monoposto vengono da Wikimedia Commons con licenza libera e i crediti dell'autore (Profilo → Info su B&T). Se pensi che un contenuto dell'app violi un tuo diritto d'autore, scrivici a bt.formula1@gmail.com con il link o la descrizione del contenuto: lo controlliamo e, se serve, lo togliamo.", `${F1_DISCLAIMER} ${APP_NAME} non è associata nemmeno alla FIA, alle scuderie o ai piloti.`],
+    ["6. Condotta degli Utenti", "Nella chat community è vietato pubblicare contenuti offensivi, discriminatori, sessualmente espliciti, spam, materiale illegale, informazioni personali altrui o contenuti di altri (testi, foto, video) senza il loro permesso. Con il tasto ⋯ su ogni messaggio puoi segnalarlo o bloccare chi l'ha scritto: i messaggi segnalati vengono controllati dai moderatori e rimossi se violano queste regole. Le violazioni possono comportare la sospensione dalla chat o dell'account."],
     ["7. Pubblicità", "Gli utenti non abbonati visualizzeranno annunci pubblicitari forniti tramite Google AdMob. Nell'Unione Europea ti chiediamo il consenso con il messaggio di Google e puoi cambiare le tue scelte in qualsiasi momento da Profilo → Preferenze privacy annunci."],
     ["8. Privacy e Cookie", null],
     ["9. Limitazione di Responsabilità", `${APP_NAME} non garantisce l'accuratezza assoluta dei dati live di gara. L'App è fornita “così com'è”. Non siamo responsabili per interruzioni del servizio, perdita di dati o danni derivanti dall'uso dell'App.`],

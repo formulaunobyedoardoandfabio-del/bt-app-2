@@ -91,4 +91,16 @@ run({
     assert(/IN ARRIVO/i.test(garage) && /Reaction Test/.test(garage) && /Setup Radar/.test(garage), 'giochi in arrivo nel Garage: ' + garage.slice(0, 300));
     assert(!errs.length, errs.join(' | '));
   },
+
+  async 'registrazione: indicatore della password (debole, buona, forte)'(b) {
+    const { ctx, p, errs } = await open(b);
+    await tapText(p, 'REGISTRATI', { exact: true }); await w(p, 300);
+    const meter = async pw => { await p.fill('#authPw', pw); await w(p, 150); return p.evaluate(() => { const e = document.querySelector('[data-pw-strength]'); return e ? e.getAttribute('data-pw-strength') + ':' + e.innerText.trim() : null; }); };
+    const r = [await meter('abc'), await meter('abcdef12'), await meter('Abcdef12!x')];
+    await ctx.close();
+    assert(r[0] && r[0].startsWith('1:') && /debole/i.test(r[0]) && /8 caratteri/.test(r[0]), 'debole: ' + r[0]);
+    assert(r[1] && r[1].startsWith('2:') && /buona/i.test(r[1]), 'buona: ' + r[1]);
+    assert(r[2] && r[2].startsWith('3:') && /forte/i.test(r[2]), 'forte: ' + r[2]);
+    assert(!errs.length, errs.join(' | '));
+  },
 });

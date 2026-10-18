@@ -14,7 +14,7 @@ const MESSAGES = {
   "wrong-password": "Password errata",
   "not-found": "Account non trovato",
   exists: "Email già registrata",
-  weak: "La password deve avere almeno 6 caratteri",
+  weak: "La password deve avere almeno 8 caratteri, con lettere e numeri",
   "weak-old": "La tua password è troppo corta per il nuovo accesso: tocca \"Password dimenticata?\" per sceglierne una nuova.",
   mismatch: "Le password non coincidono",
   offline: "Errore di connessione, riprova tra poco",
@@ -30,6 +30,15 @@ const MESSAGES = {
 };
 // Età minima per iscriversi, come dice la privacy policy (in Italia 14 anni per i servizi online, D.Lgs. 101/2018).
 const MIN_AGE = 14;
+// Password degli account nuovi (18/10): almeno 8 caratteri, con lettere e numeri. pwStrength per l'indicatore della
+// registrazione: 0 vuota, 1 debole, 2 buona, 3 forte (12 caratteri o un simbolo, con maiuscole e minuscole).
+const strongPw = pw => { const s = String(pw || ""); return s.length >= 8 && /[a-z]/i.test(s) && /\d/.test(s); };
+const pwStrength = pw => {
+  const s = String(pw || "");
+  if (!s) return 0;
+  if (!strongPw(s)) return 1;
+  return (s.length >= 12 || /[^a-z0-9]/i.test(s)) && /[a-z]/.test(s) && /[A-Z]/.test(s) ? 3 : 2;
+};
 const LAST_KEY = "bt-last-account", LOGOUT_KEY = "bt-logout-pending";
 // Con "Errore di connessione" si scrive anche il codice vero (raw), quando c'è: sul telefono di Edoardo l'accesso lo
 // diceva sempre con la rete che funzionava (11/10), e senza il codice non si capisce cosa risponde Firebase.
@@ -182,7 +191,7 @@ function createAccount({
     const nm = String(name || "").trim(), em = normEmail(email);
     if (!nm || !em || !pw || !pw2) throw mkErr("empty");
     if (pw !== pw2) throw mkErr("mismatch");
-    if (String(pw).length < 6) throw mkErr("weak");
+    if (!strongPw(pw)) throw mkErr("weak");
     // Età: con l'anno di nascita si controlla quello (anno per anno); in ogni caso serve "Ho almeno 14 anni".
     const birth = about && Number(about.birth);
     if (birth && new Date().getFullYear() - birth < MIN_AGE) throw mkErr("too-young");
@@ -319,4 +328,4 @@ function createAccount({
   };
 }
 
-module.exports = { MIN_AGE, MESSAGES, messageOf, normEmail, createAccount };
+module.exports = { MIN_AGE, MESSAGES, messageOf, normEmail, createAccount, pwStrength, strongPw };

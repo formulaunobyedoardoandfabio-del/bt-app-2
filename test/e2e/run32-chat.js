@@ -52,7 +52,7 @@ run({
   async 'segnalazione: arriva nel Pannello Admin con stanza e autore; SOSPENDI impedisce di scrivere'(b) {
     const seed = {
       addDocs: { ...ROOM, 'users/marco@b.it': { name: 'Marco', nick: 'Marco', email: 'marco@b.it', about: { birth: null, follow: 1, fan: 'vivo' } } },
-      users: { 'a@b.it': { pw: 'x', uid: 'uid-a' }, 'marco@b.it': { pw: 'abcdef', uid: 'uid-m' } },
+      users: { 'a@b.it': { pw: 'x', uid: 'uid-a' }, 'marco@b.it': { pw: 'abcdef12', uid: 'uid-m' } },
     };
     const { ctx, p, errs } = await open(b, { seed }); await login(p);
     await openRoom(p);
@@ -67,7 +67,7 @@ run({
     const banned = await doc(p, 'shared/bt-chat-banned');
     await tapSel(p, '[aria-label="Indietro"]').catch(() => {}); await w(p, 300);
     await tapText(p, 'Esci', { exact: true }); await w(p, 500);
-    await login(p, { email: 'marco@b.it', pw: 'abcdef' });
+    await login(p, { email: 'marco@b.it', pw: 'abcdef12' });
     await openRoom(p); await say(p, 'Provo a scrivere');
     const blockedMsg = await toast(p);
     const room = await doc(p, 'shared/bt-chat-generale'); await ctx.close();
@@ -132,14 +132,14 @@ run({
   async 'eliminazione account: spariscono anche i suoi messaggi'(b) {
     const { ctx, p, errs } = await open(b);
     await tapText(p, 'REGISTRATI', { exact: true }); await w(p, 300);
-    await p.fill('#regName', 'Fabio'); await p.fill('#authEmail', 'fabio@b.it'); await p.fill('#authPw', 'abcdef'); await p.fill('#regPw2', 'abcdef');
+    await p.fill('#regName', 'Fabio'); await p.fill('#authEmail', 'fabio@b.it'); await p.fill('#authPw', 'abcdef12'); await p.fill('#regPw2', 'abcdef12');
     await tapSel(p, '[data-fan-option="vivo"]'); await p.check('#regAdult'); await tapText(p, 'CREA ACCOUNT', { exact: true }); await w(p, 1500);
     await openRoom(p); await say(p, 'Messaggio di Fabio');
     await tapSel(p, '[aria-label="Indietro"]').catch(() => {}); await w(p, 300);
     await goTab(p, 'HOME').catch(() => {});
     await tapSel(p, '[aria-label="Profilo"]'); await w(p, 400);
     await tapText(p, 'Elimina account'); await w(p, 300);
-    await p.fill('#delPw', 'abcdef'); await tapText(p, 'ELIMINA DEFINITIVAMENTE'); await w(p, 1500);
+    await p.fill('#delPw', 'abcdef12'); await tapText(p, 'ELIMINA DEFINITIVAMENTE'); await w(p, 1500);
     const room = await doc(p, 'shared/bt-chat-generale'); await ctx.close();
     assert(room && !room.__arr.some(m => m.txt === 'Messaggio di Fabio'), 'il messaggio dell\'account eliminato è ancora in chat');
     assert(!errs.length, errs.join(' | '));
