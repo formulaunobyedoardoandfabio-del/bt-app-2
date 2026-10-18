@@ -177,6 +177,7 @@ run({
   async 'scheda pilota: ultima gara e miglior giro veri, niente "IN QUESTA GARA" inventato'(b) {
     const { ctx, p, errs } = await open(b); await login(p);
     await goTab(p, 'RACE'); await w(p, 400);
+    await tapSel(p, '[data-race-tab="classifica"]'); await w(p, 300);   // 18/10: l'ultima gara ha la sua scheda
     await tapSel(p, '[data-result-row="leclerc"] button'); await w(p, 400);
     const t = norm(await inner(p, '[data-driver-modal]')); await ctx.close();
     const q = BtWeekend.quali.find(x => x.round === 15).drivers.LEC.q.filter(v => v > 0), best = Math.min(...q);
