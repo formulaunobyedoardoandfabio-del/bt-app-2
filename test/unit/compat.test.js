@@ -146,6 +146,14 @@ t('chat: messaggio senza aid è mio se il nome è uguale; con aid conta solo l\'
   assert.ok(C.sameAuthor({ aid: 'u1' }, { aid: 'u1', user: 'X' }) && !C.sameAuthor({ aid: 'u1', name: 'X' }, { user: 'X' }));
 });
 
+t('chat: la medaglia dei trofei viaggia con il messaggio (Tappa 3, G31)', () => {
+  const m = C.chatMsgToStore('ciao', { ...ME, medal: 'oro' }, NOW);
+  assert.strictEqual(m.medal, 'oro');
+  assert.ok(!('medal' in C.chatMsgToStore('ciao', { ...ME, medal: 'platino' }, NOW)), 'medaglia che non esiste');
+  const got = C.chatFromStore([{ id: 'a', user: 'Fabio', aid: 'u2', txt: 'ciao', t: 1, medal: 'argento' }, { id: 'b', user: 'Ugo', aid: 'u3', txt: 'x', t: 2, medal: 'platino' }, { id: 'c', user: 'Ada', aid: 'u4', txt: 'y', t: 3 }], ME);
+  assert.deepStrictEqual(got.map(x => x.medal), ['argento', null, null]);
+});
+
 t('chat: messaggio della 2.0 nel formato di oggi {id,user,aid,txt,t}', () => {
   const m = C.chatMsgToStore('ciao', ME, NOW);
   assert.deepStrictEqual(Object.keys(m).sort(), ['aid', 'id', 't', 'txt', 'user']);

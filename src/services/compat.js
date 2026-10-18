@@ -321,15 +321,19 @@ function sameAuthor(a, m) {
   if (!x && !y) return (a.name || a.user) === (m.user || m.name);
   return false;
 }
+// Medaglia dei trofei (Tappa 3, G31) accanto al nome: campo in più che l'app di oggi ignora.
+const CHAT_MEDALS = ["bronzo", "argento", "oro"];
+const medalOk = v => (CHAT_MEDALS.includes(v) ? v : null);
 function chatFromStore(arr, me) {
   const myAid = (me && me.aid) || "", myName = (me && me.name) || "";
   return (Array.isArray(arr) ? arr : []).filter(isObj).map(m => ({
     id: String(m.id), from: m.user || "", text: m.txt || "", at: m.t || 0, aid: m.aid || "",
-    mine: m.aid ? !!myAid && m.aid === myAid : !!myName && m.user === myName,
+    mine: m.aid ? !!myAid && m.aid === myAid : !!myName && m.user === myName, medal: medalOk(m.medal),
   }));
 }
 function chatMsgToStore(text, me, now = Date.now()) {
-  return { id: uid(), user: me.name, aid: me.aid || "", txt: text, t: now };
+  const medal = medalOk(me && me.medal);
+  return { id: uid(), user: me.name, aid: me.aid || "", txt: text, t: now, ...(medal ? { medal } : {}) };
 }
 function reportToStore(roomId, msg, me, now = Date.now()) {
   return { id: uid(), room: ROOM_OLD_KEY[roomId] || roomId, msgId: msg.id, txt: msg.text, author: msg.from, aid: msg.aid || "", by: me.name, byAid: me.aid || "", t: now };

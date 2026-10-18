@@ -18,6 +18,7 @@ import { filterNews, TYRES, LANES } from "./logic/newsfilter";
 import { classifySwipe, SWIPE } from "./logic/gesture";
 import { HELMET_DEFAULT, HELMET_PATTERNS, HELMET_VISORS, HELMET_FINISHES, cleanHelmet } from "./logic/helmet";
 import { qZones, zoneOf } from "./logic/qzones";
+import { TROPHIES, SECRET_NAME, SECRET_HOW, trophyProgress, medalOf, cleanTrophies } from "./logic/trophies";
 import CommonsData from "./data/commons-candidates";
 import F1 from "./data/f1-2026";
 import AppData from "./services/appdata";
@@ -5465,9 +5466,9 @@ function ChatThreadScreen({ chat, onBack, onSend, isPremium, blocked = [], onRep
       <div className="scrollcol" style={{ flex: 1, padding: "6px 16px", display: "flex", flexDirection: "column", gap: 10 }}>
         {shown.length === 0 && <p data-chat-empty="" style={{ margin: "24px 0", textAlign: "center", fontFamily: F_BODY, fontSize: 13, color: C.muted }}>{CHAT_MSG.empty}</p>}
         {shown.map((m, i) => (
-          <div key={m.id || i} style={{ display: "flex", flexDirection: "column", alignItems: m.mine ? "flex-end" : "flex-start" }}>
-            {m.mine && isPremium && <span style={{ display: "flex", alignItems: "center", gap: 3, fontFamily: F_BODY, fontWeight: 700, fontSize: 10.5, color: C.gold, margin: "0 4px 3px" }}><Icon name="star" size={9} color={C.gold} />Tu</span>}
-            {!m.mine && <span style={{ display: "flex", alignItems: "center", gap: 2, fontFamily: F_BODY, fontWeight: 600, fontSize: 10.5, color: C.dim, margin: "0 4px 1px" }}>{m.from}
+          <div key={m.id || i} data-chat-msg={m.id} style={{ display: "flex", flexDirection: "column", alignItems: m.mine ? "flex-end" : "flex-start" }}>
+            {m.mine && (isPremium || m.medal) && <span style={{ display: "flex", alignItems: "center", gap: 3, fontFamily: F_BODY, fontWeight: 700, fontSize: 10.5, color: C.gold, margin: "0 4px 3px" }}>{isPremium && <Icon name="star" size={9} color={C.gold} />}Tu{m.medal && <Medal medal={m.medal} size={12} />}</span>}
+            {!m.mine && <span style={{ display: "flex", alignItems: "center", gap: 2, fontFamily: F_BODY, fontWeight: 600, fontSize: 10.5, color: C.dim, margin: "0 4px 1px" }}>{m.from}{m.medal && <Medal medal={m.medal} size={12} style={{ marginLeft: 2 }} />}
               <button className="press" aria-label={`Opzioni messaggio di ${m.from}`} onClick={() => setMenu(m)} style={{ minWidth: 30, height: 22, borderRadius: 8, fontFamily: F_BODY, fontWeight: 700, fontSize: 14, lineHeight: 1, color: C.dim }}>⋯</button>
             </span>}
             <div style={{ maxWidth: "78%", padding: "9px 13px", borderRadius: m.mine ? "14px 14px 4px 14px" : "14px 14px 14px 4px", background: m.mine ? C.accent : C.card, border: m.mine ? "none" : `1px solid ${C.border}` }}>
@@ -6295,7 +6296,102 @@ function FantaScreen({ squad, setSquad, base, freeTransfers, budget, stats, race
   );
 }
 
-function ProfiloScreen({ ig, onOpenIg, trial = null, trialUsed = false, onBack, onNotifiche, onPremium, onAdmin, onLogout, isPremium, onAbout, onHelp, onFeedback, aboutMe, onSaveAboutMe, favTeam, favDriver, onPickTeam, onPickDriver, guest, onLogin, onTerms, blocked = [], onUnblock, onDeleteAccount, savedCount = 0, onOpenSaved, account = null, onSaveName, isAdmin = false, onTheme, sounds = true, haptics = true, onSounds, onHaptics, helmet = null, onHelmet }) {
+// ── TROFEI (G31) ─────────────────────────────────────────────────────────
+// Medaglia dei trofei: bronzo da 1 trofeo, argento da 5, oro da 10. Nastro e disco disegnati qui; il nome della
+// medaglia è nell'aria-label (non si capisce solo dal colore).
+const MEDAL_INFO = {
+  bronzo: { label: "Medaglia di bronzo", c0: "#8A5A2E", c1: "#CD8D52" },
+  argento: { label: "Medaglia d'argento", c0: "#7C838A", c1: "#D7DCE1" },
+  oro: { label: "Medaglia d'oro", c0: "#A57716", c1: "#EDC55C" },
+};
+function Medal({ medal, size = 14, style }) {
+  const m = MEDAL_INFO[medal];
+  if (!m) return null;
+  return (
+    <svg data-medal={medal} role="img" aria-label={m.label} width={size} height={size} viewBox="0 0 24 24" style={{ display: "inline-block", flexShrink: 0, ...style }}>
+      <path d="M6.5 1h4.6l2.4 7.6H8.9z" fill="#C8102E" />
+      <path d="M12.9 1h4.6l-2.4 7.6h-4.6z" fill="#8E0C21" />
+      <circle cx="12" cy="15" r="8" fill={m.c0} />
+      <circle cx="12" cy="15" r="6.3" fill={m.c1} />
+      {size >= 18 && <path d="M12 11.4L12.88 13.79L15.42 13.89L13.43 15.46L14.12 17.91L12 16.5L9.88 17.91L10.57 15.46L8.58 13.89L11.12 13.79Z" fill={m.c0} />}
+    </svg>
+  );
+}
+// Avviso "Trofeo sbloccato: <nome>" in alto (3,6 s): non copre i tocchi; più trofei insieme in un avviso solo.
+function TrophyNotice({ n }) {
+  const many = n.names.length > 1, title = many ? "Trofei sbloccati" : "Trofeo sbloccato";
+  return (
+    <div key={n.key} className="live-notice" data-trophy-notice={n.ids.join(",")} role="status" aria-label={title + ": " + n.names.join(", ")}
+      style={{ position: "absolute", top: 10, left: 10, right: 10, zIndex: 900, pointerEvents: "none", display: "flex", alignItems: "center", gap: 10, padding: "9px 12px 9px 9px", borderRadius: 16, background: "linear-gradient(100deg, #1C1810 0%, #2B2314 100%)", border: "1px solid rgba(231,179,76,.5)", boxShadow: "0 14px 30px -12px rgba(0,0,0,.75)" }}>
+      <span style={{ width: 38, height: 38, borderRadius: 12, background: "rgba(231,179,76,.16)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}><Icon name="trophy" size={20} color={C.gold} sw={2} /></span>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ fontFamily: F_HEAD, fontWeight: 900, fontStyle: "italic", fontSize: 12, letterSpacing: .6, color: C.gold }}>{title}</div>
+        <div style={{ fontFamily: F_HEAD, fontWeight: 800, fontSize: 15, color: "#fff", marginTop: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{n.names.join(", ")}</div>
+      </div>
+    </div>
+  );
+}
+// Bacheca nel Profilo: il casco, la medaglia, "N di 15 trofei" e la prossima medaglia; aperta, i trofei vinti con la
+// data (i più recenti prima) e quelli da vincere con cosa serve e, dove si conta, quanto manca.
+function TrophyCase({ trophies = {}, progress = {}, helmet = null }) {
+  const [open, setOpen] = useState(false);
+  const won = TROPHIES.filter(t => trophies[t.id]).sort((a, b) => trophies[b.id] - trophies[a.id]);
+  const todo = TROPHIES.filter(t => !trophies[t.id]);
+  const n = won.length, medal = medalOf(n);
+  const nextAt = n < 1 ? 1 : n < 5 ? 5 : n < 10 ? 10 : null;
+  const extra = t => {
+    const p = progress[t.id] || {};
+    if (t.id === "pitcrew" || t.id === "pitperfetto") return p.value != null ? `Record ${fmtSec(p.value)} s` : null;
+    return t.goal > 1 && p.value != null ? `${Math.min(p.value, t.goal)} di ${t.goal}` : null;
+  };
+  const group = { padding: "12px 14px 4px", fontFamily: F_BODY, fontWeight: 700, fontSize: 10.5, letterSpacing: 1, color: C.dim, borderTop: `1px solid ${C.divider}` };
+  const row = (t, w, i) => {
+    const hide = t.secret && !w, x = !w && extra(t);
+    return (
+      <div key={t.id} data-trophy={t.id} data-won={w ? "1" : "0"} style={{ display: "flex", alignItems: "center", gap: 12, padding: "10px 14px", borderTop: i ? `1px solid ${C.divider}` : "none" }}>
+        <span style={{ width: 34, height: 34, borderRadius: 10, background: w ? "rgba(231,179,76,.14)" : "transparent", border: w ? "1px solid rgba(231,179,76,.4)" : `1px dashed ${C.border}`, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+          <Icon name={hide ? "lock" : "trophy"} size={16} color={w ? C.gold : C.dim} />
+        </span>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontFamily: F_HEAD, fontWeight: 800, fontSize: 13.5, color: w ? C.text : C.muted }}>{hide ? SECRET_NAME : t.name}</div>
+          <div style={{ fontFamily: F_BODY, fontSize: 11.5, color: C.dim, lineHeight: 1.35, marginTop: 1 }}>{w ? `Vinto il ${fmtDay(trophies[t.id])}` : hide ? SECRET_HOW : t.how}</div>
+        </div>
+        {x && <span style={{ fontFamily: F_HEAD, fontWeight: 800, fontSize: 12, color: C.muted, flexShrink: 0, fontVariantNumeric: "tabular-nums" }}>{x}</span>}
+      </div>
+    );
+  };
+  return (
+    <>
+      <div style={{ padding: "0 24px 10px" }}><span style={{ fontFamily: F_BODY, fontWeight: 700, fontSize: 11, color: C.dim, letterSpacing: 1 }}>I MIEI TROFEI</span></div>
+      <div data-trophies="" style={{ margin: "0 20px 22px", borderRadius: 18, background: C.card, border: `1px solid ${C.border}`, overflow: "hidden" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 14, padding: 14 }}>
+          <div style={{ position: "relative", width: 58, height: 58, borderRadius: "50%", background: "#111114", border: `1px solid ${C.border}`, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+            <HelmetArt spec={helmet} size={46} />
+            {medal && <span style={{ position: "absolute", right: -5, bottom: -5, display: "flex" }}><Medal medal={medal} size={26} /></span>}
+          </div>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontFamily: F_HEAD, fontWeight: 900, fontStyle: "italic", fontSize: 16, color: C.text }}>{n} di {TROPHIES.length} trofei</div>
+            <div style={{ fontFamily: F_BODY, fontWeight: 600, fontSize: 12, color: medal ? C.gold : C.muted, marginTop: 2 }}>{medal ? MEDAL_INFO[medal].label : "Nessuna medaglia per ora"}</div>
+            <div style={{ height: 4, borderRadius: 2, background: "rgba(255,255,255,.07)", marginTop: 8, overflow: "hidden" }}>
+              <div style={{ width: `${(n / TROPHIES.length) * 100}%`, height: "100%", borderRadius: 2, background: C.gold }} />
+            </div>
+            <div style={{ fontFamily: F_BODY, fontSize: 11, color: C.dim, marginTop: 5 }}>{nextAt ? `${MEDAL_INFO[medalOf(nextAt)].label} a ${nextAt} ${nextAt === 1 ? "trofeo" : "trofei"}` : "Hai la medaglia più alta"}</div>
+          </div>
+        </div>
+        <button className="press" aria-expanded={open ? "true" : "false"} onClick={() => setOpen(o => !o)} style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 6, width: "100%", minHeight: 44, borderTop: `1px solid ${C.divider}`, fontFamily: F_HEAD, fontWeight: 800, fontSize: 12.5, color: C.text }}>
+          {open ? "Chiudi la bacheca" : "Apri la bacheca"}
+          <span style={{ display: "flex", transform: `rotate(${open ? -90 : 90}deg)`, transition: "transform .2s" }}><Icon name="chevron" size={13} color={C.muted} /></span>
+        </button>
+        {open && won.length > 0 && <div style={group}>VINTI</div>}
+        {open && won.map((t, i) => row(t, true, i))}
+        {open && todo.length > 0 && <div style={group}>DA VINCERE</div>}
+        {open && todo.map((t, i) => row(t, false, i))}
+      </div>
+    </>
+  );
+}
+
+function ProfiloScreen({ ig, onOpenIg, trial = null, trialUsed = false, onBack, onNotifiche, onPremium, onAdmin, onLogout, isPremium, onAbout, onHelp, onFeedback, aboutMe, onSaveAboutMe, favTeam, favDriver, onPickTeam, onPickDriver, guest, onLogin, onTerms, blocked = [], onUnblock, onDeleteAccount, savedCount = 0, onOpenSaved, account = null, onSaveName, isAdmin = false, onTheme, sounds = true, haptics = true, onSounds, onHaptics, helmet = null, onHelmet, trophies = {}, trophyProg = {} }) {
   const ft = favTeam ? teamById(favTeam) : null;
   const fd = favDriver ? driverById(favDriver) : null;
   const favRows = [
@@ -6375,7 +6471,7 @@ function ProfiloScreen({ ig, onOpenIg, trial = null, trialUsed = false, onBack, 
           </div>
         ) : (
           <>
-            <h2 data-profile-name={waiting ? "waiting" : ""} style={{ fontFamily: F_HEAD, fontWeight: 800, fontSize: 18, color: waiting ? C.muted : C.text, margin: "14px 0 3px" }}>{waiting ? "Profilo in caricamento…" : account ? account.name : ""}</h2>
+            <h2 data-profile-name={waiting ? "waiting" : ""} style={{ fontFamily: F_HEAD, fontWeight: 800, fontSize: 18, color: waiting ? C.muted : C.text, margin: "14px 0 3px" }}>{waiting ? "Profilo in caricamento…" : account ? account.name : ""}{!waiting && <Medal medal={medalOf(Object.keys(trophies).length)} size={18} style={{ marginLeft: 7, verticalAlign: "-2px" }} />}</h2>
             <span style={{ fontFamily: F_BODY, fontSize: 12, color: C.muted }}>{email}</span>
           </>
         )}
@@ -6385,6 +6481,7 @@ function ProfiloScreen({ ig, onOpenIg, trial = null, trialUsed = false, onBack, 
       {!guest && noAbout && <p data-about-missing="" style={{ margin: "0 20px 10px", padding: "10px 14px", borderRadius: 12, background: "rgba(231,179,76,.1)", border: "1px solid rgba(231,179,76,.3)", fontFamily: F_BODY, fontSize: 12.5, color: C.text, lineHeight: 1.45 }}>Completa il tuo profilo: che tifoso sei e da quanti anni segui la F1</p>}
       {!guest && waiting && <p data-profile-waiting="" role="status" style={{ margin: "0 20px 14px", padding: "10px 14px", borderRadius: 12, background: "rgba(255,255,255,.04)", border: `1px solid ${C.border}`, fontFamily: F_BODY, fontSize: 12.5, color: C.muted, lineHeight: 1.45 }}>{ACCOUNT_MSG["not-loaded"]}</p>}
       {!guest && !waiting && <AboutCard about={aboutMe} onSave={onSaveAboutMe} />}
+      {!guest && !waiting && <TrophyCase trophies={trophies} progress={trophyProg} helmet={helmet} />}
 
       <button className="press" onClick={onPremium} style={{ display: "block", textAlign: "left", width: "calc(100% - 40px)", margin: "0 20px 22px", padding: 16, borderRadius: 18, background: "rgba(231,179,76,.1)", border: "1px solid rgba(231,179,76,.3)" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 9, marginBottom: 6 }}>
@@ -7975,7 +8072,7 @@ const USER_INIT = {
   saved: [], favTeam: null, favDriver: null, notifPrefs: { team: true, driver: true }, votes: {},
   squad: FANTA_SQUAD_INIT, squadBase: { drivers: FANTA_SQUAD_INIT.drivers.slice(), teams: FANTA_SQUAD_INIT.teams.slice() }, freeTransfers: 3,
   predAnswers: {}, sillyPreds: {}, stratPreds: {}, pitBest: null, wxGuess: {}, ratings: {}, dotd: {}, notifSeenAt: 0,
-  theme: { mode: "team", color: null }, sounds: true, haptics: true, helmet: null, hidden: [],
+  theme: { mode: "team", color: null }, sounds: true, haptics: true, helmet: null, hidden: [], trophies: {},
 };
 // Dati dell'account che restano anche sul telefono: uscendo dall'account non tornano quelli di serie.
 const PHONE_KEYS = ["theme", "sounds", "haptics"];
@@ -8077,6 +8174,10 @@ function App() {
   const [sounds, setSounds] = useState(() => fx.sounds());     // suoni e vibrazioni: la scelta del telefono (fx)
   const [haptics, setHaptics] = useState(() => fx.haptics());
   const [helmet, setHelmet] = useState(USER_INIT.helmet);
+  const [trophies, setTrophies] = useState(USER_INIT.trophies);   // trofei vinti (G31): { id: data in ms }
+  const [eggFound, setEggFound] = useState(false);                 // tre tocchi sul logo (trofeo segreto)
+  const [trophyNotice, setTrophyNotice] = useState(null);         // avviso "Trofeo sbloccato"
+  const trophyTimer = useRef(null);
   const [hidden, setHidden] = useState(USER_INIT.hidden);
   const [themeOpen, setThemeOpen] = useState(false);
   const [helmetOpen, setHelmetOpen] = useState(false);
@@ -8249,14 +8350,15 @@ function App() {
   const userReady = useRef(false);   // dati dell'account letti: da qui in poi le modifiche si salvano
   const userSnap = useRef({});       // ultimo valore letto o salvato di ogni dato (JSON): si manda solo quello che cambia
   const userVals = { saved, favTeam, favDriver, notifPrefs, votes, squad, squadBase, freeTransfers, predAnswers, sillyPreds, stratPreds, pitBest, wxGuess, ratings, dotd, notifSeenAt,
-    theme, sounds, haptics, helmet, hidden };
+    theme, sounds, haptics, helmet, hidden, trophies };
   const userValsRef = useRef(userVals);
   userValsRef.current = userVals;
   const userSet = { saved: setSaved, favTeam: setFavTeam, favDriver: setFavDriver, notifPrefs: setNotifPrefs, votes: setVotes, squad: setSquad, squadBase: setSquadBase,
     freeTransfers: setFreeTransfers, predAnswers: setPredAnswers, sillyPreds: setSillyPreds, stratPreds: setStratPreds, pitBest: setPitBest, wxGuess: setWxGuess,
     ratings: setRatings, dotd: setDotd, notifSeenAt: setNotifSeenAt,
     theme: v => setTheme(cleanTheme(v) || USER_INIT.theme), sounds: v => setSounds(v !== false), haptics: v => setHaptics(v !== false),
-    helmet: v => setHelmet(v == null ? null : cleanHelmet(v)), hidden: v => setHidden(Array.isArray(v) ? v : []) };
+    helmet: v => setHelmet(v == null ? null : cleanHelmet(v)), hidden: v => setHidden(Array.isArray(v) ? v : []),
+    trophies: v => setTrophies(cleanTrophies(v)) };
   // Dati dell'account arrivati (per quale email): finché non arrivano, il colore dell'app resta quello del telefono.
   const [userLoaded, setUserLoaded] = useState(null);
   const loadUser = em => AppData.loadUserData(em).then(data => {
@@ -8293,7 +8395,7 @@ function App() {
     userEmailRef.current = em; userReady.current = false; setUserEmail(em);
     loadUser(em);
   };
-  const resetUser = () => { userEmailRef.current = null; userReady.current = false; setUserEmail(null); setUserLoaded(null); AppData.USER_KEYS.forEach(k => { if (!PHONE_KEYS.includes(k)) userSet[k](USER_INIT[k]); }); };
+  const resetUser = () => { userEmailRef.current = null; userReady.current = false; setEggFound(false); setUserEmail(null); setUserLoaded(null); AppData.USER_KEYS.forEach(k => { if (!PHONE_KEYS.includes(k)) userSet[k](USER_INIT[k]); }); };
   // Dati personali non ancora letti da Firebase (avvio senza rete): finché non arrivano non si cambiano, altrimenti la
   // modifica, fatta sopra i valori di serie, andrebbe persa o cancellerebbe quelli veri (revisione della Fase B, I1).
   // Intanto si riprova a leggerli.
@@ -8701,8 +8803,9 @@ function App() {
     return Promise.resolve(withProfile(() => postChat(id, text)));
   };
   const postChat = (id, text) => {
-    const u = Account.current(), me = u ? { name: u.name, aid: u.aid } : chatMe();
-    const temp = { id: "invio-" + Date.now(), from: me.name, text: text.trim(), at: nowMs(), aid: me.aid, mine: true };
+    const u = Account.current(), who = u ? { name: u.name, aid: u.aid } : chatMe();
+    const me = myMedal ? { ...who, medal: myMedal } : who;   // la medaglia dei trofei viaggia con il messaggio (G31)
+    const temp = { id: "invio-" + Date.now(), from: me.name, text: text.trim(), at: nowMs(), aid: me.aid, mine: true, medal: myMedal || null };
     setChatMsgs(x => ({ ...x, [id]: [...(x[id] || []), temp] }));
     return Chat.send(id, text, me).then(m => {
       setChatMsgs(x => ({ ...x, [id]: (x[id] || []).map(y => (y.id === temp.id ? m : y)) }));
@@ -8842,6 +8945,43 @@ function App() {
     </div>
   );
 
+  // Punti bonus del FantaF1: pronostici meteo indovinati (+2 ciascuno).
+  const allPolls = [...(homePoll ? [{ ...homePoll, where: "Home" }] : []), ...articles.filter(a => a.poll).map(a => ({ ...articlePoll(a), where: a.title }))];
+  const bonus = [
+    ...Object.keys(wxResult).filter(k => wxGuess[k] && wxGuess[k] === wxResult[k]).map(k => {
+      const [rid, key] = k.split(":"), r = races.find(x => x.id === rid);
+      return { id: "wx:" + k, kind: "meteo", label: `Meteo ${LiveSim.SESSION_LABEL[key] || key}${r ? " · " + r.name : ""}`, pts: 2 };
+    }),
+    ...allPolls.filter(pl => pl.answer && votes[pl.id] === pl.answer).map(pl => ({ id: "poll:" + pl.id, kind: "sondaggio", label: "Sondaggio · " + pl.q, pts: 2 })),
+    ...predictions.filter(q => BtLogic.predictionCorrect(q, predAnswers[q.id]) === true).map(q => ({ id: "pred:" + q.id, kind: "previsione", label: "Previsione · " + q.q, pts: BtLogic.RULES.predictionBonus })),
+  ];
+  // Trofei (G31): dai dati veri dell'account e dei documenti condivisi (src/logic/trophies.js). Solo con un account e i
+  // suoi dati letti (si salvano lì); un trofeo nuovo si segna con la data, con l'avviso, il suono della Shift Light e
+  // la vibrazione. La squadra del FantaF1 conta solo se non è più quella di partenza.
+  const sameSet = (a, b) => Array.isArray(a) && Array.isArray(b) && a.length === b.length && [...a].sort().join() === [...b].sort().join();
+  const squadOwn = !!squad && !(sameSet(squad.drivers, FANTA_SQUAD_INIT.drivers) && sameSet(squad.teams, FANTA_SQUAD_INIT.teams));
+  // Primo messaggio in chat: uno di questo account (aid) arrivato su Firebase, scritto ora o prima.
+  const myAid = account && account.aid;
+  const chatMine = !!myAid && Object.values(chatMsgs).some(l => Array.isArray(l) && l.some(m => m && m.aid === myAid && !String(m.id).startsWith("invio-")));
+  const trophyProg = trophyProgress({
+    about: aboutMe, helmet, squad: squadOwn ? squad : null, saved, pitBest, sillyPreds, ratings, dotd,
+    correctPreds: bonus.filter(x => x.kind === "previsione").length, correctWx: bonus.filter(x => x.kind === "meteo").length,
+    correctPolls: bonus.filter(x => x.kind === "sondaggio").length, events: { chat: chatMine, egg: eggFound },
+  });
+  const trophyReady = !!userEmail && userLoaded === userEmail;
+  const trophyNew = trophyReady ? TROPHIES.filter(t => trophyProg[t.id] && trophyProg[t.id].done && !trophies[t.id]).map(t => t.id).join(",") : "";
+  useEffect(() => {
+    if (!trophyNew) return;
+    const ids = trophyNew.split(","), at = nowMs();
+    setTrophies(t => { const x = { ...t }; ids.forEach(id => { if (!x[id]) x[id] = at; }); return x; });
+    setTrophyNotice({ key: at + ":" + trophyNew, ids, names: ids.map(id => TROPHIES.find(t => t.id === id).name) });
+    fx.play("shift"); fx.buzz("success");
+    clearTimeout(trophyTimer.current);
+    trophyTimer.current = setTimeout(() => setTrophyNotice(null), 3600);
+  }, [trophyNew]);
+  useEffect(() => () => clearTimeout(trophyTimer.current), []);
+  const myMedal = medalOf(Object.keys(trophies).length);
+
   if (account === undefined && !guest) {   // si aspetta Authentication: forse c'è già una sessione
     return shell(
       <div data-auth-wait="" style={{ height: "100%", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 12, fontFamily: F_BODY, fontSize: 13, color: C.muted }}><LedGrid mode="seq" size={7} />Caricamento…</div>
@@ -8867,16 +9007,6 @@ function App() {
   const shareArticle = shareId != null ? articles.find(a => a.id === shareId) : null;
   const liveSt = live ? live.sim.state() : null;
   const trialActive = isPremium && !!trial && !trial.converted;
-  // Punti bonus del FantaF1: pronostici meteo indovinati (+2 ciascuno).
-  const allPolls = [...(homePoll ? [{ ...homePoll, where: "Home" }] : []), ...articles.filter(a => a.poll).map(a => ({ ...articlePoll(a), where: a.title }))];
-  const bonus = [
-    ...Object.keys(wxResult).filter(k => wxGuess[k] && wxGuess[k] === wxResult[k]).map(k => {
-      const [rid, key] = k.split(":"), r = races.find(x => x.id === rid);
-      return { id: "wx:" + k, kind: "meteo", label: `Meteo ${LiveSim.SESSION_LABEL[key] || key}${r ? " · " + r.name : ""}`, pts: 2 };
-    }),
-    ...allPolls.filter(pl => pl.answer && votes[pl.id] === pl.answer).map(pl => ({ id: "poll:" + pl.id, kind: "sondaggio", label: "Sondaggio · " + pl.q, pts: 2 })),
-    ...predictions.filter(q => BtLogic.predictionCorrect(q, predAnswers[q.id]) === true).map(q => ({ id: "pred:" + q.id, kind: "previsione", label: "Previsione · " + q.q, pts: BtLogic.RULES.predictionBonus })),
-  ];
   // Weekend del FantaF1: quello in diretta, altrimenti la prossima gara. La squadra si blocca all'inizio delle qualifiche.
   const fantaRace = (live && !demoOn && races.find(r => r.id === live.raceId)) || races.find(r => r.status === "IN ARRIVO") || null;
   const fantaSessions = fantaRace && CIRCUIT_INFO[fantaRace.circuitId] ? CIRCUIT_INFO[fantaRace.circuitId].weekend || [] : [];
@@ -8913,7 +9043,7 @@ function App() {
   else if (view === "instagram") body = <InstagramView ig={ig} onToast={showToast} onBack={viewBack.instagram} />;
   else if (view === "ghost") body = <GhostLap onBack={viewBack.ghost} />;
   else if (view === "chats") body = <ChatsView chats={chats} onOpen={openChat} blocked={blocked} onBack={viewBack.chats} unreadOf={(id, ms) => Chat.unread(id, ms)} />;
-  else if (view === "profilo") body = <ProfiloScreen ig={ig} onOpenIg={() => { setIgFrom("profilo"); setView("instagram"); }} aboutMe={aboutMe} onSaveAboutMe={a => Account.updateAbout(a).catch(e => showToast(e && (e.code === "too-young" || e.code === "not-loaded") ? messageOf(e) : NOT_SAVED))} account={account} onSaveName={n => Account.updateName(n)} isAdmin={Account.isAdmin()} trial={trialActive ? trial : null} trialUsed={!!trial} onBack={viewBack.profilo} onNotifiche={() => setView("notifiche")} onPremium={() => setPremiumOpen(true)} onAdmin={() => guest ? needLogin("Accedi per usare il pannello admin.") : setView(adminUnlocked ? "admin" : "adminLock")} onLogout={logout} isPremium={isPremium} onAbout={() => setInfoModal({ title: "Info su B&T", body: ABOUT_TEXT, credits: true })} onFeedback={() => setFeedbackOpen(true)} onHelp={() => setInfoModal({ title: "Assistenza", body: HELP_TEXT })} favTeam={favTeam} favDriver={favDriver} onPickTeam={() => guest ? needLogin("Per scegliere scuderia e pilota del cuore serve un account.") : setPicker("team")} onPickDriver={() => guest ? needLogin("Per scegliere scuderia e pilota del cuore serve un account.") : setPicker("driver")} guest={guest} onLogin={() => needLogin(null)} onTerms={() => setTermsOpen(true)} blocked={blocked} onUnblock={unblockUser} onDeleteAccount={deleteAccount} savedCount={saved.length} onOpenSaved={openSaved} onTheme={() => setThemeOpen(true)} helmet={helmet} onHelmet={() => setHelmetOpen(true)}
+  else if (view === "profilo") body = <ProfiloScreen ig={ig} onOpenIg={() => { setIgFrom("profilo"); setView("instagram"); }} aboutMe={aboutMe} onSaveAboutMe={a => Account.updateAbout(a).catch(e => showToast(e && (e.code === "too-young" || e.code === "not-loaded") ? messageOf(e) : NOT_SAVED))} account={account} onSaveName={n => Account.updateName(n)} isAdmin={Account.isAdmin()} trial={trialActive ? trial : null} trialUsed={!!trial} onBack={viewBack.profilo} onNotifiche={() => setView("notifiche")} onPremium={() => setPremiumOpen(true)} onAdmin={() => guest ? needLogin("Accedi per usare il pannello admin.") : setView(adminUnlocked ? "admin" : "adminLock")} onLogout={logout} isPremium={isPremium} onAbout={() => setInfoModal({ title: "Info su B&T", body: ABOUT_TEXT, credits: true })} onFeedback={() => setFeedbackOpen(true)} onHelp={() => setInfoModal({ title: "Assistenza", body: HELP_TEXT })} favTeam={favTeam} favDriver={favDriver} onPickTeam={() => guest ? needLogin("Per scegliere scuderia e pilota del cuore serve un account.") : setPicker("team")} onPickDriver={() => guest ? needLogin("Per scegliere scuderia e pilota del cuore serve un account.") : setPicker("driver")} guest={guest} onLogin={() => needLogin(null)} onTerms={() => setTermsOpen(true)} blocked={blocked} onUnblock={unblockUser} onDeleteAccount={deleteAccount} savedCount={saved.length} onOpenSaved={openSaved} onTheme={() => setThemeOpen(true)} helmet={helmet} onHelmet={() => setHelmetOpen(true)} trophies={trophies} trophyProg={trophyProg}
     sounds={sounds} haptics={haptics} onSounds={v => { if (userDataWait()) return; setSounds(v); fx.setSounds(v); if (v) fx.play("tick"); }} onHaptics={v => { if (userDataWait()) return; setHaptics(v); fx.setHaptics(v); if (v) fx.buzz("light"); }} />;
   else if (view === "notifiche") body = <NotificheScreen offline={offline} onBack={viewBack.notifiche} onAction={a => { if (a === "feedback") { if (feedbackAsk && !feedbackAsk.read) saveAsk({ ...feedbackAsk, read: true }); setFeedbackOpen(true); } }} notifs={notifs} onReadAll={readAll} isPremium={isPremium} onPremium={() => setPremiumOpen(true)} favTeam={favTeam} favDriver={favDriver} prefs={notifPrefs} onPrefs={v => { if (!userDataWait()) setNotifPrefs(v); }} onGoProfilo={() => setView("profilo")} />;
   else {
@@ -8930,7 +9060,7 @@ function App() {
 
   return shell(
       <div data-bg={pageBg || undefined} style={{ height: "100%", display: "flex", flexDirection: "column", position: "relative", background: pageBg && PAGE_BG[pageBg] ? PAGE_BG[pageBg] : undefined, transition: "background .3s" }}>
-        {showTopHeader && <TopHeader trialDays={trialActive ? trialDaysLeft(trial) : 0} isPremium={isPremium} unread={unreadCount} onPremium={() => setPremiumOpen(true)} onBell={() => setView("notifiche")} onProfile={() => setView("profilo")} helmet={helmet} onTrack={!!(live || realLiveRace)} />}
+        {showTopHeader && <TopHeader trialDays={trialActive ? trialDaysLeft(trial) : 0} isPremium={isPremium} unread={unreadCount} onPremium={() => setPremiumOpen(true)} onBell={() => setView("notifiche")} onProfile={() => setView("profilo")} helmet={helmet} onTrack={!!(live || realLiveRace)} onLogoEgg={() => setEggFound(true)} />}
         {showTopHeader && offline && <div role="status" data-offline="" style={{ margin: "-6px 16px 10px", padding: "8px 12px", borderRadius: 10, background: "rgba(231,179,76,.12)", border: "1px solid rgba(231,179,76,.35)", fontFamily: F_BODY, fontSize: 12, color: C.text, lineHeight: 1.4, flexShrink: 0 }}>{OFFLINE_LINE}</div>}
         <div data-tab-swipe={showBottomNav ? "" : undefined} style={{ flex: 1, minHeight: 0, overflow: "hidden" }}
           onTouchStart={showBottomNav ? e => { const k = e.touches[0]; if (e.touches.length === 1) swipeStart(k.clientX, k.clientY, e.timeStamp, e.target, e.currentTarget); else tabSwipe.current = null; } : undefined}
@@ -8960,6 +9090,7 @@ function App() {
         {feedbackOpen && <FeedbackModal onClose={() => setFeedbackOpen(false)} onSend={sendFeedback} />}
         {toast && <div className="toast">{toast}</div>}
         {notice && !(ssOpen && isPremium) && <LiveNotice n={notice} onClose={nextNotice} />}
+        {trophyNotice && <TrophyNotice n={trophyNotice} />}
       </div>
   );
 }
