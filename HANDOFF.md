@@ -103,3 +103,6 @@ App ID: ca-app-pub-5787516371588469~8054706643 (già nel manifest). Nel codice d
 - Pubblicità (Con premio): ca-app-pub-5787516371588469/6456990840
 - Personalizzabile, Pubblicità personalizzabile (Nativo avanzato): /9774488555, /5590821687 (il plugin @capacitor-community/admob non fa i nativi)
 Da fare in una sessione con token, su un ramo a parte: consenso UE (UMP, messaggio GDPR da creare in AdMob > Privacy e messaggi), interstitial con limite di frequenza, banner che non copre la barra delle schede, con premio; prove. Nel test chiuso niente annunci veri (amici che cliccano = rischio per l'account AdMob).
+
+## 19/10: sito su Vercel (bt-app-2.vercel.app)
+- Il 404 veniva dal ramo main, che contiene solo il README. Edoardo ha impostato su Vercel il ramo di produzione `tappa-3`: ogni push su tappa-3 aggiorna il sito.
