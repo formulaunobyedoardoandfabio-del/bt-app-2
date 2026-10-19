@@ -92,3 +92,14 @@ poi push di tappa-3 e di `tappa-3:refs/heads/apk-prova` e controllo della build 
 - OpenF1: tutti e due i piani (gratis e sponsor) dicono "personal use". Edoardo chiede a OpenF1 (Contact, "Custom projects") se va bene per l'app pubblica con pubblicità e Premium. Finché non rispondono, niente diretta a pagamento nell'app. Le credenziali solo nelle variabili di Vercel, mai nel codice.
 - Prima della produzione: audio team radio e Premium (Google Play Billing) da sistemare.
 - 23:11: la Play Console vuole il pacchetto com.bt.formula1 (com.bt.app è di un altro sviluppatore: autorità androidx-startup e fileprovider già in uso). appId tornato com.bt.formula1, anche per il futuro google-services.json. AAB del Play Store: versionCode = minuti dal 1/1/2020 (cresce sempre, più alto delle build vecchie); APK di prova invariati.
+
+## 19/10: unità pubblicitarie AdMob (da Edoardo, non ancora nel codice)
+App ID: ca-app-pub-5787516371588469~8054706643 (già nel manifest). Nel codice dell'app oggi nessun annuncio.
+- Banner nelle News (Banner): ca-app-pub-5787516371588469/2997561321
+- Pubblicità Banner (Banner): ca-app-pub-5787516371588469/3821223256
+- Pubblicità tra le News (Interstitial): ca-app-pub-5787516371588469/9706030785
+- Pubblicità in fondo alla classifica (Interstitial): ca-app-pub-5787516371588469/2087570220
+- Premium (Con premio): ca-app-pub-5787516371588469/5624901693, /6784763097, /9675827346
+- Pubblicità (Con premio): ca-app-pub-5787516371588469/6456990840
+- Personalizzabile, Pubblicità personalizzabile (Nativo avanzato): /9774488555, /5590821687 (il plugin @capacitor-community/admob non fa i nativi)
+Da fare in una sessione con token, su un ramo a parte: consenso UE (UMP, messaggio GDPR da creare in AdMob > Privacy e messaggi), interstitial con limite di frequenza, banner che non copre la barra delle schede, con premio; prove. Nel test chiuso niente annunci veri (amici che cliccano = rischio per l'account AdMob).
