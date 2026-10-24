@@ -145,6 +145,42 @@ function raceDayPassed(date, now) {   // il giorno della gara è già finito, in
   const p = romeParts(now);
   return day < `${p.year}-${p.month}-${p.day}`;
 }
+// Stato della gara (24/10). Con gli orari ufficiali del weekend (CIRCUIT_INFO.weekend) cambia da solo: IN ARRIVO fino a
+// 30 minuti prima della prima sessione, LIVE fino a 4 ore dopo la partenza della gara, poi CONCLUSA. Prima la gara era
+// LIVE solo se l'admin la metteva così (in shared/bt-races, che spesso non c'è): nel weekend la diretta non partiva.
+// Lo stato salvato: LIVE vale da 3 giorni prima della prima sessione a 6 ore dopo la partenza (l'admin apre prima o
+// tiene aperta la diretta); CONCLUSA chiude prima la diretta; IN ARRIVO è quello di serie (spesso vecchio) e non conta.
+// Senza orari ufficiali (le gare passate prima della Malesia) vale lo stato salvato, se no la data, come prima.
+const HOUR = 3600000;
+const AUTO_LIVE_BEFORE_MS = 30 * 60000, AUTO_LIVE_AFTER_MS = 4 * HOUR, SAVED_LIVE_BEFORE_MS = 72 * HOUR, SAVED_LIVE_AFTER_MS = 6 * HOUR;
+function weekendSpan(circuitId) {
+  const info = CIRCUIT_INFO[circuitId];
+  const times = (info && Array.isArray(info.weekend) ? info.weekend : []).map(s => ({ key: s && s.key, at: Date.parse(s && s.utc) })).filter(s => isFinite(s.at));
+  const race = times.find(s => s.key === "RACE");
+  return race ? { first: Math.min(...times.map(s => s.at)), race: race.at } : null;
+}
+function raceStatusAt(race, saved, now) {
+  const ok = F1.RACE_STATUSES.includes(saved) ? saved : null;
+  const span = weekendSpan(race.circuitId);
+  if (!span) return ok || (raceDayPassed(race.date, now) ? "CONCLUSA" : "IN ARRIVO");
+  if (ok === "CONCLUSA") return "CONCLUSA";
+  if (ok === "LIVE" && now >= span.first - SAVED_LIVE_BEFORE_MS && now <= span.race + SAVED_LIVE_AFTER_MS) return "LIVE";
+  return now < span.first - AUTO_LIVE_BEFORE_MS ? "IN ARRIVO" : now <= span.race + AUTO_LIVE_AFTER_MS ? "LIVE" : "CONCLUSA";
+}
+// Una sola gara LIVE: resta quella con la partenza più vicina a adesso (un LIVE dimenticato non ruba il weekend in corso).
+function oneLive(races, now) {
+  const live = races.filter(r => r.status === "LIVE");
+  if (live.length < 2) return races;
+  const startOf = r => { const s = weekendSpan(r.circuitId); return s ? s.race : Date.parse(String(r.date).slice(0, 10) + "T12:00:00Z"); };
+  const keep = live.reduce((a, b) => (Math.abs(startOf(b) - now) < Math.abs(startOf(a) - now) ? b : a));
+  return races.map(r => (r.status === "LIVE" && r !== keep ? { ...r, status: raceDayPassed(r.date, now) ? "CONCLUSA" : "IN ARRIVO" } : r));
+}
+// Lo stato con l'ora nuova (l'app resta aperta durante il weekend). Se non cambia niente, la stessa lista.
+function raceStatusesAt(races, now = Date.now()) {
+  if (!Array.isArray(races)) return races;
+  const next = oneLive(races.map(r => { const s = raceStatusAt(r, r.savedStatus, now); return s === r.status ? r : { ...r, status: s }; }), now);
+  return next.every((r, i) => r === races[i]) ? races : next;
+}
 // Calendario della 2.0 (base, 23 gare verificate) con lo stato salvato oggi; le gare salvate che non corrispondono
 // restano in extra, così nel salvataggio non si perdono.
 function mergeRaces(base, stored, now = Date.now()) {
@@ -158,12 +194,13 @@ function mergeRaces(base, stored, now = Date.now()) {
   });
   const races = (base || []).map(b => {
     const s = byCircuit.get(b.circuitId);
-    const status = s && F1.RACE_STATUSES.includes(s.status) ? s.status : raceDayPassed(b.date, now) ? "CONCLUSA" : "IN ARRIVO";
-    const out = { ...b, status };
+    const saved = s && F1.RACE_STATUSES.includes(s.status) ? s.status : null;
+    const out = { ...b, status: raceStatusAt(b, saved, now) };
+    if (saved) out.savedStatus = saved;   // lo stato salvato: con l'ora nuova si ricalcola (raceStatusesAt)
     if (s && typeof s.date === "string") out.savedStart = s.date;   // l'ora salvata, per le gare senza orario ufficiale
     return out;
   });
-  return { races, extra };
+  return { races: oneLive(races, now), extra };
 }
 // Partenza della gara in ora italiana senza fuso: dagli orari ufficiali di CIRCUIT_INFO; se mancano, l'ora salvata
 // quel giorno; altrimenti le 15:00.
@@ -363,7 +400,7 @@ function profileFromStore(doc) {
 module.exports = {
   uid, parseDate, fmtDate, relTime, romeLocal,
   FREE_CATEGORIES, newsFromStore, newsToStore,
-  circuitIdOf, mergeRaces, racesToStore,
+  circuitIdOf, mergeRaces, raceStatusesAt, racesToStore,
   teamIdOf, driverIdOf, standingsFromStore, standingsToStore,
   notifsFromStore, notifToStore,
   igFromStore, igToStore, igProfileUrl,

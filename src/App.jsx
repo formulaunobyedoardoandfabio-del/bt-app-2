@@ -31,6 +31,8 @@ import { generateArticle } from "./services/backend";
 import { fx } from "./services/fx";
 import { createCommons, normFile as commonsFileOf } from "./services/commons";
 import { createOpenF1, buildReplay, lastRaceFromResult, sessionType as of1SessionType } from "./services/openf1";
+import { createJolpica, pick as pickStandings } from "./services/jolpica";
+import { createMeteo, sessionForecast, skyOf } from "./services/meteo";
 
 /* ── DESIGN TOKENS (matches the B&T concept style) ─────────────────── */
 // Tappa 3 (G01-G02): sfondo nero puro (schermi OLED) e il colore dei tasti scelto da chi usa l'app. applyTheme cambia
@@ -345,6 +347,14 @@ const LIVE_DRIVERS = DRIVERS.map(d => ({ id: d.id, code: driverCode(d), number: 
 // Dati veri di OpenF1 (src/services/openf1.js): una sola coda di richieste per tutta l'app (3 al secondo, 30 al minuto).
 // Gara LIVE: ogni 30 secondi si guarda l'ultima sessione; finita (non più bloccata) si carica una volta e si rivede.
 const OF1 = createOpenF1();
+// Classifiche del mondiale in automatico (24/10): Jolpica F1, gratis e senza chiave (src/services/jolpica.js), lette al
+// massimo ogni 30 minuti. È pensato per uso non commerciale: prima dell'uscita pubblica con la pubblicità serve il
+// permesso di Jolpica (HANDOFF.md). false = solo le classifiche dell'admin.
+const JOLPICA_ON = true;
+const Jolpica = createJolpica({ store: local, now: nowMs });
+// Previsioni meteo del weekend (24/10): MET Norway tramite la funzione su Vercel api/meteo.js (src/services/meteo.js).
+const Meteo = createMeteo({ store: local, now: nowMs });
+const MET_LICENSE_URL = "https://api.met.no/doc/License";
 const OF1_POLL_MS = 30000;
 const OF1_LAST_RACE_KEY = "bt-of1-last-race", OF1_LAST_RACE_MS = 6 * 3600000;   // ultima gara di OpenF1: sul telefono per 6 ore
 const OF1_RETRY_MS = 5 * 60000;                                                  // senza risposta: si riprova dopo 5 minuti
@@ -388,6 +398,8 @@ const FLAG_UI = {
 const CIRCUIT_IDS = F1.CIRCUIT_IDS;
 // Calendario come nella 2.0 (lo stato vero arriva da Firebase, shared/bt-races: src/services/appdata.js).
 const RACES_INIT = F1.RACES.map((r, i) => ({ ...r, status: i < 15 ? "CONCLUSA" : "IN ARRIVO" }));
+// La gara del weekend: quella LIVE (weekend in corso, compat.raceStatusesAt), altrimenti la prossima in arrivo.
+const weekendRace = (races, ok = () => true) => races.find(r => r.status === "LIVE" && ok(r)) || races.find(r => r.status === "IN ARRIVO" && ok(r)) || null;
 const RACE_STATUSES = F1.RACE_STATUSES;
 const fmtDate = (iso) => { if (!iso) return "–"; const [y, m, d] = iso.split("-").map(Number); const M = ["gen", "feb", "mar", "apr", "mag", "giu", "lug", "ago", "set", "ott", "nov", "dic"]; return `${d} ${M[m - 1]} ${y}`; };
 
@@ -2609,6 +2621,15 @@ function WeatherGuess({ s, guess, result, lock, onGuess }) {
 // sessione del weekend, con l'esito dal meteo vero a fine sessione. Niente previsioni né radar inventati.
 function WeatherPanel({ race, st, live, guesses = {}, results = {}, onGuess }) {
   const [sel, setSel] = useState(null);
+  // Previsioni vere del weekend (MET Norway, src/services/meteo.js): solo se arrivano, niente numeri inventati.
+  const [fc, setFc] = useState(null);
+  const fcId = race ? race.circuitId : null;
+  useEffect(() => {
+    let alive = true;
+    setFc(null);
+    if (fcId) Meteo.forecast(fcId).then(v => { if (alive) setFc(v); }, () => {});
+    return () => { alive = false; };
+  }, [fcId]);
   if (!race) return null;
   const liveKey = live && live.raceId === race.id && !isOf1Live(live) ? live.type : null;   // la sessione rivista è già finita
   const w = weekendWeather(race, 0, liveKey);   // solo le sessioni del weekend e i loro orari
@@ -2637,6 +2658,31 @@ function WeatherPanel({ race, st, live, guesses = {}, results = {}, onGuess }) {
       ) : (
         <p data-wx-empty="" style={{ margin: 0, padding: 14, borderRadius: 18, background: C.card, border: `1px solid ${C.border}`, fontFamily: F_BODY, fontSize: 12.5, color: C.muted, lineHeight: 1.5 }}>{WX_EMPTY}</p>
       )}
+      {(() => {
+        const info = CIRCUIT_INFO[race.circuitId];
+        const rows = fc && info ? sessionForecast(fc, info.weekend, nowMs()).filter(x => x.fc) : [];
+        if (!rows.length) return null;
+        return (
+          <div data-wx-forecast="" style={{ padding: "12px 12px 10px", borderRadius: 18, background: C.card, border: `1px solid ${C.border}` }}>
+            <Eyebrow>PREVISIONI DEL WEEKEND</Eyebrow>
+            {rows.map(x => {
+              const ses = w.sessions.find(s => s.key === x.key), f = x.fc, wet = f.rain != null && f.rain > 0;
+              return (
+                <div key={x.key} data-wx-fc={x.key} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 2px", borderTop: `1px solid ${C.divider}` }}>
+                  <span style={{ width: 46, flexShrink: 0, fontFamily: F_HEAD, fontWeight: 800, fontSize: 11.5, color: C.text }}>{WX_SHORT[x.key] || x.key}</span>
+                  <span style={{ flex: 1, minWidth: 0, fontFamily: F_BODY, fontSize: 11, color: C.dim, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{ses ? (ses.day ? String(ses.day).split(" ").slice(0, 2).join(" ") + " · " : "") + ses.time : ""}</span>
+                  <SkyIcon kind={skyOf(f.sym) || "cloud"} size={20} />
+                  <span style={{ width: 36, textAlign: "right", fontFamily: F_HEAD, fontWeight: 800, fontSize: 13.5, color: C.text }}>{Math.round(f.temp)}°</span>
+                  <span style={{ width: 82, textAlign: "right", fontFamily: F_BODY, fontSize: 11, color: wet ? TIMING.pit : C.muted }}>{f.rain == null ? "–" : wet ? `${String(f.rain).replace(".", ",")} mm${f.step === 6 ? " in 6 h" : ""}` : "Asciutto"}</span>
+                </div>
+              );
+            })}
+            <p style={{ margin: "8px 2px 0", fontFamily: F_BODY, fontSize: 10.5, color: C.dim, lineHeight: 1.45 }}>
+              Previsioni: dati di <button className="press" onClick={() => openUrl(MET_LICENSE_URL)} style={{ padding: 0, fontFamily: F_BODY, fontSize: 10.5, color: C.muted, textDecoration: "underline" }}>MET Norway (CC BY 4.0)</button>, all'inizio di ogni sessione (ore locali del circuito).
+            </p>
+          </div>
+        );
+      })()}
       <div style={{ padding: "12px 10px 10px", borderRadius: 18, background: C.card, border: `1px solid ${C.border}` }}>
         <div style={{ padding: "0 4px" }}><Eyebrow>PRONOSTICO METEO DEL WEEKEND</Eyebrow></div>
         <div role="group" aria-label="Pronostico per sessione" style={{ display: "flex", gap: 6 }}>
@@ -4127,7 +4173,7 @@ const AERO_SHARE = {};
 const aeroShare = id => { if (AERO_SHARE[id] == null) { const t = trackOf(id); let a = 0, b = 0; for (let i = 0; i < t.n; i++) { const dt = t.ds / t.speed[i]; b += dt; if (t.speed[i] * 3.6 > 250) a += dt; } AERO_SHARE[id] = a / b; } return AERO_SHARE[id]; };
 function AeroCalc({ races, onBack }) {
   const opts = races.filter((r, i) => CIRCUITS[r.circuitId] && races.findIndex(x => x.circuitId === r.circuitId) === i);
-  const next = races.find(r => r.status === "IN ARRIVO" && CIRCUITS[r.circuitId]) || opts[0];
+  const next = weekendRace(races, r => CIRCUITS[r.circuitId]) || opts[0];
   const [cid, setCid] = useState(next ? next.circuitId : null);
   const [wing, setWing] = useState(5), [ride, setRide] = useState(3);
   if (!cid) return null;
@@ -4277,7 +4323,7 @@ function CircuitGuide({ circuitId }) {
 }
 function GuideTool({ races, onBack }) {
   const opts = races.filter((r, i) => GUIDE()[r.circuitId] && races.findIndex(x => x.circuitId === r.circuitId) === i);
-  const next = races.find(r => r.status === "IN ARRIVO" && GUIDE()[r.circuitId]) || opts[0];
+  const next = weekendRace(races, r => GUIDE()[r.circuitId]) || opts[0];
   const [cid, setCid] = useState(next ? next.circuitId : null);
   return (
     <div className="scrollcol" style={{ height: "100%" }}>
@@ -4807,6 +4853,178 @@ function BluffTool({ races, live, tags = [], onRefresh, onBack }) {
   );
 }
 
+// Icone dei giochi del Garage (disegno "Icone del Garage" del 24/10): un glifo per gioco su una piastrella nera a puntini
+// LED. Bianco, colore dell'app e oro; mescole e settori con i loro colori. "In arrivo": grigie, bordo tratteggiato e
+// orologio oro.
+const GARAGE_INK = accent => ({ w: "#F4F2EF", a: accent, g: "#E7B34C", m: "#3A3A42", k: "#0C0C0F", soft: "#FF1801", med: "#F2C230", hard: "#F4F2EF", pu: "#B35CFF", gr: "#3ED66B", ye: "#F2C230" });
+const GARAGE_INK_SOON = { w: "#8E8D94", a: "#BDBCC2", g: "#8E8D94", m: "#2A2A30", k: "#0C0C0F", soft: "#BDBCC2", med: "#8E8D94", hard: "#6E6D74", pu: "#6E6D74", gr: "#8E8D94", ye: "#BDBCC2" };
+const GARAGE_GLYPHS = {
+  pitstop: c => (<>
+    <circle cx="20" cy="21.5" r="15.5" fill="none" stroke={c.m} strokeWidth="2.5" />
+    <path d="M20 6 A15.5 15.5 0 1 1 4.5 21.5" fill="none" stroke={c.a} strokeWidth="2.5" strokeLinecap="round" />
+    <rect x="17.5" y="1.5" width="5" height="3" rx="1.2" fill={c.w} />
+    <circle cx="20" cy="21.5" r="8.5" fill="none" stroke={c.w} strokeWidth="4" />
+    <circle cx="20" cy="21.5" r="3" fill={c.g} />
+  </>),
+  silly: c => (<>
+    <path d="M11 24.5 C11 18.5 14.6 14.5 20 14.5 C25.4 14.5 29 18.3 29 22.8 L29 26 C29 27 28.3 27.6 27.4 27.6 L14.2 27.6 C12.4 27.6 11 26.4 11 24.5 Z" fill="none" stroke={c.w} strokeWidth="2.4" strokeLinejoin="round" />
+    <path d="M20.2 18.6 L28.6 18.6 L29 22.8 L21.2 22.8 C20.4 22.8 19.8 22.2 19.8 21.4 L19.8 19 C19.8 18.8 20 18.6 20.2 18.6 Z" fill={c.a} />
+    <path d="M8 12.5 C12 6.5 28 6.5 32 12.5" fill="none" stroke={c.a} strokeWidth="2.4" strokeLinecap="round" />
+    <path d="M28.3 12 L32 12.5 L32.7 8.8" fill="none" stroke={c.a} strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" />
+    <path d="M32 31 C28 37 12 37 8 31" fill="none" stroke={c.g} strokeWidth="2.4" strokeLinecap="round" />
+    <path d="M11.7 31.5 L8 31 L7.3 34.7" fill="none" stroke={c.g} strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" />
+  </>),
+  aero: c => (<>
+    <path d="M3.5 8.5 C12 4 28 4 36.5 8.5" fill="none" stroke={c.g} strokeWidth="2" strokeLinecap="round" strokeDasharray="2.5 3" />
+    <rect x="5" y="11" width="3.5" height="15" rx="1.5" fill={c.w} />
+    <rect x="31.5" y="11" width="3.5" height="15" rx="1.5" fill={c.w} />
+    <rect x="7" y="13.5" width="26" height="5" rx="2" fill={c.w} />
+    <path d="M12 18.5 V31 M28 18.5 V31" stroke={c.w} strokeWidth="2.5" strokeLinecap="round" />
+    <path d="M20 21 V33 M16.2 29.2 L20 33 L23.8 29.2" fill="none" stroke={c.a} strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" />
+  </>),
+  setup: c => (<>
+    <path d="M10 6 V34 M20 6 V34 M30 6 V34" stroke={c.m} strokeWidth="2.5" strokeLinecap="round" />
+    <path d="M10 22 V34 M20 13 V34 M30 26 V34" stroke={c.w} strokeWidth="2.5" strokeLinecap="round" />
+    <path d="M4 18 H36" stroke={c.a} strokeWidth="1.6" strokeLinecap="round" strokeDasharray="1.5 2.5" opacity=".8" />
+    <circle cx="10" cy="22" r="3.7" fill={c.a} stroke={c.k} strokeWidth="1.5" />
+    <circle cx="20" cy="13" r="3.7" fill={c.g} stroke={c.k} strokeWidth="1.5" />
+    <circle cx="30" cy="26" r="3.7" fill={c.w} stroke={c.k} strokeWidth="1.5" />
+  </>),
+  strategy: c => (<>
+    <rect x="4" y="16.5" width="11" height="8" rx="4" fill={c.soft} />
+    <rect x="18" y="16.5" width="9" height="8" rx="4" fill={c.med} />
+    <rect x="30" y="16.5" width="6" height="8" rx="3" fill={c.hard} />
+    <path d="M14.5 8.5 H18.5 L16.5 12 Z M26.5 8.5 H30.5 L28.5 12 Z" fill={c.w} stroke={c.w} strokeWidth="1" strokeLinejoin="round" />
+    <path d="M4 31 H36" stroke={c.m} strokeWidth="2.5" strokeLinecap="round" />
+    <path d="M16.5 28.5 V33.5 M28.5 28.5 V33.5" stroke={c.w} strokeWidth="2" strokeLinecap="round" />
+  </>),
+  deg: c => (<>
+    <path d="M17.5 34 H36" stroke={c.m} strokeWidth="2.5" strokeLinecap="round" />
+    <path d="M17.5 29 C23 28.5 27 26.5 30 22.5 L34 8" fill="none" stroke={c.a} strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" />
+    <circle cx="30" cy="22.5" r="2.4" fill={c.g} />
+    <circle cx="10.5" cy="27" r="6.5" fill="none" stroke={c.w} strokeWidth="3.5" />
+    <circle cx="10.5" cy="27" r="2" fill={c.w} />
+  </>),
+  mates: c => (<>
+    <path d="M20 8 V34" stroke={c.m} strokeWidth="1.6" strokeLinecap="round" strokeDasharray="2 2.5" />
+    <path d="M3.5 22 C3.5 16.5 7 13 12 13 C16.5 13 18.5 16.5 18.5 20 L18.5 24 L6 24 C4.6 24 3.5 23.2 3.5 22 Z" fill="none" stroke={c.w} strokeWidth="2.4" strokeLinejoin="round" />
+    <path d="M12 16.5 L18 16.5 L18.5 20 L12.8 20 C12.2 20 11.7 19.5 11.7 18.9 L11.7 16.8 Z" fill={c.g} />
+    <path d="M36.5 22 C36.5 16.5 33 13 28 13 C23.5 13 21.5 16.5 21.5 20 L21.5 24 L34 24 C35.4 24 36.5 23.2 36.5 22 Z" fill="none" stroke={c.a} strokeWidth="2.4" strokeLinejoin="round" />
+    <path d="M28 16.5 L22 16.5 L21.5 20 L27.2 20 C27.8 20 28.3 19.5 28.3 18.9 L28.3 16.8 Z" fill={c.a} />
+    <path d="M5 30.5 H15" stroke={c.w} strokeWidth="3" strokeLinecap="round" />
+    <path d="M25 30.5 H36" stroke={c.a} strokeWidth="3" strokeLinecap="round" />
+  </>),
+  bluff: c => (<>
+    <path d="M7 7.5 H33 A3 3 0 0 1 36 10.5 V24.5 A3 3 0 0 1 33 27.5 H17.5 L10.5 33.5 V27.5 H7 A3 3 0 0 1 4 24.5 V10.5 A3 3 0 0 1 7 7.5 Z" fill="none" stroke={c.w} strokeWidth="2.4" strokeLinejoin="round" />
+    <path d="M8.5 17.5 H12.5 L15 12 L18.5 23 L21.5 13.5 L24 19.5 L26 16.5 H31.5" fill="none" stroke={c.a} strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" />
+  </>),
+  guide: c => (<>
+    <path d="M9 28.5 C5.5 22 8.5 12.5 16 11 C21 10 22.5 14.5 26.5 13 C31 11.3 35 13.8 34.3 18.8 C33.7 23.4 28.3 23.2 27.3 27.4 C26.4 31 21.6 33 16.6 32.3 C13 31.8 10.6 31.2 9 28.5 Z" fill="none" stroke={c.w} strokeWidth="2.5" strokeLinejoin="round" />
+    <path d="M6.3 30.4 L11.2 26.8" stroke={c.w} strokeWidth="2" strokeLinecap="round" />
+    <circle cx="16" cy="11" r="3.5" fill={c.a} stroke={c.k} strokeWidth="1.5" />
+    <circle cx="27.3" cy="27.4" r="3.5" fill={c.g} stroke={c.k} strokeWidth="1.5" />
+  </>),
+  clash: c => (<>
+    <path d="M4.5 25 C3 19.5 6 14 10.5 14 C14.5 14 15 17.5 16.5 19.5 C17.8 21.4 17.5 25 14.8 26.7 C11.8 28.6 6.4 28.6 4.5 25 Z" fill="none" stroke={c.w} strokeWidth="2.4" strokeLinejoin="round" />
+    <path d="M24 13.5 H32.5 C35 13.5 36.3 15.8 35.2 18 L31.8 25.2 C30.8 27.4 28.2 27.8 26.4 26.3 L23.6 24 C22.2 22.8 22.1 21 23.1 19.8 L24.8 17.8 C25.6 16.8 25.1 15.6 24 15.6 Z" fill="none" stroke={c.a} strokeWidth="2.4" strokeLinejoin="round" />
+    <path d="M21 7 L18.6 20.5 H21.6 L19.2 33" fill="none" stroke={c.g} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
+  </>),
+  ghost: c => (<>
+    <path d="M4 25 C9 25 11.6 22 13.4 17 C15.5 11 19 6 28.5 4.8" fill="none" stroke={c.w} strokeWidth="2.2" strokeLinecap="round" strokeDasharray="2.5 3" opacity=".75" />
+    <circle cx="29.5" cy="4.8" r="2.6" fill="none" stroke={c.w} strokeWidth="1.8" opacity=".75" />
+    <path d="M4 32 C10 32 13.5 29 15.5 23.5 C17.8 17 21.5 10.5 32.5 9" fill="none" stroke={c.a} strokeWidth="2.8" strokeLinecap="round" />
+    <circle cx="33" cy="9" r="3.1" fill={c.a} />
+  </>),
+  reaction: c => (<>
+    <rect x="5" y="5" width="30" height="3.5" rx="1.75" fill={c.m} />
+    <circle cx="11" cy="15.5" r="4.2" fill={c.a} />
+    <circle cx="20" cy="15.5" r="4.2" fill={c.a} />
+    <circle cx="29" cy="15.5" r="3.7" fill="none" stroke={c.w} strokeWidth="2" />
+    <path d="M21.5 22 L15.5 30.5 H20 L18.5 36 L25 27.5 H20.5 Z" fill={c.g} stroke={c.g} strokeWidth="1" strokeLinejoin="round" />
+  </>),
+  cutoff: c => (<>
+    <rect x="8" y="4" width="24" height="32" rx="5" fill="none" stroke={c.w} strokeWidth="2.4" />
+    <path d="M15.6 13.6 A4.6 4.6 0 1 1 22.9 17.4 C21.3 18.4 20.2 19.5 20.2 21.6" fill="none" stroke={c.a} strokeWidth="2.8" strokeLinecap="round" />
+    <circle cx="20.2" cy="25.6" r="1.8" fill={c.a} />
+    <path d="M12.5 31 H27.5" stroke={c.m} strokeWidth="2.5" strokeLinecap="round" />
+    <path d="M12.5 31 H21" stroke={c.g} strokeWidth="2.5" strokeLinecap="round" />
+  </>),
+  delta: c => (<>
+    <path d="M20 5 L34 27 H6 Z" fill="none" stroke={c.w} strokeWidth="2.8" strokeLinejoin="round" />
+    <rect x="6" y="31" width="8.5" height="4" rx="2" fill={c.pu} />
+    <rect x="15.75" y="31" width="8.5" height="4" rx="2" fill={c.gr} />
+    <rect x="25.5" y="31" width="8.5" height="4" rx="2" fill={c.ye} />
+  </>),
+  crew: c => (<>
+    <circle cx="20" cy="19" r="8.5" fill="none" stroke={c.w} strokeWidth="3.8" />
+    <circle cx="20" cy="19" r="2.6" fill={c.w} />
+    <path d="M3 19 H8.5 M6.2 15.6 L9.6 19 L6.2 22.4" fill="none" stroke={c.a} strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" />
+    <path d="M37 19 H31.5 M33.8 15.6 L30.4 19 L33.8 22.4" fill="none" stroke={c.g} strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" />
+    <path d="M13 34 H27" stroke={c.m} strokeWidth="2.5" strokeLinecap="round" />
+  </>),
+  telemetry: c => (<>
+    <rect x="4" y="6" width="32" height="24" rx="4" fill="none" stroke={c.m} strokeWidth="2" />
+    <path d="M7.5 24 H11 L13 12.5 H17 L19 20.5 H23 L25 11 H28.5 L30.5 18 H32.5" fill="none" stroke={c.w} strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" />
+    <circle cx="30.5" cy="31" r="6.5" fill={c.a} />
+    <path d="M28.4 29.4 A2.2 2.2 0 1 1 31.6 31.3 C30.9 31.7 30.6 32.1 30.6 32.9" fill="none" stroke={c.k} strokeWidth="1.9" strokeLinecap="round" />
+    <circle cx="30.6" cy="35" r="1" fill={c.k} />
+  </>),
+  engineer: c => (<>
+    <path d="M11.5 10.5 C11.5 4.8 28.5 4.8 28.5 10.5" fill="none" stroke={c.a} strokeWidth="2.4" strokeLinecap="round" />
+    <rect x="8.8" y="8.5" width="4.4" height="6.5" rx="2" fill={c.a} />
+    <rect x="26.8" y="8.5" width="4.4" height="6.5" rx="2" fill={c.a} />
+    <path d="M7 21 C7 18.2 9.2 16 12 16 H28 C30.8 16 33 18.2 33 21 V26.5 C33 29.5 30.5 32 27.5 32 H25 L23 35 H17 L15 32 H12.5 C9.5 32 7 29.5 7 26.5 Z" fill="none" stroke={c.w} strokeWidth="2.4" strokeLinejoin="round" />
+    <rect x="15.5" y="19.5" width="9" height="5.5" rx="1.2" fill={c.g} />
+    <circle cx="11.5" cy="25" r="1.6" fill={c.w} />
+    <circle cx="28.5" cy="25" r="1.6" fill={c.w} />
+  </>),
+  stewards: c => (<>
+    <g transform="rotate(-40 21 14)">
+      <rect x="12" y="8" width="18" height="7.5" rx="2.5" fill={c.w} />
+      <rect x="19.6" y="15.5" width="2.8" height="16" rx="1.4" fill={c.w} />
+    </g>
+    <rect x="4.5" y="31" width="17" height="4.5" rx="2" fill={c.a} />
+    <path d="M7.5 26.5 L5 24.3 M11.5 25.6 L10.8 22.5" stroke={c.g} strokeWidth="2.2" strokeLinecap="round" />
+  </>),
+  radar: c => (<>
+    <path d="M20 5 L33 12.5 L33 27.5 L20 35 L7 27.5 L7 12.5 Z" fill="none" stroke={c.m} strokeWidth="1.8" strokeLinejoin="round" />
+    <path d="M20 12 L26.9 16 L26.9 24 L20 28 L13.1 24 L13.1 16 Z" fill="none" stroke={c.m} strokeWidth="1.5" strokeLinejoin="round" />
+    <path d="M20 20 L20 5 M20 20 L33 12.5 M20 20 L33 27.5 M20 20 L20 35 M20 20 L7 27.5 M20 20 L7 12.5" stroke={c.m} strokeWidth="1.2" />
+    <path d="M20 8 L30.4 14 L28.7 25 L20 31 L11.3 25 L13.9 16.5 Z" fill={c.a} fillOpacity=".28" stroke={c.a} strokeWidth="2.2" strokeLinejoin="round" />
+    <circle cx="20" cy="8" r="1.9" fill={c.g} />
+    <circle cx="28.7" cy="25" r="1.9" fill={c.g} />
+  </>),
+  attack: c => (<>
+    <path d="M3 16.5 H8.5 M2 22.5 H7.5 M3 28.5 H8.5" stroke={c.g} strokeWidth="2.4" strokeLinecap="round" />
+    <circle cx="23.5" cy="22.5" r="12" fill="none" stroke={c.w} strokeWidth="2.6" />
+    <rect x="21" y="5" width="5" height="3.2" rx="1.2" fill={c.w} />
+    <path d="M32.5 12.5 L34.5 10.5" stroke={c.w} strokeWidth="2.6" strokeLinecap="round" />
+    <path d="M23.5 22.5 L28.5 16.8" stroke={c.a} strokeWidth="2.8" strokeLinecap="round" />
+    <circle cx="23.5" cy="22.5" r="2.2" fill={c.a} />
+  </>),
+  stint: c => (<>
+    <path d="M15 4.5 C15 4.5 6 14.5 6 21.5 A9 9 0 0 0 24 21.5 C24 14.5 15 4.5 15 4.5 Z" fill="none" stroke={c.w} strokeWidth="2.5" strokeLinejoin="round" />
+    <path d="M9.2 22 C11.5 20.5 13.5 23.5 15.5 22 C17.5 20.5 19.2 23 20.8 22" fill="none" stroke={c.a} strokeWidth="2.4" strokeLinecap="round" />
+    <circle cx="31" cy="30.5" r="5" fill="none" stroke={c.g} strokeWidth="3" />
+    <circle cx="31" cy="30.5" r="1.6" fill={c.g} />
+  </>),
+};
+function GarageIcon({ id, soon = false, size = 62 }) {
+  const glyph = GARAGE_GLYPHS[id];
+  const R = Math.round(size * 0.28), G = Math.round(size * 0.64), B = Math.max(14, Math.round(size * 0.3)), off = Math.round(size * 0.06);
+  return (
+    <span data-garage-icon={id} aria-hidden="true" style={{ position: "relative", width: size, height: size, flexShrink: 0, boxSizing: "border-box", borderRadius: R, display: "flex", alignItems: "center", justifyContent: "center",
+      background: "#0C0C0F radial-gradient(rgba(255,255,255,.075) .9px, transparent 1.15px) 0 0/6px 6px", border: `1px ${soon ? "dashed rgba(255,255,255,.2)" : "solid rgba(255,255,255,.09)"}`, boxShadow: "inset 0 1px 0 rgba(255,255,255,.05)" }}>
+      {glyph && <svg viewBox="0 0 40 40" width={G} height={G} style={{ display: "block" }}>{glyph(soon ? GARAGE_INK_SOON : GARAGE_INK(C.accentInk))}</svg>}
+      {soon && (
+        <span data-soon-clock="" style={{ position: "absolute", right: off, bottom: off, width: B, height: B, borderRadius: "50%", background: "#E7B34C", display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "0 0 0 2px #0C0C0F" }}>
+          <svg viewBox="0 0 24 24" width={Math.round(B * 0.64)} height={Math.round(B * 0.64)} fill="none" stroke="#15120A" strokeWidth="2.8" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="8" /><path d="M12 7.5v5l3 2" /></svg>
+        </span>
+      )}
+    </span>
+  );
+}
+
 // Giochi e strumenti annunciati nel Garage ("In arrivo"): non si aprono ancora.
 const GARAGE_SOON = [
   ["reaction", "Reaction Test 1v1", "Il duello dei semafori: sfida un amico sui millisecondi della partenza."],
@@ -4836,19 +5054,9 @@ function GarageScreen({ races, pitBest, onPitResult, sillyPreds, onPredict, sill
   if (game === "deg") return <TyreDegTool races={races} live={live} onBack={back} />;
   if (game === "mates") return <TeammatesTool races={races} onBack={back} />;
   if (game === "bluff") return <BluffTool races={races} live={live} tags={bluffTags} onRefresh={onBluffRefresh} onBack={back} />;
-  const art = { ghost: <svg viewBox="0 0 40 40" width="38" height="38" aria-hidden="true"><path d="M4 30 C12 8, 20 34, 36 10" stroke={C.accentInk} strokeWidth="3" fill="none" strokeLinecap="round" /><path d="M4 33 C13 14, 21 36, 36 16" stroke="#27D8C8" strokeWidth="2.4" fill="none" strokeDasharray="3 3" strokeLinecap="round" /></svg>, pitstop: <svg viewBox="0 0 40 40" width="38" height="38" aria-hidden="true"><circle cx="20" cy="20" r="15" fill="#1A1A1E" stroke={C.accentInk} strokeWidth="5" /><circle cx="20" cy="20" r="5" fill="#9C9CA1" /></svg>,
-    silly: <svg viewBox="0 0 40 40" width="38" height="38" aria-hidden="true"><rect x="9" y="5" width="22" height="30" rx="3" fill="#F4F2EF" /><path d="M13 13h14M13 18h14M13 23h9" stroke="#86858C" strokeWidth="2" strokeLinecap="round" /><path d="M21 31l3-6 3 6" stroke={C.accentInk} strokeWidth="2.5" fill="none" strokeLinecap="round" /></svg>,
-    aero: <svg viewBox="0 0 40 40" width="38" height="38" aria-hidden="true"><path d="M5 14h30l-3 6H8z" fill={C.accentInk} /><path d="M12 20v12M28 20v12" stroke="#F4F2EF" strokeWidth="3" strokeLinecap="round" /><path d="M5 9c8 3 22 3 30 0" stroke="#E7B34C" strokeWidth="2" fill="none" strokeDasharray="3 3" /></svg>,
-    guide: <svg viewBox="0 0 40 40" width="38" height="38" aria-hidden="true"><path d="M8 28C5 19 11 9 20 10s13-3 13 6-9 6-7 12-12 6-18 0Z" stroke="#F4F2EF" strokeWidth="2.6" fill="none" strokeLinejoin="round" /><circle cx="20" cy="10" r="3.6" fill={C.accentInk} /><circle cx="26" cy="28" r="3.6" fill="#E7B34C" /><circle cx="8" cy="28" r="2.6" fill="#F4F2EF" /></svg>,
-    clash: <svg viewBox="0 0 40 40" width="38" height="38" aria-hidden="true"><rect x="5" y="9" width="13" height="5" rx="2.5" fill={C.accentInk} /><rect x="22" y="9" width="9" height="5" rx="2.5" fill="#E7B34C" /><rect x="8" y="18" width="10" height="5" rx="2.5" fill={C.accentInk} /><rect x="22" y="18" width="13" height="5" rx="2.5" fill="#E7B34C" /><rect x="3" y="27" width="15" height="5" rx="2.5" fill={C.accentInk} /><rect x="22" y="27" width="6" height="5" rx="2.5" fill="#E7B34C" /><path d="M20 6v29" stroke="#F4F2EF" strokeWidth="1.5" /></svg>,
-    setup: <svg viewBox="0 0 40 40" width="38" height="38" aria-hidden="true"><circle cx="20" cy="20" r="14" fill="none" stroke="#F4F2EF" strokeWidth="2" opacity=".45" /><circle cx="20" cy="20" r="8" fill="none" stroke="#F4F2EF" strokeWidth="2" opacity=".8" /><path d="M20 20 31 11" stroke={C.accentInk} strokeWidth="3" strokeLinecap="round" /><circle cx="27" cy="25" r="2.6" fill="#E7B34C" /><circle cx="13" cy="15" r="2.2" fill={C.accentInk} /></svg>,
-    strategy: <svg viewBox="0 0 40 40" width="38" height="38" aria-hidden="true"><rect x="3" y="15" width="12" height="10" rx="3" fill={LED_RED} /><rect x="17" y="15" width="10" height="10" rx="3" fill="#F2C230" /><rect x="29" y="15" width="8" height="10" rx="3" fill="#F4F2EF" /><path d="M16 9v22M28 9v22" stroke="#F4F2EF" strokeWidth="1.6" strokeDasharray="2 2" /></svg>,
-    deg: <svg viewBox="0 0 40 40" width="38" height="38" aria-hidden="true"><circle cx="14" cy="23" r="10" fill="#1A1A1E" stroke="#F2C230" strokeWidth="4" /><circle cx="14" cy="23" r="3" fill="#9C9CA1" /><path d="M23 9l5 7 4-3 5 9" stroke={C.accentInk} strokeWidth="2.6" fill="none" strokeLinecap="round" strokeLinejoin="round" /></svg>,
-    mates: <svg viewBox="0 0 40 40" width="38" height="38" aria-hidden="true"><circle cx="13" cy="15" r="7" fill={C.accentInk} /><circle cx="27" cy="15" r="7" fill="#E7B34C" /><path d="M4 34c1-6 4-9 9-9s8 3 9 9M18 34c1-6 4-9 9-9s8 3 9 9" stroke="#F4F2EF" strokeWidth="2.4" fill="none" strokeLinecap="round" /></svg>,
-    bluff: <svg viewBox="0 0 40 40" width="38" height="38" aria-hidden="true"><path d="M6 8h28a3 3 0 0 1 3 3v14a3 3 0 0 1-3 3H17l-7 6v-6H6a3 3 0 0 1-3-3V11a3 3 0 0 1 3-3Z" fill="#F4F2EF" /><path d="M16.5 15a3.5 3.5 0 1 1 5 3.2c-1 .5-1.5 1.1-1.5 2.3" stroke={C.accentInk} strokeWidth="2.6" fill="none" strokeLinecap="round" /><circle cx="20" cy="24.5" r="1.6" fill={C.accentInk} /></svg> };
   const card = (id, title, sub, tag) => (
     <button key={id} className="press" data-game={id} onClick={() => setGame(id)} style={{ display: "flex", alignItems: "center", gap: 12, width: "calc(100% - 32px)", margin: "0 16px 12px", padding: 14, borderRadius: 18, background: C.card, border: `1px solid ${C.border}`, textAlign: "left" }}>
-      <span style={{ width: 62, height: 62, borderRadius: 16, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", background: `linear-gradient(135deg, ${alpha(C.accentInk, .3)}, rgba(231,179,76,.16))` }}>{art[id]}</span>
+      <GarageIcon id={id} />
       <span style={{ flex: 1, minWidth: 0 }}>
         <span style={{ display: "block", fontFamily: F_HEAD, fontWeight: 900, fontStyle: "italic", fontSize: 16, color: C.text }}>{title}</span>
         <span style={{ display: "block", marginTop: 3, fontFamily: F_BODY, fontSize: 12, color: C.muted, lineHeight: 1.35 }}>{sub}</span>
@@ -4885,6 +5093,7 @@ function GarageScreen({ races, pitBest, onPitResult, sillyPreds, onPredict, sill
       <div style={{ padding: "6px 18px 8px", fontFamily: F_BODY, fontWeight: 700, fontSize: 11, letterSpacing: 1.2, color: C.gold }}>IN ARRIVO</div>
       {GARAGE_SOON.map(([id, title, sub]) => (
         <div key={id} data-soon={id} style={{ display: "flex", alignItems: "center", gap: 12, margin: "0 16px 10px", padding: "12px 14px", borderRadius: 16, background: "transparent", border: `1px dashed ${C.border}` }}>
+          <GarageIcon id={id} soon size={48} />
           <span style={{ flex: 1, minWidth: 0 }}>
             <span style={{ display: "block", fontFamily: F_HEAD, fontWeight: 800, fontStyle: "italic", fontSize: 14.5, color: C.muted }}>{title}</span>
             <span style={{ display: "block", marginTop: 3, fontFamily: F_BODY, fontSize: 11.5, color: C.dim, lineHeight: 1.35 }}>{sub}</span>
@@ -7012,7 +7221,7 @@ function AdminPredictionsTab({ predictions, setPredictions, answers, races, onTo
   const [pad, setPad] = useState(null);           // { id, v } numero esatto che si sta scrivendo
   useBack(!!picking, () => setPicking(null));
   useBack(!!pad, () => setPad(null));
-  const next = races.find(r => r.status === "IN ARRIVO") || races[races.length - 1];
+  const next = weekendRace(races) || races[races.length - 1];
   const setAnswer = (q, v) => { setPredictions(ps => ps.map(x => x.id === q.id ? { ...x, answer: v } : x)).then(ok => ok && onToast(v == null ? "Risposta esatta tolta" : "Risposta esatta segnata: chi ha indovinato prende +1 punto")); };
   const needsOptions = kind === "poll" || kind === "history";
   const add = () => {
@@ -7294,7 +7503,7 @@ function AdminRacesTab({ races, setRaces, extra = [], setExtra, onToast, live, l
         <ABtn onClick={add}>AGGIUNGI GARA</ABtn>
       </div>
       <div style={aTitle}>CALENDARIO ({races.length})</div>
-      <p style={{ margin: "-4px 0 10px", fontFamily: F_BODY, fontSize: 11, color: C.dim, lineHeight: 1.45 }}>Metti una gara su LIVE per mostrarla "In diretta" nella sezione Race.</p>
+      <p style={{ margin: "-4px 0 10px", fontFamily: F_BODY, fontSize: 11, color: C.dim, lineHeight: 1.45 }}>Lo stato cambia da solo con gli orari del weekend: LIVE da 30 minuti prima delle prove libere fino a 4 ore dopo la partenza. Con LIVE apri la diretta fino a 3 giorni prima, con CONCLUSA la chiudi prima.</p>
       {races.map(r => (
         <div key={r.id} style={{ ...aCard, padding: "10px 12px", marginBottom: 8, display: "flex", alignItems: "center", gap: 10 }}>
           <span style={{ width: 26, fontFamily: F_HEAD, fontWeight: 800, fontSize: 12, color: C.dim }}>R{r.round}</span>
@@ -8230,9 +8439,29 @@ function App() {
   const [adminTab, setAdminTab] = useState("NEWS");
   const [fantaStats, setFantaStats] = useState(shared0.fantaStats);
   const [standings, setStandings] = useState(shared0.standings);   // { note, drivers, teams, guests }
+  // 24/10: le classifiche si mostrano da Jolpica (vere, dopo ogni gara) se non sono più vecchie di quelle dell'admin; il
+  // Pannello Admin continua a modificare le sue (standings).
+  const [jolpicaSt, setJolpicaSt] = useState(null);
+  useEffect(() => {
+    if (!JOLPICA_ON) return undefined;
+    let alive = true;
+    const load = () => Jolpica.standings().then(v => {
+      if (!alive || !v) return;
+      addStandingsGuests(v.guests);
+      setJolpicaSt(cur => (sameJson(cur, v) ? cur : v));
+    }, () => {});
+    load();
+    const iv = setInterval(load, 30 * 60000);
+    return () => { alive = false; clearInterval(iv); };
+  }, []);
+  const shownStandings = pickStandings(standings, jolpicaSt);
   // Calendario 2026 con lo stato di shared/bt-races; extra = gare salvate fuori calendario, che restano nel documento.
   const [racesDoc, setRacesDoc] = useState(shared0.races);
-  const races = racesDoc.races;
+  // 24/10: lo stato delle gare segue gli orari del weekend anche con l'app aperta (LIVE da 30 minuti prima delle prove
+  // libere, src/services/compat.js): si ricontrolla ogni 20 secondi. Senza cambi resta la stessa lista.
+  const [, setClockMin] = useState(() => Math.floor(nowMs() / 60000));
+  useEffect(() => { const iv = setInterval(() => setClockMin(Math.floor(nowMs() / 60000)), 20000); return () => clearInterval(iv); }, []);
+  const races = Compat.raceStatusesAt(racesDoc.races, nowMs());
   const [ig, setIg] = useState(shared0.ig);
   const [shareId, setShareId] = useState(null);   // articolo aperto nel foglio "Condividi"
   const [circuitId, setCircuitId] = useState(null); // pagina "Mostra di più" del circuito
@@ -9051,7 +9280,7 @@ function App() {
   const liveSt = live ? live.sim.state() : null;
   const trialActive = isPremium && !!trial && !trial.converted;
   // Weekend del FantaF1: quello in diretta, altrimenti la prossima gara. La squadra si blocca all'inizio delle qualifiche.
-  const fantaRace = (live && !demoOn && races.find(r => r.id === live.raceId)) || races.find(r => r.status === "IN ARRIVO") || null;
+  const fantaRace = (live && !demoOn && races.find(r => r.id === live.raceId)) || weekendRace(races);
   const fantaSessions = fantaRace && CIRCUIT_INFO[fantaRace.circuitId] ? CIRCUIT_INFO[fantaRace.circuitId].weekend || [] : [];
   const teamLockInfo = BtLogic.teamLock({ sessions: fantaSessions, now: nowMs() });   // solo l'ora vera: la prova DEMO non blocca (D23)
   // Previsioni sul weekend: si chiudono all'inizio della sessione a cui si riferiscono (o quando l'admin segna la risposta).
@@ -9093,9 +9322,9 @@ function App() {
     if (tab === "home") body = <HomeScreen ig={ig} highlights={highlights} onOpenIg={() => { setIgFrom("tab"); setView("instagram"); }} articles={articles} tagFilter={tagFilter} onTag={filterByTag} onClearTag={() => setTagFilter(null)} onOpenArticle={openArticle} isPremium={isPremium} onPremium={() => setPremiumOpen(true)} onToast={showToast} onLiveTrack={() => setLiveTrackOpen(true)} onGoFanta={() => goTab("fanta")}  saved={saved} onToggleSave={toggleSave} savedOnly={savedOnly} setSavedOnly={setSavedOnly} onOpenCircuit={openCircuit} homePoll={homePoll} homeVote={votes.home || null} onVote={castVote}
       hidden={hidden} onHide={hideArticle} onUnhideAll={() => { if (!userDataWait()) setHidden([]); }} onSwipeSave={saveFromSwipe}
       onRefresh={() => refreshShared(["news", "highlights", "ig", "homePoll"]).catch(() => {})} />;
-    else if (tab === "race") body = <RaceScreen favDriver={favDriver} dotdVote={live ? votesNow.dotd[live.raceId] : null} onDotdVote={(k, id) => live && voteDotd(live.raceId, k, id)} ratings={votesNow.ratings} onRate={rateDriver} onOpenChats={() => setView("chats")} onOpenGhost={() => setView("ghost")} races={races} standings={standings} isPremium={isPremium} onPremium={() => setPremiumOpen(true)} onSelectDriver={setSelectedDriver} live={live} liveSt={liveSt} onExpandMap={() => setLiveTrackOpen(true)} onTelemetry={(carId, lapNo, sector) => setTelemetry({ carId, lapNo, sector })} onOpenCircuit={openCircuit} wxGuess={wxGuess} wxResult={wxResult} onGuessWeather={guessWeather} onLapTimes={setLapList} onSecondScreen={() => setSsOpen(true)} lastRace={lastRace} of1={of1} onOf1Refresh={() => of1TickRef.current && of1TickRef.current()} replay={replayCtl} />;
+    else if (tab === "race") body = <RaceScreen favDriver={favDriver} dotdVote={live ? votesNow.dotd[live.raceId] : null} onDotdVote={(k, id) => live && voteDotd(live.raceId, k, id)} ratings={votesNow.ratings} onRate={rateDriver} onOpenChats={() => setView("chats")} onOpenGhost={() => setView("ghost")} races={races} standings={shownStandings} isPremium={isPremium} onPremium={() => setPremiumOpen(true)} onSelectDriver={setSelectedDriver} live={live} liveSt={liveSt} onExpandMap={() => setLiveTrackOpen(true)} onTelemetry={(carId, lapNo, sector) => setTelemetry({ carId, lapNo, sector })} onOpenCircuit={openCircuit} wxGuess={wxGuess} wxResult={wxResult} onGuessWeather={guessWeather} onLapTimes={setLapList} onSecondScreen={() => setSsOpen(true)} lastRace={lastRace} of1={of1} onOf1Refresh={() => of1TickRef.current && of1TickRef.current()} replay={replayCtl} />;
     else if (tab === "garage") body = <GarageScreen races={races} pitBest={pitBest} onPitResult={t => { if (!userDataWait()) setPitBest(b => b == null || t < b ? t : b); }} sillyPreds={sillyPreds} onPredict={predictSeat} sillyOfficial={sillyOfficial} live={live} stratPreds={stratPreds} onStrat={(id, st) => { if (!userDataWait()) setStratPreds(x => ({ ...x, [id]: { stints: st, at: nowMs() } })); }} bluffTags={bluffNow} onBluffRefresh={loadBluffTags} />;
-    else if (tab === "fanta") body = <FantaScreen standings={standings} squad={squad} setSquad={setSquad} base={squadBase} freeTransfers={freeTransfers} budget={FANTA_BUDGET} stats={fantaStats} race={fantaRace} lock={teamLockInfo} weekends={fantaWeekends} isPremium={isPremium} onPremium={() => setPremiumOpen(true)} onToast={showToast} bonus={bonus} leagues={leagues} setLeagues={setLeagues} needAccount={needAccount} predictions={predictions} predAnswers={predAnswers} predLockOf={predLockOf} onAnswerPrediction={answerPrediction} />;
+    else if (tab === "fanta") body = <FantaScreen standings={shownStandings} squad={squad} setSquad={setSquad} base={squadBase} freeTransfers={freeTransfers} budget={FANTA_BUDGET} stats={fantaStats} race={fantaRace} lock={teamLockInfo} weekends={fantaWeekends} isPremium={isPremium} onPremium={() => setPremiumOpen(true)} onToast={showToast} bonus={bonus} leagues={leagues} setLeagues={setLeagues} needAccount={needAccount} predictions={predictions} predAnswers={predAnswers} predLockOf={predLockOf} onAnswerPrediction={answerPrediction} />;
   }
 
   const showTopHeader = view === "tab";
@@ -9117,8 +9346,8 @@ function App() {
         {showBottomNav && <BottomNav active={tab} onChange={t => { setTabEnter(null); goTab(t); }} />}
         {premiumOpen && <PremiumModal onClose={closePremium} isPremium={isPremium} plan={plan} setPlan={setPlan} onSubscribe={doSubscribe} subscribing={subscribing} subscribed={subscribed} trialUsed={!!trial} onTrial={doTrial} trial={trial} />}
         {selectedDriver && <DriverDetailModal driver={selectedDriver} lastRace={lastRace} races={races} onClose={() => setSelectedDriver(null)} />}
-        {liveTrackOpen && <LiveMapView race={live ? races.find(r => r.id === live.raceId) : (races.find(r => r.status === "IN ARRIVO") || null)} live={live} st={liveSt} onClose={() => setLiveTrackOpen(false)} />}
-        {ssOpen && <SecondScreen chat={chats.find(c => c.id === "generale")} blocked={blocked} onChatSend={guest ? () => needLogin("Per scrivere in chat serve un account.") : t => sendMessage("generale", t)} race={live ? races.find(r => r.id === live.raceId) : (races.find(r => r.status === "IN ARRIVO") || null)} live={live} st={liveSt} standings={standings} layout={ssLayout} setLayout={setSsLayout} prefs={ssPrefs} setPrefs={setSsPrefs} vote={live ? votesNow.dotd[live.raceId] || {} : {}} onVote={(k, id) => live && voteDotd(live.raceId, k, id)} notice={notice} onCloseNotice={nextNotice} onClose={() => setSsOpen(false)} />}
+        {liveTrackOpen && <LiveMapView race={live ? races.find(r => r.id === live.raceId) : weekendRace(races)} live={live} st={liveSt} onClose={() => setLiveTrackOpen(false)} />}
+        {ssOpen && <SecondScreen chat={chats.find(c => c.id === "generale")} blocked={blocked} onChatSend={guest ? () => needLogin("Per scrivere in chat serve un account.") : t => sendMessage("generale", t)} race={live ? races.find(r => r.id === live.raceId) : weekendRace(races)} live={live} st={liveSt} standings={shownStandings} layout={ssLayout} setLayout={setSsLayout} prefs={ssPrefs} setPrefs={setSsPrefs} vote={live ? votesNow.dotd[live.raceId] || {} : {}} onVote={(k, id) => live && voteDotd(live.raceId, k, id)} notice={notice} onCloseNotice={nextNotice} onClose={() => setSsOpen(false)} />}
         {lapList && live && liveSt && <LapTimesModal live={live} st={liveSt} carId={lapList} onOpenLap={n => setTelemetry({ carId: lapList, lapNo: n, sector: 0 })} onClose={() => setLapList(null)} />}
         {telemetry && live && liveSt && <TelemetryModal live={live} st={liveSt} carId={telemetry.carId} lapNo={telemetry.lapNo} sector={telemetry.sector} onClose={() => setTelemetry(null)} />}
         {infoModal && <InfoModal title={infoModal.title} body={infoModal.body} extra={infoModal.credits ? <CommonsCredits /> : null} onClose={() => setInfoModal(null)} />}

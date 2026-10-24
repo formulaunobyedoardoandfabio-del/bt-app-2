@@ -93,6 +93,54 @@ t('gare: date scritta in ora italiana senza fuso (Singapore → "2026-10-11T14:0
   assert.deepStrictEqual(again.extra, [S.races[2]]);
 });
 
+// ── Stato della gara dagli orari del weekend (24/10) ────────────────────
+// GP degli Stati Uniti: FP1 23/10 17:30Z, FP3 24/10 17:30Z, qualifiche 24/10 21:00Z, gara 25/10 20:00Z.
+const at = s => Date.parse(s);
+const usOf = (stored, now) => C.mergeRaces(BASE, stored, now).races.find(r => r.circuitId === 'us-2012');
+t('gare: con gli orari ufficiali lo stato cambia da solo (IN ARRIVO, LIVE da 30 minuti prima delle FP1 a 4 ore dopo la partenza, CONCLUSA)', () => {
+  const st = now => usOf(null, at(now)).status;
+  assert.strictEqual(st('2026-10-23T16:58:00Z'), 'IN ARRIVO');   // 32 minuti prima delle FP1
+  assert.strictEqual(st('2026-10-23T17:01:00Z'), 'LIVE');        // 29 minuti prima
+  assert.strictEqual(st('2026-10-24T18:00:00Z'), 'LIVE');        // sabato, durante le FP3
+  assert.strictEqual(st('2026-10-25T23:59:00Z'), 'LIVE');        // 3 ore e 59 minuti dopo la partenza
+  assert.strictEqual(st('2026-10-26T00:01:00Z'), 'CONCLUSA');    // 4 ore dopo
+});
+
+t('gare: uno stato salvato vecchio non comanda (IN ARRIVO per una gara passata, LIVE dimenticato dopo la gara)', () => {
+  const stored = [{ circuitId: 'us-2012', name: 'GP degli Stati Uniti', status: 'IN ARRIVO' }, { circuitId: 'my-1999', name: 'GP del Bahrain in Malesia', status: 'IN ARRIVO' }];
+  const { races } = C.mergeRaces(BASE, stored, at('2026-10-24T18:00:00Z'));
+  assert.strictEqual(races.find(r => r.circuitId === 'my-1999').status, 'CONCLUSA');   // 4/10: passata
+  assert.strictEqual(races.find(r => r.circuitId === 'us-2012').status, 'LIVE');       // weekend in corso
+  // LIVE dell'admin: vale da 3 giorni prima delle FP1 a 6 ore dopo la partenza; CONCLUSA chiude prima la diretta.
+  const live = [{ ...stored[0], status: 'LIVE' }];
+  assert.strictEqual(usOf(live, at('2026-10-21T10:00:00Z')).status, 'LIVE');        // mercoledì: aperta in anticipo
+  assert.strictEqual(usOf(live, at('2026-10-19T10:00:00Z')).status, 'IN ARRIVO');   // 4 giorni prima: vecchio
+  assert.strictEqual(usOf(live, at('2026-10-26T01:30:00Z')).status, 'LIVE');        // 5 ore e mezza dopo la partenza
+  assert.strictEqual(usOf(live, at('2026-10-26T02:30:00Z')).status, 'CONCLUSA');    // 6 ore e mezza dopo: vecchio
+  assert.strictEqual(usOf([{ ...stored[0], status: 'CONCLUSA' }], at('2026-10-25T22:00:00Z')).status, 'CONCLUSA');
+});
+
+t('gare: una sola gara LIVE (un LIVE dimenticato a Baku non prende il posto del weekend in corso)', () => {
+  const { races } = C.mergeRaces(BASE, [{ circuitId: 'az-2016', name: "GP dell'Azerbaigian", status: 'LIVE' }], at('2026-10-24T18:00:00Z'));
+  assert.deepStrictEqual(races.filter(r => r.status === 'LIVE').map(r => r.circuitId), ['us-2012']);
+  assert.strictEqual(races.find(r => r.circuitId === 'az-2016').status, 'CONCLUSA');
+  // Senza un weekend in corso il LIVE salvato senza orari resta (come prima).
+  assert.strictEqual(C.mergeRaces(BASE, [{ circuitId: 'az-2016', status: 'LIVE' }], NOW).races.find(r => r.circuitId === 'az-2016').status, 'LIVE');
+});
+
+t('gare: con l\'app aperta lo stato si ricalcola con l\'ora nuova (raceStatusesAt)', () => {
+  const { races } = C.mergeRaces(BASE, [{ circuitId: 'us-2012', status: 'IN ARRIVO' }], at('2026-10-23T16:00:00Z'));
+  assert.strictEqual(races.find(r => r.circuitId === 'us-2012').status, 'IN ARRIVO');
+  const later = C.raceStatusesAt(races, at('2026-10-23T17:10:00Z'));
+  assert.strictEqual(later.find(r => r.circuitId === 'us-2012').status, 'LIVE');
+  assert.strictEqual(later.find(r => r.circuitId === 'my-1999').status, 'CONCLUSA');
+  assert.strictEqual(C.raceStatusesAt(later, at('2026-10-23T17:20:00Z')), later);   // niente cambiato: la stessa lista
+  assert.strictEqual(C.raceStatusesAt(later, at('2026-10-26T01:00:00Z')).find(r => r.circuitId === 'us-2012').status, 'CONCLUSA');
+  // Nel documento va lo stato che si vede, con i soliti campi.
+  assert.deepStrictEqual(Object.keys(C.racesToStore(later)[17]).sort(), ['circuit', 'circuitId', 'country', 'date', 'id', 'name', 'round', 'status', 'totalLaps']);
+  assert.strictEqual(C.racesToStore(later)[17].status, 'LIVE');
+});
+
 // ── Classifiche ─────────────────────────────────────────────────────────
 t('classifiche: Antonelli p1 → antonelli; "RB F1 Team" → racingbulls; pilota sconosciuto → ospite', () => {
   const st = C.standingsFromStore({ piloti: S.piloti, costruttori: S.costruttori });
