@@ -13,6 +13,9 @@ const SITE = 'https://formulaunobyedoardoandfabio-del.github.io/bt-app-flutter';
 // share (il telefono ha la condivisione di sistema), clipboard: 'fail' (la copia non riesce).
 async function open(b, opts = {}) {
   const ctx = await b.newContext({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true });
+  await ctx.route('https://api.jolpi.ca/**', r => r.abort());               // 24/10: classifiche di Jolpica e previsioni
+  await ctx.route('https://bt-app-2.vercel.app/api/**', r => r.abort());   // meteo di serie non rispondono (come helpers.js)
+  await ctx.addInitScript(() => { window.__btNow = window.__btNow || Date.parse('2026-10-07T10:00:00Z'); });   // ora fissa (come helpers.js)
   await ctx.addInitScript(seed => { window.__btSeed = seed; }, SEED_20);
   await ctx.addInitScript(o => {
     window.__opened = []; window.open = u => { window.__opened.push(String(u)); return null; };
