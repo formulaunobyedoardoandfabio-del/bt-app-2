@@ -101,7 +101,7 @@ const SEASON_PRICE = 6;
 // Link di Buy Me a Coffee: finché manca, nel Profilo "Offrici un caffè" è "in arrivo".
 const COFFEE_URL = "";
 const premiumOffer = ({ trialUsed, isPremium }) => isPremium ? "premium" : trialUsed ? "subscribe" : "trial";
-const trialDaysLeft = trial => trial ? Math.max(0, Math.ceil((trial.end - Date.now()) / 86400000)) : 0;
+const trialDaysLeft = trial => trial ? Math.max(0, Math.ceil((trial.end - nowMs()) / 86400000)) : 0;
 const fmtDay = ms => new Date(ms).toLocaleDateString("it-IT", { day: "numeric", month: "long", year: "numeric" });
 // Apre un link fuori dall'app: nell'APK col browser di sistema, sul web in una nuova scheda.
 const openUrl = url => {
@@ -8105,6 +8105,12 @@ const USER_INIT = {
   squad: FANTA_SQUAD_INIT, squadBase: { drivers: FANTA_SQUAD_INIT.drivers.slice(), teams: FANTA_SQUAD_INIT.teams.slice() }, freeTransfers: 3,
   predAnswers: {}, sillyPreds: {}, stratPreds: {}, pitBest: null, wxGuess: {}, ratings: {}, dotd: {}, notifSeenAt: 0,
   theme: { mode: "team", color: null }, sounds: true, haptics: true, helmet: null, hidden: [], trophies: {},
+  premium: { sub: false, trial: null },
+};
+// Premium dell'anteprima salvato nell'account (24/10): sub = abbonamento di prova, trial = prova per un GP { start, end }.
+const cleanPremium = v => {
+  const t = v && v.trial, ok = t && isFinite(t.start) && isFinite(t.end);
+  return { sub: !!(v && v.sub), trial: ok ? { start: +t.start, end: +t.end, ...(t.converted ? { converted: true } : {}) } : null };
 };
 // Dati dell'account che restano anche sul telefono: uscendo dall'account non tornano quelli di serie.
 const PHONE_KEYS = ["theme", "sounds", "haptics"];
@@ -8185,11 +8191,13 @@ function App() {
   const [localNotifs, setLocalNotifs] = useState([]);            // avvisi di questo telefono (notizia sul tuo preferito)
   const [notifSeenAt, setNotifSeenAt] = useState(USER_INIT.notifSeenAt);   // ora dell'ultima "Segna tutte come lette"
   const [premiumOpen, setPremiumOpen] = useState(false);
-  const [isPremium, setIsPremium] = useState(false);
+  // Premium: si salva nell'account (users/<email>.app2.premium) e torna riaprendo l'app; la prova finisce da sola.
+  const [premium, setPremium] = useState(USER_INIT.premium);
+  const trial = premium.trial;   // prova gratuita: { start, end } (una sola volta)
+  const isPremium = !!(account && account.isPremium) || premium.sub || (!!trial && nowMs() < trial.end);
   const [plan, setPlan] = useState("annual");
   const [subscribing, setSubscribing] = useState(false);
   const [subscribed, setSubscribed] = useState(false);
-  const [trial, setTrial] = useState(null);   // prova gratuita: { start, end } (una sola volta)
   const [toast, setToast] = useState(null);
   const toastTimer = useRef(null);
   const [selectedDriver, setSelectedDriver] = useState(null);
@@ -8382,7 +8390,7 @@ function App() {
   const userReady = useRef(false);   // dati dell'account letti: da qui in poi le modifiche si salvano
   const userSnap = useRef({});       // ultimo valore letto o salvato di ogni dato (JSON): si manda solo quello che cambia
   const userVals = { saved, favTeam, favDriver, notifPrefs, votes, squad, squadBase, freeTransfers, predAnswers, sillyPreds, stratPreds, pitBest, wxGuess, ratings, dotd, notifSeenAt,
-    theme, sounds, haptics, helmet, hidden, trophies };
+    theme, sounds, haptics, helmet, hidden, trophies, premium };
   const userValsRef = useRef(userVals);
   userValsRef.current = userVals;
   const userSet = { saved: setSaved, favTeam: setFavTeam, favDriver: setFavDriver, notifPrefs: setNotifPrefs, votes: setVotes, squad: setSquad, squadBase: setSquadBase,
@@ -8390,7 +8398,7 @@ function App() {
     ratings: setRatings, dotd: setDotd, notifSeenAt: setNotifSeenAt,
     theme: v => setTheme(cleanTheme(v) || USER_INIT.theme), sounds: v => setSounds(v !== false), haptics: v => setHaptics(v !== false),
     helmet: v => setHelmet(v == null ? null : cleanHelmet(v)), hidden: v => setHidden(Array.isArray(v) ? v : []),
-    trophies: v => setTrophies(cleanTrophies(v)) };
+    trophies: v => setTrophies(cleanTrophies(v)), premium: v => setPremium(cleanPremium(v)) };
   // Dati dell'account arrivati (per quale email): finché non arrivano, il colore dell'app resta quello del telefono.
   const [userLoaded, setUserLoaded] = useState(null);
   const loadUser = em => AppData.loadUserData(em).then(data => {
@@ -8879,7 +8887,7 @@ function App() {
     if (em) AppData.cancelUserData(em);   // niente salvataggi che ricreino l'account
     setChatMsgs({}); setChatTick(n => n + 1);   // i suoi messaggi li ha già tolti la pulizia della chat: si rilegge
     resetUser();
-    setBlocked([]); setSavedOnly(false); setIsPremium(false);
+    setBlocked([]); setSavedOnly(false);   // il Premium lo rimette come di serie resetUser (è un dato dell'account)
     setGuest(false); setAdminUnlocked(false); setView("tab"); setTab("home");
   };
   const needAccount = () => { if (guest) { needLogin("Per creare la tua squadra FantaF1 serve un account."); return true; } return userDataWait(); };
@@ -8899,13 +8907,16 @@ function App() {
   const doSubscribe = () => {
     if (guest) { setPremiumOpen(false); needLogin("Per abbonarti a B&T Premium serve un account."); return; }
     setSubscribing(true);
-    setTimeout(() => { setSubscribing(false); setSubscribed(true); setIsPremium(true); setTrial(t => t ? { ...t, converted: true } : t); }, 1100);
+    if (userDataWait()) { setPremiumOpen(false); return; }
+    setSubscribing(true);
+    setTimeout(() => { setSubscribing(false); setSubscribed(true); setPremium(p => ({ sub: true, trial: p.trial ? { ...p.trial, converted: true } : null })); }, 1100);
   };
   const doTrial = () => {
     if (guest) { setPremiumOpen(false); needLogin("Per la prova gratuita di B&T Premium serve un account."); return; }
     if (trial) return;
+    if (userDataWait()) { setPremiumOpen(false); return; }
     setSubscribing(true);
-    setTimeout(() => { const now = Date.now(); setTrial({ start: now, end: trialEndFor(races, now) }); setSubscribing(false); setSubscribed("trial"); setIsPremium(true); }, 900);
+    setTimeout(() => { const now = nowMs(); setPremium(p => ({ ...p, trial: { start: now, end: trialEndFor(races, now) } })); setSubscribing(false); setSubscribed("trial"); }, 900);
   };
   const closePremium = () => { setPremiumOpen(false); setTimeout(() => setSubscribed(false), 300); };
 
