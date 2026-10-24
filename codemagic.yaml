@@ -33,7 +33,7 @@ workflows:
         - bt_secrets
       vars:
         # Annunci di prova di Google (scritta "Test Ad"): si vede che la pubblicità
-        # funziona senza cliccare quelli veri. La build per il Play Store non lo ha.
+        # funziona senza cliccare quelli veri.
         BT_ADMOB_TEST: "1"
     # Build automatica a ogni push su main (una volta collegato il webhook
     # su GitHub — vedi README.md), così non serve più premere "Start new
@@ -69,6 +69,11 @@ workflows:
         - bt_keystore
       groups:
         - bt_secrets
+      vars:
+        # Test chiuso (24/10): annunci di prova anche qui, perché gli amici che toccano gli
+        # annunci veri metterebbero a rischio l'account AdMob. PER L'USCITA PUBBLICA TOGLIERE
+        # QUESTE DUE RIGHE: allora l'app usa le unità vere di B&T (src/services/ads.js).
+        BT_ADMOB_TEST: "1"
     scripts:
       - *install
       # I loghi sono marchi delle scuderie: restano solo nelle versioni di prova

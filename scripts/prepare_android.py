@@ -4,7 +4,8 @@
 - imposta versionCode dal numero di build di Codemagic
 - se c'è un keystore (build di release), configura la firma
 - copia l'icona dell'app (logo BT con la monoposto, "Sector 4") al posto di quella di default
-- con BT_ADMOB_TEST=1 (solo "B&T - APK di prova") accende gli annunci di prova di Google
+- con BT_ADMOB_TEST=1 accende gli annunci di prova di Google ("B&T - APK di prova" e, finché c'è il
+  test chiuso, anche "B&T - Play Store": vedi codemagic.yaml)
 """
 import os
 import time
@@ -18,9 +19,9 @@ WEB_INDEX = "android/app/src/main/assets/public/index.html"
 ADMOB_APP_ID = "ca-app-pub-5787516371588469~8054706643"
 ADMOB_TEST_FLAG = "<script>window.BT_ADMOB_TEST=true;</script>"
 
-# ── ANNUNCI DI PROVA (solo APK di prova) ──
+# ── ANNUNCI DI PROVA (APK di prova e, per ora, test chiuso del Play Store) ──
 # L'app legge window.BT_ADMOB_TEST (vedi ADMOB_TEST in src/App.jsx): va scritto in cima
-# alla pagina, prima dello script dell'app. La build del Play Store non lo imposta mai.
+# alla pagina, prima dello script dell'app. Senza la variabile l'app usa le unità vere.
 if os.environ.get("BT_ADMOB_TEST") == "1":
     if not os.path.isfile(WEB_INDEX):
         sys.exit(f"ERRORE: {WEB_INDEX} non trovato (npx cap sync non ha copiato l'app?)")

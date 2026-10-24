@@ -25,6 +25,31 @@ const jolpica = (hits = []) => ({ 'https://api.jolpi.ca/**': r => {
 } });
 // La funzione meteo su Vercel finta: risponde con la previsione vera di MET Norway per il COTA (24/10, sabato sera).
 const METEO_FX = { circuitId: 'us-2012', source: 'MET Norway', ...Meteo.shapeForecast(require('../fixtures/met-cota.json')) };
+// Telefono finto (APK): Capacitor con App, SystemBars e il plugin AdMob che registra le chiamate in window.__ads; il banner
+// "caricato" manda la sua altezza (61). test: window.BT_ADMOB_TEST come lo scrive scripts/prepare_android.py.
+const capAds = ({ test = true, consent = 'NOT_REQUIRED' } = {}) => `(() => {
+  const L = {}, emit = (ev, d) => (L[ev] || []).forEach(f => f(d));
+  window.__ads = [];
+  const rec = (name, ret) => o => { window.__ads.push(name + (o ? ':' + JSON.stringify(o) : '')); return Promise.resolve(ret); };
+  const info = ${JSON.stringify(consent)} === 'REQUIRED'
+    ? { status: 'REQUIRED', isConsentFormAvailable: true, canRequestAds: false, privacyOptionsRequirementStatus: 'REQUIRED' }
+    : { status: 'NOT_REQUIRED', isConsentFormAvailable: false, canRequestAds: true, privacyOptionsRequirementStatus: 'NOT_REQUIRED' };
+  window.Capacitor = { isNativePlatform: () => true, getPlatform: () => 'android', Plugins: {
+    App: { addListener: () => Promise.resolve({ remove() {} }), exitApp: () => Promise.resolve(), minimizeApp: () => Promise.resolve() },
+    SystemBars: { hide: () => Promise.resolve() },
+    AdMob: {
+      initialize: rec('initialize'), requestConsentInfo: rec('requestConsentInfo', info),
+      showConsentForm: rec('showConsentForm', { ...info, status: 'OBTAINED', canRequestAds: true }), showPrivacyOptionsForm: rec('showPrivacyOptionsForm'),
+      showBanner: o => { window.__ads.push('showBanner:' + JSON.stringify(o)); setTimeout(() => emit('bannerAdSizeChanged', { width: 390, height: 61 }), 60); return Promise.resolve(); },
+      removeBanner: () => { window.__ads.push('removeBanner'); setTimeout(() => emit('bannerAdSizeChanged', { width: 0, height: 0 }), 10); return Promise.resolve(); },
+      prepareInterstitial: rec('prepareInterstitial', { adUnitId: 'x' }), showInterstitial: rec('showInterstitial'),
+      addListener: (ev, cb) => { (L[ev] = L[ev] || []).push(cb); return Promise.resolve({ remove() {} }); },
+    } } };
+  if (${test}) window.BT_ADMOB_TEST = true;
+})();`;
+const ads = p => p.evaluate(() => (window.__ads || []).slice());
+const banners = list => list.filter(c => /^(showBanner|removeBanner)/.test(c)).map(c => c.startsWith('showBanner:') ? 'show:' + JSON.parse(c.slice(11)).adId.split('/').pop() : 'remove');
+const adSpace = p => p.evaluate(() => { const e = document.querySelector('[data-ad-space]'); return e ? Math.round(e.getBoundingClientRect().height) : 0; });
 const meteoTab = async p => { await goTab(p, 'RACE'); await w(p, 600); await tapSel(p, '[data-race-tab="meteo"]'); await w(p, 900); };
 const mondiale = async p => { await goTab(p, 'RACE'); await w(p, 600); await tapSel(p, '[data-race-tab="mondiale"]').catch(() => {}); await w(p, 500); return norm(await text(p)); };
 // Chiude e riapre l'app: stessa memoria del telefono (il Firebase finto è nel localStorage), pagina nuova.
@@ -117,6 +142,18 @@ run({
     assert(/IN DIRETTA/.test(after), 'alle 17:05 la gara non è ancora in diretta: ' + after);
     assert(!errs.length, errs.join(' | '));
   },
+  async 'diretta: "IN PISTA" in alto solo mentre una sessione è in corso (qualifiche sì, sabato mattina no)'(b) {
+    const onTrack = async now => {
+      const { ctx, p, errs } = await open(b, { now, routes: OF1_LOCKED }); await login(p); await w(p, 600);
+      const v = await has(p, '[data-on-track]');
+      await ctx.close();
+      assert(!errs.length, errs.join(' | '));
+      return v;
+    };
+    const quali = await onTrack('2026-10-24T21:30:00Z'), morning = await onTrack('2026-10-24T12:00:00Z');
+    assert(quali, 'durante le qualifiche manca "IN PISTA"');
+    assert(!morning, 'sabato mattina (nessuna sessione) c\'è "IN PISTA"');
+  },
   async 'diretta: gli stati vecchi salvati non contano (Malesia e Singapore "IN ARRIVO" dopo la gara)'(b) {
     const old = { 'shared/bt-races': { __arr: [
       { id: 'r16', name: 'GP del Bahrain in Malesia', circuit: 'Sepang International Circuit', country: 'Malesia', round: 16, date: '2026-10-04T09:00:00', status: 'IN ARRIVO', circuitId: 'my-1999' },
@@ -167,6 +204,92 @@ run({
     assert(r.soon.length === 10 && r.soon.every(g => g.icon === g.id && g.clock), 'in arrivo: ' + JSON.stringify(r.soon.map(g => [g.id, g.icon, g.clock])));
     const grey = /^#(8E8D94|BDBCC2|2A2A30|0C0C0F|6E6D74)$/i;
     assert(r.soon.every(g => g.colors.length && g.colors.every(c => grey.test(c))), 'le icone in arrivo devono essere grigie: ' + JSON.stringify(r.soon.map(g => g.colors.filter(c => !grey.test(c)))));
+    assert(!errs.length, errs.join(' | '));
+  },
+
+  // ── Pubblicità AdMob nell'APK (annunci di prova di Google nell'APK di prova e nel test chiuso) ──
+  async 'pubblicità: nell\'APK il banner di prova in Home, in fondo, con la barra delle schede sopra'(b) {
+    const { ctx, p, errs } = await open(b, { capacitor: capAds() }); await login(p); await w(p, 900);
+    const list = await ads(p), space = await adSpace(p);
+    const nav = await p.evaluate(() => { const s = document.querySelector('[data-ad-space]'), n = s && s.previousElementSibling; return n ? Math.round(s.getBoundingClientRect().top - n.getBoundingClientRect().bottom) : null; });
+    await ctx.close();
+    const show = list.find(c => c.startsWith('showBanner:'));
+    assert(list.indexOf('initialize:{"initializeForTesting":true}') >= 0 && list.findIndex(c => c.startsWith('requestConsentInfo')) < list.indexOf(show), 'prima il consenso: ' + list.join(' '));
+    assert(show && /"adId":"ca-app-pub-3940256099942544\/9214589741"/.test(show) && /"position":"BOTTOM_CENTER"/.test(show) && /"isTesting":true/.test(show), 'banner: ' + show);
+    assert(space === 71, 'spazio per il banner (61 + 10 di distacco): ' + space);
+    assert(nav === 0, 'la barra delle schede deve stare subito sopra lo spazio del banner: ' + nav);
+    assert(!errs.length, errs.join(' | '));
+  },
+  async 'pubblicità: annunci veri solo senza BT_ADMOB_TEST; Home e Race con il loro banner, Garage e Fanta senza'(b) {
+    const { ctx, p, errs } = await open(b, { capacitor: capAds({ test: false }) }); await login(p); await w(p, 900);
+    await goTab(p, 'RACE'); await w(p, 600);
+    await goTab(p, 'GARAGE'); await w(p, 600);
+    const garage = await adSpace(p);
+    await goTab(p, 'FANTA'); await w(p, 600);
+    await goTab(p, 'HOME'); await w(p, 600);
+    const list = await ads(p);
+    await ctx.close();
+    assert(banners(list).join(' ') === 'show:2997561321 remove show:3821223256 remove show:2997561321', 'banner: ' + banners(list).join(' '));
+    assert(list.some(c => c === 'initialize:{"initializeForTesting":false}'), list.join(' '));
+    assert(garage === 0, 'nel Garage niente spazio per il banner: ' + garage);
+    assert(!errs.length, errs.join(' | '));
+  },
+  async 'pubblicità: con una finestra aperta il banner si toglie (non copre i tasti) e torna alla chiusura'(b) {
+    const { ctx, p, errs } = await open(b, { capacitor: capAds() }); await login(p); await w(p, 900);
+    await tapSel(p, '[data-premium-chip="off"]'); await w(p, 600);
+    const during = banners(await ads(p)), space = await adSpace(p);
+    await p.keyboard.press('Escape').catch(() => {});
+    await tapSel(p, '[aria-label="Chiudi"]').catch(() => {}); await w(p, 800);
+    const after = banners(await ads(p));
+    await ctx.close();
+    assert(during.join(' ') === 'show:9214589741 remove', 'con il Premium aperto: ' + during.join(' '));
+    assert(space === 0, 'spazio del banner con la finestra aperta: ' + space);
+    assert(after.join(' ') === 'show:9214589741 remove show:9214589741', 'chiusa la finestra: ' + after.join(' '));
+    assert(!errs.length, errs.join(' | '));
+  },
+  async 'pubblicità: con il Premium niente pubblicità'(b) {
+    const { ctx, p, errs } = await open(b, { capacitor: capAds() }); await login(p); await w(p, 900);
+    await tapSel(p, '[data-premium-chip="off"]'); await w(p, 400);
+    await tapText(p, 'PROVA GRATIS'); await w(p, 1500);
+    await tapText(p, 'INIZIA'); await w(p, 1200);
+    await goTab(p, 'RACE'); await w(p, 600);
+    const list = banners(await ads(p)), space = await adSpace(p);
+    await ctx.close();
+    assert(list[list.length - 1] === 'remove' && list.filter(x => x.startsWith('show')).length === 1, 'con il Premium: ' + list.join(' '));
+    assert(space === 0, 'spazio del banner con il Premium: ' + space);
+    assert(!errs.length, errs.join(' | '));
+  },
+  async 'pubblicità: consenso UE richiesto, prima il messaggio di Google; nel Profilo "Preferenze privacy annunci"'(b) {
+    const { ctx, p, errs } = await open(b, { capacitor: capAds({ consent: 'REQUIRED' }) }); await login(p); await w(p, 900);
+    await tapSel(p, '[aria-label="Profilo"]'); await w(p, 500);
+    await tapText(p, 'Preferenze privacy annunci'); await w(p, 500);
+    const list = await ads(p);
+    await ctx.close();
+    const names = list.map(c => c.split(':')[0]);
+    assert(names.indexOf('showConsentForm') >= 0 && names.indexOf('showConsentForm') < names.indexOf('showBanner'), 'ordine: ' + names.join(' '));
+    assert(names.includes('showPrivacyOptionsForm'), 'dal Profilo non si aprono le scelte: ' + names.join(' '));
+    assert(!errs.length, errs.join(' | '));
+  },
+  async 'pubblicità: un interstitial tornando alle notizie dopo 3 lette, mai nel primo minuto'(b) {
+    const { ctx, p, errs } = await open(b, { capacitor: capAds() }); await login(p); await w(p, 900);
+    const read = async () => { await tapSel(p, '[data-featured]'); await w(p, 500); await tapSel(p, '[aria-label="Indietro"]'); await w(p, 500); };
+    await read(); await read(); await read();
+    const early = (await ads(p)).filter(c => /Interstitial/.test(c)).length;
+    await p.evaluate(() => { window.__btNow += 2 * 60000; });   // due minuti dopo
+    await read();
+    const list = await ads(p);
+    await ctx.close();
+    assert(early === 0, 'interstitial nel primo minuto: ' + early);
+    const prep = list.find(c => c.startsWith('prepareInterstitial:'));
+    assert(prep && /3940256099942544\/1033173712/.test(prep) && list.includes('showInterstitial'), 'interstitial: ' + list.filter(c => /Interstitial/.test(c)).join(' '));
+    assert(!errs.length, errs.join(' | '));
+  },
+  async 'pubblicità: nel sito niente annunci, niente spazio vuoto e niente riquadro finto "Spazio pubblicitario"'(b) {
+    const { ctx, p, errs } = await open(b); await login(p); await w(p, 600);
+    const space = await adSpace(p), has1 = await p.evaluate(() => !!window.__ads), t = await text(p);
+    await ctx.close();
+    assert(space === 0 && !has1, 'nel sito: ' + space);
+    assert(!/Spazio pubblicitario/.test(t), 'c\'è ancora il riquadro finto della pubblicità');
     assert(!errs.length, errs.join(' | '));
   },
 

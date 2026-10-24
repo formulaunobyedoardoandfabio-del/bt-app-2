@@ -33,6 +33,7 @@ import { createCommons, normFile as commonsFileOf } from "./services/commons";
 import { createOpenF1, buildReplay, lastRaceFromResult, sessionType as of1SessionType } from "./services/openf1";
 import { createJolpica, pick as pickStandings } from "./services/jolpica";
 import { createMeteo, sessionForecast, skyOf } from "./services/meteo";
+import { createAds } from "./services/ads";
 
 /* ── DESIGN TOKENS (matches the B&T concept style) ─────────────────── */
 // Tappa 3 (G01-G02): sfondo nero puro (schermi OLED) e il colore dei tasti scelto da chi usa l'app. applyTheme cambia
@@ -355,6 +356,34 @@ const Jolpica = createJolpica({ store: local, now: nowMs });
 // Previsioni meteo del weekend (24/10): MET Norway tramite la funzione su Vercel api/meteo.js (src/services/meteo.js).
 const Meteo = createMeteo({ store: local, now: nowMs });
 const MET_LICENSE_URL = "https://api.met.no/doc/License";
+// Pubblicità AdMob (24/10, src/services/ads.js): solo nell'APK, banner in Home e in Race e interstitial tra le notizie;
+// niente con il Premium. ADMOB_TEST = annunci di prova di Google: scripts/prepare_android.py scrive
+// window.BT_ADMOB_TEST = true quando su Codemagic c'è BT_ADMOB_TEST=1 (APK di prova e, per ora, il test chiuso).
+const ADS_ON = true;
+const ADMOB_TEST = typeof window !== "undefined" && window.BT_ADMOB_TEST === true;
+const AD_GAP = 10;   // distacco tra il banner e la barra delle schede: AdMob vieta i banner attaccati ai pulsanti
+const isNativeApp = () => { try { return !!(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform()); } catch (e) { return false; } };
+const adMobPlugin = () => (ADS_ON && isNativeApp() ? capPlugin("AdMob") : null);
+// Altezza vera del banner nativo (0 = nessun banner): la manda AdMob, la root lascia lo spazio sotto le schede.
+const adBannerBus = { h: 0, subs: new Set(), set(h) { if (h === this.h) return; this.h = h; this.subs.forEach(f => f(h)); } };
+const Ads = createAds({ plugin: adMobPlugin, test: ADMOB_TEST, now: nowMs, onBanner: h => adBannerBus.set(h) });
+// Una finestra aperta sopra l'app (role="dialog", aria-modal o un livello a tutto schermo): il banner nativo, disegnato
+// da Android sopra la pagina, coprirebbe i suoi tasti. Solo nell'APK (on).
+const overlayOpen = () => [...document.querySelectorAll('[role="dialog"], [aria-modal="true"], [style*="inset: 0"]')]
+  .some(e => e.getAttribute("role") === "dialog" || e.getAttribute("aria-modal") === "true" || ((e.style.position === "absolute" || e.style.position === "fixed") && Number(e.style.zIndex) >= 500));
+function useOverlayOpen(on) {
+  const [open, setOpen] = useState(false);
+  useEffect(() => {
+    if (!on || typeof MutationObserver === "undefined") { setOpen(false); return undefined; }
+    let raf = 0;
+    const check = () => { raf = 0; const v = overlayOpen(); setOpen(o => (o === v ? o : v)); };
+    const mo = new MutationObserver(() => { if (!raf) raf = requestAnimationFrame(check); });
+    mo.observe(document.body, { childList: true, subtree: true });
+    check();
+    return () => { mo.disconnect(); if (raf) cancelAnimationFrame(raf); };
+  }, [on]);
+  return open;
+}
 const OF1_POLL_MS = 30000;
 const OF1_LAST_RACE_KEY = "bt-of1-last-race", OF1_LAST_RACE_MS = 6 * 3600000;   // ultima gara di OpenF1: sul telefono per 6 ore
 const OF1_RETRY_MS = 5 * 60000;                                                  // senza risposta: si riprova dopo 5 minuti
@@ -400,6 +429,13 @@ const CIRCUIT_IDS = F1.CIRCUIT_IDS;
 const RACES_INIT = F1.RACES.map((r, i) => ({ ...r, status: i < 15 ? "CONCLUSA" : "IN ARRIVO" }));
 // La gara del weekend: quella LIVE (weekend in corso, compat.raceStatusesAt), altrimenti la prossima in arrivo.
 const weekendRace = (races, ok = () => true) => races.find(r => r.status === "LIVE" && ok(r)) || races.find(r => r.status === "IN ARRIVO" && ok(r)) || null;
+// La sessione in pista adesso, dagli orari ufficiali (durata indicativa in minuti, con un po' di margine): il badge
+// "IN PISTA" in alto si vede solo mentre le macchine girano, non per tutto il weekend.
+const SESSION_MIN = { FP1: 60, FP2: 60, FP3: 60, SQ: 50, SPRINT: 70, QUALI: 70, RACE: 150 };
+const sessionNow = (race, now) => {
+  const w = race && CIRCUIT_INFO[race.circuitId] ? CIRCUIT_INFO[race.circuitId].weekend : null;
+  return (Array.isArray(w) ? w : []).find(s => { const at = Date.parse(s.utc); return isFinite(at) && now >= at && now < at + (SESSION_MIN[s.key] || 60) * 60000; }) || null;
+};
 const RACE_STATUSES = F1.RACE_STATUSES;
 const fmtDate = (iso) => { if (!iso) return "–"; const [y, m, d] = iso.split("-").map(Number); const M = ["gen", "feb", "mar", "apr", "mag", "giu", "lug", "ago", "set", "ott", "nov", "dic"]; return `${d} ${M[m - 1]} ${y}`; };
 
@@ -1777,14 +1813,8 @@ function HomeScreen({ ig, onOpenIg, highlights = [], articles, tagFilter, onTag,
       {(pullRev.pull > 0 || pullRev.busy) && <PullGauge rev={pullRev.rev} busy={pullRev.busy} pull={pullRev.pull} />}
       <div style={{ transform: pullRev.pull ? `translateY(${pullRev.pull}px)` : undefined, transition: pullRev.dragging ? "none" : "transform .25s ease" }}>
 
-      {!isPremium && (
-        <button className="press" onClick={onPremium} style={{ display: "flex", alignItems: "center", gap: 10, width: "calc(100% - 32px)", margin: "0 16px 16px", padding: "10px 14px", borderRadius: 12, background: "rgba(255,255,255,.04)", border: `1px dashed ${C.border}`, textAlign: "left" }}>
-          <span style={{ fontFamily: F_BODY, fontWeight: 700, fontSize: 9, color: C.dim, letterSpacing: 1, padding: "2px 6px", borderRadius: 4, background: "rgba(255,255,255,.08)", flexShrink: 0 }}>ADV</span>
-          <span style={{ flex: 1, fontFamily: F_BODY, fontSize: 11.5, color: C.dim }}>Spazio pubblicitario: con Premium non lo vedi più.</span>
-          <span style={{ fontFamily: F_HEAD, fontWeight: 800, fontSize: 10.5, color: C.gold, flexShrink: 0 }}>RIMUOVI</span>
-        </button>
-      )}
-
+      {/* 24/10: tolto il riquadro finto "ADV · Spazio pubblicitario": nell'APK c'è il banner vero di AdMob in fondo
+          (src/services/ads.js), nel sito niente pubblicità. */}
       <SectionLabel icon="flag">ULTIME NEWS</SectionLabel>
 
       <div style={{ margin: "0 16px 10px" }}>
@@ -6640,7 +6670,7 @@ function TrophyCase({ trophies = {}, progress = {}, helmet = null }) {
   );
 }
 
-function ProfiloScreen({ ig, onOpenIg, trial = null, trialUsed = false, onBack, onNotifiche, onPremium, onAdmin, onLogout, isPremium, onAbout, onHelp, onFeedback, aboutMe, onSaveAboutMe, favTeam, favDriver, onPickTeam, onPickDriver, guest, onLogin, onTerms, blocked = [], onUnblock, onDeleteAccount, savedCount = 0, onOpenSaved, account = null, onSaveName, isAdmin = false, onTheme, sounds = true, haptics = true, onSounds, onHaptics, helmet = null, onHelmet, trophies = {}, trophyProg = {} }) {
+function ProfiloScreen({ ig, onOpenIg, trial = null, trialUsed = false, onBack, onNotifiche, onPremium, onAdmin, onLogout, isPremium, onAbout, onHelp, onFeedback, aboutMe, onSaveAboutMe, favTeam, favDriver, onPickTeam, onPickDriver, guest, onLogin, onTerms, blocked = [], onUnblock, onDeleteAccount, savedCount = 0, onOpenSaved, account = null, onSaveName, isAdmin = false, onTheme, sounds = true, haptics = true, onSounds, onHaptics, helmet = null, onHelmet, trophies = {}, trophyProg = {}, onAdPrivacy = null }) {
   const ft = favTeam ? teamById(favTeam) : null;
   const fd = favDriver ? driverById(favDriver) : null;
   const favRows = [
@@ -6686,6 +6716,8 @@ function ProfiloScreen({ ig, onOpenIg, trial = null, trialUsed = false, onBack, 
     { icon: "star", label: "Offrici un caffè", onClick: COFFEE_URL ? () => openUrl(COFFEE_URL) : undefined, ...(COFFEE_URL ? { chevron: true } : { badge: "IN ARRIVO" }) },
     { icon: "info", label: "Info su B&T", onClick: onAbout, chevron: true },
     { icon: "lock", label: "Privacy Policy", onClick: () => openUrl(PRIVACY_URL), chevron: true },
+    // Scelte sul consenso degli annunci (UE): Google chiede che si possano cambiare quando servono (Termini, punto 7).
+    ...(onAdPrivacy ? [{ icon: "lock", label: "Preferenze privacy annunci", onClick: onAdPrivacy, chevron: true }] : []),
     { icon: "doc", label: "Termini e Condizioni", onClick: onTerms, chevron: true },
   ];
   return (
@@ -9254,6 +9286,27 @@ function App() {
   useEffect(() => () => clearTimeout(trophyTimer.current), []);
   const myMedal = medalOf(Object.keys(trophies).length);
 
+  // ── Pubblicità (24/10, src/services/ads.js): banner in Home e in Race, solo nell'APK e senza Premium ──
+  // Il banner nativo è disegnato da Android sopra l'app: si toglie con ogni finestra aperta (coprirebbe i suoi tasti) e
+  // durante avvio, Termini e accesso. Le schede salgono della sua altezza vera più AD_GAP (spazio data-ad-space).
+  const [adH, setAdH] = useState(adBannerBus.h);
+  useEffect(() => { adBannerBus.subs.add(setAdH); return () => { adBannerBus.subs.delete(setAdH); }; }, []);
+  const overlay = useOverlayOpen(!!adMobPlugin());
+  const appShown = !(account === undefined && !guest) && !((!authed || loginHold) && !guest) && !(loginOpen && (!authed || loginHold));
+  const adsPaused = splash || !termsAccepted || !appShown || overlay || premiumOpen || !!selectedDriver || liveTrackOpen || ssOpen || !!lapList || !!telemetry
+    || !!infoModal || helmetOpen || themeOpen || !!picker || termsOpen || feedbackOpen;
+  const bannerSlot = !isPremium && view === "tab" && !adsPaused && (tab === "home" || tab === "race") ? tab : null;
+  useEffect(() => { Ads.setBanner(bannerSlot); }, [bannerSlot]);
+  // Interstitial tra le notizie: si conta ogni notizia aperta e si mostra tornando alla lista (src/services/ads.js).
+  const adView = useRef(view);
+  useEffect(() => {
+    const was = adView.current;
+    adView.current = view;
+    if (isPremium || was === view) return;
+    if (view === "article") Ads.articleOpened();
+    else if (was === "article") Ads.articleClosed();
+  }, [view]);
+
   if (account === undefined && !guest) {   // si aspetta Authentication: forse c'è già una sessione
     return shell(
       <div data-auth-wait="" style={{ height: "100%", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 12, fontFamily: F_BODY, fontSize: 13, color: C.muted }}><LedGrid mode="seq" size={7} />Caricamento…</div>
@@ -9316,6 +9369,7 @@ function App() {
   else if (view === "ghost") body = <GhostLap onBack={viewBack.ghost} />;
   else if (view === "chats") body = <ChatsView chats={chats} onOpen={openChat} blocked={blocked} onBack={viewBack.chats} unreadOf={(id, ms) => Chat.unread(id, ms)} />;
   else if (view === "profilo") body = <ProfiloScreen ig={ig} onOpenIg={() => { setIgFrom("profilo"); setView("instagram"); }} aboutMe={aboutMe} onSaveAboutMe={a => Account.updateAbout(a).catch(e => showToast(e && (e.code === "too-young" || e.code === "not-loaded") ? messageOf(e) : NOT_SAVED))} account={account} onSaveName={n => Account.updateName(n)} isAdmin={Account.isAdmin()} trial={trialActive ? trial : null} trialUsed={!!trial} onBack={viewBack.profilo} onNotifiche={() => setView("notifiche")} onPremium={() => setPremiumOpen(true)} onAdmin={() => guest ? needLogin("Accedi per usare il pannello admin.") : setView(adminUnlocked ? "admin" : "adminLock")} onLogout={logout} isPremium={isPremium} onAbout={() => setInfoModal({ title: "Info su B&T", body: ABOUT_TEXT, credits: true })} onFeedback={() => setFeedbackOpen(true)} onHelp={() => setInfoModal({ title: "Assistenza", body: HELP_TEXT })} favTeam={favTeam} favDriver={favDriver} onPickTeam={() => guest ? needLogin("Per scegliere scuderia e pilota del cuore serve un account.") : setPicker("team")} onPickDriver={() => guest ? needLogin("Per scegliere scuderia e pilota del cuore serve un account.") : setPicker("driver")} guest={guest} onLogin={() => needLogin(null)} onTerms={() => setTermsOpen(true)} blocked={blocked} onUnblock={unblockUser} onDeleteAccount={deleteAccount} savedCount={saved.length} onOpenSaved={openSaved} onTheme={() => setThemeOpen(true)} helmet={helmet} onHelmet={() => setHelmetOpen(true)} trophies={trophies} trophyProg={trophyProg}
+    onAdPrivacy={Ads.privacyRequired() ? () => Ads.openPrivacy().catch(() => showToast("Le preferenze sulla privacy degli annunci non sono disponibili in questo momento.")) : null}
     sounds={sounds} haptics={haptics} onSounds={v => { if (userDataWait()) return; setSounds(v); fx.setSounds(v); if (v) fx.play("tick"); }} onHaptics={v => { if (userDataWait()) return; setHaptics(v); fx.setHaptics(v); if (v) fx.buzz("light"); }} />;
   else if (view === "notifiche") body = <NotificheScreen offline={offline} onBack={viewBack.notifiche} onAction={a => { if (a === "feedback") { if (feedbackAsk && !feedbackAsk.read) saveAsk({ ...feedbackAsk, read: true }); setFeedbackOpen(true); } }} notifs={notifs} onReadAll={readAll} isPremium={isPremium} onPremium={() => setPremiumOpen(true)} favTeam={favTeam} favDriver={favDriver} prefs={notifPrefs} onPrefs={v => { if (!userDataWait()) setNotifPrefs(v); }} onGoProfilo={() => setView("profilo")} />;
   else {
@@ -9332,7 +9386,7 @@ function App() {
 
   return shell(
       <div data-bg={pageBg || undefined} style={{ height: "100%", display: "flex", flexDirection: "column", position: "relative", background: pageBg && PAGE_BG[pageBg] ? PAGE_BG[pageBg] : undefined, transition: "background .3s" }}>
-        {showTopHeader && <TopHeader trialDays={trialActive ? trialDaysLeft(trial) : 0} isPremium={isPremium} unread={unreadCount} onPremium={() => setPremiumOpen(true)} onBell={() => setView("notifiche")} onProfile={() => setView("profilo")} helmet={helmet} onTrack={!!(live || realLiveRace)} onLogoEgg={() => setEggFound(true)} />}
+        {showTopHeader && <TopHeader trialDays={trialActive ? trialDaysLeft(trial) : 0} isPremium={isPremium} unread={unreadCount} onPremium={() => setPremiumOpen(true)} onBell={() => setView("notifiche")} onProfile={() => setView("profilo")} helmet={helmet} onTrack={isDemoLive(live) || !!sessionNow(realLiveRace, nowMs())} onLogoEgg={() => setEggFound(true)} />}
         {showTopHeader && offline && <div role="status" data-offline="" style={{ margin: "-6px 16px 10px", padding: "8px 12px", borderRadius: 10, background: "rgba(231,179,76,.12)", border: "1px solid rgba(231,179,76,.35)", fontFamily: F_BODY, fontSize: 12, color: C.text, lineHeight: 1.4, flexShrink: 0 }}>{OFFLINE_LINE}</div>}
         <div data-tab-swipe={showBottomNav ? "" : undefined} style={{ flex: 1, minHeight: 0, overflow: "hidden" }}
           onTouchStart={showBottomNav ? e => { const k = e.touches[0]; if (e.touches.length === 1) swipeStart(k.clientX, k.clientY, e.timeStamp, e.target, e.currentTarget); else tabSwipe.current = null; } : undefined}
@@ -9344,6 +9398,7 @@ function App() {
           <div key={showBottomNav ? "tab-" + tab : "view"} data-tab-enter={showBottomNav && tabEnter ? tabEnter : undefined} className={showBottomNav && tabEnter ? "tab-enter-" + tabEnter : undefined} style={{ height: "100%" }}>{body}</div>
         </div>
         {showBottomNav && <BottomNav active={tab} onChange={t => { setTabEnter(null); goTab(t); }} />}
+        {showBottomNav && adH > 0 && <div data-ad-space="" aria-hidden="true" style={{ height: adH + AD_GAP, flexShrink: 0 }} />}
         {premiumOpen && <PremiumModal onClose={closePremium} isPremium={isPremium} plan={plan} setPlan={setPlan} onSubscribe={doSubscribe} subscribing={subscribing} subscribed={subscribed} trialUsed={!!trial} onTrial={doTrial} trial={trial} />}
         {selectedDriver && <DriverDetailModal driver={selectedDriver} lastRace={lastRace} races={races} onClose={() => setSelectedDriver(null)} />}
         {liveTrackOpen && <LiveMapView race={live ? races.find(r => r.id === live.raceId) : weekendRace(races)} live={live} st={liveSt} onClose={() => setLiveTrackOpen(false)} />}
@@ -9360,7 +9415,7 @@ function App() {
         {shareArticle && view === "article" && <ShareSheet article={shareArticle} locked={!!shareArticle.premium && !isPremium} handle={ig.handle} onClose={() => setShareId(null)} onToast={showToast} />}
         {termsAccepted && termsOpen && <TermsSheet review onClose={() => setTermsOpen(false)} />}
         {feedbackOpen && <FeedbackModal onClose={() => setFeedbackOpen(false)} onSend={sendFeedback} />}
-        {toast && <div className="toast">{toast}</div>}
+        {toast && <div className="toast" style={showBottomNav && adH > 0 ? { bottom: 104 + adH + AD_GAP } : undefined}>{toast}</div>}
         {notice && !ssOpen && <LiveNotice n={notice} onClose={nextNotice} />}
         {trophyNotice && <TrophyNotice n={trophyNotice} />}
       </div>
