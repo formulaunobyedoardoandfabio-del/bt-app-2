@@ -9,7 +9,7 @@ const EXE = '/opt/pw-browsers/chromium-1194/chrome-linux/chrome';
 async function open(b) {
   const ctx = await b.newContext({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true });
   await ctx.route('https://api.jolpi.ca/**', r => r.abort());               // 24/10: classifiche di Jolpica e previsioni
-  await ctx.route('https://bt-app-2.vercel.app/api/**', r => r.abort());   // meteo di serie non rispondono (come helpers.js)
+  await ctx.route('https://bt-app-2.vercel.app/**', r => r.abort());   // meteo di serie non rispondono (come helpers.js)
   await ctx.addInitScript(() => { window.__btNow = window.__btNow || Date.parse('2026-10-07T10:00:00Z'); });   // ora fissa (come helpers.js)
   await ctx.addInitScript(seed => { window.__btSeed = seed; }, SEED_20);
   await ctx.addInitScript(() => { window.open = () => null; });

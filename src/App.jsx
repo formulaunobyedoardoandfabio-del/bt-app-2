@@ -34,6 +34,7 @@ import { createOpenF1, buildReplay, lastRaceFromResult, sessionType as of1Sessio
 import { createJolpica, pick as pickStandings } from "./services/jolpica";
 import { createMeteo, sessionForecast, skyOf } from "./services/meteo";
 import { createAds } from "./services/ads";
+import { createF1Data, apply as applyF1Data } from "./services/f1data";
 
 /* ── DESIGN TOKENS (matches the B&T concept style) ─────────────────── */
 // Tappa 3 (G01-G02): sfondo nero puro (schermi OLED) e il colore dei tasti scelto da chi usa l'app. applyTheme cambia
@@ -355,6 +356,9 @@ const JOLPICA_ON = true;
 const Jolpica = createJolpica({ store: local, now: nowMs });
 // Previsioni meteo del weekend (24/10): MET Norway tramite la funzione su Vercel api/meteo.js (src/services/meteo.js).
 const Meteo = createMeteo({ store: local, now: nowMs });
+// Dati F1 che si aggiornano da soli (25/10, src/services/f1data.js): Ghost Lap delle ultime qualifiche, gare, qualifiche e
+// prove libere, rigenerati ogni ora nei weekend da GitHub (tools/make_live_data.py) e pubblicati su Vercel.
+const F1Data = createF1Data({ store: local, now: nowMs });
 const MET_LICENSE_URL = "https://api.met.no/doc/License";
 // Pubblicità AdMob (24/10, src/services/ads.js): solo nell'APK, banner in Home e in Race e interstitial tra le notizie;
 // niente con il Premium. ADMOB_TEST = annunci di prova di Google: scripts/prepare_android.py scrive
@@ -8487,6 +8491,18 @@ function App() {
     return () => { alive = false; clearInterval(iv); };
   }, []);
   const shownStandings = pickStandings(standings, jolpicaSt);
+  // 25/10: dati F1 nuovi dopo ogni sessione (src/services/f1data.js): all'avvio e ogni 30 minuti cambiano sul posto quelli
+  // dentro l'APK (Ghost Lap, gare, qualifiche, prove libere) e l'app si ridisegna.
+  const [, setF1Ver] = useState(0);
+  useEffect(() => {
+    let alive = true;
+    const load = () => F1Data.refresh().then(r => {
+      if (alive && applyF1Data(r, { weekend: BtWeekend, ghostData: BtRealData, ghostSessions: GHOST_SESSIONS, ghostCircuit: GHOST_CIRCUIT })) setF1Ver(v => v + 1);
+    }, () => {});
+    load();
+    const iv = setInterval(load, 30 * 60000);
+    return () => { alive = false; clearInterval(iv); };
+  }, []);
   // Calendario 2026 con lo stato di shared/bt-races; extra = gare salvate fuori calendario, che restano nel documento.
   const [racesDoc, setRacesDoc] = useState(shared0.races);
   // 24/10: lo stato delle gare segue gli orari del weekend anche con l'app aperta (LIVE da 30 minuti prima delle prove

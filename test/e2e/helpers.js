@@ -31,7 +31,7 @@ async function open(b, { now = NOW, width = 390, height = 844, seed, query = '',
   await ctx.route('https://upload.wikimedia.org/**', r => r.abort());
   // Lo stesso per le classifiche di Jolpica e le previsioni meteo (24/10): di serie quelle dell'admin e niente previsioni.
   await ctx.route('https://api.jolpi.ca/**', r => r.abort());
-  await ctx.route('https://bt-app-2.vercel.app/api/**', r => r.abort());
+  await ctx.route('https://bt-app-2.vercel.app/**', r => r.abort());
   for (const [glob, handler] of Object.entries(routes)) await ctx.route(glob, handler);
   const p = await ctx.newPage();
   const errs = [];

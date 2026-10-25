@@ -50,6 +50,13 @@ const capAds = ({ test = true, consent = 'NOT_REQUIRED' } = {}) => `(() => {
 const ads = p => p.evaluate(() => (window.__ads || []).slice());
 const banners = list => list.filter(c => /^(showBanner|removeBanner)/.test(c)).map(c => c.startsWith('showBanner:') ? 'show:' + JSON.parse(c.slice(11)).adId.split('/').pop() : 'remove');
 const adSpace = p => p.evaluate(() => { const e = document.querySelector('[data-ad-space]'); return e ? Math.round(e.getBoundingClientRect().height) : 0; });
+// Sito finto con i dati F1 veri generati da tools/make_live_data.py (public/data/f1: Ghost Lap di Austin e Singapore).
+const F1DIR = require('path').join(__dirname, '../../public/data/f1');
+const f1data = (hits = []) => ({ 'https://bt-app-2.vercel.app/data/f1/**': r => {
+  const name = new URL(r.request().url()).pathname.split('/').pop(), f = require('path').join(F1DIR, name);
+  hits.push(name);
+  return require('fs').existsSync(f) ? r.fulfill({ status: 200, contentType: 'application/json', headers: { 'access-control-allow-origin': '*' }, body: require('fs').readFileSync(f, 'utf8') }) : r.fulfill({ status: 404, body: '' });
+} });
 const meteoTab = async p => { await goTab(p, 'RACE'); await w(p, 600); await tapSel(p, '[data-race-tab="meteo"]'); await w(p, 900); };
 const mondiale = async p => { await goTab(p, 'RACE'); await w(p, 600); await tapSel(p, '[data-race-tab="mondiale"]').catch(() => {}); await w(p, 500); return norm(await text(p)); };
 // Chiude e riapre l'app: stessa memoria del telefono (il Firebase finto è nel localStorage), pagina nuova.
@@ -185,6 +192,32 @@ run({
     await ctx.close();
     assert(!/Jolpica/.test(t), 'senza Jolpica non deve citarlo: ' + t.slice(-300));
     assert(/pt/.test(t), 'manca la classifica dell\'admin');
+    assert(!errs.length, errs.join(' | '));
+  },
+
+  // ── Dati F1 che si aggiornano da soli (25/10): Ghost Lap delle ultime qualifiche e dati del weekend ──
+  async 'dati F1: dopo le qualifiche di Austin il Ghost Lap è di Austin (Race e Garage), senza nuovo APK'(b) {
+    const hits = [];
+    const { ctx, p, errs } = await open(b, { now: '2026-10-25T08:00:00Z', routes: { ...OF1_LOCKED, ...f1data(hits) } }); await login(p); await w(p, 1200);
+    await goTab(p, 'RACE'); await w(p, 600);
+    const race = norm(await p.evaluate(() => (document.querySelector('[data-ghost-open]') || {}).innerText || ''));
+    await goTab(p, 'GARAGE'); await w(p, 500);
+    const garage = norm(await p.evaluate(() => (document.querySelector('[data-game="ghost"]') || {}).innerText || ''));
+    await tapSel(p, '[data-game="ghost"]'); await w(p, 700);
+    const lap = norm(await text(p));
+    await ctx.close();
+    assert(/QUALIFICHE DI AUSTIN/.test(race), 'Race: ' + race);
+    assert(/qualifiche di Austin/.test(garage), 'Garage: ' + garage);
+    assert(/Antonelli|ANT/.test(lap) && /Leclerc|LEC/.test(lap), 'Ghost Lap: ' + lap.slice(0, 300));
+    assert(hits.includes('index.json') && hits.includes('ghost-us-2012.json'), 'richieste: ' + hits.join(', '));
+    assert(!errs.length, errs.join(' | '));
+  },
+  async 'dati F1: senza il sito restano i dati dentro l\'APK (Ghost Lap di Sepang)'(b) {
+    const { ctx, p, errs } = await open(b, { now: '2026-10-25T08:00:00Z', routes: OF1_LOCKED }); await login(p); await w(p, 800);
+    await goTab(p, 'GARAGE'); await w(p, 500);
+    const garage = norm(await p.evaluate(() => (document.querySelector('[data-game="ghost"]') || {}).innerText || ''));
+    await ctx.close();
+    assert(/qualifiche di Sepang/.test(garage), 'Garage: ' + garage);
     assert(!errs.length, errs.join(' | '));
   },
 

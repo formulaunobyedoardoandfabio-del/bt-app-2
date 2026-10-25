@@ -1,0 +1,64 @@
+# Dati F1 che si aggiornano da soli (25/10). Ogni ora nei weekend di gara (venerdì, sabato e domenica) e ogni 4 ore il
+# lunedì e il giovedì guarda se TracingInsights/2026 ha dati nuovi; se sì rigenera public/data/f1 (tools/make_live_data.py:
+# Ghost Lap delle ultime qualifiche, gare, qualifiche e prove libere) e, se qualcosa è cambiato, fa il commit su tappa-3.
+# Vercel pubblica il sito e l'app scarica i dati nuovi da sola (src/services/f1data.js), anche dal Play Store.
+# Senza novità finisce in pochi secondi. A mano: GitHub → Actions → "Dati F1 (Ghost Lap, gare, prove)" → Run workflow.
+# I workflow a orario partono solo dal ramo principale (main): questo file deve stare anche lì.
+name: Dati F1 (Ghost Lap, gare, prove)
+
+on:
+  schedule:
+    - cron: '23 * * * 5,6,0'
+    - cron: '23 */4 * * 1,4'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: dati-f1
+  cancel-in-progress: false
+
+jobs:
+  dati:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Ultimo commit di TracingInsights
+        id: ti
+        run: echo "sha=$(git ls-remote https://github.com/TracingInsights/2026 HEAD | cut -f1)" >> "$GITHUB_OUTPUT"
+      - name: Già fatto per questo commit?
+        id: seen
+        uses: actions/cache@v4
+        with:
+          path: .ti-seen
+          key: ti-${{ steps.ti.outputs.sha }}
+      - uses: actions/checkout@v4
+        if: steps.seen.outputs.cache-hit != 'true'
+        with:
+          ref: tappa-3
+      - name: Dati di TracingInsights (si scaricano solo i file che servono)
+        if: steps.seen.outputs.cache-hit != 'true'
+        run: git clone -q --depth 1 --filter=blob:none --no-checkout https://github.com/TracingInsights/2026 "$RUNNER_TEMP/ti"
+      - name: Genera public/data/f1
+        if: steps.seen.outputs.cache-hit != 'true'
+        env:
+          TI_DIR: ${{ runner.temp }}/ti
+          TI_REF: HEAD
+        run: python3 tools/make_live_data.py
+      - name: Commit su tappa-3 se è cambiato qualcosa
+        if: steps.seen.outputs.cache-hit != 'true'
+        env:
+          TI_SHA: ${{ steps.ti.outputs.sha }}
+        run: |
+          mkdir -p .ti-seen
+          git add public/data/f1
+          if git diff --cached --quiet; then echo "Niente di nuovo"; exit 0; fi
+          git config user.name 'B&T'
+          git config user.email '259185044+formulaunobyedoardoandfabio-del@users.noreply.github.com'
+          git commit -q -m "Dati F1 aggiornati da TracingInsights (${TI_SHA::7})"
+          for i in 1 2 3; do
+            if git pull -q --rebase origin tappa-3 && git push -q origin HEAD:tappa-3; then exit 0; fi
+            sleep 10
+          done
+          exit 1

@@ -3,5 +3,14 @@
   "framework": "create-react-app",
   "installCommand": "npm install",
   "buildCommand": "CI=false DISABLE_ESLINT_PLUGIN=true GENERATE_SOURCEMAP=false NODE_OPTIONS=--max-old-space-size=6144 npm run build",
-  "outputDirectory": "build"
+  "outputDirectory": "build",
+  "headers": [
+    {
+      "source": "/data/(.*)",
+      "headers": [
+        { "key": "Access-Control-Allow-Origin", "value": "*" },
+        { "key": "Cache-Control", "value": "public, max-age=300, must-revalidate" }
+      ]
+    }
+  ]
 }

@@ -1,0 +1,66 @@
+{
+ "weekend": {
+  "h": "b6406648bb66",
+  "races": [
+   1,
+   2,
+   3,
+   4,
+   5,
+   6,
+   7,
+   8,
+   9,
+   10,
+   11,
+   12,
+   13,
+   14,
+   15,
+   16,
+   17
+  ],
+  "quali": [
+   1,
+   2,
+   3,
+   4,
+   5,
+   6,
+   7,
+   8,
+   9,
+   10,
+   11,
+   12,
+   13,
+   14,
+   15,
+   16,
+   17,
+   18
+  ],
+  "practice": [
+   "us-2012",
+   "sg-2008",
+   "my-1999"
+  ]
+ },
+ "ghosts": [
+  {
+   "id": "us-2012-2026-q",
+   "circuitId": "us-2012",
+   "round": 18,
+   "place": "Austin",
+   "h": "157cc625c547"
+  },
+  {
+   "id": "sg-2008-2026-q",
+   "circuitId": "sg-2008",
+   "round": 17,
+   "place": "Singapore",
+   "h": "cc73ce76093c"
+  }
+ ],
+ "source": "TracingInsights (github.com/TracingInsights/2026), dati FastF1 dal live timing di Formula 1"
+}
