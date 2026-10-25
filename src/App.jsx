@@ -659,7 +659,7 @@ function TabPeek({ side, tab, peekRef }) {
   if (!tab) return null;
   return (
     <div ref={peekRef} aria-hidden="true" data-tab-peek={side} className="tab-peek" style={{ position: "absolute", top: "50%", [side === "right" ? "left" : "right"]: "calc(100% + 12px)", marginTop: -34, display: "flex", flexDirection: "column", alignItems: "center", gap: 7, opacity: 0, pointerEvents: "none" }}>
-      <span className="tab-peek-ico" style={{ width: 46, height: 46, borderRadius: 15, background: C.card, border: `1px solid ${C.border}`, display: "flex", alignItems: "center", justifyContent: "center" }}><Icon name={tab.icon} size={20} color={C.text} /></span>
+      <span className="tab-peek-ico" style={{ "--peek-on": C.accent, width: 46, height: 46, borderRadius: 15, background: C.card, border: `1px solid ${C.border}`, display: "flex", alignItems: "center", justifyContent: "center" }}><Icon name={tab.icon} size={20} color={C.text} /></span>
       <span data-label={tab.label} style={{ fontFamily: F_HEAD, fontWeight: 800, fontSize: 10, letterSpacing: .8, color: C.text }} />
     </div>
   );

@@ -179,11 +179,12 @@
   .tab-leave{ position:absolute; inset:0; pointer-events:none; animation:tabout .3s cubic-bezier(.2,.8,.2,1) forwards; }
   @keyframes tabout{ from{ transform:translateX(var(--tab-from,0px)); opacity:var(--tab-from-op,1); } to{ transform:translateX(var(--tab-to,-100%)); opacity:.55; } }
   .tab-back{ transition:transform .3s cubic-bezier(.3,1.25,.5,1), opacity .2s ease; }
-  /* Ai lati, durante lo swipe, la scheda accanto: diventa rossa (C.accent, LED_RED) quando lasciando il dito si cambia. */
+  /* Ai lati, durante lo swipe, la scheda accanto: prende il colore dei tasti (--peek-on = C.accent, di serie il rosso
+     LED, con la scuderia del cuore il suo colore) quando lasciando il dito si cambia. */
   .tab-peek{ transition:opacity .18s ease, transform .22s ease; }
   .tab-peek.dragging{ transition:none; }
   .tab-peek [data-label]::after{ content:attr(data-label); }
-  .tab-peek[data-ready="1"] .tab-peek-ico{ background:#FF1801 !important; border-color:#FF1801 !important; }
+  .tab-peek[data-ready="1"] .tab-peek-ico{ background:var(--peek-on,#FF1801) !important; border-color:var(--peek-on,#FF1801) !important; }
   /* La pillola rossa della barra in basso scivola sotto la scheda attiva; durante lo swipe segue il dito. */
   .nav-pill{ transition:transform .36s cubic-bezier(.3,1.2,.5,1); }
   .nav-pill.dragging{ transition:none; }

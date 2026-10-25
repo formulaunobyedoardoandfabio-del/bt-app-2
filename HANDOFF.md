@@ -166,3 +166,6 @@ Da fare in una sessione con token, su un ramo a parte: consenso UE (UMP, messagg
 - Prove: `test/e2e/run71-animazioni-schede.js` (10), `test/unit/gesture.test.js` (dragFollow, dragProgress, leaveTo).
   Col mouse un trascinamento seleziona il testo e il successivo lo trascinerebbe (pointercancel): nella prova si toglie
   la selezione; sul telefono (touch) non succede.
+- Verificato il 25/10: `JOBS=2 bash test/all.sh` a e882fa6 → tutto verde tranne run50-colori, che cercava la pillola
+  dentro il tasto (`[data-nav-tab] > div`): ora `[data-nav-pill] > *`, 6/6. Dopo l'ultimo ritocco (scheda accanto col
+  colore dei tasti, `--peek-on`) run71 10/10, run50 6/6, run66 8/8.
