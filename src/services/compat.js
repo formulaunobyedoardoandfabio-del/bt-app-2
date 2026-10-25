@@ -385,6 +385,29 @@ function profOf(p) {
   if (Array.isArray(p.w)) { const w = p.w.filter(x => idOk(x, 24)).slice(0, 30); if (w.length) out.w = w; }
   return Object.keys(out).length ? out : null;
 }
+// 25/10: link a una cosa dell'app nel messaggio (k): { t, id, ti, su, ln, s/a/b/n (Ghost Lap), u (team radio) }.
+// Solo testo e id: le foto le prende ogni telefono dai suoi dati (nessun indirizzo d'immagine da fuori); l'audio dei
+// team radio solo dal sito della F1. L'app di oggi vede solo il testo (txt).
+const LINK_TYPES = ["news", "race", "ghost", "radio", "driver", "team", "profile", "fanta", "games", "question"];
+const lineOk = (v, n) => (typeof v === "string" ? v.replace(/\s+/g, " ").trim().slice(0, n) : "");
+function linkOf(k) {
+  if (!isObj(k) || !LINK_TYPES.includes(k.t)) return null;
+  const ti = lineOk(k.ti, 80);
+  if (!ti) return null;
+  const out = { t: k.t };
+  if (typeof k.id === "string" && /^[A-Za-z0-9_-]{1,60}$/.test(k.id)) out.id = k.id;
+  out.ti = ti;
+  const su = lineOk(k.su, 120);
+  if (su) out.su = su;
+  if (Array.isArray(k.ln)) { const ln = k.ln.map(x => lineOk(x, 70)).filter(Boolean).slice(0, 8); if (ln.length) out.ln = ln; }
+  if (k.t === "ghost") {
+    if (typeof k.s === "string" && /^[A-Za-z0-9_-]{1,40}$/.test(k.s)) out.s = k.s;
+    ["a", "b"].forEach(x => { if (typeof k[x] === "string" && /^[A-Z]{3}$/.test(k[x])) out[x] = k[x]; });
+    if (Number.isInteger(k.n) && k.n > 0 && k.n < 100) out.n = k.n;
+  }
+  if (k.t === "radio" && typeof k.u === "string" && /^https:\/\/livetiming\.formula1\.com\/[\w./-]+\.mp3$/i.test(k.u)) out.u = k.u;
+  return out;
+}
 function chatFromStore(arr, me) {
   const myAid = (me && me.aid) || "", myName = (me && me.name) || "";
   const all = (Array.isArray(arr) ? arr : []).filter(isObj);
@@ -402,7 +425,7 @@ function chatFromStore(arr, me) {
     const reactions = sortReactions(REACTIONS.map(e => ({ e, n: per.filter(r => r.e === e).length, mine: !!mineR && mineR.e === e })));
     return {
       id: String(m.id), from: m.user || "", text: m.txt || "", at: m.t || 0, aid: m.aid || "",
-      mine: isMine(m), medal: medalOk(m.medal), prof: profOf(m.p), reactions, myReaction: mineR ? mineR.e : null,
+      mine: isMine(m), medal: medalOk(m.medal), prof: profOf(m.p), link: linkOf(m.k), reactions, myReaction: mineR ? mineR.e : null,
     };
   });
 }
@@ -416,9 +439,9 @@ function reactionToStore(msgId, emoji, me, now = Date.now()) {
   if (!REACTIONS.includes(emoji)) return null;
   return { id: uid(), user: me.name, aid: me.aid || "", re: String(msgId), e: emoji, t: now };
 }
-function chatMsgToStore(text, me, now = Date.now()) {
-  const medal = medalOk(me && me.medal), p = profOf(me && me.p);
-  return { id: uid(), user: me.name, aid: me.aid || "", txt: text, t: now, ...(medal ? { medal } : {}), ...(p ? { p } : {}) };
+function chatMsgToStore(text, me, now = Date.now(), link = null) {
+  const medal = medalOk(me && me.medal), p = profOf(me && me.p), k = linkOf(link);
+  return { id: uid(), user: me.name, aid: me.aid || "", txt: text, t: now, ...(medal ? { medal } : {}), ...(p ? { p } : {}), ...(k ? { k } : {}) };
 }
 function reportToStore(roomId, msg, me, now = Date.now()) {
   return { id: uid(), room: ROOM_OLD_KEY[roomId] || roomId, msgId: msg.id, txt: msg.text, author: msg.from, aid: msg.aid || "", by: me.name, byAid: me.aid || "", t: now };
@@ -451,7 +474,7 @@ module.exports = {
   circuitIdOf, mergeRaces, raceStatusesAt, racesToStore,
   teamIdOf, driverIdOf, standingsFromStore, standingsToStore,
   notifsFromStore, notifToStore,
-  igFromStore, igToStore, igProfileUrl,
+  igFromStore, igToStore, igProfileUrl, linkOf,
   CHAT_DB_KEY, ROOM_OLD_KEY, authorId, sameAuthor, chatFromStore, chatMsgToStore, reportToStore, reportFromStore,
   REACTIONS, applyReaction, reactionToStore,
   profileFromStore,

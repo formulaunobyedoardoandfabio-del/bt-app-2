@@ -324,6 +324,21 @@ t('Instagram: thumbnail ↔ thumb, url conservato, contatori vuoti senza numeri 
   assert.strictEqual(C.igProfileUrl('bt_formula1'), 'https://www.instagram.com/bt_formula1/');
 });
 
+// 25/10: link a una cosa dell'app nel messaggio (k): solo testo e id; le foto le prende ogni telefono dai suoi dati.
+t('link in chat: tipi previsti, titolo obbligatorio, testi accorciati, Ghost Lap e team radio controllati', () => {
+  assert.strictEqual(C.linkOf(null), null);
+  assert.strictEqual(C.linkOf({ t: 'virus', ti: 'x' }), null);
+  assert.strictEqual(C.linkOf({ t: 'news', id: 'n1', ti: '   ' }), null);
+  assert.deepStrictEqual(C.linkOf({ t: 'news', id: 'n1', ti: '  Pole  per Antonelli ', su: 'x'.repeat(200), img: 'https://evil/x.png' }), { t: 'news', id: 'n1', ti: 'Pole per Antonelli', su: 'x'.repeat(120) });
+  assert.deepStrictEqual(C.linkOf({ t: 'driver', id: 'bad id!', ti: 'Leclerc' }), { t: 'driver', ti: 'Leclerc' });
+  assert.deepStrictEqual(C.linkOf({ t: 'fanta', ti: 'Squadra', ln: ['A', 7, '', 'B', ...Array(10).fill('C')] }).ln, ['A', 'B', 'C', 'C', 'C', 'C', 'C', 'C']);
+  assert.deepStrictEqual(C.linkOf({ t: 'ghost', ti: 'Curva 4', s: 'baku2026q', a: 'LEC', b: 'ver', n: 4 }), { t: 'ghost', ti: 'Curva 4', s: 'baku2026q', a: 'LEC', n: 4 });
+  assert.strictEqual(C.linkOf({ t: 'radio', ti: 'R', u: 'https://livetiming.formula1.com/static/2026/x/TeamRadio/LEC_1.mp3' }).u, 'https://livetiming.formula1.com/static/2026/x/TeamRadio/LEC_1.mp3');
+  assert.strictEqual(C.linkOf({ t: 'radio', ti: 'R', u: 'https://evil.example/x.mp3' }).u, undefined);
+  const m = C.chatFromStore([{ id: 'm1', user: 'Marco', aid: 'u1', txt: 'Guarda', t: 1, k: { t: 'race', id: 'monza', ti: 'GP d\'Italia' } }, { id: 'm2', user: 'Marco', txt: 'x', t: 2, k: { t: 'nope' } }], {});
+  assert.deepStrictEqual(m.map(x => x.link), [{ t: 'race', id: 'monza', ti: 'GP d\'Italia' }, null]);
+});
+
 (async () => {
   const filter = process.argv[2] ? new RegExp(process.argv[2], 'i') : null;
   for (const [name, fn] of tests) {

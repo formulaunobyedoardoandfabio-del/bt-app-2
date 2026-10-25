@@ -44,16 +44,18 @@ function createChat({ sg = FB.sg, sgStrict = FB.sgStrict, ss = FB.ss, sharedAppe
   // Un invio non riuscito può arrivare lo stesso più tardi (tempo scaduto): rimandando lo stesso testo si rimanda lo
   // stesso messaggio, che arrayUnion non aggiunge due volte (revisione della Fase B, minore 2).
   const failedSends = new Map();   // stanza → messaggio non partito
-  async function send(roomId, text, me) {
-    const txt = String(text || "").trim();
+  // link: una cosa dell'app (C.linkOf); senza testo, al posto del testo il suo titolo (l'app di oggi vede solo quello).
+  async function send(roomId, text, me, link = null) {
+    const k = C.linkOf(link);
+    const txt = String(text || "").trim() || (k ? k.ti : "");
     if (!txt) throw mkErr("empty");
     const key = keyOf(roomId);
     const banned = await read(BANNED_KEY);
     if (banned.some(b => sameWho(b, { aid: me.aid, name: me.name }))) throw mkErr("banned");
     const prev = failedSends.get(key);
-    let m = prev && prev.txt === txt && prev.aid === (me.aid || "") && prev.user === me.name ? prev : null;
+    let m = prev && prev.txt === txt && prev.aid === (me.aid || "") && prev.user === me.name && JSON.stringify(prev.k || null) === JSON.stringify(k) ? prev : null;
     if (!m) {
-      m = C.chatMsgToStore(txt, me, now());
+      m = C.chatMsgToStore(txt, me, now(), k);
       const sent = local.get(PROFILE_KEY(key));
       if (m.p && sent && sent.j === JSON.stringify(m.p) && now() - (sent.t || 0) < PROFILE_REFRESH_MS) delete m.p;
     }

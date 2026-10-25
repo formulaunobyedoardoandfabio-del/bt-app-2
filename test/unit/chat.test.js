@@ -208,6 +208,17 @@ t('profilo veloce: viaggia col messaggio solo quando cambia (o dopo una settiman
   assert.deepStrictEqual(room.map(m => m.prof && m.prof.w.length), [1, null, 2, 2]);
 });
 
+t('link in chat: si manda anche senza testo (al posto del testo il titolo, per l\'app di oggi)', async () => {
+  const c = ctx();
+  await c.chat.send('generale', '', ME, { t: 'driver', id: 'leclerc', ti: 'Charles Leclerc', su: 'Ferrari' });
+  await c.chat.send('generale', 'Che giro!', ME, { t: 'ghost', ti: 'Baku · curva 4', s: 'baku2026q', a: 'LEC', b: 'VER', n: 4 });
+  const arr = c.fs('shared/bt-chat-generale').__arr;
+  assert.deepStrictEqual(arr.map(m => [m.txt, m.k && m.k.t]), [['Charles Leclerc', 'driver'], ['Che giro!', 'ghost']]);
+  const room = await c.chat.loadRoom('generale', ME);
+  assert.strictEqual(room[1].link.n, 4);
+  await assert.rejects(c.chat.send('generale', '', ME, { t: 'nope', ti: 'x' }), e => e.code === 'empty');
+});
+
 (async () => {
   const filter = process.argv[2] ? new RegExp(process.argv[2], 'i') : null;
   for (const [name, fn] of tests) {

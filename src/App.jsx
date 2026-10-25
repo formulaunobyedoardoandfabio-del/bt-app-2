@@ -2123,6 +2123,7 @@ function ShareSheet({ article, locked, handle, onClose, onToast }) {
         )}
         <Eyebrow>INVIA A</Eyebrow>
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+          <div style={{ gridColumn: "1 / -1" }}><ShareChatBtn k={{ t: "news", id: article.id, ti: article.title, su: article.excerpt || "" }} label="Chat B&T" /></div>
           {shareTargets(article, handle).map(t => (
             <a key={t.id} className="press" href={t.href} target="_blank" rel="noopener noreferrer" onClick={() => { onToast(SENT); setTimeout(onClose, 0); }} style={pill}>{t.label}<Icon name="external" size={13} color={C.dim} /></a>
           ))}
@@ -2205,8 +2206,7 @@ function CircuitScreen({ circuitId, races, articles, onBack, onTag, onOpenArticl
   const info = CIRCUIT_INFO[circuitId], circ = CIRCUITS[circuitId];
   const race = races.find(r => r.circuitId === circuitId) || raceOfCircuit(circuitId);
   const track = trackOf(circuitId);
-  const [openQ, setOpenQ] = useState(null);
-  if (!info || !circ) return <div style={{ padding: 24 }}><SubHeader title="Circuito" onBack={onBack} /></div>;
+  const [openQ, setOpenQ] = useState(null);  if (!info || !circ) return <div style={{ padding: 24 }}><SubHeader title="Circuito" onBack={onBack} /></div>;
   const tag = circuitTagOf(circuitId);
   const related = articles.filter(a => a.published !== false && (a.circuits || []).includes(circuitId));
   const rec = info.lapRecord;
@@ -2220,7 +2220,7 @@ function CircuitScreen({ circuitId, races, articles, onBack, onTag, onOpenArticl
   const status = race ? (race.status === "CONCLUSA" ? `Gara disputata il ${fmtDate(race.date)}` : race.status === "LIVE" ? "Weekend in corso" : `In programma il ${fmtDate(race.date)}`) : "";
   return (
     <div data-circuit-page="" className="scrollcol" style={{ height: "100%" }}>
-      <SubHeader title={race ? race.name : circ.name} onBack={onBack} />
+      <SubHeader title={race ? race.name : circ.name} onBack={onBack} right={race ? <ShareChatBtn round k={{ t: "race", id: circuitId, ti: race.name, su: [circ.name, status].filter(Boolean).join(" · ") }} /> : null} />
       <div style={{ position: "relative", margin: "0 16px 14px", height: 190, borderRadius: 18, overflow: "hidden", border: `1px solid ${C.border}` }}>
         <CircuitArt circuitId={circuitId} uid="page" />
         <div style={{ position: "absolute", inset: 0, background: "linear-gradient(0deg, rgba(10,10,12,.9) 0%, rgba(10,10,12,.2) 60%, rgba(10,10,12,0) 100%)" }} />
@@ -5272,12 +5272,13 @@ function ghostForNow(races, now) {
   });
   return last ? ghostSessions().find(([id]) => GHOST_CIRCUIT[id] === last.r.circuitId) || null : null;
 }
-function GhostLap({ sessionId, onBack }) {
+// init (25/10): aperto da un link della chat, sulla sessione, i piloti e la curva del link.
+function GhostLap({ sessionId, init = null, onBack }) {
   const list = ghostSessions();
-  const [sid, setSid] = useState(sessionId && BtRealData[sessionId] ? sessionId : list[0][0]);
+  const [sid, setSid] = useState(init && init.s && BtRealData[init.s] ? init.s : sessionId && BtRealData[sessionId] ? sessionId : list[0][0]);
   const S = BtRealData[sid], codes = Object.keys(S.laps);
-  const [a0, setA] = useState(codes[0]), [b0, setB] = useState(codes[1]);
-  const [cur, setCur] = useState(null), [cn, setCn] = useState(null), [replay, setReplay] = useState(false);
+  const [a0, setA] = useState(init && S.laps[init.a] ? init.a : codes[0]), [b0, setB] = useState(init && S.laps[init.b] && init.b !== init.a ? init.b : codes[1]);
+  const [cur, setCur] = useState(null), [cn, setCn] = useState(init && S.corners.some(c => c.n === init.n) ? init.n : null), [replay, setReplay] = useState(false);
   const a = S.laps[a0] ? a0 : codes[0], b = S.laps[b0] && b0 !== a ? b0 : codes.find(c => c !== a);
   const pickSession = id => { if (id === sid) return; const c = Object.keys(BtRealData[id].laps); setSid(id); setA(c[0]); setB(c[1]); setCn(null); setCur(null); setReplay(false); };
   const A = S.laps[a], B = S.laps[b], IA = ghostInfo(a), IB = ghostInfo(b), same = IA.color === IB.color;
@@ -5355,6 +5356,7 @@ function GhostLap({ sessionId, onBack }) {
             </div>
             <button className="press" data-ghost-replay="" onClick={() => setReplay(x => !x)} style={{ marginTop: 10, width: "100%", padding: "10px 0", borderRadius: 11, background: replay ? "rgba(255,255,255,.08)" : C.accent, border: `1px solid ${replay ? C.border : C.accent}`, fontFamily: F_HEAD, fontWeight: 800, fontSize: 12.5, color: "#fff" }}>{replay ? "Chiudi il replay" : "GUARDA IL REPLAY 2D DELLA CURVA"}</button>
             {replay && <GhostReplay key={a + b + duel.n} A={A} B={B} IA={IA} IB={IB} duel={duel} />}
+            <div style={{ marginTop: 10 }}><ShareChatBtn k={{ t: "ghost", s: sid, a: IA.code, b: IB.code, n: duel.n, ti: `${S.name} · curva ${duel.n}: ${IA.code} contro ${IB.code}`, su: ghostGain(duel, IA, IB) }} /></div>
           </div>
         )}
       </div>
@@ -5864,6 +5866,147 @@ function ChatListScreen({ chats, onOpen, blocked = [], unreadOf = () => 0 }) {
   );
 }
 
+/* ── LINK DELL'APP IN CHAT (25/10) ───────────────────────────────────── */
+// Un messaggio può portare un link a una cosa dell'app (campo k, compat.linkOf): notizia, gara, curva del Ghost Lap,
+// team radio, pilota, scuderia, profilo, squadra FantaF1, traguardi del Garage, domanda del Fanta. In chat si vede come
+// una miniatura che si capisce da sola (tipo, titolo, una riga); toccandola si apre la pagina dell'app o, per quello
+// che una pagina non ce l'ha, la scheda coi dettagli. Si allega scrivendo @ (o col tasto del link accanto al campo),
+// oppure con "Invia in chat" su notizie, gare e Ghost Lap (ChatShare: share apre la scelta della stanza).
+const ChatShare = React.createContext(null);
+const LINK_KINDS = [
+  ["news", "NOTIZIA", "doc"], ["race", "GARA", "flag"], ["ghost", "GHOST LAP", "stopwatch"], ["radio", "TEAM RADIO", "radio"],
+  ["driver", "PILOTA", "helmet"], ["team", "SCUDERIA", "wheel"], ["profile", "PROFILO", "person"],
+  ["fanta", "SQUADRA FANTAF1", "trophy"], ["games", "TRAGUARDI NEL GARAGE", "garage"], ["question", "DOMANDA DEL FANTA", "poll"],
+];
+const LINK_LABEL = Object.fromEntries(LINK_KINDS.map(([t, l]) => [t, l])), LINK_ICON = Object.fromEntries(LINK_KINDS.map(([t, , i]) => [t, i]));
+const LINK_SHEET = ["team", "fanta", "games", "radio"];   // si aprono nella scheda coi dettagli
+const LINK_CATS = [["news", "Notizie"], ["race", "Gare"], ["ghost", "Ghost Lap"], ["radio", "Team radio"], ["driver", "Piloti"], ["team", "Scuderie"], ["me", "I miei"], ["question", "Domande del Fanta"]];
+const LINK_EMPTY = { news: "Nessuna notizia per ora.", radio: "I team radio veri arrivano durante e dopo le sessioni.", question: "Nessuna domanda del Fanta per questo weekend.", me: "Accedi per mandare il tuo profilo, la squadra e i traguardi." };
+const ghostGain = (duel, IA, IB) => (!duel ? "" : duel.gained.who === "pari" ? "In questa curva sono pari" : `${(duel.gained.who === "A" ? IA : IB).last} guadagna ${duel.gained.s.toFixed(3).replace(".", ",")} s`);
+const countOf = v => (v && typeof v === "object" ? Object.keys(v).length : 0);
+// I link di una categoria dell'elenco (S: i dati dell'app, ChatShare.sources).
+function linkItems(cat, S) {
+  if (!S) return [];
+  if (cat === "news") return (S.articles || []).filter(a => a.published !== false && a.title).slice(0, 30).map(a => ({ t: "news", id: a.id, ti: a.title, su: a.excerpt || a.cat || "" }));
+  if (cat === "race") return (S.races || []).filter(r => r.circuitId && r.name).map(r => ({ t: "race", id: r.circuitId, ti: r.name, su: [r.circuit, r.date ? fmtDate(r.date) : ""].filter(Boolean).join(" · ") }));
+  if (cat === "ghost") return ghostSessions().flatMap(([sid]) => {
+    const G = BtRealData[sid], codes = Object.keys(G.laps), a = codes[0], b = codes[1], IA = ghostInfo(a), IB = ghostInfo(b);
+    return G.corners.map(c => ({ t: "ghost", s: sid, a, b, n: c.n, ti: `${G.name} · curva ${c.n}: ${a} contro ${b}`, su: ghostGain(BtGhost.cornerDuel(G.laps[a], G.laps[b], c), IA, IB) }));
+  });
+  if (cat === "radio") return (S.radios || []).map(r => { const d = driverById(r.id); return { t: "radio", id: r.id, ti: `${d ? d.full : r.code}${r.lap ? " · giro " + r.lap : ""}`, su: "Team radio con l'audio", u: r.url }; });
+  if (cat === "driver") return DRIVERS.map(d => ({ t: "driver", id: d.id, ti: d.full, su: d.team }));
+  if (cat === "team") return TEAMS.map(t => { const ds = DRIVERS.filter(d => d.teamId === t.id).map(d => d.full); return { t: "team", id: t.id, ti: t.name, su: ds.join(" e "), ln: ds }; });
+  if (cat === "question") return (S.predictions || []).filter(q => q.q).map(q => ({ t: "question", id: q.id, ti: q.q, su: S.predAnswers && S.predAnswers[q.id] != null ? "Ho già risposto: e tu?" : "Rispondi nella pagina FANTA" }));
+  if (cat === "me") {
+    const M = S.me;
+    if (!M || !M.name) return [];
+    const tm = M.team && teamById(M.team), dr = M.driver && driverById(M.driver);
+    const out = [{ t: "profile", ti: `Profilo di ${M.name}`, su: [tm ? "Tifa " + tm.name : "", dr ? "pilota del cuore " + dr.full : ""].filter(Boolean).join(", ") || fanLabel(M.fan) }];
+    const sq = S.squad || {}, ds = (sq.drivers || []).map(driverById).filter(Boolean), ts = (sq.teams || []).map(teamById).filter(Boolean);
+    if (ds.length || ts.length) out.push({ t: "fanta", ti: sq.name || `La squadra di ${M.name}`, su: `${ds.length} piloti e ${ts.length} scuderie`, ln: [...ds.map(d => d.full), ...ts.map(t => t.name)] });
+    const all = S.trophyList || [], won = all.filter(t => S.trophies && S.trophies[t.id]);
+    const ln = [S.pitBest ? `Pit Stop Challenge: ${S.pitBest.toFixed(2).replace(".", ",")} s` : "", countOf(S.sillyPreds) ? `Silly Season: ${countOf(S.sillyPreds)} previsioni` : "",
+      countOf(S.stratPreds) ? `Strategie: ${countOf(S.stratPreds)} previsioni` : "", ...won.slice(0, 5).map(t => "Trofeo: " + (t.secret ? SECRET_NAME : t.name))].filter(Boolean);
+    out.push({ t: "games", ti: `I traguardi di ${M.name}`, su: `${won.length} trofei su ${all.length}`, ln });
+    return out;
+  }
+  return [];
+}
+// Miniatura: la foto della notizia, il pilota, lo stemma della scuderia, il casco; per il resto l'icona del tipo.
+function ChatLinkThumb({ k, prof = null, size = 52 }) {
+  const ctx = React.useContext(ChatShare);
+  const box = { width: size, height: size, borderRadius: 10, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden", background: C.card };
+  if (k.t === "news") {
+    const a = ctx && ctx.sources ? (ctx.sources.articles || []).find(x => x.id === k.id) : null;
+    return <StoredBg data-link-thumb="news" src={a && a.image} empty={C.card} style={box}>{!(a && a.image) && <Icon name="doc" size={Math.round(size * .42)} color={C.muted} />}</StoredBg>;
+  }
+  const d = (k.t === "driver" || k.t === "radio") && driverById(k.id), t = k.t === "team" && teamById(k.id);
+  if (d) return <span data-link-thumb="driver" style={{ ...box, background: alpha(d.color, .28) }}><Headshot driver={d} size={size - 8} /></span>;
+  if (t) return <span data-link-thumb="team" style={box}><TeamBadge team={t} size={size - 14} /></span>;
+  if (k.t === "profile") return <span data-link-thumb="profile" style={box}><HelmetArt spec={prof && prof.h ? prof.h : null} size={size - 10} /></span>;
+  return <span data-link-thumb={k.t} style={box}><Icon name={LINK_ICON[k.t] || "link"} size={Math.round(size * .42)} color={C.gold} /></span>;
+}
+function ChatLinkCard({ k, prof = null, onOpen = null }) {
+  const Tag = onOpen ? "button" : "div";
+  const clamp = n => ({ overflow: "hidden", display: "-webkit-box", WebkitLineClamp: n, WebkitBoxOrient: "vertical" });
+  return (
+    <Tag className={onOpen ? "press" : undefined} data-chat-link={k.t} {...(onOpen ? { onClick: onOpen, "aria-label": `${LINK_LABEL[k.t]}: ${k.ti}` } : {})}
+      style={{ display: "flex", alignItems: "center", gap: 10, width: "100%", boxSizing: "border-box", padding: 8, borderRadius: 12, background: "rgba(0,0,0,.3)", border: "1px solid rgba(255,255,255,.12)", textAlign: "left" }}>
+      <ChatLinkThumb k={k} prof={prof} />
+      <span style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: 2 }}>
+        <span style={{ fontFamily: F_HEAD, fontWeight: 900, fontSize: 9.5, letterSpacing: 1, color: C.gold }}>{LINK_LABEL[k.t]}</span>
+        <span style={{ fontFamily: F_HEAD, fontWeight: 800, fontSize: 13.5, lineHeight: 1.2, color: "#fff", ...clamp(2) }}>{k.ti}</span>
+        {k.su && <span style={{ fontFamily: F_BODY, fontSize: 11.5, lineHeight: 1.3, color: "rgba(255,255,255,.72)", ...clamp(2) }}>{k.su}</span>}
+      </span>
+      {onOpen && <Icon name="chevron" size={14} color="rgba(255,255,255,.6)" />}
+    </Tag>
+  );
+}
+const sheetWrap = (extra, onClose, children) => (
+  <div {...extra} role="dialog" aria-modal="true" onClick={e => { if (e.target === e.currentTarget) onClose(); }} style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,.62)", zIndex: 560, display: "flex", alignItems: "flex-end" }}>{children}</div>
+);
+// Scheda coi dettagli (scuderia, squadra FantaF1, traguardi, team radio): tutto quello che c'è nel link.
+function ChatLinkSheet({ k, from, onClose }) {
+  return sheetWrap({ "data-chat-link-sheet": k.t, "aria-label": LINK_LABEL[k.t] + ": " + k.ti }, onClose,
+    <div style={{ width: "100%", maxHeight: "86%", overflowY: "auto", boxSizing: "border-box", background: "#111114", borderTop: "1px solid rgba(255,255,255,.12)", borderRadius: "24px 24px 0 0", padding: "10px 18px 22px", display: "flex", flexDirection: "column", gap: 12 }}>
+      <div aria-hidden="true" style={{ alignSelf: "center", width: 40, height: 5, borderRadius: 3, background: "rgba(255,255,255,.22)" }} />
+      <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+        <ChatLinkThumb k={k} size={64} />
+        <div style={{ minWidth: 0, display: "flex", flexDirection: "column", gap: 3 }}>
+          <span style={{ fontFamily: F_HEAD, fontWeight: 900, fontSize: 10.5, letterSpacing: 1, color: C.gold }}>{LINK_LABEL[k.t]}</span>
+          <h2 style={{ margin: 0, fontFamily: F_HEAD, fontWeight: 900, fontStyle: "italic", fontSize: 20, lineHeight: 1.15, color: C.text }}>{k.ti}</h2>
+          {k.su && <span style={{ fontFamily: F_BODY, fontSize: 12.5, color: C.muted }}>{k.su}</span>}
+        </div>
+      </div>
+      {k.ln && <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 14, overflow: "hidden" }}>{k.ln.map((l, i) => <div key={i} data-link-line="" style={{ padding: "10px 12px", borderTop: i ? `1px solid ${C.divider}` : "none", fontFamily: F_BODY, fontSize: 13, color: C.text }}>{l}</div>)}</div>}
+      {k.u && <audio controls preload="none" src={k.u} aria-label={"Team radio: " + k.ti} style={{ display: "block", width: "100%" }} />}
+      {from && <span style={{ fontFamily: F_BODY, fontSize: 11.5, color: C.dim }}>Mandato in chat da {from}</span>}
+    </div>);
+}
+// Elenco dei link da mandare (si apre scrivendo @ o col tasto del link): categorie, ricerca, le miniature come in chat.
+function ChatLinkPicker({ onPick, onClose }) {
+  const ctx = React.useContext(ChatShare);
+  const [cat, setCat] = useState("news"), [q, setQ] = useState("");
+  const items = React.useMemo(() => linkItems(cat, ctx && ctx.sources), [cat, ctx && ctx.sources]);
+  const f = q.trim().toLowerCase(), shown = f ? items.filter(k => (k.ti + " " + (k.su || "")).toLowerCase().includes(f)) : items;
+  return sheetWrap({ "data-link-picker": "", "aria-label": "Manda in chat un link dell'app" }, onClose,
+    <div style={{ width: "100%", height: "80%", boxSizing: "border-box", background: "#111114", borderTop: "1px solid rgba(255,255,255,.12)", borderRadius: "24px 24px 0 0", paddingTop: 10, display: "flex", flexDirection: "column" }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "0 16px 10px" }}>
+        <h2 style={{ flex: 1, margin: 0, fontFamily: F_HEAD, fontWeight: 900, fontStyle: "italic", fontSize: 18, color: C.text }}>MANDA IN CHAT</h2>
+        <button className="press" aria-label="Chiudi" onClick={onClose} style={{ width: 32, height: 32, borderRadius: "50%", background: "rgba(255,255,255,.08)", display: "flex", alignItems: "center", justifyContent: "center" }}><Icon name="close" size={13} sw={2.2} /></button>
+      </div>
+      <div className="scrollrow" style={{ display: "flex", gap: 6, overflowX: "auto", scrollbarWidth: "none", padding: "0 16px 10px", flexShrink: 0 }}>
+        {LINK_CATS.map(([id, label]) => <button key={id} className="press" data-link-cat={id} aria-pressed={cat === id ? "true" : "false"} onClick={() => { setCat(id); setQ(""); }} style={{ flex: "0 0 auto", padding: "8px 12px", borderRadius: 999, background: cat === id ? C.accent : C.card, border: `1px solid ${cat === id ? C.accent : C.border}`, fontFamily: F_HEAD, fontWeight: 800, fontSize: 12, color: cat === id ? "#fff" : C.muted }}>{label}</button>)}
+      </div>
+      <div style={{ padding: "0 16px 10px", flexShrink: 0 }}>
+        <input aria-label="Cerca nell'elenco" placeholder="Cerca…" value={q} onChange={e => setQ(e.target.value)} style={{ width: "100%", boxSizing: "border-box", padding: "10px 12px", borderRadius: 12, background: C.card, border: `1px solid ${C.border}`, outline: "none", color: C.text, fontFamily: F_BODY, fontSize: 13 }} />
+      </div>
+      <div className="scrollcol" style={{ flex: 1, minHeight: 0, padding: "0 16px 18px", display: "flex", flexDirection: "column", gap: 8 }}>
+        {shown.length === 0 && <p data-link-empty="" style={{ margin: "12px 0", fontFamily: F_BODY, fontSize: 12.5, lineHeight: 1.45, color: C.dim }}>{LINK_EMPTY[cat] || "Niente da mostrare."}</p>}
+        {shown.map((k, i) => <ChatLinkCard key={k.t + (k.id || "") + (k.s || "") + (k.n || "") + i} k={k} onOpen={() => onPick(k)} />)}
+      </div>
+    </div>);
+}
+// "Invia in chat": in quale stanza.
+function ChatRoomPicker({ onPick, onClose }) {
+  return (
+    <div data-room-picker="" role="dialog" aria-modal="true" aria-label="In quale chat?" onClick={e => { if (e.target === e.currentTarget) onClose(); }} style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,.62)", zIndex: 640, display: "flex", alignItems: "flex-end" }}>
+      <div style={{ width: "100%", boxSizing: "border-box", background: C.card, borderRadius: "22px 22px 0 0", padding: "18px 16px 22px", display: "flex", flexDirection: "column", gap: 8 }}>
+        <h2 style={{ margin: "0 0 4px", fontFamily: F_HEAD, fontWeight: 900, fontStyle: "italic", fontSize: 17, color: C.text }}>IN QUALE CHAT?</h2>
+        {CHAT_ROOMS.map(r => <button key={r.id} className="press" data-room={r.id} onClick={() => onPick(r.id)} style={{ display: "flex", alignItems: "center", gap: 12, padding: "10px 12px", borderRadius: 14, background: "rgba(255,255,255,.05)", border: `1px solid ${C.border}`, textAlign: "left" }}><IconCircle name={r.icon} bg={r.color} stroke={r.iconColor} size={34} filled /><span style={{ fontFamily: F_HEAD, fontWeight: 800, fontSize: 14, color: C.text }}>{r.name}</span></button>)}
+        <button className="press" onClick={onClose} style={{ padding: "12px 0", fontFamily: F_BODY, fontWeight: 600, fontSize: 13, color: C.muted }}>Annulla</button>
+      </div>
+    </div>
+  );
+}
+// Tasto "Invia in chat" (notizia, gara, curva del Ghost Lap).
+function ShareChatBtn({ k, label = "Invia in chat", round = false }) {
+  const ctx = React.useContext(ChatShare);
+  if (!ctx || !k) return null;
+  if (round) return <button className="press" data-share-chat={k.t} aria-label={label} onClick={() => ctx.share(k)} style={{ width: 36, height: 36, borderRadius: 12, background: C.card, border: `1px solid ${C.border}`, display: "flex", alignItems: "center", justifyContent: "center" }}><Icon name="chat" size={16} /></button>;
+  return <button className="press" data-share-chat={k.t} onClick={() => ctx.share(k)} style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8, width: "100%", padding: "11px 0", borderRadius: 12, background: "rgba(255,255,255,.05)", border: `1px solid ${C.border}`, fontFamily: F_BODY, fontWeight: 600, fontSize: 13, color: C.text }}><Icon name="chat" size={15} />{label}</button>;
+}
+
 // Profilo veloce (25/10): toccando il nome in chat, tifo (squadra e pilota del cuore, tipo di tifoso), casco e trofei
 // dall'ultimo messaggio dell'autore che li ha (viaggiano coi messaggi, src/services/chat.js), e Segnala.
 function ChatProfileSheet({ msg, messages, trophyList = TROPHIES, myWon = {}, onReport, onClose }) {
@@ -5923,10 +6066,16 @@ function ChatProfileSheet({ msg, messages, trophyList = TROPHIES, myWon = {}, on
 // messaggio) si apre la barra delle emoji; toccando di nuovo la propria la si toglie. Una per persona.
 const REACTION_NAMES = { "👍": "Mi piace", "❤️": "Cuore", "😂": "Risata", "😮": "Stupore", "😢": "Tristezza", "🙏": "Grazie" };
 const LONG_PRESS_MS = 450;
-function ChatThreadScreen({ chat, onBack, onSend, isPremium, blocked = [], onReport, onBlock, onReact, trophyList = TROPHIES, myWon = {}, liveRace = null }) {
+function ChatThreadScreen({ chat, onBack, onSend, isPremium, blocked = [], onReport, onBlock, onReact, trophyList = TROPHIES, myWon = {}, liveRace = null, pendingLink = null, onPendingUsed, onOpenLink }) {
   const [draft, setDraft] = useState("");
   const [menu, setMenu] = useState(null); // messaggio su cui ho aperto le opzioni e le reazioni
   const [peek, setPeek] = useState(null); // messaggio di cui guardo l'autore (profilo veloce)
+  const [attach, setAttach] = useState(null);     // link dell'app da mandare col messaggio
+  const [picking, setPicking] = useState(false);  // elenco dei link aperto (@ o tasto del link)
+  const [linkOpen, setLinkOpen] = useState(null); // messaggio di cui guardo il link nella scheda
+  useBack(picking, () => setPicking(false));
+  useBack(!!linkOpen, () => setLinkOpen(null));
+  useEffect(() => { if (pendingLink) { setAttach(pendingLink); if (onPendingUsed) onPendingUsed(); } }, [pendingLink]);
   useBack(!!menu, () => setMenu(null));
   useBack(!!peek, () => setPeek(null));
   const endRef = useRef(null);
@@ -5947,11 +6096,20 @@ function ChatThreadScreen({ chat, onBack, onSend, isPremium, blocked = [], onRep
   const react = e => { if (menu && onReact) onReact(chat.id, menu, e); setMenu(null); };
   const totalOf = m => m.reactions.reduce((s, r) => s + r.n, 0);
   const send = () => {
-    const t = draft.trim();
-    if (!t) return;
-    setDraft("");
-    Promise.resolve(onSend(chat.id, t)).then(ok => { if (ok === false) setDraft(d => d || t); });   // non inviato: il testo torna
+    const t = draft.trim(), k = attach;
+    if (!t && !k) return;
+    setDraft(""); setAttach(null);
+    Promise.resolve(onSend(chat.id, t, k)).then(ok => { if (ok === false) { setDraft(d => d || t); setAttach(a => a || k); } });   // non inviato: testo e link tornano
   };
+  // Profilo dell'autore (per la miniatura di un profilo): l'ultimo dei suoi messaggi che ce l'ha.
+  const authorProf = m => { const w = [...shown].reverse().find(x => (m.aid ? x.aid === m.aid : !x.aid && x.from === m.from) && x.prof); return w ? w.prof : null; };
+  const openLinkOf = m => {
+    const k = m.link;
+    if (k.t === "profile") setPeek(m);
+    else if (LINK_SHEET.includes(k.t)) setLinkOpen(m);
+    else if (onOpenLink) onOpenLink(k);
+  };
+  const typed = v => { if (v.length === draft.length + 1 && /(^|\s)@$/.test(v)) { setDraft(v.slice(0, -1)); setPicking(true); } else setDraft(v); };   // @: l'elenco dei link
   return (
     <div style={{ height: "100%", display: "flex", flexDirection: "column" }}>
       <SubHeader title={chat.name} onBack={onBack} right={<IconCircle name={chat.icon} bg={chat.color} stroke={chat.iconColor} size={32} filled />} />
@@ -5967,8 +6125,9 @@ function ChatThreadScreen({ chat, onBack, onSend, isPremium, blocked = [], onRep
             </span>}
             <div data-chat-bubble={m.id} onPointerDown={e => holdStart(m, e)} onPointerMove={holdMove} onPointerUp={holdEnd} onPointerCancel={holdEnd} onPointerLeave={holdEnd}
               onContextMenu={e => { e.preventDefault(); if (canReact(m)) openMenu(m); }}
-              style={{ maxWidth: "78%", padding: "9px 13px", borderRadius: m.mine ? "14px 14px 4px 14px" : "14px 14px 14px 4px", background: m.mine ? C.accent : C.card, border: m.mine ? "none" : `1px solid ${C.border}`, userSelect: "none", WebkitUserSelect: "none", WebkitTouchCallout: "none" }}>
-              <span style={{ fontFamily: F_BODY, fontSize: 13.5, color: "#fff", lineHeight: 1.4 }}>{m.text}</span>
+              style={{ maxWidth: "78%", width: m.link ? "78%" : undefined, boxSizing: "border-box", padding: m.link ? 6 : "9px 13px", borderRadius: m.mine ? "14px 14px 4px 14px" : "14px 14px 14px 4px", background: m.mine ? C.accent : C.card, border: m.mine ? "none" : `1px solid ${C.border}`, userSelect: "none", WebkitUserSelect: "none", WebkitTouchCallout: "none" }}>
+              {m.link && <ChatLinkCard k={m.link} prof={m.link.t === "profile" ? authorProf(m) : null} onOpen={String(m.id).startsWith("invio-") ? null : () => openLinkOf(m)} />}
+              {(!m.link || (m.text && m.text !== m.link.ti)) && <span style={{ display: "block", padding: m.link ? "7px 7px 3px" : 0, fontFamily: F_BODY, fontSize: 13.5, color: "#fff", lineHeight: 1.4 }}>{m.text}</span>}
             </div>
             {m.reactions && m.reactions.length > 0 && (
               <button className="press" data-reactions={m.id} aria-label={"Reazioni: " + m.reactions.map(r => `${REACTION_NAMES[r.e] || r.e} ${r.n}`).join(", ")} onClick={() => { if (canReact(m)) openMenu(m); }}
@@ -5981,9 +6140,16 @@ function ChatThreadScreen({ chat, onBack, onSend, isPremium, blocked = [], onRep
         ))}
         <div ref={endRef} />
       </div>
-      <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 16px", borderTop: `1px solid ${C.border}`, flexShrink: 0 }}>
+      {attach && (
+        <div data-chat-attach={attach.t} style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 16px 0", borderTop: `1px solid ${C.border}`, flexShrink: 0 }}>
+          <div style={{ flex: 1, minWidth: 0 }}><ChatLinkCard k={attach} /></div>
+          <button className="press" aria-label="Togli il link" onClick={() => setAttach(null)} style={{ width: 32, height: 32, borderRadius: "50%", background: "rgba(255,255,255,.08)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}><Icon name="close" size={12} sw={2.2} /></button>
+        </div>
+      )}
+      <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 16px", borderTop: attach ? "none" : `1px solid ${C.border}`, flexShrink: 0 }}>
         <div style={{ flex: 1, display: "flex", alignItems: "center", padding: "11px 14px", borderRadius: 20, background: C.card, border: `1px solid ${C.border}` }}>
-          <input value={draft} onChange={e => setDraft(e.target.value)} onKeyDown={e => e.key === "Enter" && send()} placeholder="Scrivi un messaggio…" style={{ flex: 1, minWidth: 0, border: "none", background: "none", outline: "none", fontFamily: F_BODY, fontSize: 13.5, color: C.text }} />
+          <button className="press" data-link-btn="" aria-label="Manda un link dell'app" onClick={() => setPicking(true)} style={{ display: "flex", padding: 0, marginRight: 9, flexShrink: 0 }}><Icon name="link" size={17} color={C.muted} /></button>
+          <input value={draft} onChange={e => typed(e.target.value)} onKeyDown={e => e.key === "Enter" && send()} placeholder="Scrivi un messaggio…" style={{ flex: 1, minWidth: 0, border: "none", background: "none", outline: "none", fontFamily: F_BODY, fontSize: 13.5, color: C.text }} />
         </div>
         <button className="press" aria-label="Invia" onClick={send} style={{ width: 40, height: 40, borderRadius: "50%", background: C.accent, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
           <Icon name="send" size={16} color="#fff" sw={2} />
@@ -6009,6 +6175,8 @@ function ChatThreadScreen({ chat, onBack, onSend, isPremium, blocked = [], onRep
         </div>
       )}
       {peek && <ChatProfileSheet msg={peek} messages={shown} trophyList={trophyList} myWon={myWon || {}} onReport={m => onReport && onReport(chat.id, m)} onClose={() => setPeek(null)} />}
+      {picking && <ChatLinkPicker onPick={k => { setAttach(k); setPicking(false); }} onClose={() => setPicking(false)} />}
+      {linkOpen && <ChatLinkSheet k={linkOpen.link} from={linkOpen.mine ? null : linkOpen.from} onClose={() => setLinkOpen(null)} />}
     </div>
   );
 }
@@ -8651,6 +8819,10 @@ function App() {
   const [toast, setToast] = useState(null);
   const toastTimer = useRef(null);
   const [selectedDriver, setSelectedDriver] = useState(null);
+  // Link dell'app in chat (25/10): "Invia in chat" sceglie la stanza (linkShare), poi il link si allega (pendingLink);
+  // aperto un link dalla chat, Indietro torna in chat (linkFrom); il Ghost Lap si apre sulla curva del link (ghostInit).
+  const [linkShare, setLinkShare] = useState(null), [pendingLink, setPendingLink] = useState(null);
+  const [linkFrom, setLinkFrom] = useState(null), [ghostInit, setGhostInit] = useState(null);
   const [liveTrackOpen, setLiveTrackOpen] = useState(false);
   const [infoModal, setInfoModal] = useState(null);
   const [articles, setArticles] = useState(shared0.news);
@@ -9390,9 +9562,9 @@ function App() {
     });
   };
   // Il messaggio si vede subito; se l'invio non riesce si toglie e la stanza rimette il testo nel campo (risponde false).
-  const sendMessage = (id, text) => {
+  const sendMessage = (id, text, link = null) => {
     if (!chatMe()) { needLogin("Per scrivere in chat serve un account."); return Promise.resolve(false); }
-    return Promise.resolve(withProfile(() => postChat(id, text)));
+    return Promise.resolve(withProfile(() => postChat(id, text, link)));
   };
   // Profilo veloce (25/10): tifo, casco (col colore dei tasti se non ne ha uno suo) e trofei vinti viaggiano col
   // messaggio; Chat.send li manda solo quando cambiano.
@@ -9401,12 +9573,12 @@ function App() {
     h: helmet ? { ...helmet, base: helmet.base || C.accent } : undefined,
     w: trophyList.filter(t => trophies[t.id]).map(t => t.id),
   });
-  const postChat = (id, text) => {
+  const postChat = (id, text, link = null) => {
     const u = Account.current(), who = u ? { name: u.name, aid: u.aid } : chatMe();
     const me = { ...(myMedal ? { ...who, medal: myMedal } : who), p: myProf() };   // la medaglia dei trofei viaggia con il messaggio (G31)
-    const temp = { id: "invio-" + Date.now(), from: me.name, text: text.trim(), at: nowMs(), aid: me.aid, mine: true, medal: myMedal || null };
+    const temp = { id: "invio-" + Date.now(), from: me.name, text: text.trim() || (link ? link.ti : ""), at: nowMs(), aid: me.aid, mine: true, medal: myMedal || null, link: link || null };
     setChatMsgs(x => ({ ...x, [id]: [...(x[id] || []), temp] }));
-    return Chat.send(id, text, me).then(m => {
+    return Chat.send(id, text, me, link).then(m => {
       setChatMsgs(x => ({ ...x, [id]: (x[id] || []).map(y => (y.id === temp.id ? m : y)) }));
       return true;
     }, e => {
@@ -9428,6 +9600,18 @@ function App() {
         showToast(e && e.code === "banned" ? CHAT_MSG.banned : e && e.code === "offline" ? CHAT_MSG["reaction-offline"] : CHAT_MSG.reaction);
       });
     });
+  };
+  // "Invia in chat" (notizia, gara, Ghost Lap): prima si sceglie la stanza.
+  const shareToChat = k => { if (guest) { needLogin("Per scrivere in chat serve un account."); return; } setShareId(null); setLinkShare(k); };
+  // Un link toccato in chat: la sua pagina dell'app (Indietro torna in chat).
+  const openLink = k => {
+    const gone = () => showToast("Non c'è più nell'app");
+    const page = fn => { setLinkFrom(view); fn(); };
+    if (k.t === "news") { if (articles.some(a => a.id === k.id)) page(() => openArticle(k.id)); else gone(); }
+    else if (k.t === "race") { if (CIRCUITS[k.id]) page(() => openCircuit(k.id)); else gone(); }
+    else if (k.t === "ghost") page(() => { setGhostInit({ s: k.s, a: k.a, b: k.b, n: k.n }); setView("ghost"); });
+    else if (k.t === "driver") { const d = driverById(k.id); if (d) setSelectedDriver(d); else gone(); }
+    else if (k.t === "question") goTab("fanta");
   };
   // Moderazione chat, come nell'app di oggi.
   const reportMessage = (chatId, m) => {
@@ -9495,8 +9679,9 @@ function App() {
 
   // ── Tasto indietro di Android e barra di stato (nell'APK) ──────────────
   // Pagine interne: il tasto indietro fa come la freccia in alto a sinistra.
+  const backFromLink = () => { setView(linkFrom || "tab"); setLinkFrom(null); setGhostInit(null); };
   const viewBack = {
-    article: () => setView("tab"), circuit: () => setView("tab"), ghost: () => setView("tab"), chats: () => setView("tab"),
+    article: backFromLink, circuit: backFromLink, ghost: backFromLink, chats: () => setView("tab"),
     profilo: () => setView("tab"), notifiche: () => setView("tab"), instagram: () => setView(igFrom),
     adminLock: () => setView("profilo"), admin: () => setView("profilo"), chatThread: () => goTab("race"),
   };
@@ -9506,6 +9691,7 @@ function App() {
   useBack(loginOpen && !authed, closeLogin);
   useBack(premiumOpen, () => closePremium());
   useBack(!!selectedDriver, () => setSelectedDriver(null));
+  useBack(!!linkShare, () => setLinkShare(null));
   useBack(liveTrackOpen, () => setLiveTrackOpen(false));
   useBack(ssOpen, () => setSsOpen(false));
   useBack(!!lapList, () => setLapList(null));
@@ -9651,6 +9837,12 @@ function App() {
   const activeArticle = articles.find(a => a.id === articleId);
   const shareArticle = shareId != null ? articles.find(a => a.id === shareId) : null;
   const liveSt = live ? live.sim.state() : null;
+  // Quello che si può mandare in chat come link (ChatLinkPicker) e le foto delle miniature.
+  const chatShareCtx = { share: shareToChat, sources: {
+    articles, races, predictions, predAnswers, squad, trophyList, trophies, pitBest, sillyPreds, stratPreds,
+    me: account ? { name: account.name, team: favTeam, driver: favDriver, fan: aboutMe && aboutMe.fan } : null,
+    radios: of1RadiosAt(live, liveSt).slice(0, 20),
+  } };
   const trialActive = isPremium && !!trial && !trial.converted;
   // Weekend del FantaF1: quello in diretta, altrimenti la prossima gara. La squadra si blocca all'inizio delle qualifiche.
   const fantaRace = (live && !demoOn && races.find(r => r.id === live.raceId)) || weekendRace(races);
@@ -9684,9 +9876,9 @@ function App() {
   else if (view === "circuit" && circuitId) body = <CircuitScreen circuitId={circuitId} races={races} articles={articles} onBack={viewBack.circuit} onTag={filterByTag} onOpenArticle={openArticle} />;
   else if (view === "adminLock") body = <AdminKeypad onOk={() => { setAdminUnlocked(true); setView("admin"); }} onCancel={viewBack.adminLock} />;
   else if (view === "admin" && adminUnlocked && Account.isAdmin()) body = <AdminScreen photos={commonsPhotos} setPhotos={adminSet.commonsPhotos} silly={sillyOfficial} onSilly={officialSeat} highlights={highlights} setHighlights={adminSet.highlights} onBack={viewBack.admin} onPublish={publishArticle} articles={articles} setArticles={adminSet.articles} fantaStats={fantaStats} setFantaStats={adminSet.fantaStats} standings={standings} setStandings={adminSet.standings} races={races} setRaces={adminSet.races} extraRaces={racesDoc.extra} setExtraRaces={adminSet.extraRaces} ig={ig} setIg={adminSet.ig} sentNotifs={sentNotifs} onSendNotif={sendNotif} onDeleteNotif={deleteNotif} onToast={showToast} tab={adminTab} setTab={setAdminTab} chats={chats} reports={reports} banned={banned} onDeleteMsg={deleteChatMsg} onSuspend={suspendUser} onUnsuspend={unsuspendUser} onIgnoreReport={ignoreReport} liveProps={liveProps} polls={allPolls} votes={votes} onPollAnswer={setPollAnswer} predictions={predictions} setPredictions={adminSet.predictions} predAnswers={predAnswers} />;
-  else if (view === "chatThread" && activeChat) body = <ChatThreadScreen chat={activeChat} onBack={viewBack.chatThread} onSend={guest ? () => needLogin("Per scrivere in chat serve un account.") : sendMessage} isPremium={isPremium} blocked={blocked} onReport={guest ? () => needLogin("Per segnalare un messaggio serve un account.") : reportMessage} onBlock={blockUser} onReact={guest ? () => needLogin("Per reagire ai messaggi serve un account.") : reactMessage} trophyList={trophyList} myWon={trophies} liveRace={races.find(r => r.status === "LIVE") || null} />;
+  else if (view === "chatThread" && activeChat) body = <ChatThreadScreen chat={activeChat} onBack={viewBack.chatThread} onSend={guest ? () => needLogin("Per scrivere in chat serve un account.") : sendMessage} isPremium={isPremium} blocked={blocked} onReport={guest ? () => needLogin("Per segnalare un messaggio serve un account.") : reportMessage} onBlock={blockUser} onReact={guest ? () => needLogin("Per reagire ai messaggi serve un account.") : reactMessage} trophyList={trophyList} myWon={trophies} pendingLink={pendingLink} onPendingUsed={() => setPendingLink(null)} onOpenLink={openLink} liveRace={races.find(r => r.status === "LIVE") || null} />;
   else if (view === "instagram") body = <InstagramView ig={ig} onToast={showToast} onBack={viewBack.instagram} />;
-  else if (view === "ghost") body = <GhostLap onBack={viewBack.ghost} />;
+  else if (view === "ghost") body = <GhostLap key={ghostInit ? JSON.stringify(ghostInit) : "ghost"} init={ghostInit} onBack={viewBack.ghost} />;
   else if (view === "chats") body = <ChatsView chats={chats} onOpen={openChat} blocked={blocked} onBack={viewBack.chats} unreadOf={(id, ms) => Chat.unread(id, ms)} />;
   else if (view === "profilo") body = <ProfiloScreen ig={ig} onOpenIg={() => { setIgFrom("profilo"); setView("instagram"); }} aboutMe={aboutMe} onSaveAboutMe={a => Account.updateAbout(a).catch(e => showToast(e && (e.code === "too-young" || e.code === "not-loaded") ? messageOf(e) : NOT_SAVED))} account={account} onSaveName={n => Account.updateName(n)} isAdmin={Account.isAdmin()} trial={trialActive ? trial : null} trialUsed={!!trial} onBack={viewBack.profilo} onNotifiche={() => setView("notifiche")} onPremium={() => setPremiumOpen(true)} onAdmin={() => guest ? needLogin("Accedi per usare il pannello admin.") : setView(adminUnlocked ? "admin" : "adminLock")} onLogout={logout} isPremium={isPremium} onAbout={() => setInfoModal({ title: "Info su B&T", body: ABOUT_TEXT, credits: true })} onFeedback={() => setFeedbackOpen(true)} onHelp={() => setInfoModal({ title: "Assistenza", body: HELP_TEXT })} favTeam={favTeam} favDriver={favDriver} onPickTeam={() => guest ? needLogin("Per scegliere scuderia e pilota del cuore serve un account.") : setPicker("team")} onPickDriver={() => guest ? needLogin("Per scegliere scuderia e pilota del cuore serve un account.") : setPicker("driver")} guest={guest} onLogin={() => needLogin(null)} onTerms={() => setTermsOpen(true)} blocked={blocked} onUnblock={unblockUser} onDeleteAccount={deleteAccount} savedCount={saved.length} onOpenSaved={openSaved} onTheme={() => setThemeOpen(true)} helmet={helmet} onHelmet={() => setHelmetOpen(true)} trophies={trophies} trophyProg={trophyProg} trophyList={trophyList}
     onAdPrivacy={Ads.privacyRequired() ? () => Ads.openPrivacy().catch(() => showToast("Le preferenze sulla privacy degli annunci non sono disponibili in questo momento.")) : null}
@@ -9728,7 +9920,7 @@ function App() {
           onPointerMove={showBottomNav ? e => { if (e.pointerType === "mouse" && (e.buttons & 1)) swipeMove(e.clientX, e.clientY); } : undefined}
           onPointerUp={showBottomNav ? e => { if (e.pointerType === "mouse") swipeEnd(e.clientX, e.clientY, e.timeStamp, e.currentTarget.clientWidth, true); } : undefined}
           onClickCapture={e => { if (performance.now() - swipeClick.current < 400) { e.stopPropagation(); e.preventDefault(); } }}>
-          {showBottomNav ? tabPages() : <div key="view" style={{ height: "100%" }}>{body}</div>}
+          <ChatShare.Provider value={chatShareCtx}>{showBottomNav ? tabPages() : <div key="view" style={{ height: "100%" }}>{body}</div>}</ChatShare.Provider>
           {/* Una per scheda accanto (key): cambiata scheda non resta il nome di quella di prima mentre svanisce. */}
           {showBottomNav && <TabPeek key={"peek-left-" + tab} side="left" tab={TABS[TAB_IDS.indexOf(tab) - 1]} peekRef={el => { peekRef.current.left = el; }} />}
           {showBottomNav && <TabPeek key={"peek-right-" + tab} side="right" tab={TABS[TAB_IDS.indexOf(tab) + 1]} peekRef={el => { peekRef.current.right = el; }} />}
@@ -9748,7 +9940,8 @@ function App() {
           options={TEAMS.map(t => ({ id: t.id, label: t.name, color: t.color, sub: t.tag }))} />}
         {picker === "driver" && <PickerModal title="PILOTA DEL CUORE" selected={favDriver} onPick={v => { if (!userDataWait()) setFavDriver(v); }} onClose={() => setPicker(null)}
           options={DRIVERS.map(d => ({ id: d.id, label: d.full, color: d.color, sub: d.team, driver: d }))} />}
-        {shareArticle && view === "article" && <ShareSheet article={shareArticle} locked={!!shareArticle.premium && !isPremium} handle={ig.handle} onClose={() => setShareId(null)} onToast={showToast} />}
+        <ChatShare.Provider value={chatShareCtx}>{shareArticle && view === "article" && <ShareSheet article={shareArticle} locked={!!shareArticle.premium && !isPremium} handle={ig.handle} onClose={() => setShareId(null)} onToast={showToast} />}</ChatShare.Provider>
+        {linkShare && <ChatRoomPicker onPick={id => { setPendingLink(linkShare); setLinkShare(null); openChat(id); }} onClose={() => setLinkShare(null)} />}
         {termsAccepted && termsOpen && <TermsSheet review onClose={() => setTermsOpen(false)} />}
         {feedbackOpen && <FeedbackModal onClose={() => setFeedbackOpen(false)} onSend={sendFeedback} />}
         {toast && <div className="toast" style={showBottomNav && adH > 0 ? { bottom: 104 + adH + AD_GAP } : undefined}>{toast}</div>}

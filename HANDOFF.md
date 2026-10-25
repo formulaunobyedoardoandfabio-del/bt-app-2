@@ -210,3 +210,13 @@ toccando il nome in chat (tifo, casco, trofei, segnalazione), reazioni con le em
   run64 aggiornata); trofei in Firebase con `attivo: true/false` per ognuno (prima `off`; dentro l'app
   resta `off`, `cleanTrophyConfig` si può rifare due volte). Il documento lo crea l'app di un admin al primo avvio.
   Prove: run72 9/9, run64 5/5, run20 13/13, trophies.test 6/6, appdata.test 23/23.
+- Link dell'app in chat (Edoardo, 21:40): messaggio con `k` = `{ t, id, ti, su, ln, s/a/b/n, u }` (`compat.linkOf`; solo
+  testo e id, le foto le prende ogni telefono dai suoi dati; audio solo da livetiming.formula1.com). Tipi: notizia,
+  gara, curva del Ghost Lap, team radio (solo quelli veri di OpenF1), pilota, scuderia, profilo, squadra FantaF1,
+  traguardi del Garage, domanda del Fanta. Si allegano scrivendo @ o col tasto del link nel campo (`ChatLinkPicker`,
+  categorie e ricerca), oppure con "Invia in chat" (`ShareChatBtn`: Chat B&T nella scheda Condividi della notizia,
+  tasto in alto nella pagina della gara, sotto la curva scelta nel Ghost Lap) che chiede la stanza (`ChatRoomPicker`).
+  Toccando la miniatura: notizia, gara e Ghost Lap aprono la pagina (Indietro torna in chat, `linkFrom`), il pilota la
+  sua scheda, la domanda la pagina FANTA, il profilo il profilo veloce; scuderia, squadra, traguardi e team radio la
+  scheda coi dettagli (`ChatLinkSheet`). Senza testo, `txt` = titolo del link (l'app di oggi vede solo quello).
+  Prove: `test/e2e/run74-chat-link.js` (3), compat.test e chat.test.
