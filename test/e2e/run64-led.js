@@ -17,10 +17,11 @@ const shift = p => p.evaluate(() => {
   const anim = c => { const x = leds.find(l => l.getAttribute('data-shift-led') === c); return x ? getComputedStyle(x).animationName : null; };
   return { state: e.getAttribute('data-shift'), colors: leds.map(l => l.getAttribute('data-shift-led')).join(''), green: anim('g'), blue: anim('b'), inButton: !!e.closest('button') };
 });
+// 25/10: nel tasto in alto solo il logo B&T (prima la griglia di LED accanto alla scritta); i tre tocchi lo fanno lampeggiare.
 const logo = p => p.evaluate(() => {
-  const g = document.querySelector('[data-logo] [data-led-grid]'); if (!g) return null;
-  const led = g.querySelector('[data-led]');
-  return { mode: g.getAttribute('data-mode'), leds: g.querySelectorAll('[data-led]').length, anim: led ? getComputedStyle(led).animationName : null, iter: led ? getComputedStyle(led).animationIterationCount : null };
+  const i = document.querySelector('[data-logo] [data-logo-img]'); if (!i) return null;
+  const cs = getComputedStyle(i);
+  return { grid: !!document.querySelector('[data-logo] [data-led-grid]'), mode: i.getAttribute('data-mode'), anim: cs.animationName, iter: cs.animationIterationCount, src: i.getAttribute('src').split(',')[0] };
 });
 const tapLogo = async (p, n, gap = 90) => { for (let i = 0; i < n; i++) { await tapSel(p, '[data-logo]'); await w(p, gap); } };
 
@@ -49,12 +50,12 @@ run({
     assert(!errs.length, errs.join(' | '));
   },
 
-  async 'logo in alto con la griglia di LED'(b) {
+  async 'logo in alto: il logo B&T, senza la griglia di LED'(b) {
     const { ctx, p, errs } = await open(b); await login(p);
     const l = await logo(p);
     const label = await p.evaluate(() => { const e = document.querySelector('[data-logo]'); return e && e.getAttribute('aria-label'); });
     await ctx.close();
-    assert(l && l.leds === 8 && l.mode === 'idle', 'nel logo manca la griglia di 8 LED: ' + JSON.stringify(l));
+    assert(l && !l.grid && l.mode === 'idle' && l.src === 'data:image/png;base64', 'nel tasto in alto deve esserci solo il logo: ' + JSON.stringify(l));
     assert(label === 'B&T', 'il logo ha perso il nome: ' + label);
     assert(!errs.length, errs.join(' | '));
   },
@@ -75,7 +76,7 @@ run({
     assert(!errs.length, errs.join(' | '));
   },
 
-  async 'tre tocchi sul logo: tre lampeggi (data-led="flash3"), suono e vibrazione'(b) {
+  async 'tre tocchi sul logo: tre lampeggi del logo, suono e vibrazione'(b) {
     const { ctx, p, errs } = await open(b); await login(p);
     await spyFx(p);
     await tapLogo(p, 3);
@@ -84,9 +85,9 @@ run({
     await w(p, 1800);
     const back = await logo(p);
     await ctx.close();
-    assert(l && l.mode === 'flash3' && l.anim === 'ledflash3' && l.iter === '3', 'i LED non lampeggiano tre volte: ' + JSON.stringify(l));
+    assert(l && l.mode === 'flash3' && l.anim === 'logoflash3' && l.iter === '3', 'il logo non lampeggia tre volte: ' + JSON.stringify(l));
     assert(fx.played.includes('rev') && fx.buzzed.includes('success'), 'manca suono o vibrazione: ' + JSON.stringify(fx));
-    assert(back && back.mode === 'idle', 'dopo i lampeggi i LED non tornano fermi: ' + JSON.stringify(back));
+    assert(back && back.mode === 'idle', 'dopo i lampeggi il logo non torna fermo: ' + JSON.stringify(back));
     assert(!errs.length, errs.join(' | '));
   },
 

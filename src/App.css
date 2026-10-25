@@ -80,6 +80,9 @@
   .led-pulse > span{ animation:ledpulse 1.4s ease-in-out infinite alternate both; }
   @keyframes ledpulse{ from{ opacity:.35; } to{ opacity:1; } }
   .led-flash3 > span{ animation:ledflash3 .32s steps(1, end) 3; }
+  /* 25/10: nel tasto in alto c'è solo il logo B&T; i tre tocchi lo fanno lampeggiare tre volte. */
+  .logo-flash3{ animation:logoflash3 .32s steps(1, end) 3; }
+  @keyframes logoflash3{ 0%{ opacity:1; } 50%{ opacity:.15; } 100%{ opacity:1; } }
   @keyframes ledflash3{ 0%{ opacity:1; } 50%{ opacity:.12; } 100%{ opacity:1; } }
   /* Tappa 3 (G24): Shift Light. "run": verdi e rossi in sequenza; "done": i blu lampeggiano. */
   .shift-run > span{ opacity:.14; }
