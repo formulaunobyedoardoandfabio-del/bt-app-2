@@ -13,7 +13,12 @@ const CHAT_MSG = {
   "report-failed": "Segnalazione non inviata: controlla la connessione e riprova.",
   empty: "Nessun messaggio: scrivi tu il primo!",
   "no-aid": "Non riesco a identificare con certezza chi ha scritto questo messaggio (è vecchio, senza l'ID dell'autore): sospendilo da un suo messaggio più recente.",
+  reaction: "Reazione non riuscita: riprova.",
+  "reaction-offline": "Reazione non salvata: controlla la connessione e riprova.",
 };
+// 25/10: il profilo veloce (p: tifo, casco, trofei) va col messaggio solo quando cambia, o dopo una settimana, per
+// stanza: chi lo guarda prende l'ultimo messaggio dell'autore che ce l'ha. Ricordato sul telefono (bt-chat-p-<stanza>).
+const PROFILE_KEY = k => "bt-chat-p-" + k, PROFILE_REFRESH_MS = 7 * 86400000;
 const REPORTS_KEY = "bt-chat-reports", BANNED_KEY = "bt-chat-banned", BLOCKED_KEY = "bt-blocked", LEGACY_KEY = "bt-chat";
 const ROOM_IDS = Object.keys(C.CHAT_DB_KEY);
 const mkErr = code => Object.assign(new Error(CHAT_MSG[code] || code), { code });
@@ -46,10 +51,28 @@ function createChat({ sg = FB.sg, sgStrict = FB.sgStrict, ss = FB.ss, sharedAppe
     const banned = await read(BANNED_KEY);
     if (banned.some(b => sameWho(b, { aid: me.aid, name: me.name }))) throw mkErr("banned");
     const prev = failedSends.get(key);
-    const m = prev && prev.txt === txt && prev.aid === (me.aid || "") && prev.user === me.name ? prev : C.chatMsgToStore(txt, me, now());
+    let m = prev && prev.txt === txt && prev.aid === (me.aid || "") && prev.user === me.name ? prev : null;
+    if (!m) {
+      m = C.chatMsgToStore(txt, me, now());
+      const sent = local.get(PROFILE_KEY(key));
+      if (m.p && sent && sent.j === JSON.stringify(m.p) && now() - (sent.t || 0) < PROFILE_REFRESH_MS) delete m.p;
+    }
     try { await sharedAppend(key, m); } catch (e) { failedSends.set(key, m); throw mkErr("offline"); }
     failedSends.delete(key);
+    if (m.p) local.set(PROFILE_KEY(key), { j: JSON.stringify(m.p), t: m.t });
     return C.chatFromStore([m], me)[0];
+  }
+  // Reazione al messaggio msgId: emoji di C.REACTIONS, oppure null per toglierla. Una per persona: la vecchia va via.
+  async function react(roomId, msgId, emoji, me) {
+    const key = keyOf(roomId);
+    if (emoji != null && !C.REACTIONS.includes(emoji)) throw mkErr("reaction");
+    const banned = await read(BANNED_KEY);
+    const who = { aid: me.aid || "", name: me.name };
+    if (banned.some(b => sameWho(b, who))) throw mkErr("banned");
+    try {
+      await sharedRemoveWhere(key, x => !!x && x.re === String(msgId) && sameWho(who, { aid: x.aid || "", name: x.user }));
+      if (emoji) await sharedAppend(key, C.reactionToStore(msgId, emoji, me, now()));
+    } catch (e) { throw mkErr("offline"); }
   }
 
   // ── Moderazione ─────────────────────────────────────────────────────
@@ -61,7 +84,7 @@ function createChat({ sg = FB.sg, sgStrict = FB.sgStrict, ss = FB.ss, sharedAppe
   const loadReports = async () => (await read(REPORTS_KEY)).map(C.reportFromStore).sort((a, b) => b.t - a.t);
   const loadBanned = async () => read(BANNED_KEY);
   async function deleteMessage(roomId, msgId) {
-    await sharedRemoveWhere(keyOf(roomId), m => m && m.id === msgId);
+    await sharedRemoveWhere(keyOf(roomId), m => m && (m.id === msgId || m.re === msgId));   // con le sue reazioni
     await sharedRemoveWhere(REPORTS_KEY, r => r && r.msgId === msgId);
   }
   // Si sospende per aid: un messaggio vecchio senza aid non dice chi l'ha scritto (lo stesso nome lo può avere chiunque,
@@ -116,7 +139,7 @@ function createChat({ sg = FB.sg, sgStrict = FB.sgStrict, ss = FB.ss, sharedAppe
     await sharedRemoveWhere(REPORTS_KEY, r => !!r && (r.byAid === aid || r.aid === aid || (!r.aid && !!user.name && r.author === user.name)));
   }
 
-  return { loadRoom, send, report, loadReports, loadBanned, deleteMessage, suspend, unsuspend, ignoreReport, block, unblock, blocked, unread, markSeen, migrateLegacy, cleanupFor };
+  return { loadRoom, send, react, report, loadReports, loadBanned, deleteMessage, suspend, unsuspend, ignoreReport, block, unblock, blocked, unread, markSeen, migrateLegacy, cleanupFor };
 }
 
 module.exports = { CHAT_MSG, ROOM_IDS, createChat };

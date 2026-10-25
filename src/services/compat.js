@@ -3,6 +3,7 @@
 // 2.0 viaggiano negli stessi oggetti, che l'app di oggi ignora.
 const F1 = require("../data/f1-2026");
 const CIRCUIT_INFO = require("../data/circuit-info.json");
+const { cleanHelmet } = require("../logic/helmet");
 
 const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 5);   // come l'app di oggi
 // Minuscolo e senza accenti (Montréal → montreal).
@@ -313,6 +314,10 @@ function notifToStore({ title, body } = {}, now = Date.now()) {
 
 // ── Instagram (shared/bt-ig-config) ────────────────────────────────────
 // Oggi {followers, videos: [{id, title, thumbnail, views, likes, url}]}; in più handle e posts. Niente numeri inventati.
+// 25/10: per ogni reel anche una descrizione breve (desc, al massimo 40 caratteri: va sulla copertina) e la data di
+// uscita (date, AAAA-MM-GG: ultimo reel, "NUOVO", più visti del mese). L'app di oggi non le legge.
+const igDesc = v => String(v == null ? "" : v).trim().slice(0, 40);
+const igDate = v => (typeof v === "string" && /^\d{4}-\d{2}-\d{2}$/.test(v) && !isNaN(Date.parse(v)) ? v : "");
 function igFromStore(doc) {
   const d = isObj(doc) ? doc : {};
   return {
@@ -321,7 +326,7 @@ function igFromStore(doc) {
     posts: d.posts == null ? null : d.posts,
     videos: (Array.isArray(d.videos) ? d.videos : []).filter(isObj).map(v => ({
       id: String(v.id), title: v.title || "", views: v.views == null ? "" : v.views, likes: v.likes == null ? "" : v.likes,
-      thumb: v.thumbnail || v.thumb || "", url: v.url || "",
+      thumb: v.thumbnail || v.thumb || "", url: v.url || "", desc: igDesc(v.desc), date: igDate(v.date),
     })),
   };
 }
@@ -330,7 +335,7 @@ function igToStore(ig = {}) {
     handle: ig.handle || "bt_formula1",
     followers: ig.followers == null ? null : ig.followers,
     posts: ig.posts == null ? null : ig.posts,
-    videos: (ig.videos || []).map(v => ({ id: String(v.id), title: v.title || "", thumbnail: v.thumb || "", views: v.views == null ? "" : v.views, likes: v.likes == null ? "" : v.likes, url: v.url || "" })),
+    videos: (ig.videos || []).map(v => ({ id: String(v.id), title: v.title || "", thumbnail: v.thumb || "", views: v.views == null ? "" : v.views, likes: v.likes == null ? "" : v.likes, url: v.url || "", desc: igDesc(v.desc), date: igDate(v.date) })),
   };
 }
 const igProfileUrl = handle => `https://www.instagram.com/${String(handle || "bt_formula1").replace(/^@/, "")}/`;
@@ -361,16 +366,59 @@ function sameAuthor(a, m) {
 // Medaglia dei trofei (Tappa 3, G31) accanto al nome: campo in più che l'app di oggi ignora.
 const CHAT_MEDALS = ["bronzo", "argento", "oro"];
 const medalOk = v => (CHAT_MEDALS.includes(v) ? v : null);
+// 25/10: reazioni come su WhatsApp. Ogni reazione è una voce della stanza {id, user, aid, re: id del messaggio, e, t}
+// (aggiunta con arrayUnion come i messaggi, così bastano le regole di oggi); una per persona e per messaggio: vale
+// l'ultima. L'app di oggi non le conosce.
+const REACTIONS = ["👍", "❤️", "😂", "😮", "😢", "🙏"];
+const isReaction = m => typeof m.re === "string" && m.re !== "";
+const whoKey = m => (m.aid ? "a:" + m.aid : "n:" + (m.user || ""));
+// [{ e, n, mine }]: più reazioni prima; a pari numero nell'ordine di REACTIONS.
+const sortReactions = l => l.filter(r => r.n > 0).sort((a, b) => b.n - a.n || REACTIONS.indexOf(a.e) - REACTIONS.indexOf(b.e));
+// Profilo veloce nel messaggio (p): squadra (t) e pilota (d) del cuore, tipo di tifoso (f), casco (h), trofei vinti (w).
+const idOk = (v, max) => (typeof v === "string" && /^[a-z0-9-]{1,40}$/.test(v) && v.length <= max ? v : null);
+function profOf(p) {
+  if (!isObj(p)) return null;
+  const out = {};
+  const t = idOk(p.t, 24), d = idOk(p.d, 30), f = idOk(p.f, 20);
+  if (t) out.t = t; if (d) out.d = d; if (f) out.f = f;
+  if (isObj(p.h)) out.h = cleanHelmet(p.h);
+  if (Array.isArray(p.w)) { const w = p.w.filter(x => idOk(x, 24)).slice(0, 30); if (w.length) out.w = w; }
+  return Object.keys(out).length ? out : null;
+}
 function chatFromStore(arr, me) {
   const myAid = (me && me.aid) || "", myName = (me && me.name) || "";
-  return (Array.isArray(arr) ? arr : []).filter(isObj).map(m => ({
-    id: String(m.id), from: m.user || "", text: m.txt || "", at: m.t || 0, aid: m.aid || "",
-    mine: m.aid ? !!myAid && m.aid === myAid : !!myName && m.user === myName, medal: medalOk(m.medal),
-  }));
+  const all = (Array.isArray(arr) ? arr : []).filter(isObj);
+  const isMine = m => (m.aid ? !!myAid && m.aid === myAid : !!myName && m.user === myName);
+  // Reazioni: per messaggio, per persona, l'ultima con un'emoji prevista.
+  const last = new Map();   // id messaggio → Map(persona → { e, t, mine })
+  all.filter(isReaction).filter(r => REACTIONS.includes(r.e)).forEach(r => {
+    const per = last.get(r.re) || new Map(), k = whoKey(r), old = per.get(k);
+    if (!old || (r.t || 0) >= old.t) per.set(k, { e: r.e, t: r.t || 0, mine: isMine(r) });
+    last.set(r.re, per);
+  });
+  return all.filter(m => !isReaction(m)).map(m => {
+    const per = [...(last.get(String(m.id)) || new Map()).values()];
+    const mineR = per.find(r => r.mine);
+    const reactions = sortReactions(REACTIONS.map(e => ({ e, n: per.filter(r => r.e === e).length, mine: !!mineR && mineR.e === e })));
+    return {
+      id: String(m.id), from: m.user || "", text: m.txt || "", at: m.t || 0, aid: m.aid || "",
+      mine: isMine(m), medal: medalOk(m.medal), prof: profOf(m.p), reactions, myReaction: mineR ? mineR.e : null,
+    };
+  });
+}
+// La reazione messa (o cambiata, o tolta con null) da chi usa l'app, subito sullo schermo: un messaggio nuovo.
+function applyReaction(msg, emoji) {
+  const e = REACTIONS.includes(emoji) ? emoji : null, prev = msg.myReaction || null;
+  const counts = REACTIONS.map(x => { const r = (msg.reactions || []).find(y => y.e === x); return { e: x, n: (r ? r.n : 0) - (prev === x ? 1 : 0) + (e === x ? 1 : 0), mine: e === x }; });
+  return { ...msg, reactions: sortReactions(counts), myReaction: e };
+}
+function reactionToStore(msgId, emoji, me, now = Date.now()) {
+  if (!REACTIONS.includes(emoji)) return null;
+  return { id: uid(), user: me.name, aid: me.aid || "", re: String(msgId), e: emoji, t: now };
 }
 function chatMsgToStore(text, me, now = Date.now()) {
-  const medal = medalOk(me && me.medal);
-  return { id: uid(), user: me.name, aid: me.aid || "", txt: text, t: now, ...(medal ? { medal } : {}) };
+  const medal = medalOk(me && me.medal), p = profOf(me && me.p);
+  return { id: uid(), user: me.name, aid: me.aid || "", txt: text, t: now, ...(medal ? { medal } : {}), ...(p ? { p } : {}) };
 }
 function reportToStore(roomId, msg, me, now = Date.now()) {
   return { id: uid(), room: ROOM_OLD_KEY[roomId] || roomId, msgId: msg.id, txt: msg.text, author: msg.from, aid: msg.aid || "", by: me.name, byAid: me.aid || "", t: now };
@@ -405,5 +453,6 @@ module.exports = {
   notifsFromStore, notifToStore,
   igFromStore, igToStore, igProfileUrl,
   CHAT_DB_KEY, ROOM_OLD_KEY, authorId, sameAuthor, chatFromStore, chatMsgToStore, reportToStore, reportFromStore,
+  REACTIONS, applyReaction, reactionToStore,
   profileFromStore,
 };

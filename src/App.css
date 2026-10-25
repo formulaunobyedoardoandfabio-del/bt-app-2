@@ -73,16 +73,6 @@
   /* Invito "Esplora il circuito": un riflesso di luce che passa ogni tanto. */
   .cta-shine::after{ content:""; position:absolute; top:0; bottom:0; left:-45%; width:32%; background:linear-gradient(100deg, rgba(255,255,255,0), rgba(255,255,255,.26), rgba(255,255,255,0)); transform:skewX(-18deg); animation:ctashine 3.4s ease-in-out infinite; pointer-events:none; }
   @keyframes ctashine{ 0%{ left:-45%; } 55%,100%{ left:135%; } }
-  /* Tappa 3 (G06): Pit Exit Launch. Zoom verso l'app con le linee della velocità; solo transform e opacity (R4). */
-  .pit-zoom{ animation:pitzoom .42s cubic-bezier(.55,0,.9,.4) forwards; }
-  @keyframes pitzoom{ from{ transform:scale(1); opacity:1; } to{ transform:scale(2.8); opacity:0; } }
-  .pit-out{ animation:pitout .42s ease-in forwards; }
-  @keyframes pitout{ 0%,30%{ opacity:1; } 100%{ opacity:0; } }
-  .pit-fade{ transition:opacity .2s ease; opacity:0; }
-  .pit-lines{ position:absolute; left:50%; top:50%; width:0; height:0; }
-  .pit-lines > span{ position:absolute; left:0; top:0; width:0; height:0; }
-  .pit-lines > span > i{ position:absolute; left:40px; top:-1px; width:120px; height:2px; border-radius:2px; background:linear-gradient(90deg, rgba(255,255,255,0), rgba(255,255,255,.85)); transform-origin:0 50%; animation:pitline .42s ease-in forwards; }
-  @keyframes pitline{ from{ transform:translateX(0) scaleX(.2); opacity:0; } 35%{ opacity:1; } to{ transform:translateX(260px) scaleX(1.6); opacity:0; } }
   /* Tappa 3 (G06, G25): la luce posteriore a LED; "seq" = si accendono una riga alla volta. */
   .led-seq > span{ animation:ledseq .84s linear infinite both; }
   @keyframes ledseq{ 0%{ opacity:.16; } 10%,45%{ opacity:1; } 62%,100%{ opacity:.16; } }
@@ -199,4 +189,4 @@
     .tab-leave, .tab-peek{ display:none; }
     .tab-back, .nav-pill, .nav-ico{ transition:none; }
   }
-  @media (prefers-reduced-motion:reduce){ .press, .toast, .live-notice{ transition:none; animation:none; } .track-dot{ animation:none !important; } .cta-shine::after{ animation:none; display:none; } .led-seq > span, .pit-zoom, .pit-out, .pit-lines > span > i{ animation:none; } .abort-yellow{ animation:none; opacity:1; } .abort-shake{ animation:none; } }
+  @media (prefers-reduced-motion:reduce){ .press, .toast, .live-notice{ transition:none; animation:none; } .track-dot{ animation:none !important; } .cta-shine::after{ animation:none; display:none; } .led-seq > span{ animation:none; } .abort-yellow{ animation:none; opacity:1; } .abort-shake{ animation:none; } }

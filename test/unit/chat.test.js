@@ -159,6 +159,55 @@ t('cleanupFor: via i suoi messaggi (con aid o, senza aid, con lo stesso nome) e 
   assert.strictEqual(c.fs('shared/bt-chat-banned').__arr.length, 1, 'le sospensioni le cambia solo l\'admin');
 });
 
+// ── 25/10: reazioni e profilo veloce ────────────────────────────────────
+t('reazioni: una per persona; si cambia e si toglie; nella stanza come voci re', async () => {
+  const c = ctx();
+  const his = await c.chat.send('generale', 'Che sorpasso!', OTHER);
+  await c.chat.react('generale', his.id, '👍', ME);
+  let room = await c.chat.loadRoom('generale', ME);
+  assert.deepStrictEqual(room.map(m => m.id), [his.id], 'la reazione non è un messaggio');
+  assert.deepStrictEqual([room[0].myReaction, room[0].reactions], ['👍', [{ e: '👍', n: 1, mine: true }]]);
+  c.tick(1000);
+  await c.chat.react('generale', his.id, '❤️', ME);
+  await c.chat.react('generale', his.id, '❤️', OTHER);
+  const arr = c.fs('shared/bt-chat-generale').__arr;
+  assert.strictEqual(arr.filter(x => x.re === his.id && x.aid === ME.aid).length, 1, 'una sola reazione mia');
+  room = await c.chat.loadRoom('generale', ME);
+  assert.deepStrictEqual(room[0].reactions, [{ e: '❤️', n: 2, mine: true }]);
+  await c.chat.react('generale', his.id, null, ME);
+  room = await c.chat.loadRoom('generale', ME);
+  assert.deepStrictEqual([room[0].myReaction, room[0].reactions], [null, [{ e: '❤️', n: 1, mine: false }]]);
+  await assert.rejects(c.chat.react('generale', his.id, '💩', ME), e => e.code === 'reaction');
+});
+
+t('reazioni: chi è sospeso non reagisce; quelle di un bloccato non si contano; tolto il messaggio vanno via', async () => {
+  const c = ctx({ 'shared/bt-chat-banned': { __arr: [{ aid: OTHER.aid, name: 'Marco', t: 1 }] } });
+  const mine = await c.chat.send('generale', 'ciao', ME);
+  await assert.rejects(c.chat.react('generale', mine.id, '👍', OTHER), e => e.code === 'banned');
+  c.fake.setDoc('shared/bt-chat-banned', { __arr: [] });
+  await c.chat.react('generale', mine.id, '😂', OTHER);
+  assert.strictEqual((await c.chat.loadRoom('generale', ME))[0].reactions[0].n, 1);
+  c.chat.block({ aid: OTHER.aid, from: 'Marco' });
+  assert.deepStrictEqual((await c.chat.loadRoom('generale', ME))[0].reactions, [], 'reazione di un bloccato');
+  await c.chat.deleteMessage('generale', mine.id);
+  assert.deepStrictEqual(c.fs('shared/bt-chat-generale').__arr, [], 'messaggio e reazioni tolti');
+});
+
+t('profilo veloce: viaggia col messaggio solo quando cambia (o dopo una settimana)', async () => {
+  const c = ctx();
+  const P = { t: 'ferrari', d: 'leclerc', f: 'vivo', w: ['casco'] };
+  await c.chat.send('generale', 'uno', { ...ME, p: P });
+  c.tick(1000); await c.chat.send('generale', 'due', { ...ME, p: { ...P } });
+  c.tick(1000); await c.chat.send('generale', 'tre', { ...ME, p: { ...P, w: ['casco', 'pitcrew'] } });
+  c.tick(1000); await c.chat.send('live', 'altra stanza', { ...ME, p: { ...P, w: ['casco', 'pitcrew'] } });
+  c.tick(8 * 86400000); await c.chat.send('generale', 'dopo una settimana', { ...ME, p: { ...P, w: ['casco', 'pitcrew'] } });
+  const arr = c.fs('shared/bt-chat-generale').__arr;
+  assert.deepStrictEqual(arr.map(m => !!m.p), [true, false, true, true]);
+  assert.ok(c.fs('shared/bt-chat-live-gara').__arr[0].p, 'in un\'altra stanza il profilo va col primo messaggio');
+  const room = await c.chat.loadRoom('generale', OTHER);
+  assert.deepStrictEqual(room.map(m => m.prof && m.prof.w.length), [1, null, 2, 2]);
+});
+
 (async () => {
   const filter = process.argv[2] ? new RegExp(process.argv[2], 'i') : null;
   for (const [name, fn] of tests) {

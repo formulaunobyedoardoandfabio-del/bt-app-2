@@ -3,11 +3,50 @@
 // Uso: node test/unit/trophies.test.js [filtro]
 const assert = require('assert');
 const path = require('path');
-const { TROPHIES, trophyProgress, medalOf } = require(path.join(__dirname, '..', '..', 'src', 'logic', 'trophies.js'));
+const { TROPHIES, trophyProgress, medalOf, trophyDefs, trophyConfigDefaults, cleanTrophyConfig } = require(path.join(__dirname, '..', '..', 'src', 'logic', 'trophies.js'));
 
 const done = p => Object.keys(p).filter(id => p[id].done).sort();
 
 const tests = {
+  // 25/10: Pit crew in 2,30 secondi o meno (prima sotto i 2,5); "o meno": il tempo esatto vale.
+  'pit stop: Pit crew entro 2,30 s, Pit stop perfetto entro 2,00 s'() {
+    const pc = TROPHIES.find(t => t.id === 'pitcrew'), pp = TROPHIES.find(t => t.id === 'pitperfetto');
+    assert.strictEqual(pc.goal, 2.3); assert.strictEqual(pp.goal, 2);
+    assert.ok(/2,30/.test(pc.how), pc.how);
+    assert.deepStrictEqual(done(trophyProgress({ pitBest: 2.3 })), ['pitcrew']);
+    assert.deepStrictEqual(done(trophyProgress({ pitBest: 2.31 })), []);
+    assert.deepStrictEqual(done(trophyProgress({ pitBest: 2 })), ['pitcrew', 'pitperfetto']);
+  },
+
+  // 25/10: i trofei si cambiano da Firebase (shared/bt-trophies): per ogni id nome, come si vince, obiettivo, spento.
+  'trofei da Firebase: nome, testo, obiettivo e spento sopra i valori di serie'() {
+    const defs = trophyDefs({ pitcrew: { goal: 2.1, name: 'Pit crew pro' }, archivio: { goal: 3, how: 'Salva 3 notizie' }, sgasata: { off: true },
+      fantasma: { name: 'x' }, oracolo: { goal: -1 }, indovino: { name: '   ' }, radar: { goal: 'tanti' } });
+    const by = id => defs.find(t => t.id === id);
+    assert.strictEqual(by('pitcrew').name, 'Pit crew pro'); assert.strictEqual(by('pitcrew').goal, 2.1);
+    assert.strictEqual(by('archivio').goal, 3); assert.strictEqual(by('archivio').how, 'Salva 3 notizie');
+    assert.strictEqual(by('sgasata'), undefined, 'spento: non c\'è più');
+    assert.strictEqual(by('fantasma'), undefined, 'id sconosciuto: ignorato');
+    assert.strictEqual(by('oracolo').goal, 5, 'obiettivo non valido: quello di serie');
+    assert.strictEqual(by('indovino').name, 'Indovino', 'nome vuoto: quello di serie');
+    assert.strictEqual(by('radar').goal, 1);
+    assert.strictEqual(defs.length, 14);
+    assert.deepStrictEqual(done(trophyProgress({ pitBest: 2.2 }, defs)), [], '2,2 s non basta con 2,1');
+    assert.deepStrictEqual(done(trophyProgress({ saved: ['a', 'b', 'c'] }, defs)), ['archivio']);
+    assert.strictEqual(trophyProgress({ events: { egg: true } }, defs).sgasata, undefined, 'spento: non si vince');
+    assert.deepStrictEqual(trophyDefs(null).map(t => t.id), TROPHIES.map(t => t.id), 'senza documento: quelli di serie');
+  },
+
+  'valori di serie da scrivere su Firebase, e ritorno'() {
+    const cfg = trophyConfigDefaults();
+    assert.deepStrictEqual(Object.keys(cfg).sort(), TROPHIES.map(t => t.id).sort());
+    assert.deepStrictEqual(cfg.pitcrew, { name: 'Pit crew', how: TROPHIES.find(t => t.id === 'pitcrew').how, goal: 2.3, off: false });
+    assert.strictEqual(cfg.casco.goal, undefined, 'senza obiettivo: niente goal');
+    assert.deepStrictEqual(trophyDefs(cfg), trophyDefs(null));
+    assert.deepStrictEqual(cleanTrophyConfig({ pitcrew: { goal: '2,4', name: 7, off: 'sì' }, x: {} }), { pitcrew: {} });
+    assert.deepStrictEqual(cleanTrophyConfig('rotto'), {});
+  },
+
   'medalOf: 1 bronzo, 5 argento, 10 oro'() {
     assert.strictEqual(medalOf(0), null);
     assert.strictEqual(medalOf(1), 'bronzo');
@@ -51,7 +90,7 @@ const tests = {
     one({ about: { birth: 2001, follow: 3, fan: 'vivo', years: 9 } }, 'superlicenza');
     one({ helmet: { base: '#c00' } }, 'casco');
     one({ squad: { drivers: ['norris', 'leclerc', 'hadjar', 'gasly', 'ocon'], teams: ['ferrari', 'haas'] } }, 'griglia');
-    one({ pitBest: 2.31 }, 'pitcrew');
+    one({ pitBest: 2.3 }, 'pitcrew');   // 25/10: Edoardo vuole il Pit crew in 2,30 secondi (prima sotto i 2,5)
     one({ sillyPreds: { 'ferrari-2': { pick: 'bearman', at: 1 } } }, 'mercato');
     one({ ratings: { 'r16:RACE': { leclerc: { pace: 8 } } } }, 'pagellone');
     one({ dotd: { r16: { driver: 'leclerc' } } }, 'paddock');
@@ -74,7 +113,7 @@ const tests = {
     const q = trophyProgress({ pitBest: 2.73 });
     assert.strictEqual(q.pitcrew.done, false);
     assert.strictEqual(q.pitcrew.value, 2.73);
-    assert.strictEqual(q.pitcrew.goal, 2.5);
+    assert.strictEqual(q.pitcrew.goal, 2.3);   // 25/10: era 2,5
   },
 };
 

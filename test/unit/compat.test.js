@@ -202,6 +202,56 @@ t('chat: la medaglia dei trofei viaggia con il messaggio (Tappa 3, G31)', () => 
   assert.deepStrictEqual(got.map(x => x.medal), ['argento', null, null]);
 });
 
+// 25/10: reazioni come su WhatsApp, salvate nella stanza come voci {id, user, aid, re: id del messaggio, e, t}.
+t('chat: reazioni nella stanza, una per persona (vale l\'ultima), contate sul messaggio', () => {
+  const arr = [
+    { id: 'm1', user: 'Fabio', aid: 'u2', txt: 'ciao', t: 1 },
+    { id: 'r1', user: 'Edo', aid: ME.aid, re: 'm1', e: '👍', t: 2 },
+    { id: 'r2', user: 'Ada', aid: 'u4', re: 'm1', e: '👍', t: 3 },
+    { id: 'r3', user: 'Ugo', aid: 'u3', re: 'm1', e: '❤️', t: 4 },
+    { id: 'r4', user: 'Ada', aid: 'u4', re: 'm1', e: '😂', t: 5 },
+    { id: 'r5', user: 'Ugo', aid: 'u3', re: 'm1', e: '💩', t: 6 },
+    { id: 'r6', user: 'Ugo', aid: 'u3', re: 'zz', e: '👍', t: 7 },
+  ];
+  const msgs = C.chatFromStore(arr, ME);
+  assert.deepStrictEqual(msgs.map(m => m.id), ['m1'], 'le reazioni non sono messaggi');
+  assert.deepStrictEqual(msgs[0].reactions, [{ e: '👍', n: 1, mine: true }, { e: '❤️', n: 1, mine: false }, { e: '😂', n: 1, mine: false }]);
+  assert.strictEqual(msgs[0].myReaction, '👍');
+  assert.deepStrictEqual(C.REACTIONS, ['👍', '❤️', '😂', '😮', '😢', '🙏']);
+  const r = C.reactionToStore('m1', '😮', ME, NOW);
+  assert.deepStrictEqual(Object.keys(r).sort(), ['aid', 'e', 'id', 're', 't', 'user']);
+  assert.deepStrictEqual([r.re, r.e, r.aid, r.t], ['m1', '😮', ME.aid, NOW]);
+  assert.strictEqual(C.reactionToStore('m1', '💩', ME, NOW), null);
+  const plain = C.chatFromStore([{ id: 'm9', user: 'Ada', aid: 'u4', txt: 'x', t: 1 }], ME)[0];
+  assert.deepStrictEqual([plain.reactions, plain.myReaction], [[], null]);
+});
+
+t('chat: applyReaction cambia subito il messaggio sullo schermo (si mette, si cambia, si toglie)', () => {
+  const m = C.chatFromStore([{ id: 'm1', user: 'Fabio', aid: 'u2', txt: 'ciao', t: 1 }, { id: 'r1', user: 'Ada', aid: 'u4', re: 'm1', e: '👍', t: 2 }], ME)[0];
+  const a = C.applyReaction(m, '👍');
+  assert.deepStrictEqual([a.myReaction, a.reactions], ['👍', [{ e: '👍', n: 2, mine: true }]]);
+  const b = C.applyReaction(a, '❤️');
+  assert.deepStrictEqual([b.myReaction, b.reactions], ['❤️', [{ e: '👍', n: 1, mine: false }, { e: '❤️', n: 1, mine: true }]]);
+  const c = C.applyReaction(b, null);
+  assert.deepStrictEqual([c.myReaction, c.reactions], [null, [{ e: '👍', n: 1, mine: false }]]);
+  assert.strictEqual(m.myReaction, null, 'il messaggio di prima non cambia');
+});
+
+// 25/10: profilo veloce nel messaggio (p): squadra e pilota del cuore, tipo di tifoso, casco, trofei vinti.
+t('chat: profilo veloce nel messaggio, solo valori validi', () => {
+  const p = { t: 'ferrari', d: 'leclerc', f: 'vivo', h: { base: '#E8002D', pattern: 'stripes', c1: '#FFFFFF', c2: '#111111', number: 7 }, w: ['casco', 'pitcrew', 'x'.repeat(40), 3] };
+  const m = C.chatMsgToStore('ciao', { ...ME, p }, NOW);
+  assert.deepStrictEqual(Object.keys(m.p).sort(), ['d', 'f', 'h', 't', 'w']);
+  assert.deepStrictEqual(m.p.w, ['casco', 'pitcrew']);
+  const got = C.chatFromStore([m, { id: 'b', user: 'Ugo', aid: 'u3', txt: 'x', t: 2, p: { t: 7, w: 'tutti' } }, { id: 'c', user: 'Ada', aid: 'u4', txt: 'y', t: 3 }], ME);
+  assert.strictEqual(got[0].prof.t, 'ferrari'); assert.strictEqual(got[0].prof.d, 'leclerc'); assert.strictEqual(got[0].prof.f, 'vivo');
+  assert.strictEqual(got[0].prof.h.pattern, 'stripes'); assert.strictEqual(got[0].prof.h.number, 7);
+  assert.deepStrictEqual(got[0].prof.w, ['casco', 'pitcrew']);
+  assert.strictEqual(got[1].prof, null, 'profilo rotto: niente');
+  assert.strictEqual(got[2].prof, null, 'senza profilo: niente');
+  assert.ok(!('p' in C.chatMsgToStore('ciao', ME, NOW)), 'senza profilo: messaggio come prima');
+});
+
 t('chat: messaggio della 2.0 nel formato di oggi {id,user,aid,txt,t}', () => {
   const m = C.chatMsgToStore('ciao', ME, NOW);
   assert.deepStrictEqual(Object.keys(m).sort(), ['aid', 'id', 't', 'txt', 'user']);
@@ -268,7 +318,7 @@ t('Instagram: thumbnail ↔ thumb, url conservato, contatori vuoti senza numeri 
   assert.strictEqual(ig.videos[0].thumb, S.ig.videos[0].thumbnail);
   assert.strictEqual(ig.videos[0].url, S.ig.videos[0].url);
   const back = C.igToStore(ig);
-  assert.deepStrictEqual(back.videos, S.ig.videos);
+  assert.deepStrictEqual(back.videos, S.ig.videos.map(v => ({ ...v, desc: '', date: '' })));   // 25/10: in più descrizione breve e data
   assert.strictEqual(back.followers, 128544);
   assert.deepStrictEqual(C.igFromStore(null), { handle: 'bt_formula1', followers: null, posts: null, videos: [] });
   assert.strictEqual(C.igProfileUrl('bt_formula1'), 'https://www.instagram.com/bt_formula1/');

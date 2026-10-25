@@ -1,5 +1,5 @@
 # Handoff
-Updated: 2026-10-25 by Claude (claude-opus-5-5)   Branch: tappa-3   (vedi "24/10" in fondo per l'ultimo lavoro)
+Updated: 2026-10-25 by Claude (claude-opus-5-5)   Branch: tappa-3   (vedi "25/10 sera" in fondo per l'ultimo lavoro)
 
 ## Goal
 Tappa 3 della 2.0: "fai prima tutti gli easter egg e le nuove grafiche, poi vedo l'apk di prova e poi ci sono altre
@@ -169,3 +169,38 @@ Da fare in una sessione con token, su un ramo a parte: consenso UE (UMP, messagg
 - Verificato il 25/10: `JOBS=2 bash test/all.sh` a e882fa6 → tutto verde tranne run50-colori, che cercava la pillola
   dentro il tasto (`[data-nav-tab] > div`): ora `[data-nav-pill] > *`, 6/6. Dopo l'ultimo ritocco (scheda accanto col
   colore dei tasti, `--peek-on`) run71 10/10, run50 6/6, run66 8/8.
+
+## 25/10 sera: trofei da Firebase, chat (profilo veloce, reazioni), Instagram nuova, caricamento
+Edoardo: "usa questo design (canvas "Profili tifosi e Instagram", con le sue modifiche), logo B&T ritagliato e
+trasparente, solo la schermata di caricamento, trofei modificabili in Firebase (Pit stop in 2,30), profilo degli altri
+toccando il nome in chat (tifo, casco, trofei, segnalazione), reazioni con le emoji come WhatsApp".
+- Trofei: `shared/bt-trophies` = `{ <id>: { name, how, goal, off } }` (`src/logic/trophies.js`: `cleanTrophyConfig`,
+  `trophyDefs`, `trophyConfigDefaults`). Se manca lo crea l'app di un admin coi valori di serie
+  (`AppData.ensureTrophyDoc`); si cambia dalla console di Firebase. Obiettivi: conteggi interi 1-100, tempi del Pit
+  Stop 1-5 s; `off: true` toglie il trofeo. Pit crew in 2,30 s o meno (prima sotto 2,5), Pit stop perfetto 2,00.
+  Trofei che "non risultavano": il pilota del giorno e le pagelle votati nella prova DEMO finivano in `demoVotes` e
+  non contavano; ora contano.
+- Chat, profilo veloce (`ChatProfileSheet`): toccando il nome di un messaggio, tifo (scuderia, pilota del cuore, tipo di
+  tifoso), casco, trofei vinti e "Segnala". Viaggia nei messaggi (`p` = `{t, d, f, h, w}`, `compat.profOf`), solo
+  quando cambia o dopo 7 giorni, per stanza (`bt-chat-p-<stanza>` sul telefono): niente uid in giro e nessuna regola di
+  Firebase cambiata. Chi non ha ancora scritto dopo l'aggiornamento: "si vede dal suo prossimo messaggio". Il trofeo
+  segreto di un altro si vede come "Trofeo segreto" se non l'hai trovato anche tu.
+- Reazioni come WhatsApp (👍 ❤️ 😂 😮 😢 🙏): voci della stanza `{id, user, aid, re, e, t}` (arrayUnion come i
+  messaggi), una per persona e messaggio, vale l'ultima (`Chat.react`, `compat.applyReaction` per lo schermo subito).
+  Si aprono tenendo premuto il messaggio (450 ms), col tasto ⋯ o toccando le reazioni sotto il messaggio; la stessa
+  emoji la toglie. L'admin che elimina un messaggio toglie anche le sue reazioni. ATTENZIONE: l'app di oggi
+  (bt-app-flutter) legge le stesse stanze e mostrerebbe le reazioni come messaggi vuoti.
+- Instagram (`InstagramScreen`, `src/logic/instagram.js`): come la grafica, col logo nuovo nel cerchio del profilo
+  (`src/data/logo.js`: PNG 384x384 bianco su trasparente, dal file caricato da Edoardo; il vecchio logo.js non era più
+  usato). Nel Pannello Admin ogni reel ha anche descrizione breve (40 caratteri, sulla copertina) e data di uscita (di
+  serie oggi). Ultimo reel = data più recente (senza date l'ultimo aggiunto); "NUOVO" per 7 giorni; "PIÙ VISTI DEL
+  MESE" se almeno 2 reel degli ultimi 30 giorni, altrimenti "PIÙ VISTI" di tutti; senza visualizzazioni "ALTRI REEL".
+  Numeri come li scrive l'admin ("12,3K", "1.200"). FOLLOWER resta il numero dell'admin: nella grafica Edoardo ha
+  scritto "FOLLOWER (live)", ma senza la Graph API di Instagram (account Business + app Meta + token) non è vero.
+  La HomeBanner della grafica Edoardo l'ha cancellata: non fatta.
+- Avvio: via il Pit Exit Launch (15 LED del volante, "PIT EXIT OPEN", zoom). Dagli avvii dopo il primo solo
+  `LoadingScreen`: la luce posteriore a LED in sequenza e "Caricamento…" (la schermata che prima si vedeva solo coi
+  dati lenti), almeno 840 ms, poi l'app. Primo avvio in assoluto: i video, come prima. Una prima versione con una
+  schermata nuova di 6 LED Edoardo non la voleva: "non devi creare una nuova schermata, solo togliere quella".
+- Prove: `test/e2e/run72-trofei-chat.js` (9), `run73-instagram.js` (5), `run53-avvio.js` (4, riscritta per il
+  caricamento), `run33-playstore.js` (splash senza i video), `test/unit/{trophies,appdata,compat,chat,instagram}.test.js`.

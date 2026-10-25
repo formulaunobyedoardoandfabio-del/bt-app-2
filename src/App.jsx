@@ -5,6 +5,8 @@ import "./App.css";
 import CIRCUITS from "./data/circuits.json";
 import CIRCUIT_INFO from "./data/circuit-info.json";
 import BT_WATERMARK from "./data/watermark";
+import BT_LOGO from "./data/logo";
+import IGL from "./logic/instagram";
 import BtRealData from "./data/real-data";
 import BtWeekend from "./data/real-weekend";
 import LiveSim from "./logic/live-sim";
@@ -18,7 +20,7 @@ import { filterNews, TYRES, LANES } from "./logic/newsfilter";
 import { classifySwipe, SWIPE, dragFollow, dragProgress, leaveTo } from "./logic/gesture";
 import { HELMET_DEFAULT, HELMET_PATTERNS, HELMET_VISORS, HELMET_FINISHES, cleanHelmet } from "./logic/helmet";
 import { qZones, zoneOf } from "./logic/qzones";
-import { TROPHIES, SECRET_NAME, SECRET_HOW, trophyProgress, medalOf, cleanTrophies } from "./logic/trophies";
+import { TROPHIES, SECRET_NAME, SECRET_HOW, trophyProgress, medalOf, cleanTrophies, trophyDefs } from "./logic/trophies";
 import CommonsData from "./data/commons-candidates";
 import F1 from "./data/f1-2026";
 import AppData from "./services/appdata";
@@ -735,10 +737,10 @@ const nativeShareKind = () => {
   try { if (window.Capacitor?.isNativePlatform?.() && window.Capacitor?.Plugins?.Share) return "app"; } catch (e) {}
   return !IS_FRAMED && typeof navigator.share === "function" ? "web" : null;
 };
-async function shareNative(data) {
+async function shareNative(data, dialogTitle = "Condividi articolo") {
   try {
     const S = window.Capacitor?.Plugins?.Share;
-    if (window.Capacitor?.isNativePlatform?.() && S) await S.share({ ...data, dialogTitle: "Condividi articolo" });
+    if (window.Capacitor?.isNativePlatform?.() && S) await S.share({ ...data, dialogTitle });
     else await navigator.share(data);
     return "ok";
   } catch (e) { return e && e.name === "AbortError" ? "cancel" : "fail"; }
@@ -4048,16 +4050,18 @@ function IgBigButton({ ig, onOpen }) {
     </button>
   );
 }
-function BackBar({ title, onBack }) {
+function BackBar({ title, onBack, right = null }) {
   return (
     <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "12px 16px 10px", flexShrink: 0 }}>
       <button className="press" aria-label="Indietro" onClick={onBack} style={{ width: 36, height: 36, borderRadius: 12, background: C.card, border: `1px solid ${C.border}`, display: "flex", alignItems: "center", justifyContent: "center" }}><Icon name="back" size={18} /></button>
-      <span style={{ fontFamily: F_HEAD, fontWeight: 900, fontStyle: "italic", fontSize: 17, color: C.text }}>{title}</span>
+      <span style={{ flex: 1, minWidth: 0, fontFamily: F_HEAD, fontWeight: 900, fontStyle: "italic", fontSize: 17, color: C.text }}>{title}</span>
+      {right}
     </div>
   );
 }
 function InstagramView({ ig, onToast, onBack }) {
-  return <div data-ig-screen="" style={{ height: "100%", display: "flex", flexDirection: "column" }}><BackBar title="INSTAGRAM" onBack={onBack} /><div style={{ flex: 1, minHeight: 0 }}><InstagramScreen ig={ig} /></div></div>;
+  const share = <button className="press" aria-label="Condividi la pagina" onClick={() => shareLink(Compat.igProfileUrl(ig.handle), "B&T su Instagram: @" + ig.handle, onToast)} style={{ width: 36, height: 36, borderRadius: 12, background: C.card, border: `1px solid ${C.border}`, display: "flex", alignItems: "center", justifyContent: "center" }}><Icon name="share" size={17} /></button>;
+  return <div data-ig-screen="" style={{ height: "100%", display: "flex", flexDirection: "column" }}><BackBar title="INSTAGRAM" onBack={onBack} right={share} /><div style={{ flex: 1, minHeight: 0 }}><InstagramScreen ig={ig} onToast={onToast} /></div></div>;
 }
 function ChatsView({ chats, onOpen, blocked, onBack, unreadOf }) {
   return <div data-chats-screen="" style={{ height: "100%", display: "flex", flexDirection: "column" }}><BackBar title="CHAT DEI TIFOSI" onBack={onBack} /><div style={{ flex: 1, minHeight: 0 }}><ChatListScreen chats={chats} onOpen={onOpen} blocked={blocked} unreadOf={unreadOf} /></div></div>;
@@ -5664,60 +5668,162 @@ function RaceScreen({ isPremium, onPremium, onSelectDriver, races, standings, li
   );
 }
 
-// "SEGUI SU INSTAGRAM" apre il profilo; un video apre il suo link (o il profilo, se l'admin non l'ha messo) (D06).
-function InstagramScreen({ ig }) {
-  const GRADS = ["#3a0a0c", "#1a1a2e", "#241505", "#0a2e28"];
-  const profile = Compat.igProfileUrl(ig.handle);
+// Pagina Instagram rinnovata (25/10, dalla grafica approvata): profilo col logo B&T, follower e post scritti
+// dall'admin, l'ultimo reel in grande, la classifica dei più visti, perché seguirci e l'invito finale.
+// "SEGUI SU INSTAGRAM" apre il profilo; un reel apre il suo link (o il profilo, se l'admin non l'ha messo) (D06).
+const IG_WHY = [
+  ["flag", "WEEKEND DI GARA GOAT", "I momenti chiave dei GP analizzati senza filtri. Solo storie di spessore, gufate storiche e l’hype della pista raccontato come si deve."],
+  ["poll", "Sondaggi e pronostici", "Vota nelle storie e confronta le previsioni con l'app."],
+  ["group", "La nostra storia", "Come nasce B&T e chi c'è dietro all'app."],
+];
+const IG_SURFACE = "#111114";
+const IG_EMPTY = "repeating-linear-gradient(135deg, rgba(255,255,255,.035) 0 14px, rgba(255,255,255,0) 14px 28px), #141418";
+// Numero scritto dall'admin come lo mostra Instagram ("12,3K"); scritto in un modo che non si capisce: così com'è.
+const igCount = v => { const n = IGL.parseCount(v); return n != null ? IGL.shortCount(n) : (String(v == null ? "" : v).trim() || null); };
+const igDay = ms => { const d = new Date(ms); return d.toLocaleDateString("it-IT", { day: "numeric", month: "long", ...(d.getFullYear() !== new Date(nowMs()).getFullYear() ? { year: "numeric" } : {}) }); };
+// Condivide un link: col menu del telefono se c'è, altrimenti lo copia.
+async function shareLink(url, title, onToast) {
+  if (nativeShareKind()) { const r = await shareNative({ title, text: title, url }, "Condividi"); if (r !== "fail") return; }
+  const ok = await Promise.resolve(copyText(url)).catch(() => false);
+  if (onToast) onToast(ok ? "Link copiato: incollalo dove vuoi" : "Non riesco a copiare il link");
+}
+const IgPlay = ({ size, color }) => <svg width={size} height={size} viewBox="0 0 24 24" fill={color} aria-hidden="true"><path d="M8 5.5v13l10.5-6.5z" /></svg>;
+function IgStat({ value, label, line }) {
   return (
-    <div className="scrollcol" style={{ height: "100%" }}>
-      <div style={{ margin: "4px 16px 16px", display: "flex", alignItems: "center", gap: 14 }}>
-        <div style={{ width: 60, height: 60, borderRadius: "50%", background: `linear-gradient(155deg,${shade(C.accent, .25)} 0%,#0f0f12 70%)`, border: `2px solid ${C.accentInk}`, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-          <span style={{ fontFamily: F_HEAD, fontWeight: 900, fontStyle: "italic", fontSize: 16, color: C.text }}>B&amp;T</span>
-        </div>
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <h1 style={{ fontFamily: F_HEAD, fontWeight: 800, fontSize: 16, color: C.text, margin: "0 0 3px" }}>@{ig.handle}</h1>
-          <span style={{ fontFamily: F_BODY, fontSize: 12, color: C.muted }}>La community B&amp;T di Formula 1</span>
-        </div>
-      </div>
-
-      <div style={{ display: "flex", margin: "0 16px 16px", padding: "14px 0", borderRadius: 16, background: C.card, border: `1px solid ${C.border}` }}>
-        <div style={{ flex: 1, textAlign: "center", borderRight: `1px solid ${C.border}` }}>
-          <div style={{ fontFamily: F_HEAD, fontWeight: 800, fontSize: 17, color: C.text }}>{fmtK(ig.followers)}</div>
-          <div style={{ fontFamily: F_BODY, fontSize: 10, color: C.dim, marginTop: 2 }}>FOLLOWER</div>
-        </div>
-        <div style={{ flex: 1, textAlign: "center" }}>
-          <div style={{ fontFamily: F_HEAD, fontWeight: 800, fontSize: 17, color: C.text }}>{ig.posts}</div>
-          <div style={{ fontFamily: F_BODY, fontSize: 10, color: C.dim, marginTop: 2 }}>POST</div>
-        </div>
-      </div>
-
-      <button className="press" data-ig-follow="" onClick={() => openUrl(profile)} style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8, width: "calc(100% - 32px)", margin: "0 16px 22px", padding: "13px 0", borderRadius: 14, background: C.accent, boxShadow: `0 10px 22px -10px ${C.accent}` }}>
-        <Icon name="instagram" size={16} color="#fff" />
-        <span style={{ fontFamily: F_HEAD, fontWeight: 900, fontStyle: "italic", fontSize: 14, color: "#fff", letterSpacing: .3 }}>SEGUI SU INSTAGRAM</span>
-      </button>
-
-      <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "0 16px 12px" }}>
-        <Icon name="play" size={15} color={C.accentInk} />
-        <h2 style={{ fontFamily: F_HEAD, fontWeight: 900, fontStyle: "italic", fontSize: 16, color: C.text, margin: 0 }}>ULTIMI VIDEO</h2>
-      </div>
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, margin: "0 16px 16px" }}>
-        {ig.videos.map((v, i) => (
-          <button key={v.id} className="press" data-ig-video={v.id} aria-label={"Apri su Instagram: " + (v.title || "video " + (i + 1))} onClick={() => openUrl(v.url || profile)} style={{ display: "block", padding: 0, borderRadius: 14, overflow: "hidden", background: C.card, border: `1px solid ${C.border}` }}>
-            <StoredBg data-ig-thumb="" src={v.thumb} empty={`linear-gradient(155deg, ${GRADS[i % 4]} 0%, #0f0f12 70%)`} style={{ height: 140, position: "relative", display: "flex", alignItems: "center", justifyContent: "center" }}>
-              <div style={{ width: 34, height: 34, borderRadius: "50%", background: "rgba(255,255,255,.16)", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                <Icon name="play" size={13} color="#fff" />
+    <div style={{ padding: "12px 14px", display: "flex", flexDirection: "column", gap: 3, borderRight: line ? `1px solid ${C.border}` : "none" }}>
+      <span style={{ fontFamily: F_HEAD, fontWeight: 900, fontStyle: "italic", fontSize: 24, lineHeight: 1, color: C.text }}>{value}</span>
+      <span style={{ fontFamily: F_BODY, fontWeight: 600, fontSize: 10.5, letterSpacing: 1.1, color: C.dim }}>{label}</span>
+    </div>
+  );
+}
+// Una riga della classifica (pos: P1, P2…) o degli altri reel (senza pos).
+function IgRow({ v, pos = null, line, onOpen }) {
+  const views = igCount(v.views);
+  return (
+    <button className="press" data-ig-video={v.id} aria-label={"Apri su Instagram: " + (v.title || "reel")} onClick={onOpen}
+      style={{ display: "flex", alignItems: "center", gap: 12, width: "100%", padding: "10px 14px", textAlign: "left", borderBottom: line ? `1px solid ${C.divider}` : "none" }}>
+      {pos != null && <span data-ig-pos={pos} style={{ width: 34, height: 28, borderRadius: 8, display: "flex", alignItems: "center", justifyContent: "center", fontFamily: F_HEAD, fontWeight: 900, fontStyle: "italic", fontSize: 13, flexShrink: 0, ...(pos === 1 ? { background: C.accent, color: C.onAccent } : { background: C.card, color: C.text, border: "1px solid rgba(255,255,255,.1)" }) }}>P{pos}</span>}
+      <StoredBg as="span" data-ig-thumb="" src={v.thumb} empty="#1F1F24" style={{ width: 40, height: 52, borderRadius: 9, border: `1px solid ${C.border}`, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+        {!v.thumb && <IgPlay size={14} color={C.dim} />}
+      </StoredBg>
+      <span style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: 3 }}>
+        <span style={{ fontFamily: F_BODY, fontWeight: 600, fontSize: 13.5, lineHeight: 1.3, color: C.text, overflow: "hidden", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical" }}>{v.title || "Reel senza titolo"}</span>
+        {views && <span style={{ fontFamily: F_BODY, fontSize: 11.5, color: C.dim }}>{views} visualizzazioni</span>}
+      </span>
+      <Icon name="external" size={16} color={C.dim} />
+    </button>
+  );
+}
+function InstagramScreen({ ig, onToast }) {
+  const now = nowMs(), profile = Compat.igProfileUrl(ig.handle), videos = ig.videos || [];
+  const last = IGL.latestReel(videos, now), top = IGL.topReels(videos, now);
+  const ranked = top.list.length >= 2 && top.list.some(v => IGL.parseCount(v.views) != null);
+  const others = ranked ? [] : videos.filter(v => v !== last).reverse();   // senza visualizzazioni: gli altri, dal più nuovo
+  const open = v => openUrl((v && v.url) || profile);
+  const sec = { display: "flex", flexDirection: "column", gap: 12, padding: "0 16px" };
+  const h2 = { margin: 0, fontFamily: F_HEAD, fontWeight: 900, fontStyle: "italic", fontSize: 17, color: C.text };
+  const cta = { display: "flex", alignItems: "center", justifyContent: "center", gap: 9, width: "100%", borderRadius: 15, background: C.accent, fontFamily: F_HEAD, fontWeight: 900, fontStyle: "italic", fontSize: 19, letterSpacing: .4, color: "#fff" };
+  const outline = { display: "flex", alignItems: "center", justifyContent: "center", gap: 8, height: 48, borderRadius: 14, border: "1px solid rgba(255,255,255,.22)", color: C.text };
+  const lastDay = last && IGL.dateMs(last);
+  const lastStats = last ? [igCount(last.views) && igCount(last.views) + " visualizzazioni", igCount(last.likes) && igCount(last.likes) + " mi piace"].filter(Boolean).join(" · ") : "";
+  const stat = v => (v == null || v === "" ? "–" : igCount(v) || "–");
+  return (
+    <div className="scrollcol" style={{ height: "100%", display: "flex", flexDirection: "column", gap: 20, paddingBottom: 28 }}>
+      <section aria-label="Profilo Instagram di B&T" style={{ ...sec, gap: 16, paddingTop: 4 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
+          <div data-ig-avatar="" style={{ width: 82, height: 82, borderRadius: "50%", background: C.accent, padding: 3, boxSizing: "border-box", flexShrink: 0 }}>
+            <div style={{ width: "100%", height: "100%", borderRadius: "50%", background: C.bg, padding: 3, boxSizing: "border-box" }}>
+              <div style={{ width: "100%", height: "100%", borderRadius: "50%", background: C.card, display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden" }}>
+                <img src={BT_LOGO} alt="B&T" style={{ width: "64%", height: "64%", objectFit: "contain" }} />
               </div>
-              {String(v.likes || "").trim() !== "" && (
-                <div style={{ position: "absolute", bottom: 8, left: 8, display: "flex", alignItems: "center", gap: 4, padding: "3px 7px", borderRadius: 6, background: "rgba(0,0,0,.55)" }}>
-                  <Icon name="heart" size={10} color="#fff" />
-                  <span style={{ fontFamily: F_BODY, fontWeight: 600, fontSize: 10, color: "#fff" }}>{v.likes}</span>
-                </div>
+            </div>
+          </div>
+          <div style={{ minWidth: 0, display: "flex", flexDirection: "column", gap: 4 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 7, minWidth: 0 }}>
+              <Icon name="instagram" size={18} />
+              <h1 style={{ margin: 0, fontFamily: F_HEAD, fontWeight: 900, fontStyle: "italic", fontSize: 23, lineHeight: 1.05, color: C.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>@{ig.handle}</h1>
+            </div>
+            <p style={{ margin: 0, fontFamily: F_BODY, fontSize: 13, lineHeight: 1.4, color: C.muted }}>La community B&amp;T di Formula 1: gare, Fanta e la nostra storia</p>
+          </div>
+        </div>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", background: IG_SURFACE, border: `1px solid ${C.border}`, borderRadius: 16 }}>
+          <IgStat value={stat(ig.followers)} label="FOLLOWER" line />
+          <IgStat value={stat(ig.posts)} label="POST" />
+        </div>
+        <button className="press" data-ig-follow="" onClick={() => openUrl(profile)} style={{ ...cta, height: 52 }}><Icon name="plus" size={18} color="#fff" sw={2.4} />SEGUI SU INSTAGRAM</button>
+      </section>
+
+      {last ? (
+        <section aria-label="Ultimo reel" style={sec}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 8 }}>
+            <h2 style={h2}>ULTIMO REEL</h2>
+            {lastDay && <span data-ig-date="" style={{ fontFamily: F_BODY, fontSize: 12, color: C.muted }}>{igDay(lastDay)}</span>}
+          </div>
+          <button className="press" data-ig-video={last.id} data-ig-last="" aria-label={"Guarda su Instagram: " + (last.title || "l'ultimo reel")} onClick={() => open(last)} style={{ display: "block", width: "100%", padding: 0, borderRadius: 22, overflow: "hidden", border: `1px solid ${C.border}`, textAlign: "left" }}>
+            <StoredBg as="span" data-ig-thumb="" src={last.thumb} empty={IG_EMPTY} style={{ display: "block", position: "relative", aspectRatio: "4 / 5" }}>
+              {last.desc && <span data-ig-desc="" style={{ position: "absolute", top: 14, left: 14, maxWidth: "60%", padding: "6px 10px", borderRadius: 8, background: "rgba(0,0,0,.6)", border: "1px solid rgba(255,255,255,.16)", fontFamily: F_HEAD, fontWeight: 900, fontStyle: "italic", fontSize: 11, letterSpacing: 1, color: "#fff", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", boxSizing: "border-box" }}>{last.desc}</span>}
+              {IGL.isNew(last, now) && <span data-ig-new="" style={{ position: "absolute", top: 14, right: 14, display: "flex", alignItems: "center", gap: 6, padding: "6px 9px", borderRadius: 8, background: "#fff", color: "#0A0A0C", fontFamily: F_HEAD, fontWeight: 900, fontSize: 11, letterSpacing: 1 }}><span style={{ width: 7, height: 7, borderRadius: "50%", background: C.accent }} />NUOVO</span>}
+              <span aria-hidden="true" style={{ position: "absolute", top: "50%", left: "50%", width: 68, height: 68, margin: "-34px 0 0 -34px", borderRadius: "50%", background: "rgba(255,255,255,.16)", border: "1px solid rgba(255,255,255,.3)", display: "flex", alignItems: "center", justifyContent: "center", boxSizing: "border-box" }}><IgPlay size={26} color="#fff" /></span>
+              {(last.title || lastStats) && (
+                <span style={{ position: "absolute", left: 0, right: 0, bottom: 0, padding: "48px 16px 16px", background: "linear-gradient(180deg, rgba(0,0,0,0) 0%, rgba(0,0,0,.82) 62%)" }}>
+                  {last.title && <span style={{ display: "block", fontFamily: F_HEAD, fontWeight: 900, fontStyle: "italic", fontSize: 21, lineHeight: 1.15, color: "#fff" }}>{last.title}</span>}
+                  {lastStats && <span style={{ display: "block", marginTop: 6, fontFamily: F_BODY, fontSize: 12, color: "#C7C7CC" }}>{lastStats}</span>}
+                </span>
               )}
             </StoredBg>
-            {v.title && <div style={{ padding: "8px 10px", textAlign: "left" }}><div style={{ fontFamily: F_BODY, fontWeight: 600, fontSize: 11.5, color: C.text, lineHeight: 1.3 }}>{v.title}</div>{String(v.views || "").trim() !== "" && <div style={{ fontFamily: F_BODY, fontSize: 10, color: C.dim, marginTop: 2 }}>{v.views} visualizzazioni</div>}</div>}
           </button>
-        ))}
-      </div>
+          <div style={{ display: "flex", gap: 8 }}>
+            <button className="press" onClick={() => open(last)} style={{ ...outline, flex: 1, fontFamily: F_BODY, fontWeight: 600, fontSize: 13.5 }}><Icon name="external" size={16} color={C.text} />Guarda su Instagram</button>
+            <button className="press" aria-label="Condividi il reel" onClick={() => shareLink(last.url || profile, last.title || "Il reel di B&T", onToast)} style={{ ...outline, width: 48 }}><Icon name="share" size={18} color={C.text} /></button>
+          </div>
+        </section>
+      ) : (
+        <section aria-label="Ultimo reel" style={sec}>
+          <h2 style={h2}>ULTIMO REEL</h2>
+          <p data-ig-empty="" style={{ margin: 0, padding: "18px 16px", borderRadius: 18, background: IG_SURFACE, border: `1px solid ${C.border}`, fontFamily: F_BODY, fontSize: 13, lineHeight: 1.45, color: C.muted }}>I reel arrivano qui appena li pubblichiamo. Intanto li trovi tutti sul profilo @{ig.handle}.</p>
+        </section>
+      )}
+
+      {ranked && (
+        <section aria-label={top.month ? "I reel più visti del mese" : "I reel più visti"} style={sec}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 8 }}>
+            <h2 style={h2}>{top.month ? "PIÙ VISTI DEL MESE" : "PIÙ VISTI"}</h2>
+            <span style={{ fontFamily: F_BODY, fontSize: 12, color: C.muted }}>classifica per visualizzazioni</span>
+          </div>
+          <div data-ig-top="" style={{ background: IG_SURFACE, border: `1px solid ${C.border}`, borderRadius: 18, overflow: "hidden" }}>
+            {top.list.map((v, i) => <IgRow key={v.id} v={v} pos={i + 1} line={i < top.list.length - 1} onOpen={() => open(v)} />)}
+          </div>
+        </section>
+      )}
+      {others.length > 0 && (
+        <section aria-label="Altri reel" style={sec}>
+          <h2 style={h2}>ALTRI REEL</h2>
+          <div style={{ background: IG_SURFACE, border: `1px solid ${C.border}`, borderRadius: 18, overflow: "hidden" }}>
+            {others.map((v, i) => <IgRow key={v.id} v={v} line={i < others.length - 1} onOpen={() => open(v)} />)}
+          </div>
+        </section>
+      )}
+
+      <section aria-label="Perché seguirci" style={sec}>
+        <h2 style={h2}>PERCHÉ SEGUIRCI</h2>
+        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          {IG_WHY.map(([icon, title, text]) => (
+            <div key={icon} style={{ display: "flex", gap: 12, alignItems: "flex-start", padding: "13px 14px", borderRadius: 16, background: IG_SURFACE, border: `1px solid ${C.border}` }}>
+              <span style={{ width: 38, height: 38, borderRadius: 11, background: C.card, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}><Icon name={icon} size={18} /></span>
+              <span style={{ display: "flex", flexDirection: "column", gap: 3, minWidth: 0 }}>
+                <span style={{ fontFamily: F_BODY, fontWeight: 700, fontSize: 14, color: C.text }}>{title}</span>
+                <span style={{ fontFamily: F_BODY, fontSize: 12.5, lineHeight: 1.4, color: C.muted }}>{text}</span>
+              </span>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      <section aria-label="Segui B&T" style={{ margin: "0 16px", padding: "18px 16px", borderRadius: 20, background: IG_SURFACE, border: "1px solid rgba(255,255,255,.1)", display: "flex", flexDirection: "column", gap: 12 }}>
+        <div style={{ fontFamily: F_HEAD, fontWeight: 900, fontStyle: "italic", fontSize: 20, lineHeight: 1.15, color: C.text }}>Non perderti il prossimo reel</div>
+        <button className="press" data-ig-follow-end="" onClick={() => openUrl(profile)} style={{ ...cta, height: 50 }}>SEGUI @{ig.handle}</button>
+        <span style={{ fontFamily: F_BODY, fontSize: 11.5, color: C.dim, textAlign: "center" }}>Si apre l'app Instagram</span>
+      </section>
     </div>
   );
 }
@@ -5759,13 +5865,88 @@ function ChatListScreen({ chats, onOpen, blocked = [], unreadOf = () => 0 }) {
   );
 }
 
-function ChatThreadScreen({ chat, onBack, onSend, isPremium, blocked = [], onReport, onBlock, liveRace = null }) {
+// Profilo veloce (25/10): toccando il nome in chat, tifo (squadra e pilota del cuore, tipo di tifoso), casco e trofei
+// dall'ultimo messaggio dell'autore che li ha (viaggiano coi messaggi, src/services/chat.js), e Segnala.
+function ChatProfileSheet({ msg, messages, trophyList = TROPHIES, myWon = {}, onReport, onClose }) {
+  const same = x => (msg.aid ? x.aid === msg.aid : !x.aid && x.from === msg.from);
+  const withProf = [...messages].reverse().find(x => same(x) && x.prof);
+  const prof = withProf ? withProf.prof : null;
+  const team = prof && prof.t ? teamById(prof.t) : null, drv = prof && prof.d ? driverById(prof.d) : null;
+  const won = prof && prof.w ? trophyList.filter(t => prof.w.includes(t.id)) : [];
+  const medal = (withProf && withProf.medal) || msg.medal;
+  return (
+    <div data-chat-profile={msg.id} role="dialog" aria-modal="true" aria-label={"Profilo di " + msg.from} onClick={e => { if (e.target === e.currentTarget) onClose(); }}
+      style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,.62)", zIndex: 560, display: "flex", alignItems: "flex-end" }}>
+      <div style={{ width: "100%", maxHeight: "86%", overflowY: "auto", boxSizing: "border-box", background: "#111114", borderTop: "1px solid rgba(255,255,255,.12)", borderRadius: "24px 24px 0 0", padding: "10px 18px 22px", display: "flex", flexDirection: "column", gap: 14 }}>
+        <div aria-hidden="true" style={{ alignSelf: "center", width: 40, height: 5, borderRadius: 3, background: "rgba(255,255,255,.22)" }} />
+        <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+          <div style={{ width: 74, height: 74, borderRadius: 18, background: C.card, border: `1px solid ${C.border}`, position: "relative", overflow: "hidden", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+            {team && <div aria-hidden="true" style={{ position: "absolute", top: 0, left: 0, right: 0, height: 6, background: team.color }} />}
+            {prof && prof.h ? <HelmetArt spec={prof.h} size={56} />
+              : <span data-helmet-placeholder="" style={{ display: "flex", opacity: .32 }}><HelmetArt spec={{ base: "#6A6A73", c1: "#6A6A73", c2: "#6A6A73", pattern: "none", finish: "matte" }} size={56} /></span>}
+          </div>
+          <div style={{ minWidth: 0, display: "flex", flexDirection: "column", gap: 5 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
+              <h2 style={{ margin: 0, fontFamily: F_HEAD, fontWeight: 900, fontStyle: "italic", fontSize: 23, lineHeight: 1.05, color: C.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{msg.from}</h2>
+              {medal && <Medal medal={medal} size={18} />}
+            </div>
+            {team && <span data-chat-profile-team={team.id} style={{ display: "flex", alignItems: "center", gap: 6, fontFamily: F_BODY, fontSize: 13, color: C.muted }}><span style={{ width: 8, height: 8, borderRadius: "50%", background: team.color, flexShrink: 0 }} />Tifa <b style={{ color: C.text, fontWeight: 600 }}>{team.name}</b></span>}
+            {drv && <span style={{ fontFamily: F_BODY, fontSize: 13, color: C.muted }}>Pilota del cuore: <b style={{ color: C.text, fontWeight: 600 }}>{drv.full || drv.name}</b></span>}
+            {prof && prof.f && <span style={{ fontFamily: F_BODY, fontSize: 12, color: C.dim }}>{fanLabel(prof.f)}</span>}
+          </div>
+        </div>
+        {prof ? (
+          <section aria-label={"Trofei di " + msg.from} data-chat-profile-trophies={won.length} style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 16, padding: "12px 12px 10px" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 10 }}>
+              <span style={{ fontFamily: F_HEAD, fontWeight: 900, fontStyle: "italic", fontSize: 15, color: C.text }}>TROFEI</span>
+              <span style={{ fontFamily: F_BODY, fontSize: 12, color: C.muted }}><b style={{ color: C.text }}>{won.length}</b> di {trophyList.length}</span>
+            </div>
+            {won.length ? (
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                {won.map(t => (
+                  <span key={t.id} data-chat-profile-trophy={t.id} style={{ display: "flex", alignItems: "center", gap: 5, padding: "5px 9px 5px 6px", borderRadius: 999, background: "rgba(231,179,76,.1)", border: "1px solid rgba(231,179,76,.4)", fontFamily: F_BODY, fontWeight: 600, fontSize: 11.5, color: C.text }}>
+                    <Icon name="trophy" size={12} color={C.gold} sw={2} />{t.secret && !myWon[t.id] ? SECRET_NAME : t.name}
+                  </span>
+                ))}
+              </div>
+            ) : <p style={{ margin: 0, fontFamily: F_BODY, fontSize: 12.5, color: C.dim }}>Nessun trofeo per ora.</p>}
+          </section>
+        ) : (
+          <p data-chat-profile-empty="" style={{ margin: 0, fontFamily: F_BODY, fontSize: 12.5, lineHeight: 1.45, color: C.dim }}>Il tifo, il casco e i trofei di {msg.from} si vedono dal suo prossimo messaggio in chat.</p>
+        )}
+        <button className="press" data-chat-profile-report="" onClick={() => { onReport && onReport(msg); onClose(); }} style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8, height: 48, borderRadius: 14, border: "1.5px solid rgba(255,90,95,.45)", fontFamily: F_HEAD, fontWeight: 800, fontSize: 14, color: "#FF7A7E" }}><Icon name="flag" size={15} color="#FF7A7E" /> Segnala {msg.from}</button>
+      </div>
+    </div>
+  );
+}
+
+// Reazioni (25/10), come su WhatsApp: tenendo premuto un messaggio (o col tasto ⋯, o toccando le reazioni sotto il
+// messaggio) si apre la barra delle emoji; toccando di nuovo la propria la si toglie. Una per persona.
+const REACTION_NAMES = { "👍": "Mi piace", "❤️": "Cuore", "😂": "Risata", "😮": "Stupore", "😢": "Tristezza", "🙏": "Grazie" };
+const LONG_PRESS_MS = 450;
+function ChatThreadScreen({ chat, onBack, onSend, isPremium, blocked = [], onReport, onBlock, onReact, trophyList = TROPHIES, myWon = {}, liveRace = null }) {
   const [draft, setDraft] = useState("");
-  const [menu, setMenu] = useState(null); // messaggio su cui ho aperto le opzioni
+  const [menu, setMenu] = useState(null); // messaggio su cui ho aperto le opzioni e le reazioni
+  const [peek, setPeek] = useState(null); // messaggio di cui guardo l'autore (profilo veloce)
   useBack(!!menu, () => setMenu(null));
+  useBack(!!peek, () => setPeek(null));
   const endRef = useRef(null);
+  const press = useRef({ t: 0, x: 0, y: 0 }), menuAt = useRef(0);
+  useEffect(() => () => clearTimeout(press.current.t), []);
   useEffect(() => { endRef.current?.scrollIntoView({ block: "end" }); }, [chat.messages.length]);
   const shown = chat.messages.filter(m => !isBlockedMsg(blocked, m));
+  const canReact = m => !!onReact && !String(m.id).startsWith("invio-");
+  const openMenu = m => { if (!m.mine || canReact(m)) { menuAt.current = performance.now(); setMenu(m); } };
+  // Tenere premuto: dopo LONG_PRESS_MS senza spostare il dito si apre la barra delle reazioni.
+  const holdStart = (m, e) => {
+    if (!canReact(m)) return;
+    clearTimeout(press.current.t);
+    press.current = { x: e.clientX, y: e.clientY, t: setTimeout(() => { fx.buzz("select"); openMenu(m); }, LONG_PRESS_MS) };
+  };
+  const holdMove = e => { if (Math.hypot(e.clientX - press.current.x, e.clientY - press.current.y) > 10) clearTimeout(press.current.t); };
+  const holdEnd = () => clearTimeout(press.current.t);
+  const react = e => { if (menu && onReact) onReact(chat.id, menu, e); setMenu(null); };
+  const totalOf = m => m.reactions.reduce((s, r) => s + r.n, 0);
   const send = () => {
     const t = draft.trim();
     if (!t) return;
@@ -5781,12 +5962,22 @@ function ChatThreadScreen({ chat, onBack, onSend, isPremium, blocked = [], onRep
         {shown.map((m, i) => (
           <div key={m.id || i} data-chat-msg={m.id} style={{ display: "flex", flexDirection: "column", alignItems: m.mine ? "flex-end" : "flex-start" }}>
             {m.mine && (isPremium || m.medal) && <span style={{ display: "flex", alignItems: "center", gap: 3, fontFamily: F_BODY, fontWeight: 700, fontSize: 10.5, color: C.gold, margin: "0 4px 3px" }}>{isPremium && <Icon name="star" size={9} color={C.gold} />}Tu{m.medal && <Medal medal={m.medal} size={12} />}</span>}
-            {!m.mine && <span style={{ display: "flex", alignItems: "center", gap: 2, fontFamily: F_BODY, fontWeight: 600, fontSize: 10.5, color: C.dim, margin: "0 4px 1px" }}>{m.from}{m.medal && <Medal medal={m.medal} size={12} style={{ marginLeft: 2 }} />}
-              <button className="press" aria-label={`Opzioni messaggio di ${m.from}`} onClick={() => setMenu(m)} style={{ minWidth: 30, height: 22, borderRadius: 8, fontFamily: F_BODY, fontWeight: 700, fontSize: 14, lineHeight: 1, color: C.dim }}>⋯</button>
+            {!m.mine && <span style={{ display: "flex", alignItems: "center", gap: 2, fontFamily: F_BODY, fontWeight: 600, fontSize: 10.5, color: C.dim, margin: "0 4px 1px" }}>
+              <button className="press" data-chat-author={m.id} aria-label={"Profilo di " + m.from} onClick={() => setPeek(m)} style={{ display: "flex", alignItems: "center", gap: 2, minHeight: 24, padding: "2px 2px", font: "inherit", color: "inherit" }}>{m.from}{m.medal && <Medal medal={m.medal} size={12} style={{ marginLeft: 2 }} />}</button>
+              <button className="press" aria-label={`Opzioni messaggio di ${m.from}`} onClick={() => openMenu(m)} style={{ minWidth: 30, height: 22, borderRadius: 8, fontFamily: F_BODY, fontWeight: 700, fontSize: 14, lineHeight: 1, color: C.dim }}>⋯</button>
             </span>}
-            <div style={{ maxWidth: "78%", padding: "9px 13px", borderRadius: m.mine ? "14px 14px 4px 14px" : "14px 14px 14px 4px", background: m.mine ? C.accent : C.card, border: m.mine ? "none" : `1px solid ${C.border}` }}>
+            <div data-chat-bubble={m.id} onPointerDown={e => holdStart(m, e)} onPointerMove={holdMove} onPointerUp={holdEnd} onPointerCancel={holdEnd} onPointerLeave={holdEnd}
+              onContextMenu={e => { e.preventDefault(); if (canReact(m)) openMenu(m); }}
+              style={{ maxWidth: "78%", padding: "9px 13px", borderRadius: m.mine ? "14px 14px 4px 14px" : "14px 14px 14px 4px", background: m.mine ? C.accent : C.card, border: m.mine ? "none" : `1px solid ${C.border}`, userSelect: "none", WebkitUserSelect: "none", WebkitTouchCallout: "none" }}>
               <span style={{ fontFamily: F_BODY, fontSize: 13.5, color: "#fff", lineHeight: 1.4 }}>{m.text}</span>
             </div>
+            {m.reactions && m.reactions.length > 0 && (
+              <button className="press" data-reactions={m.id} aria-label={"Reazioni: " + m.reactions.map(r => `${REACTION_NAMES[r.e] || r.e} ${r.n}`).join(", ")} onClick={() => { if (canReact(m)) openMenu(m); }}
+                style={{ position: "relative", zIndex: 1, marginTop: -7, [m.mine ? "marginRight" : "marginLeft"]: 10, display: "flex", alignItems: "center", gap: 2, padding: "3px 8px", borderRadius: 999, background: "#1F1F24", border: `1px solid ${m.myReaction ? alpha(C.accentInk, .65) : "rgba(255,255,255,.14)"}`, boxShadow: "0 0 0 2px " + C.bg, fontSize: 13, lineHeight: 1.25, color: C.text }}>
+                {m.reactions.slice(0, 3).map(r => <span key={r.e} aria-hidden="true">{r.e}</span>)}
+                {totalOf(m) > 1 && <span style={{ fontFamily: F_BODY, fontWeight: 700, fontSize: 11, color: C.muted, marginLeft: 3 }}>{totalOf(m)}</span>}
+              </button>
+            )}
           </div>
         ))}
         <div ref={endRef} />
@@ -5800,15 +5991,25 @@ function ChatThreadScreen({ chat, onBack, onSend, isPremium, blocked = [], onRep
         </button>
       </div>
       {menu && (
-        <div style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,.6)", zIndex: 550, display: "flex", alignItems: "flex-end" }} onClick={e => { if (e.target === e.currentTarget) setMenu(null); }}>
+        <div style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,.6)", zIndex: 550, display: "flex", alignItems: "flex-end" }} onClick={e => { if (e.target === e.currentTarget && performance.now() - menuAt.current > 350) setMenu(null); }}>
           <div style={{ background: C.card, borderRadius: "22px 22px 0 0", width: "100%", padding: "18px 18px 24px", display: "flex", flexDirection: "column", gap: 10 }}>
-            <p style={{ fontFamily: F_BODY, fontSize: 12, color: C.muted, textAlign: "center", margin: "0 0 4px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{menu.from}: “{menu.text}”</p>
-            <button className="press" onClick={() => { onReport && onReport(chat.id, menu); setMenu(null); }} style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8, padding: "14px 0", borderRadius: 14, background: C.accent, fontFamily: F_HEAD, fontWeight: 800, fontSize: 14, color: "#fff" }}><Icon name="flag" size={15} color="#fff" /> Segnala messaggio</button>
-            <button className="press" onClick={() => { onBlock && onBlock(menu); setMenu(null); }} style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8, padding: "14px 0", borderRadius: 14, border: `1.5px solid ${C.border}`, fontFamily: F_HEAD, fontWeight: 800, fontSize: 14, color: C.text }}><Icon name="no" size={15} /> Blocca {menu.from}</button>
+            <p style={{ fontFamily: F_BODY, fontSize: 12, color: C.muted, textAlign: "center", margin: "0 0 4px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{menu.mine ? "Tu" : menu.from}: “{menu.text}”</p>
+            {canReact(menu) && (
+              <div data-react-bar="" role="group" aria-label="Reazioni" style={{ display: "flex", justifyContent: "space-between", padding: "2px 2px 8px" }}>
+                {Compat.REACTIONS.map(e => {
+                  const on = menu.myReaction === e;
+                  return <button key={e} className="press" data-react={e} aria-pressed={on ? "true" : "false"} aria-label={(REACTION_NAMES[e] || e) + (on ? ": togli" : "")} onClick={() => react(on ? null : e)}
+                    style={{ width: 48, height: 48, borderRadius: "50%", fontSize: 27, lineHeight: 1, display: "flex", alignItems: "center", justifyContent: "center", background: on ? alpha(C.accentInk, .22) : "rgba(255,255,255,.05)", border: `1.5px solid ${on ? alpha(C.accentInk, .75) : "transparent"}` }}>{e}</button>;
+                })}
+              </div>
+            )}
+            {!menu.mine && <button className="press" onClick={() => { onReport && onReport(chat.id, menu); setMenu(null); }} style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8, padding: "14px 0", borderRadius: 14, background: C.accent, fontFamily: F_HEAD, fontWeight: 800, fontSize: 14, color: "#fff" }}><Icon name="flag" size={15} color="#fff" /> Segnala messaggio</button>}
+            {!menu.mine && <button className="press" onClick={() => { onBlock && onBlock(menu); setMenu(null); }} style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8, padding: "14px 0", borderRadius: 14, border: `1.5px solid ${C.border}`, fontFamily: F_HEAD, fontWeight: 800, fontSize: 14, color: C.text }}><Icon name="no" size={15} /> Blocca {menu.from}</button>}
             <button className="press" onClick={() => setMenu(null)} style={{ padding: "12px 0", fontFamily: F_BODY, fontWeight: 600, fontSize: 13, color: C.muted }}>Annulla</button>
           </div>
         </div>
       )}
+      {peek && <ChatProfileSheet msg={peek} messages={shown} trophyList={trophyList} myWon={myWon || {}} onReport={m => onReport && onReport(chat.id, m)} onClose={() => setPeek(null)} />}
     </div>
   );
 }
@@ -6646,10 +6847,10 @@ function TrophyNotice({ n }) {
 }
 // Bacheca nel Profilo: il casco, la medaglia, "N di 15 trofei" e la prossima medaglia; aperta, i trofei vinti con la
 // data (i più recenti prima) e quelli da vincere con cosa serve e, dove si conta, quanto manca.
-function TrophyCase({ trophies = {}, progress = {}, helmet = null }) {
+function TrophyCase({ trophies = {}, progress = {}, helmet = null, defs = TROPHIES }) {
   const [open, setOpen] = useState(false);
-  const won = TROPHIES.filter(t => trophies[t.id]).sort((a, b) => trophies[b.id] - trophies[a.id]);
-  const todo = TROPHIES.filter(t => !trophies[t.id]);
+  const won = defs.filter(t => trophies[t.id]).sort((a, b) => trophies[b.id] - trophies[a.id]);
+  const todo = defs.filter(t => !trophies[t.id]);
   const n = won.length, medal = medalOf(n);
   const nextAt = n < 1 ? 1 : n < 5 ? 5 : n < 10 ? 10 : null;
   const extra = t => {
@@ -6683,10 +6884,10 @@ function TrophyCase({ trophies = {}, progress = {}, helmet = null }) {
             {medal && <span style={{ position: "absolute", right: -5, bottom: -5, display: "flex" }}><Medal medal={medal} size={26} /></span>}
           </div>
           <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ fontFamily: F_HEAD, fontWeight: 900, fontStyle: "italic", fontSize: 16, color: C.text }}>{n} di {TROPHIES.length} trofei</div>
+            <div style={{ fontFamily: F_HEAD, fontWeight: 900, fontStyle: "italic", fontSize: 16, color: C.text }}>{n} di {defs.length} trofei</div>
             <div style={{ fontFamily: F_BODY, fontWeight: 600, fontSize: 12, color: medal ? C.gold : C.muted, marginTop: 2 }}>{medal ? MEDAL_INFO[medal].label : "Nessuna medaglia per ora"}</div>
             <div style={{ height: 4, borderRadius: 2, background: "rgba(255,255,255,.07)", marginTop: 8, overflow: "hidden" }}>
-              <div style={{ width: `${(n / TROPHIES.length) * 100}%`, height: "100%", borderRadius: 2, background: C.gold }} />
+              <div style={{ width: `${(n / defs.length) * 100}%`, height: "100%", borderRadius: 2, background: C.gold }} />
             </div>
             <div style={{ fontFamily: F_BODY, fontSize: 11, color: C.dim, marginTop: 5 }}>{nextAt ? `${MEDAL_INFO[medalOf(nextAt)].label} a ${nextAt} ${nextAt === 1 ? "trofeo" : "trofei"}` : "Hai la medaglia più alta"}</div>
           </div>
@@ -6704,7 +6905,7 @@ function TrophyCase({ trophies = {}, progress = {}, helmet = null }) {
   );
 }
 
-function ProfiloScreen({ ig, onOpenIg, trial = null, trialUsed = false, onBack, onNotifiche, onPremium, onAdmin, onLogout, isPremium, onAbout, onHelp, onFeedback, aboutMe, onSaveAboutMe, favTeam, favDriver, onPickTeam, onPickDriver, guest, onLogin, onTerms, blocked = [], onUnblock, onDeleteAccount, savedCount = 0, onOpenSaved, account = null, onSaveName, isAdmin = false, onTheme, sounds = true, haptics = true, onSounds, onHaptics, helmet = null, onHelmet, trophies = {}, trophyProg = {}, onAdPrivacy = null }) {
+function ProfiloScreen({ ig, onOpenIg, trial = null, trialUsed = false, onBack, onNotifiche, onPremium, onAdmin, onLogout, isPremium, onAbout, onHelp, onFeedback, aboutMe, onSaveAboutMe, favTeam, favDriver, onPickTeam, onPickDriver, guest, onLogin, onTerms, blocked = [], onUnblock, onDeleteAccount, savedCount = 0, onOpenSaved, account = null, onSaveName, isAdmin = false, onTheme, sounds = true, haptics = true, onSounds, onHaptics, helmet = null, onHelmet, trophies = {}, trophyProg = {}, trophyList = TROPHIES, onAdPrivacy = null }) {
   const ft = favTeam ? teamById(favTeam) : null;
   const fd = favDriver ? driverById(favDriver) : null;
   const favRows = [
@@ -6798,7 +6999,7 @@ function ProfiloScreen({ ig, onOpenIg, trial = null, trialUsed = false, onBack, 
       {!guest && noAbout && <p data-about-missing="" style={{ margin: "0 20px 10px", padding: "10px 14px", borderRadius: 12, background: "rgba(231,179,76,.1)", border: "1px solid rgba(231,179,76,.3)", fontFamily: F_BODY, fontSize: 12.5, color: C.text, lineHeight: 1.45 }}>Completa il tuo profilo: che tifoso sei e da quanti anni segui la F1</p>}
       {!guest && waiting && <p data-profile-waiting="" role="status" style={{ margin: "0 20px 14px", padding: "10px 14px", borderRadius: 12, background: "rgba(255,255,255,.04)", border: `1px solid ${C.border}`, fontFamily: F_BODY, fontSize: 12.5, color: C.muted, lineHeight: 1.45 }}>{ACCOUNT_MSG["not-loaded"]}</p>}
       {!guest && !waiting && <AboutCard about={aboutMe} onSave={onSaveAboutMe} />}
-      {!guest && !waiting && <TrophyCase trophies={trophies} progress={trophyProg} helmet={helmet} />}
+      {!guest && !waiting && <TrophyCase trophies={trophies} progress={trophyProg} helmet={helmet} defs={trophyList} />}
 
       <button className="press" onClick={onPremium} style={{ display: "block", textAlign: "left", width: "calc(100% - 40px)", margin: "0 20px 22px", padding: 16, borderRadius: 18, background: "rgba(231,179,76,.1)", border: "1px solid rgba(231,179,76,.3)" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 9, marginBottom: 6 }}>
@@ -7663,6 +7864,7 @@ function AdminPhotosTab({ photos = {}, setPhotos, onToast }) {
   );
 }
 
+const todayIso = () => { const d = new Date(nowMs()), z = n => String(n).padStart(2, "0"); return `${d.getFullYear()}-${z(d.getMonth() + 1)}-${z(d.getDate())}`; };
 function AdminInstagramTab({ ig, setIg, onToast }) {
   const [d, setD] = useState(() => ({ ...ig, followers: ig.followers == null ? "" : String(ig.followers), posts: ig.posts == null ? "" : String(ig.posts), videos: ig.videos.map(v => ({ ...v, url: v.url || "" })) }));
   const setV = (id, k, val) => setD(p => ({ ...p, videos: p.videos.map(v => v.id === id ? { ...v, [k]: val } : v) }));
@@ -7696,7 +7898,7 @@ function AdminInstagramTab({ ig, setIg, onToast }) {
           <div style={{ flex: 1 }}><label style={aLabel} htmlFor="igPosts">POST</label><input id="igPosts" type="number" value={d.posts} onChange={e => setD(p => ({ ...p, posts: e.target.value }))} style={aInput} /></div>
         </div>
       </div>
-      <div style={aTitle}>VIDEO VIRALI</div>
+      <div style={aTitle}>REEL</div>
       {d.videos.map((v, i) => (
         <div key={v.id} style={aCard}>
           <div style={{ display: "flex", alignItems: "center", marginBottom: 8 }}>
@@ -7705,6 +7907,9 @@ function AdminInstagramTab({ ig, setIg, onToast }) {
           </div>
           <input aria-label={"Titolo video " + (i + 1)} placeholder="Titolo" value={v.title} onChange={e => setV(v.id, "title", e.target.value)} style={{ ...aInput, marginBottom: 8 }} />
           <input aria-label={"Link video " + (i + 1)} placeholder="Link del video: https://www.instagram.com/reel/…" value={v.url || ""} onChange={e => setV(v.id, "url", e.target.value)} style={{ ...aInput, marginBottom: 8 }} />
+          <input aria-label={"Descrizione breve video " + (i + 1)} placeholder="Descrizione breve (va sulla copertina)" maxLength={40} value={v.desc || ""} onChange={e => setV(v.id, "desc", e.target.value)} style={{ ...aInput, marginBottom: 8 }} />
+          <label style={aLabel} htmlFor={"igDate" + v.id}>DATA DI USCITA</label>
+          <input id={"igDate" + v.id} type="date" aria-label={"Data video " + (i + 1)} value={v.date || ""} onChange={e => setV(v.id, "date", e.target.value)} style={{ ...aInput, marginBottom: 8 }} />
           <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
             <input aria-label={"Visualizzazioni video " + (i + 1)} placeholder="Views" value={v.views} onChange={e => setV(v.id, "views", e.target.value)} style={aInput} />
             <input aria-label={"Like video " + (i + 1)} placeholder="Likes" value={v.likes} onChange={e => setV(v.id, "likes", e.target.value)} style={aInput} />
@@ -7715,8 +7920,8 @@ function AdminInstagramTab({ ig, setIg, onToast }) {
           </div>
         </div>
       ))}
-      <p style={{ margin: "-4px 2px 12px", fontFamily: F_BODY, fontSize: 11, color: C.dim, lineHeight: 1.45 }}>Toccando un video nell'app si apre il suo link; senza link si apre il profilo @{d.handle || "bt_formula1"}.</p>
-      <button className="press" onClick={() => setD(p => ({ ...p, videos: [...p.videos, { id: "v" + Date.now(), title: "", views: "", likes: "", thumb: "", url: "" }] }))} style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8, width: "100%", padding: 12, borderRadius: 12, background: "transparent", border: `1.5px dashed ${C.border}`, fontFamily: F_BODY, fontWeight: 600, fontSize: 12.5, color: C.muted, marginBottom: 14 }}><Icon name="plus" size={14} color={C.muted} /> Aggiungi video</button>
+      <p style={{ margin: "-4px 2px 12px", fontFamily: F_BODY, fontSize: 11, color: C.dim, lineHeight: 1.45 }}>Toccando un video nell'app si apre il suo link; senza link si apre il profilo @{d.handle || "bt_formula1"}. L'ultimo reel è quello con la data più recente (senza date, l'ultimo aggiunto); "NUOVO" resta 7 giorni.</p>
+      <button className="press" onClick={() => setD(p => ({ ...p, videos: [...p.videos, { id: "v" + Date.now(), title: "", views: "", likes: "", thumb: "", url: "", desc: "", date: todayIso() }] }))} style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8, width: "100%", padding: 12, borderRadius: 12, background: "transparent", border: `1.5px dashed ${C.border}`, fontFamily: F_BODY, fontWeight: 600, fontSize: 12.5, color: C.muted, marginBottom: 14 }}><Icon name="plus" size={14} color={C.muted} /> Aggiungi video</button>
       <ABtn onClick={save}>SALVA TUTTO</ABtn>
     </div>
   );
@@ -7977,20 +8182,20 @@ function TermsSheet({ review, onAccept, onClose }) {
 }
 
 // Avvio (G06). Al primo avvio in assoluto i video dello splash (VideoSplash); dagli avvii dopo, o se i video non si
-// possono vedere (file mancante, formato) o il telefono chiede meno animazioni, il Pit Exit Launch. Il primo avvio fatto
+// possono vedere (file mancante, formato) o il telefono chiede meno animazioni, il caricamento (LoadingScreen). Il primo avvio fatto
 // (i video visti fino alla fine) si ricorda sul telefono (bt-intro-seen). ready = contenuti di Firebase letti e account
 // noto (o LOAD_MAX_MS passati). Lo splash sta sopra l'app, che intanto si carica sotto.
 const INTRO_KEY = "bt-intro-seen";
 const prefersReduced = () => { try { return !!(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches); } catch (e) { return false; } };
 function SplashScreen({ ready, onDone }) {
-  const [mode, setMode] = useState(() => (!prefersReduced() && !local.get(INTRO_KEY) ? "video" : "pitexit"));
-  if (mode === "video") return <VideoSplash ready={ready} onFail={() => setMode("pitexit")} onDone={() => { local.set(INTRO_KEY, true); onDone(); }} />;
-  return <PitExitLaunch ready={ready} onDone={onDone} />;
+  const [mode, setMode] = useState(() => (!prefersReduced() && !local.get(INTRO_KEY) ? "video" : "loading"));
+  if (mode === "video") return <VideoSplash ready={ready} onFail={() => setMode("loading")} onDone={() => { local.set(INTRO_KEY, true); onDone(); }} />;
+  return <LoadingScreen ready={ready} onDone={onDone} />;
 }
 
 // I video di Edoardo: il primo si vede tutto; se a quel punto i dati non ci sono ancora parte quello d'attesa, che si
 // ripete; appena i dati arrivano parte il finale, dove le lettere B e T si aprono sull'app vera. Se un video non parte
-// (file mancante, formato non supportato, o il primo non parte entro SPLASH_VIDEO_START_MS) si passa al Pit Exit Launch.
+// (file mancante, formato non supportato, o il primo non parte entro SPLASH_VIDEO_START_MS) si passa al caricamento.
 function VideoSplash({ ready, onDone, onFail }) {
   const [phase, setPhase] = useState("intro");          // intro | loop | outro
   const [loops, setLoops] = useState(0);              // quante volte è partito il video d'attesa
@@ -8039,7 +8244,7 @@ function VideoSplash({ ready, onDone, onFail }) {
     else onDone();
   };
   // Un video che non si carica: se è il finale mentre va, si chiude; altrimenti (anche un file che manca e dà errore
-  // appena si apre l'app) si passa al Pit Exit Launch.
+  // appena si apre l'app) si passa al caricamento.
   const onError = key => { if (key === "outro" && phaseRef.current === "outro") finish(); else fail(); };
   const video = key => (
     <video key={key} ref={vids[key]} src={SPLASH_VIDEO[key]} poster={SPLASH_POSTER} muted playsInline preload="auto" aria-hidden="true"
@@ -8071,59 +8276,29 @@ function LedGrid({ mode = "idle", size = 10 }) {
   );
 }
 
-// Pit Exit Launch (G06, dagli avvii dopo il primo; circa 1,5 s): i LED del volante si accendono da sinistra a destra
-// (5 verdi, 5 rossi, 5 blu, come le luci del cambio), compare "PIT EXIT OPEN", poi zoom con le linee della velocità e
-// l'app. Se i dati non sono ancora arrivati, i LED rossi del logo si accendono in sequenza con "Caricamento…" fino a
-// quando arrivano (al massimo LOAD_MAX_MS). Con "Rimuovi animazioni": LED accesi fermi e la scritta, niente zoom.
-const PIT_LEDS = 15, PIT_LED_MS = 45, PIT_OPEN_MS = 760, PIT_GO_MS = 1100, PIT_ZOOM_MS = 420, PIT_REDUCED_MS = 900;
-const pitLedColor = i => (i < 5 ? "#3ED66B" : i < 10 ? C.red : "#4C8DFF");
-function PitExitLaunch({ ready, onDone }) {
+// Caricamento (25/10, chiesto da Edoardo: "togli il Pit Exit Launch, tieni solo la schermata di caricamento"; prove in
+// test/e2e/run53-avvio.js): dagli avvii dopo il primo, o se i video non si possono vedere, solo la luce posteriore a LED
+// che si accende una riga alla volta e "Caricamento…", finché i dati arrivano (al massimo LOAD_MAX_MS); poi l'app.
+// Resta almeno LOAD_MIN_MS (un giro dei LED), così coi dati già pronti non lampeggia. Con "Rimuovi animazioni": LED
+// accesi fermi. Prima, coi dati pronti, c'era il Pit Exit Launch (15 LED del volante, "PIT EXIT OPEN" e lo zoom).
+const LOAD_MIN_MS = 840, LOAD_FADE_MS = 200;
+function LoadingScreen({ ready, onDone }) {
   const reduce = useRef(prefersReduced()).current;
-  const [lit, setLit] = useState(reduce ? PIT_LEDS : 0);
-  const [open, setOpen] = useState(reduce);
-  const [armed, setArmed] = useState(false);          // finita la partenza: si esce appena ci sono i dati
-  const [out, setOut] = useState(false);              // zoom (o dissolvenza breve) verso l'app
+  const [minDone, setMinDone] = useState(false);
   const [maxDone, setMaxDone] = useState(false);
-  const go = ready || maxDone;
+  const [out, setOut] = useState(false);
   useEffect(() => {
-    const ts = [setTimeout(() => setMaxDone(true), LOAD_MAX_MS), setTimeout(() => setArmed(true), reduce ? PIT_REDUCED_MS : PIT_GO_MS)];
-    if (!reduce) {
-      for (let i = 1; i <= PIT_LEDS; i++) ts.push(setTimeout(() => setLit(i), i * PIT_LED_MS));
-      ts.push(setTimeout(() => setOpen(true), PIT_OPEN_MS));
-    }
+    const ts = [setTimeout(() => setMinDone(true), LOAD_MIN_MS), setTimeout(() => setMaxDone(true), LOAD_MAX_MS)];
     return () => ts.forEach(clearTimeout);
   }, []);
-  useEffect(() => { if (armed && go) setOut(true); }, [armed, go]);
-  useEffect(() => { if (!out) return undefined; const t = setTimeout(onDone, reduce ? 220 : PIT_ZOOM_MS); return () => clearTimeout(t); }, [out]);
-  const waiting = armed && !go;
+  useEffect(() => { if (minDone && (ready || maxDone)) setOut(true); }, [minDone, ready, maxDone]);
+  useEffect(() => { if (!out) return undefined; const t = setTimeout(onDone, reduce ? 0 : LOAD_FADE_MS); return () => clearTimeout(t); }, [out]);
   return (
-    <div data-splash="" data-splash-phase="pitexit" data-pit-step={out ? "out" : waiting ? "wait" : open ? "open" : "leds"} data-reduced={reduce ? "1" : undefined}
-      className={out ? (reduce ? "pit-fade" : "pit-out") : undefined}
-      style={{ position: "fixed", inset: 0, background: "#000", zIndex: 9999, overflow: "hidden", display: "flex", alignItems: "center", justifyContent: "center", pointerEvents: out ? "none" : "auto" }}>
-      {out && !reduce && (
-        <div data-pit-zoom="" className="pit-lines" aria-hidden="true">
-          {Array.from({ length: 14 }, (_, i) => <span key={i} style={{ transform: `rotate(${i * (360 / 14) + 8}deg)` }}><i /></span>)}
-        </div>
-      )}
-      <div className={out && !reduce ? "pit-zoom" : undefined} style={{ position: "relative", display: "flex", flexDirection: "column", alignItems: "center", gap: 18 }}>
-        {waiting ? (
-          <>
-            <LedGrid mode={reduce ? "idle" : "seq"} size={14} />
-            <p style={{ fontFamily: F_BODY, fontSize: 13, color: C.dim, margin: 0 }}>Caricamento…</p>
-          </>
-        ) : (
-          <>
-            <div data-pit-leds="" style={{ display: "flex", gap: 6, padding: "10px 14px", borderRadius: 14, background: "#0B0B0E", border: "1px solid rgba(255,255,255,.08)" }}>
-              {Array.from({ length: PIT_LEDS }, (_, i) => (
-                <span key={i} data-pit-led={i} data-on={i < lit ? "1" : "0"} style={{ width: 12, height: 12, borderRadius: "50%", background: pitLedColor(i), boxShadow: `0 0 9px ${pitLedColor(i)}`, opacity: i < lit ? 1 : .13, transition: reduce ? "none" : "opacity .08s linear" }} />
-              ))}
-            </div>
-            <div style={{ display: "flex", alignItems: "center", gap: 9, opacity: open ? 1 : 0, transform: open ? "none" : "translateY(6px)", transition: reduce ? "none" : "opacity .18s ease, transform .18s ease" }}>
-              <span style={{ width: 10, height: 10, borderRadius: "50%", background: "#3ED66B", boxShadow: "0 0 10px #3ED66B" }} />
-              <span style={{ fontFamily: F_HEAD, fontWeight: 900, fontStyle: "italic", fontSize: 20, letterSpacing: 2, color: C.text }}>PIT EXIT OPEN</span>
-            </div>
-          </>
-        )}
+    <div data-splash="" data-splash-phase="loading" data-reduced={reduce ? "1" : undefined}
+      style={{ position: "fixed", inset: 0, background: "#000", zIndex: 9999, display: "flex", alignItems: "center", justifyContent: "center", opacity: out ? 0 : 1, transition: reduce ? "none" : `opacity ${LOAD_FADE_MS}ms ease`, pointerEvents: out ? "none" : "auto" }}>
+      <div role="status" style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 18 }}>
+        <LedGrid mode={reduce ? "idle" : "seq"} size={14} />
+        <p style={{ fontFamily: F_BODY, fontSize: 13, color: C.dim, margin: 0 }}>Caricamento…</p>
       </div>
     </div>
   );
@@ -8423,6 +8598,7 @@ function App() {
   const [sillyOfficial, setSillyOfficial] = useState(shared0.silly);       // comunicati ufficiali registrati dall'admin
   const [driverPhotos, setDriverPhotos] = useState(shared0.driverPhotos);  // foto dei piloti caricate dall'admin (Task 14)
   const [commonsPhotos, setCommonsPhotos] = useState(shared0.commonsPhotos);   // G30: foto di Commons scelte dall'admin
+  const [trophyCfg, setTrophyCfg] = useState(shared0.trophies);   // 25/10: trofei cambiati da Firebase (shared/bt-trophies)
   commons.choice = commonsPhotos || commons.choice;
   useEffect(() => { commonsNotify(); }, [commonsPhotos]);
   const predictSeat = (id, pr) => { if (userDataWait()) return; setSillyPreds(x => x[id] ? x : { ...x, [id]: pr }); };
@@ -8661,6 +8837,7 @@ function App() {
     standings: v => { addStandingsGuests(v.guests); keep(setStandings)(v); },
     highlights: keep(setHighlights), silly: keep(setSillyOfficial), predictions: keep(setPredictions),
     homePoll: keep(setHomePoll), fantaStats: keep(setFantaStats), driverPhotos: keep(setDriverPhotos), commonsPhotos: keep(setCommonsPhotos),
+    trophies: keep(setTrophyCfg),
   };
   // Rilegge i contenuti indicati (tutti, all'avvio) e mette nello stato quelli letti davvero.
   const refreshShared = kinds => AppData.loadShared(nowMs(), kinds ? { kinds } : undefined).then(r => {
@@ -9218,9 +9395,16 @@ function App() {
     if (!chatMe()) { needLogin("Per scrivere in chat serve un account."); return Promise.resolve(false); }
     return Promise.resolve(withProfile(() => postChat(id, text)));
   };
+  // Profilo veloce (25/10): tifo, casco (col colore dei tasti se non ne ha uno suo) e trofei vinti viaggiano col
+  // messaggio; Chat.send li manda solo quando cambiano.
+  const myProf = () => ({
+    t: favTeam || undefined, d: favDriver || undefined, f: (aboutMe && aboutMe.fan) || undefined,
+    h: helmet ? { ...helmet, base: helmet.base || C.accent } : undefined,
+    w: trophyList.filter(t => trophies[t.id]).map(t => t.id),
+  });
   const postChat = (id, text) => {
     const u = Account.current(), who = u ? { name: u.name, aid: u.aid } : chatMe();
-    const me = myMedal ? { ...who, medal: myMedal } : who;   // la medaglia dei trofei viaggia con il messaggio (G31)
+    const me = { ...(myMedal ? { ...who, medal: myMedal } : who), p: myProf() };   // la medaglia dei trofei viaggia con il messaggio (G31)
     const temp = { id: "invio-" + Date.now(), from: me.name, text: text.trim(), at: nowMs(), aid: me.aid, mine: true, medal: myMedal || null };
     setChatMsgs(x => ({ ...x, [id]: [...(x[id] || []), temp] }));
     return Chat.send(id, text, me).then(m => {
@@ -9230,6 +9414,20 @@ function App() {
       setChatMsgs(x => ({ ...x, [id]: (x[id] || []).filter(y => y.id !== temp.id) }));
       showToast(e && e.code === "banned" ? CHAT_MSG.banned : CHAT_MSG.offline);
       return false;
+    });
+  };
+  // Reazioni (25/10): subito sullo schermo, poi in Firebase; se non va, la reazione torna com'era e lo si dice.
+  const reactMessage = (chatId, m, emoji) => {
+    if (!chatMe() || String(m.id).startsWith("invio-")) return;
+    const put = fn => setChatMsgs(x => ({ ...x, [chatId]: (x[chatId] || []).map(y => (y.id === m.id ? fn(y) : y)) }));
+    const before = m.myReaction || null;
+    put(y => Compat.applyReaction(y, emoji));
+    withProfile(() => {
+      const u = Account.current() || chatMe();
+      return Chat.react(chatId, m.id, emoji, { name: u.name, aid: u.aid }).then(() => loadRoomMsgs(chatId), e => {
+        put(y => Compat.applyReaction(y, before));
+        showToast(e && e.code === "banned" ? CHAT_MSG.banned : e && e.code === "offline" ? CHAT_MSG["reaction-offline"] : CHAT_MSG.reaction);
+      });
     });
   };
   // Moderazione chat, come nell'app di oggi.
@@ -9382,24 +9580,32 @@ function App() {
   // Primo messaggio in chat: uno di questo account (aid) arrivato su Firebase, scritto ora o prima.
   const myAid = account && account.aid;
   const chatMine = !!myAid && Object.values(chatMsgs).some(l => Array.isArray(l) && l.some(m => m && m.aid === myAid && !String(m.id).startsWith("invio-")));
+  // 25/10: nomi, testi e obiettivi da Firebase (shared/bt-trophies, trophyDefs); le pagelle e il pilota del giorno
+  // della prova DEMO contano per i trofei (prima no: "li ho fatti ma il trofeo non arriva"), non per punti e classifiche.
+  const trophyList = trophyDefs(trophyCfg);
   const trophyProg = trophyProgress({
-    about: aboutMe, helmet, squad: squadOwn ? squad : null, saved, pitBest, sillyPreds, ratings, dotd,
+    about: aboutMe, helmet, squad: squadOwn ? squad : null, saved, pitBest, sillyPreds,
+    ratings: { ...demoVotes.ratings, ...ratings }, dotd: { ...demoVotes.dotd, ...dotd },
     correctPreds: bonus.filter(x => x.kind === "previsione").length, correctWx: bonus.filter(x => x.kind === "meteo").length,
     correctPolls: bonus.filter(x => x.kind === "sondaggio").length, events: { chat: chatMine, egg: eggFound },
-  });
+  }, trophyList);
   const trophyReady = !!userEmail && userLoaded === userEmail;
-  const trophyNew = trophyReady ? TROPHIES.filter(t => trophyProg[t.id] && trophyProg[t.id].done && !trophies[t.id]).map(t => t.id).join(",") : "";
+  const trophyNew = trophyReady ? trophyList.filter(t => trophyProg[t.id] && trophyProg[t.id].done && !trophies[t.id]).map(t => t.id).join(",") : "";
   useEffect(() => {
     if (!trophyNew) return;
     const ids = trophyNew.split(","), at = nowMs();
     setTrophies(t => { const x = { ...t }; ids.forEach(id => { if (!x[id]) x[id] = at; }); return x; });
-    setTrophyNotice({ key: at + ":" + trophyNew, ids, names: ids.map(id => TROPHIES.find(t => t.id === id).name) });
+    setTrophyNotice({ key: at + ":" + trophyNew, ids, names: ids.map(id => (trophyList.find(t => t.id === id) || { name: id }).name) });
     fx.play("shift"); fx.buzz("success");
     clearTimeout(trophyTimer.current);
     trophyTimer.current = setTimeout(() => setTrophyNotice(null), 3600);
   }, [trophyNew]);
   useEffect(() => () => clearTimeout(trophyTimer.current), []);
-  const myMedal = medalOf(Object.keys(trophies).length);
+  const myMedal = medalOf(trophyList.filter(t => trophies[t.id]).length);
+  // 25/10: con l'app di un admin il documento dei trofei su Firebase (shared/bt-trophies) si crea coi valori di serie se
+  // manca: nella console ci sono già tutti, pronti da cambiare (nome, how, goal, off).
+  const adminNow = !!account && Account.isAdmin();
+  useEffect(() => { if (adminNow) AppData.ensureTrophyDoc().then(w => { if (w) refreshShared(["trophies"]); }, () => {}); }, [adminNow]);
 
   // ── Pubblicità (24/10, src/services/ads.js): banner in Home e in Race, solo nell'APK e senza Premium ──
   // Il banner nativo è disegnato da Android sopra l'app: si toglie con ogni finestra aperta (coprirebbe i suoi tasti) e
@@ -9479,11 +9685,11 @@ function App() {
   else if (view === "circuit" && circuitId) body = <CircuitScreen circuitId={circuitId} races={races} articles={articles} onBack={viewBack.circuit} onTag={filterByTag} onOpenArticle={openArticle} />;
   else if (view === "adminLock") body = <AdminKeypad onOk={() => { setAdminUnlocked(true); setView("admin"); }} onCancel={viewBack.adminLock} />;
   else if (view === "admin" && adminUnlocked && Account.isAdmin()) body = <AdminScreen photos={commonsPhotos} setPhotos={adminSet.commonsPhotos} silly={sillyOfficial} onSilly={officialSeat} highlights={highlights} setHighlights={adminSet.highlights} onBack={viewBack.admin} onPublish={publishArticle} articles={articles} setArticles={adminSet.articles} fantaStats={fantaStats} setFantaStats={adminSet.fantaStats} standings={standings} setStandings={adminSet.standings} races={races} setRaces={adminSet.races} extraRaces={racesDoc.extra} setExtraRaces={adminSet.extraRaces} ig={ig} setIg={adminSet.ig} sentNotifs={sentNotifs} onSendNotif={sendNotif} onDeleteNotif={deleteNotif} onToast={showToast} tab={adminTab} setTab={setAdminTab} chats={chats} reports={reports} banned={banned} onDeleteMsg={deleteChatMsg} onSuspend={suspendUser} onUnsuspend={unsuspendUser} onIgnoreReport={ignoreReport} liveProps={liveProps} polls={allPolls} votes={votes} onPollAnswer={setPollAnswer} predictions={predictions} setPredictions={adminSet.predictions} predAnswers={predAnswers} />;
-  else if (view === "chatThread" && activeChat) body = <ChatThreadScreen chat={activeChat} onBack={viewBack.chatThread} onSend={guest ? () => needLogin("Per scrivere in chat serve un account.") : sendMessage} isPremium={isPremium} blocked={blocked} onReport={guest ? () => needLogin("Per segnalare un messaggio serve un account.") : reportMessage} onBlock={blockUser} liveRace={races.find(r => r.status === "LIVE") || null} />;
+  else if (view === "chatThread" && activeChat) body = <ChatThreadScreen chat={activeChat} onBack={viewBack.chatThread} onSend={guest ? () => needLogin("Per scrivere in chat serve un account.") : sendMessage} isPremium={isPremium} blocked={blocked} onReport={guest ? () => needLogin("Per segnalare un messaggio serve un account.") : reportMessage} onBlock={blockUser} onReact={guest ? () => needLogin("Per reagire ai messaggi serve un account.") : reactMessage} trophyList={trophyList} myWon={trophies} liveRace={races.find(r => r.status === "LIVE") || null} />;
   else if (view === "instagram") body = <InstagramView ig={ig} onToast={showToast} onBack={viewBack.instagram} />;
   else if (view === "ghost") body = <GhostLap onBack={viewBack.ghost} />;
   else if (view === "chats") body = <ChatsView chats={chats} onOpen={openChat} blocked={blocked} onBack={viewBack.chats} unreadOf={(id, ms) => Chat.unread(id, ms)} />;
-  else if (view === "profilo") body = <ProfiloScreen ig={ig} onOpenIg={() => { setIgFrom("profilo"); setView("instagram"); }} aboutMe={aboutMe} onSaveAboutMe={a => Account.updateAbout(a).catch(e => showToast(e && (e.code === "too-young" || e.code === "not-loaded") ? messageOf(e) : NOT_SAVED))} account={account} onSaveName={n => Account.updateName(n)} isAdmin={Account.isAdmin()} trial={trialActive ? trial : null} trialUsed={!!trial} onBack={viewBack.profilo} onNotifiche={() => setView("notifiche")} onPremium={() => setPremiumOpen(true)} onAdmin={() => guest ? needLogin("Accedi per usare il pannello admin.") : setView(adminUnlocked ? "admin" : "adminLock")} onLogout={logout} isPremium={isPremium} onAbout={() => setInfoModal({ title: "Info su B&T", body: ABOUT_TEXT, credits: true })} onFeedback={() => setFeedbackOpen(true)} onHelp={() => setInfoModal({ title: "Assistenza", body: HELP_TEXT })} favTeam={favTeam} favDriver={favDriver} onPickTeam={() => guest ? needLogin("Per scegliere scuderia e pilota del cuore serve un account.") : setPicker("team")} onPickDriver={() => guest ? needLogin("Per scegliere scuderia e pilota del cuore serve un account.") : setPicker("driver")} guest={guest} onLogin={() => needLogin(null)} onTerms={() => setTermsOpen(true)} blocked={blocked} onUnblock={unblockUser} onDeleteAccount={deleteAccount} savedCount={saved.length} onOpenSaved={openSaved} onTheme={() => setThemeOpen(true)} helmet={helmet} onHelmet={() => setHelmetOpen(true)} trophies={trophies} trophyProg={trophyProg}
+  else if (view === "profilo") body = <ProfiloScreen ig={ig} onOpenIg={() => { setIgFrom("profilo"); setView("instagram"); }} aboutMe={aboutMe} onSaveAboutMe={a => Account.updateAbout(a).catch(e => showToast(e && (e.code === "too-young" || e.code === "not-loaded") ? messageOf(e) : NOT_SAVED))} account={account} onSaveName={n => Account.updateName(n)} isAdmin={Account.isAdmin()} trial={trialActive ? trial : null} trialUsed={!!trial} onBack={viewBack.profilo} onNotifiche={() => setView("notifiche")} onPremium={() => setPremiumOpen(true)} onAdmin={() => guest ? needLogin("Accedi per usare il pannello admin.") : setView(adminUnlocked ? "admin" : "adminLock")} onLogout={logout} isPremium={isPremium} onAbout={() => setInfoModal({ title: "Info su B&T", body: ABOUT_TEXT, credits: true })} onFeedback={() => setFeedbackOpen(true)} onHelp={() => setInfoModal({ title: "Assistenza", body: HELP_TEXT })} favTeam={favTeam} favDriver={favDriver} onPickTeam={() => guest ? needLogin("Per scegliere scuderia e pilota del cuore serve un account.") : setPicker("team")} onPickDriver={() => guest ? needLogin("Per scegliere scuderia e pilota del cuore serve un account.") : setPicker("driver")} guest={guest} onLogin={() => needLogin(null)} onTerms={() => setTermsOpen(true)} blocked={blocked} onUnblock={unblockUser} onDeleteAccount={deleteAccount} savedCount={saved.length} onOpenSaved={openSaved} onTheme={() => setThemeOpen(true)} helmet={helmet} onHelmet={() => setHelmetOpen(true)} trophies={trophies} trophyProg={trophyProg} trophyList={trophyList}
     onAdPrivacy={Ads.privacyRequired() ? () => Ads.openPrivacy().catch(() => showToast("Le preferenze sulla privacy degli annunci non sono disponibili in questo momento.")) : null}
     sounds={sounds} haptics={haptics} onSounds={v => { if (userDataWait()) return; setSounds(v); fx.setSounds(v); if (v) fx.play("tick"); }} onHaptics={v => { if (userDataWait()) return; setHaptics(v); fx.setHaptics(v); if (v) fx.buzz("light"); }} />;
   else if (view === "notifiche") body = <NotificheScreen offline={offline} onBack={viewBack.notifiche} onAction={a => { if (a === "feedback") { if (feedbackAsk && !feedbackAsk.read) saveAsk({ ...feedbackAsk, read: true }); setFeedbackOpen(true); } }} notifs={notifs} onReadAll={readAll} isPremium={isPremium} onPremium={() => setPremiumOpen(true)} favTeam={favTeam} favDriver={favDriver} prefs={notifPrefs} onPrefs={v => { if (!userDataWait()) setNotifPrefs(v); }} onGoProfilo={() => setView("profilo")} />;

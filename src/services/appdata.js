@@ -12,6 +12,7 @@
 const FB = require("./firebase");
 const C = require("./compat");
 const F1 = require("../data/f1-2026");
+const T = require("../logic/trophies");
 
 const isObj = v => v && typeof v === "object" && !Array.isArray(v);
 const list = v => (Array.isArray(v) ? v.filter(isObj) : []);
@@ -61,6 +62,7 @@ const SHARED_DOCS = {
   "bt-fanta-stats": FANTA_DEFAULT,
   "bt-driver-photos": {},
   "bt-commons-photos": { drivers: {}, cars: {}, logos: {} },   // Tappa 3 (G30): foto di Commons scelte dall'admin
+  "bt-trophies": null,                    // 25/10: trofei cambiati da Firebase (niente documento: quelli di serie)
 };
 
 // Ogni contenuto dell'app (nome dello stato della 2.0) → i suoi documenti e le conversioni.
@@ -85,6 +87,9 @@ const KINDS = {
   fantaStats: { docs: ["bt-fanta-stats"], from: d => fantaOf(d["bt-fanta-stats"]), to: v => ({ "bt-fanta-stats": fantaOf(v) }) },
   driverPhotos: { docs: ["bt-driver-photos"], from: d => obj(d["bt-driver-photos"]), to: v => ({ "bt-driver-photos": obj(v) }) },
   commonsPhotos: { docs: ["bt-commons-photos"], from: d => commonsOf(d["bt-commons-photos"]), to: v => ({ "bt-commons-photos": commonsOf(v) }) },
+  // 25/10: { <id trofeo>: { name, how, goal, off } } solo con i campi validi (src/logic/trophies.js, cleanTrophyConfig).
+  // Si cambia dalla console di Firebase (shared/bt-trophies); l'app non lo riscrive (ensureTrophyDoc lo crea se manca).
+  trophies: { docs: ["bt-trophies"], from: d => T.cleanTrophyConfig(d["bt-trophies"]) },
 };
 
 // Dati personali dell'account (users/<email>.app2): ognuno vede e modifica solo i suoi.
@@ -176,6 +181,15 @@ function createAppData({ fb = FB } = {}) {
     fb.sharedAppend(bluffDoc(sessionKey), { code: String(code), date: String(date), lap: Number(lap) || null, text: String(text || ""), by: String(by || "") });
   const untagBluff = (sessionKey, code, date) => fb.sharedRemoveWhere(bluffDoc(sessionKey), x => x && x.code === code && x.date === date);
 
+  // Trofei da Firebase (25/10): se shared/bt-trophies non c'è, lo scrive con i valori di serie (lo chiama l'app di un
+  // admin), così nella console ci sono già tutti i trofei da cambiare. Se c'è non lo tocca. → true se l'ha scritto.
+  async function ensureTrophyDoc() {
+    if ((await fb.sgStrict("bt-trophies")) != null) return false;
+    await fb.ss("bt-trophies", T.trophyConfigDefaults());
+    base.set("bt-trophies", T.trophyConfigDefaults());
+    return true;
+  }
+
   async function loadUserData(email) {
     const u = await fb.dbGet("users", email);
     return pickUser(u && u.app2);
@@ -218,7 +232,7 @@ function createAppData({ fb = FB } = {}) {
     await fb.dbSet("users", email, { app2: {} });
   }
 
-  return { loadShared, staleKinds, saveShared, appendNotif, removeNotif, loadBluff, tagBluff, untagBluff, loadUserData, saveUserData, flushUserData, cancelUserData, clearUserData };
+  return { loadShared, staleKinds, saveShared, ensureTrophyDoc, appendNotif, removeNotif, loadBluff, tagBluff, untagBluff, loadUserData, saveUserData, flushUserData, cancelUserData, clearUserData };
 }
 
 // I valori di serie di tutti i contenuti, già convertiti per l'app: quelli che si vedono finché Firebase non risponde.

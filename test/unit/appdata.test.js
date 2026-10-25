@@ -61,6 +61,25 @@ t('documenti di oggi: notizie, gare (stato salvato), classifiche, Instagram e no
 });
 
 // Tappa 3 (G30): foto di Commons scelte dall'admin; dal documento passano solo nomi di file per pilota e scuderia.
+// 25/10: i trofei si cambiano da Firebase (shared/bt-trophies); l'admin crea il documento coi valori di serie se manca.
+t('trophies: dal documento solo i campi validi; ensureTrophyDoc lo scrive solo se manca', async () => {
+  const { firebase } = seed({});
+  const A = D.createAppData();
+  assert.deepStrictEqual((await A.loadShared(NOW)).values.trophies, {}, 'senza documento: nessuna modifica');
+  assert.strictEqual(await A.ensureTrophyDoc(), true, 'scritto');
+  const doc = firebase.__fake.doc('shared/bt-trophies');
+  assert.deepStrictEqual(doc.pitcrew, { name: 'Pit crew', how: 'Pit Stop Challenge in 2,30 secondi o meno', goal: 2.3, off: false });
+  assert.strictEqual(Object.keys(doc).length, 15);
+  // L'admin lo cambia nella console di Firebase: l'app lo legge e non lo riscrive.
+  const f2 = seed({ 'shared/bt-trophies': { pitcrew: { goal: 2.1 }, sgasata: { off: true }, radar: { goal: 'tanti' } } }).firebase;
+  const B = D.createAppData();
+  assert.strictEqual(await B.ensureTrophyDoc(), false, 'c\'è già: non si tocca');
+  assert.deepStrictEqual(f2.__fake.doc('shared/bt-trophies').pitcrew, { goal: 2.1 });
+  const v = (await B.loadShared(NOW)).values.trophies;
+  assert.strictEqual(v.pitcrew.goal, 2.1); assert.strictEqual(v.sgasata.off, true); assert.strictEqual(v.radar.goal, undefined);
+  assert.deepStrictEqual(D.sharedDefaults(NOW).trophies, {});
+});
+
 t('commonsPhotos: di serie vuote; dal documento solo i nomi dei file; si salvano in bt-commons-photos', async () => {
   const { firebase } = seed({ 'shared/bt-commons-photos': { drivers: { leclerc: 'File:Leclerc.jpg', norris: 7 }, cars: { ferrari: 'File:SF-26.jpg' }, logos: null, altro: 1 } });
   const A = D.createAppData();

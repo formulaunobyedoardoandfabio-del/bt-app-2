@@ -205,14 +205,15 @@ run({
     assert(!errs.length, errs.join(' | '));
   },
 
-  // Tappa 3 (G06): senza i video lo splash fisso di prima diventa il Pit Exit Launch (i LED del volante, poi l'app).
-  async 'splash senza i video (file mancanti): Pit Exit Launch e sotto l\'app che si carica'(b) {
+  // Tappa 3 (G06): senza i video lo splash fisso di prima diventa la schermata di caricamento (25/10: la luce a LED e
+  // "Caricamento…", poi l'app; prima il Pit Exit Launch).
+  async 'splash senza i video (file mancanti): luce a LED e "Caricamento…", sotto l\'app che si carica'(b) {
     const { ctx, p, errs } = await open(b, { waitSplash: false });   // test.html non ha accanto i video
-    const s = await p.evaluate(() => { const e = document.querySelector('[data-splash]'); return e ? { leds: e.querySelectorAll('[data-pit-led]').length, phase: e.dataset.splashPhase } : null; });
+    const s = await p.evaluate(() => { const e = document.querySelector('[data-splash]'); return e ? { leds: e.querySelectorAll('[data-led-grid] [data-led]').length, phase: e.dataset.splashPhase, text: e.innerText.trim() } : null; });
     const underneath = await p.evaluate(() => !!document.querySelector('#authEmail'));
     await p.waitForFunction(() => !document.querySelector('[data-splash]'), null, { timeout: 8000 }).catch(() => {});
     const gone = await p.evaluate(() => !document.querySelector('[data-splash]')); await ctx.close();
-    assert(s && s.phase === 'pitexit' && s.leds === 15, 'senza i video manca il Pit Exit Launch: ' + JSON.stringify(s));
+    assert(s && s.phase === 'loading' && s.leds === 8 && s.text === 'Caricamento…', 'senza i video manca la schermata di caricamento: ' + JSON.stringify(s));
     assert(underneath, 'sotto lo splash l\'app deve caricarsi');
     assert(gone, 'lo splash non se ne va');
     assert(!errs.length, errs.join(' | '));
