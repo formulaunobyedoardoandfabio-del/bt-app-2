@@ -574,9 +574,9 @@ function TopHeader({ isPremium, unread, onPremium, onBell, onProfile, trialDays 
   };
   return (
     <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "18px 16px 14px", flexShrink: 0 }}>
-      <button className="press" data-logo="" aria-label={"B&T"} onClick={tapLogo} style={{ height: 38, padding: "0 11px 0 7px", borderRadius: 11, background: C.accent, display: "flex", alignItems: "center", gap: 7, flexShrink: 0 }}>
+      <button className="press" data-logo="" aria-label={"B&T"} onClick={tapLogo} style={{ height: 38, padding: "0 8px 0 7px", borderRadius: 11, background: C.accent, display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
         <span style={{ display: "flex", padding: 3, borderRadius: 5, background: "#0B0B0D" }}><LedGrid mode={egg ? "flash3" : "idle"} size={4} /></span>
-        <span style={{ fontFamily: F_HEAD, fontWeight: 900, fontStyle: "italic", fontSize: 14, color: "#fff", letterSpacing: -.5 }}>B&amp;T</span>
+        <img data-logo-img="" src={BT_LOGO} alt="" style={{ width: 26, height: 26, objectFit: "contain", display: "block" }} />
       </button>
       {onTrack && (
         <span data-on-track="" role="status" style={{ display: "flex", alignItems: "center", gap: 6, padding: "6px 9px", borderRadius: 999, background: alpha(C.red, .12), border: `1px solid ${alpha(C.red, .45)}`, flexShrink: 0 }}>

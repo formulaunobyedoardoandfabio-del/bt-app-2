@@ -29,8 +29,8 @@ const filled = v => v !== null && v !== undefined && v !== "";
 const someEntry = (m, test) => isObj(m) && Object.values(m).some(test);
 
 // ── Trofei da Firebase (25/10) ─────────────────────────────────────────
-// shared/bt-trophies = { <id>: { name, how, goal, off } }: quello che c'è e vale sostituisce il valore di serie; off:
-// true toglie il trofeo (non si vede e non si vince). Gli obiettivi: i conteggi interi da 1 a 100, i tempi del Pit
+// shared/bt-trophies = { <id>: { name, how, goal, attivo } }: quello che c'è e vale sostituisce il valore di serie;
+// attivo: false toglie il trofeo (non si vede e non si vince), true lo rimette. Gli obiettivi: i conteggi interi da 1 a 100, i tempi del Pit
 // Stop Challenge da 1 a 5 secondi (2 decimali). Gli id sono quelli del codice: come si controlla ogni trofeo resta qui.
 const PIT_IDS = ["pitcrew", "pitperfetto"];
 const goalOk = (id, g) => (PIT_IDS.includes(id) ? g >= 1 && g <= 5 : Number.isInteger(g) && g >= 1 && g <= 100);
@@ -45,7 +45,7 @@ function cleanTrophyConfig(v) {
     if (textOk(c.name, 40)) o.name = c.name.trim();
     if (textOk(c.how, 140)) o.how = c.how.trim();
     if (t.goal != null && typeof c.goal === "number" && isFinite(c.goal) && goalOk(t.id, c.goal)) o.goal = Math.round(c.goal * 100) / 100;
-    if (c.off === true) o.off = true;
+    if (c.attivo === false || c.off === true) o.off = true;   // dentro l'app: off (si pulisce anche due volte)
     out[t.id] = o;
   });
   return out;
@@ -57,7 +57,7 @@ function trophyDefs(cfg) {
 }
 // Il documento da scrivere su Firebase quando non c'è: tutti i trofei con i valori di serie, pronti da cambiare.
 function trophyConfigDefaults() {
-  return Object.fromEntries(TROPHIES.map(t => [t.id, { name: t.name, how: t.how, ...(t.goal != null ? { goal: t.goal } : {}), off: false }]));
+  return Object.fromEntries(TROPHIES.map(t => [t.id, { name: t.name, how: t.how, ...(t.goal != null ? { goal: t.goal } : {}), attivo: true }]));
 }
 
 // input = { about, helmet, squad, saved, pitBest, sillyPreds, ratings, dotd, correctPreds, correctWx, correctPolls,

@@ -88,7 +88,7 @@ run({
   },
 
   async 'trofei da Firebase: nome e obiettivo cambiati, un trofeo spento'(b) {
-    const seed = { addDocs: { ...USER({ pitBest: 2.2 }), 'shared/bt-trophies': { pitcrew: { name: 'Pit crew pro', how: 'Pit Stop Challenge in 2,10 secondi', goal: 2.1 }, sgasata: { off: true } } } };
+    const seed = { addDocs: { ...USER({ pitBest: 2.2 }), 'shared/bt-trophies': { pitcrew: { name: 'Pit crew pro', how: 'Pit Stop Challenge in 2,10 secondi', goal: 2.1 }, sgasata: { attivo: false } } } };
     const { ctx, p, errs } = await open(b, { seed });
     await login(p); await w(p, 800);
     await openProfile(p);
@@ -110,7 +110,7 @@ run({
     const fs = await doc(p, 'shared/bt-trophies');
     await ctx.close();
     assert(fs && Object.keys(fs).length === 15, 'documento dei trofei: ' + JSON.stringify(fs));
-    assert(fs.pitcrew.goal === 2.3 && fs.pitcrew.off === false && /2,30/.test(fs.pitcrew.how), 'Pit crew nel documento: ' + JSON.stringify(fs.pitcrew));
+    assert(fs.pitcrew.goal === 2.3 && fs.pitcrew.attivo === true && Object.values(fs).every(t => t.attivo === true) && /2,30/.test(fs.pitcrew.how), 'Pit crew nel documento: ' + JSON.stringify(fs.pitcrew));
     assert(!errs.length, errs.join(' | '));
   },
 

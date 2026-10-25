@@ -20,7 +20,7 @@ const tests = {
 
   // 25/10: i trofei si cambiano da Firebase (shared/bt-trophies): per ogni id nome, come si vince, obiettivo, spento.
   'trofei da Firebase: nome, testo, obiettivo e spento sopra i valori di serie'() {
-    const defs = trophyDefs({ pitcrew: { goal: 2.1, name: 'Pit crew pro' }, archivio: { goal: 3, how: 'Salva 3 notizie' }, sgasata: { off: true },
+    const defs = trophyDefs({ pitcrew: { goal: 2.1, name: 'Pit crew pro' }, archivio: { goal: 3, how: 'Salva 3 notizie' }, sgasata: { attivo: false },
       fantasma: { name: 'x' }, oracolo: { goal: -1 }, indovino: { name: '   ' }, radar: { goal: 'tanti' } });
     const by = id => defs.find(t => t.id === id);
     assert.strictEqual(by('pitcrew').name, 'Pit crew pro'); assert.strictEqual(by('pitcrew').goal, 2.1);
@@ -40,10 +40,10 @@ const tests = {
   'valori di serie da scrivere su Firebase, e ritorno'() {
     const cfg = trophyConfigDefaults();
     assert.deepStrictEqual(Object.keys(cfg).sort(), TROPHIES.map(t => t.id).sort());
-    assert.deepStrictEqual(cfg.pitcrew, { name: 'Pit crew', how: TROPHIES.find(t => t.id === 'pitcrew').how, goal: 2.3, off: false });
+    assert.deepStrictEqual(cfg.pitcrew, { name: 'Pit crew', how: TROPHIES.find(t => t.id === 'pitcrew').how, goal: 2.3, attivo: true });
     assert.strictEqual(cfg.casco.goal, undefined, 'senza obiettivo: niente goal');
     assert.deepStrictEqual(trophyDefs(cfg), trophyDefs(null));
-    assert.deepStrictEqual(cleanTrophyConfig({ pitcrew: { goal: '2,4', name: 7, off: 'sì' }, x: {} }), { pitcrew: {} });
+    assert.deepStrictEqual(cleanTrophyConfig({ pitcrew: { goal: '2,4', name: 7, attivo: 'no' }, x: {} }), { pitcrew: {} });
     assert.deepStrictEqual(cleanTrophyConfig('rotto'), {});
   },
 

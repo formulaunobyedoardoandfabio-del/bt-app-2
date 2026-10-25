@@ -68,10 +68,10 @@ t('trophies: dal documento solo i campi validi; ensureTrophyDoc lo scrive solo s
   assert.deepStrictEqual((await A.loadShared(NOW)).values.trophies, {}, 'senza documento: nessuna modifica');
   assert.strictEqual(await A.ensureTrophyDoc(), true, 'scritto');
   const doc = firebase.__fake.doc('shared/bt-trophies');
-  assert.deepStrictEqual(doc.pitcrew, { name: 'Pit crew', how: 'Pit Stop Challenge in 2,30 secondi o meno', goal: 2.3, off: false });
+  assert.deepStrictEqual(doc.pitcrew, { name: 'Pit crew', how: 'Pit Stop Challenge in 2,30 secondi o meno', goal: 2.3, attivo: true });
   assert.strictEqual(Object.keys(doc).length, 15);
   // L'admin lo cambia nella console di Firebase: l'app lo legge e non lo riscrive.
-  const f2 = seed({ 'shared/bt-trophies': { pitcrew: { goal: 2.1 }, sgasata: { off: true }, radar: { goal: 'tanti' } } }).firebase;
+  const f2 = seed({ 'shared/bt-trophies': { pitcrew: { goal: 2.1 }, sgasata: { attivo: false }, radar: { goal: 'tanti' } } }).firebase;
   const B = D.createAppData();
   assert.strictEqual(await B.ensureTrophyDoc(), false, 'c\'è già: non si tocca');
   assert.deepStrictEqual(f2.__fake.doc('shared/bt-trophies').pitcrew, { goal: 2.1 });

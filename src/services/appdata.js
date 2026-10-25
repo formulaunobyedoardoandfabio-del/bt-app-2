@@ -87,7 +87,7 @@ const KINDS = {
   fantaStats: { docs: ["bt-fanta-stats"], from: d => fantaOf(d["bt-fanta-stats"]), to: v => ({ "bt-fanta-stats": fantaOf(v) }) },
   driverPhotos: { docs: ["bt-driver-photos"], from: d => obj(d["bt-driver-photos"]), to: v => ({ "bt-driver-photos": obj(v) }) },
   commonsPhotos: { docs: ["bt-commons-photos"], from: d => commonsOf(d["bt-commons-photos"]), to: v => ({ "bt-commons-photos": commonsOf(v) }) },
-  // 25/10: { <id trofeo>: { name, how, goal, off } } solo con i campi validi (src/logic/trophies.js, cleanTrophyConfig).
+  // 25/10: { <id trofeo>: { name, how, goal, attivo } } in Firebase, { name, how, goal, off } qui solo con i campi validi (src/logic/trophies.js, cleanTrophyConfig).
   // Si cambia dalla console di Firebase (shared/bt-trophies); l'app non lo riscrive (ensureTrophyDoc lo crea se manca).
   trophies: { docs: ["bt-trophies"], from: d => T.cleanTrophyConfig(d["bt-trophies"]) },
 };

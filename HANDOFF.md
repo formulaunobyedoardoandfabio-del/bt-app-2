@@ -205,3 +205,7 @@ toccando il nome in chat (tifo, casco, trofei, segnalazione), reazioni con le em
 - Prove: `test/e2e/run72-trofei-chat.js` (9), `run73-instagram.js` (5), `run53-avvio.js` (4, riscritta per il
   caricamento), `run33-playstore.js` (splash senza i video), `test/unit/{trophies,appdata,compat,chat,instagram}.test.js`.
 - Verificato il 25/10 sera: `JOBS=2 bash test/all.sh` a c6a9626 → TUTTO VERDE (77 file).
+- Dopo (Edoardo, 21:28): logo B&T nel tasto rosso in alto a sinistra al posto della scritta (`[data-logo-img]`; il
+  "in alto a destra" era quello); trofei in Firebase con `attivo: true/false` per ognuno (prima `off`; dentro l'app
+  resta `off`, `cleanTrophyConfig` si può rifare due volte). Il documento lo crea l'app di un admin al primo avvio.
+  Prove: run72 9/9, run64 5/5, run20 13/13, trophies.test 6/6, appdata.test 23/23.
