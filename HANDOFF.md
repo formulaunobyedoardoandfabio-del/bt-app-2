@@ -204,3 +204,4 @@ toccando il nome in chat (tifo, casco, trofei, segnalazione), reazioni con le em
   schermata nuova di 6 LED Edoardo non la voleva: "non devi creare una nuova schermata, solo togliere quella".
 - Prove: `test/e2e/run72-trofei-chat.js` (9), `run73-instagram.js` (5), `run53-avvio.js` (4, riscritta per il
   caricamento), `run33-playstore.js` (splash senza i video), `test/unit/{trophies,appdata,compat,chat,instagram}.test.js`.
+- Verificato il 25/10 sera: `JOBS=2 bash test/all.sh` a c6a9626 → TUTTO VERDE (77 file).
