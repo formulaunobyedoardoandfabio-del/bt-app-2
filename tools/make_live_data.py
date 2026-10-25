@@ -34,6 +34,15 @@ SOURCE = "TracingInsights (github.com/TracingInsights/2026), dati FastF1 dal liv
 def git(*a): return subprocess.run(['git', '-c', 'core.quotepath=false', '-C', TI, *a], capture_output=True, text=True).stdout
 TREE = set(git('ls-tree', '-r', '--name-only', REF).splitlines())
 def has(path): return path in TREE
+# Cartella dell'evento: il nome di FastF1; se per un GP non ancora corso il nome cambia, una parola chiave sola.
+TOP = {p.split('/')[0] for p in TREE}
+KEYS = {'sg-2008': 'singapore', 'us-2012': 'united states', 'mx-1962': 'mexic', 'br-1940': 'paulo', 'us-2023': 'vegas',
+        'qa-2004': 'qatar', 'ae-2009': 'abu dhabi'}
+def folder(i):
+    ev = EVENTS[i]
+    if ev in TOP: return ev
+    k = KEYS.get(CIRCUIT_IDS[i]); hit = [t for t in TOP if k and k in t.lower()]
+    return hit[0] if len(hit) == 1 else ev
 def load(path):
     if not has(path): return None
     full = os.path.join(TI, path)
@@ -208,7 +217,8 @@ def dump(path, data):
 
 weekend = {'races': [], 'quali': [], 'practice': {}}
 with_quali, with_fp = [], []
-for i, ev in enumerate(EVENTS):
+for i in range(len(EVENTS)):
+    ev = folder(i)
     if not any(p.startswith(ev + '/') for p in TREE): continue
     r = race(i, ev)
     if r: weekend['races'].append(r)
@@ -216,11 +226,11 @@ for i, ev in enumerate(EVENTS):
     if q: weekend['quali'].append(q); with_quali.append(i)
     if any(p.startswith(f'{ev}/Practice ') for p in TREE): with_fp.append(i)
 for i in with_fp[-3:][::-1]:
-    p = practice(EVENTS[i], CIRCUIT_IDS[i])
+    p = practice(folder(i), CIRCUIT_IDS[i])
     if p: weekend['practice'][CIRCUIT_IDS[i]] = p
 ghosts = []
 for i in with_quali[-2:][::-1]:
-    g = ghost(i, EVENTS[i])
+    g = ghost(i, folder(i))
     if not g: continue
     cid = CIRCUIT_IDS[i]
     ghosts.append({'id': g['id'], 'circuitId': cid, 'round': i + 1, 'place': PLACE[cid], 'h': dump(f'ghost-{cid}.json', g)})
