@@ -165,11 +165,37 @@
   /* Tappa 3 (G27): la Pit Board scende quando la tabella dei tempi arriva in cima. */
   .pit-board{ transition:transform .28s cubic-bezier(.3,1.2,.5,1), opacity .2s ease; }
   @media (prefers-reduced-motion:reduce){ .pit-board{ transition:none; } [data-wear-layer]{ transition:none !important; } }
-  /* Tappa 3 (G29): con lo swipe la scheda nuova arriva scivolando dalla parte del dito. Finita la scivolata niente
-     transform (backwards, non both): con transform le finestre aperte dentro la scheda non coprirebbero lo schermo. */
-  .tab-enter-left{ animation:tabinleft .26s cubic-bezier(.2,.8,.3,1) backwards; }
-  .tab-enter-right{ animation:tabinright .26s cubic-bezier(.2,.8,.3,1) backwards; }
-  @keyframes tabinleft{ from{ transform:translateX(26%); opacity:.3; } to{ transform:translateX(0); opacity:1; } }
-  @keyframes tabinright{ from{ transform:translateX(-26%); opacity:.3; } to{ transform:translateX(0); opacity:1; } }
-  @media (prefers-reduced-motion:reduce){ .tab-enter-left, .tab-enter-right{ animation:none; } }
+  /* Tappa 3 (G29) e 25/10: passaggio tra le schede della barra in basso, col tocco o con lo swipe. Le due schede scorrono
+     insieme come un nastro: la vecchia esce tutta dalla parte del movimento (.tab-leave, dal punto dove la lascia il dito:
+     --tab-from), la nuova entra attaccata dall'altra parte; stessa durata e stessa curva, così non si sovrappongono e non
+     resta mai lo schermo nero (la prima versione con le dissolvenze lo lasciava per qualche fotogramma). Finita la
+     scivolata niente transform (backwards, non both): con transform le finestre aperte dentro la scheda non coprirebbero
+     lo schermo. Col dito la pagina segue lo swipe (stile in linea dal codice, src/logic/gesture.js: dragFollow); se lo
+     swipe è corto torna a posto con .tab-back. */
+  .tab-enter-left{ animation:tabinleft .3s cubic-bezier(.2,.8,.2,1) backwards; }
+  .tab-enter-right{ animation:tabinright .3s cubic-bezier(.2,.8,.2,1) backwards; }
+  @keyframes tabinleft{ from{ transform:translateX(var(--tab-in,100%)); } to{ transform:translateX(0); } }
+  @keyframes tabinright{ from{ transform:translateX(var(--tab-in,-100%)); } to{ transform:translateX(0); } }
+  .tab-leave{ position:absolute; inset:0; pointer-events:none; animation:tabout .3s cubic-bezier(.2,.8,.2,1) forwards; }
+  @keyframes tabout{ from{ transform:translateX(var(--tab-from,0px)); opacity:var(--tab-from-op,1); } to{ transform:translateX(var(--tab-to,-100%)); opacity:.55; } }
+  .tab-back{ transition:transform .3s cubic-bezier(.3,1.25,.5,1), opacity .2s ease; }
+  /* Ai lati, durante lo swipe, la scheda accanto: diventa rossa (C.accent, LED_RED) quando lasciando il dito si cambia. */
+  .tab-peek{ transition:opacity .18s ease, transform .22s ease; }
+  .tab-peek.dragging{ transition:none; }
+  .tab-peek [data-label]::after{ content:attr(data-label); }
+  .tab-peek[data-ready="1"] .tab-peek-ico{ background:#FF1801 !important; border-color:#FF1801 !important; }
+  /* La pillola rossa della barra in basso scivola sotto la scheda attiva; durante lo swipe segue il dito. */
+  .nav-pill{ transition:transform .36s cubic-bezier(.3,1.2,.5,1); }
+  .nav-pill.dragging{ transition:none; }
+  .nav-ico{ transition:opacity .18s ease .06s; }
+  /* Sottoschede (pagina RACE): il contenuto nuovo entra dalla parte della sottoscheda toccata. */
+  .sub-enter-left{ animation:subinleft .24s cubic-bezier(.16,.84,.24,1) backwards; }
+  .sub-enter-right{ animation:subinright .24s cubic-bezier(.16,.84,.24,1) backwards; }
+  @keyframes subinleft{ from{ transform:translateX(28px); opacity:.3; } to{ transform:translateX(0); opacity:1; } }
+  @keyframes subinright{ from{ transform:translateX(-28px); opacity:.3; } to{ transform:translateX(0); opacity:1; } }
+  @media (prefers-reduced-motion:reduce){
+    .tab-enter-left, .tab-enter-right, .tab-leave, .sub-enter-left, .sub-enter-right{ animation:none; }
+    .tab-leave, .tab-peek{ display:none; }
+    .tab-back, .nav-pill, .nav-ico{ transition:none; }
+  }
   @media (prefers-reduced-motion:reduce){ .press, .toast, .live-notice{ transition:none; animation:none; } .track-dot{ animation:none !important; } .cta-shine::after{ animation:none; display:none; } .led-seq > span, .pit-zoom, .pit-out, .pit-lines > span > i{ animation:none; } .abort-yellow{ animation:none; opacity:1; } .abort-shake{ animation:none; } }

@@ -3,7 +3,7 @@
 // Uso: node test/unit/gesture.test.js [filtro]
 const assert = require('assert');
 const path = require('path');
-const { classifySwipe, SWIPE } = require(path.join(__dirname, '..', '..', 'src', 'logic', 'gesture.js'));
+const { classifySwipe, SWIPE, dragFollow, dragProgress, leaveTo } = require(path.join(__dirname, '..', '..', 'src', 'logic', 'gesture.js'));
 
 const W = 400;   // larghezza della pagina: un quarto = 100 px
 const c = (dx, dy, dt) => classifySwipe({ dx, dy, dt, width: W });
@@ -34,6 +34,31 @@ const tests = {
     assert.strictEqual(classifySwipe({ dx: 200, dy: 0, dt: 100, width: 0 }), 'right', 'senza larghezza conta la velocità');
     assert.strictEqual(classifySwipe({ dx: NaN, dy: 0, dt: 10, width: W }), null);
     assert.strictEqual(SWIPE.ratio, 0.58); assert.strictEqual(SWIPE.share, 0.25); assert.strictEqual(SWIPE.speed, 0.6);
+  },
+  // 25/10: durante lo swipe la pagina segue il dito (al 60%, fino al 60% della pagina); senza scheda accanto fa
+  // l'elastico (15% del dito, al massimo 8% della pagina).
+  'la pagina segue il dito'() {
+    assert.strictEqual(dragFollow(-100, W, true), -60, '60% del dito');
+    assert.strictEqual(dragFollow(-1000, W, true), -240, 'al massimo il 60% della pagina');
+    assert.strictEqual(dragFollow(100, W, false), 15, 'senza scheda accanto: elastico');
+    assert.strictEqual(dragFollow(1000, W, false), 32, 'elastico al massimo 8%');
+    assert.strictEqual(dragFollow(NaN, W, true), 0);
+    assert.strictEqual(dragFollow(-100, 0, true), -60, 'senza larghezza: telefono da 390 px');
+  },
+  'quanto manca allo swipe: da 0 a 1'() {
+    assert.strictEqual(dragProgress(0, W), 0);
+    assert.strictEqual(dragProgress(-50, W), 0.5, 'metà del quarto di pagina');
+    assert.strictEqual(dragProgress(300, W), 1, 'oltre il quarto: 1');
+    assert.strictEqual(dragProgress(NaN, W), 0);
+  },
+  // Le due schede scorrono insieme come un nastro (la nuova attaccata alla vecchia): la vecchia esce tutta dallo schermo,
+  // da qualunque punto la lasci il dito.
+  'la scheda vecchia esce tutta dallo schermo'() {
+    assert.strictEqual(leaveTo(0, 'left', W), -400, 'dal tocco');
+    assert.strictEqual(leaveTo(-200, 'left', W), -400, 'dal dito');
+    assert.strictEqual(leaveTo(0, 'right', W), 400);
+    assert.strictEqual(leaveTo(150, 'right', W), 400);
+    assert.strictEqual(leaveTo(0, 'left', 0), -390, 'senza larghezza: telefono da 390 px');
   },
 };
 

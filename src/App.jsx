@@ -15,7 +15,7 @@ import BtGhost from "./logic/bt-ghost";
 import BtWk from "./logic/bt-weekend";
 import Colors from "./logic/colors";
 import { filterNews, TYRES, LANES } from "./logic/newsfilter";
-import { classifySwipe, SWIPE } from "./logic/gesture";
+import { classifySwipe, SWIPE, dragFollow, dragProgress, leaveTo } from "./logic/gesture";
 import { HELMET_DEFAULT, HELMET_PATTERNS, HELMET_VISORS, HELMET_FINISHES, cleanHelmet } from "./logic/helmet";
 import { qZones, zoneOf } from "./logic/qzones";
 import { TROPHIES, SECRET_NAME, SECRET_HOW, trophyProgress, medalOf, cleanTrophies } from "./logic/trophies";
@@ -625,24 +625,51 @@ function ownGesture(el, root) {
   return false;
 }
 
-function BottomNav({ active, onChange }) {
+// Barra in basso (25/10): la pillola rossa è una sola e scivola sotto la scheda attiva; durante lo swipe segue il dito
+// (--nav-drag, scritto dal codice dello swipe). Icona bianca e grigia una sopra l'altra: cambia solo l'opacità.
+const NAV_ICO = { position: "absolute", top: 0, left: 0, right: 0, bottom: 0, display: "flex", alignItems: "center", justifyContent: "center" };
+function BottomNav({ active, onChange, pillRef }) {
+  const idx = Math.max(0, TAB_IDS.indexOf(active));
   return (
-    <div style={{ display: "flex", alignItems: "center", padding: "10px 8px 14px", borderTop: `1px solid ${C.border}`, background: C.bg, flexShrink: 0 }}>
+    <div style={{ position: "relative", display: "flex", alignItems: "center", padding: "10px 8px 14px", borderTop: `1px solid ${C.border}`, background: C.bg, flexShrink: 0 }}>
+      <div aria-hidden="true" style={{ position: "absolute", left: 8, right: 8, top: 16, height: 26, pointerEvents: "none" }}>
+        <div ref={pillRef} data-nav-pill="" className="nav-pill" style={{ "--nav-i": idx, width: 100 / TABS.length + "%", height: "100%", display: "flex", justifyContent: "center", transform: "translateX(calc((var(--nav-i) + var(--nav-drag, 0)) * 100%))" }}>
+          <div style={{ width: 34, height: 26, borderRadius: 9, background: C.accent }} />
+        </div>
+      </div>
       {TABS.map(t => {
         const on = t.id === active;
         return (
-          <button key={t.id} className="press" data-nav-tab={t.id} aria-current={on ? "page" : undefined} onClick={() => onChange(t.id)} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 4, padding: "6px 0" }}>
-            {on ? (
-              <div style={{ width: 34, height: 26, borderRadius: 9, background: C.accent, display: "flex", alignItems: "center", justifyContent: "center" }}>
-                <Icon name={t.icon} size={16} color="#fff" sw={2.3} />
-              </div>
-            ) : <Icon name={t.icon} size={18} color={C.dim} />}
+          <button key={t.id} className="press" data-nav-tab={t.id} aria-current={on ? "page" : undefined} onClick={() => onChange(t.id)} style={{ position: "relative", flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 4, padding: "6px 0" }}>
+            <span style={{ position: "relative", display: "block", width: 34, height: 26 }}>
+              <span className="nav-ico" style={{ ...NAV_ICO, opacity: on ? 1 : 0 }}><Icon name={t.icon} size={16} color="#fff" sw={2.3} /></span>
+              <span className="nav-ico" style={{ ...NAV_ICO, opacity: on ? 0 : 1 }}><Icon name={t.icon} size={18} color={C.dim} /></span>
+            </span>
             <span style={{ fontFamily: F_HEAD, fontWeight: 700, fontSize: 9, color: on ? C.text : C.dim, letterSpacing: .4 }}>{t.label}</span>
           </button>
         );
       })}
     </div>
   );
+}
+// Scheda accanto che compare ai lati durante lo swipe (25/10): sta appena fuori dallo schermo ed entra attaccata al
+// bordo della pagina che il dito sposta (mai sopra la pagina); opacità, posizione e data-ready (lasciando il dito si
+// cambia scheda) li scrive il codice dello swipe. Il nome arriva dal CSS (data-label), così non è testo della pagina.
+function TabPeek({ side, tab, peekRef }) {
+  if (!tab) return null;
+  return (
+    <div ref={peekRef} aria-hidden="true" data-tab-peek={side} className="tab-peek" style={{ position: "absolute", top: "50%", [side === "right" ? "left" : "right"]: "calc(100% + 12px)", marginTop: -34, display: "flex", flexDirection: "column", alignItems: "center", gap: 7, opacity: 0, pointerEvents: "none" }}>
+      <span className="tab-peek-ico" style={{ width: 46, height: 46, borderRadius: 15, background: C.card, border: `1px solid ${C.border}`, display: "flex", alignItems: "center", justifyContent: "center" }}><Icon name={tab.icon} size={20} color={C.text} /></span>
+      <span data-label={tab.label} style={{ fontFamily: F_HEAD, fontWeight: 800, fontSize: 10, letterSpacing: .8, color: C.text }} />
+    </div>
+  );
+}
+// Da che parte entra il contenuto di una sottoscheda (25/10): "left" se la nuova è a destra della vecchia, "right" se è
+// a sinistra, null alla prima apertura.
+function useSlideFrom(index) {
+  const ref = useRef({ index, dir: null });
+  if (ref.current.index !== index) ref.current = { index, dir: index > ref.current.index ? "left" : "right" };
+  return ref.current.dir;
 }
 
 function FeatureRow({ icon, title, starIcon }) {
@@ -5482,6 +5509,7 @@ function RaceScreen({ isPremium, onPremium, onSelectDriver, races, standings, li
     : [["mondiale", "Mondiale"], ["classifica", "Ultima gara"], ["radio", "Radio"], ["meteo", "Meteo"], ["gomme", "Gomme"]];
   // Senza sessione (18/10): di serie il mondiale; l'ultima gara nella sua scheda.
   const curTab = tab && tabs.some(t => t[0] === tab) ? tab : tabs[0][0];
+  const subDir = useSlideFrom(tabs.findIndex(t => t[0] === curTab));   // 25/10: da che parte entra il contenuto
   const liveRace = live ? races.find(r => r.id === live.raceId) : null;
   const next = races.find(r => r.status === "IN ARRIVO");
   const realLive = races.find(r => r.status === "LIVE") || null;
@@ -5546,6 +5574,7 @@ function RaceScreen({ isPremium, onPremium, onSelectDriver, races, standings, li
         ))}
       </div>
 
+      <div key={curTab} data-race-pane={curTab} data-sub-enter={subDir || undefined} className={subDir ? "sub-enter-" + subDir : undefined}>
       {curTab === "classifica" && st && <div ref={tblRef}><TimingTable st={st} onTelemetry={onTelemetry} onSelectDriver={onSelectDriver} onLapTimes={onLapTimes} /></div>}
       {curTab === "messaggi" && st && <RaceControlList messages={st.messages} />}
       {curTab === "meteo" && <WeatherPanel race={shown} st={st} live={live} guesses={wxGuess} results={wxResult} onGuess={onGuessWeather} />}
@@ -5629,6 +5658,7 @@ function RaceScreen({ isPremium, onPremium, onSelectDriver, races, standings, li
             : <p data-radio-empty="later" style={{ margin: 0, padding: 16, fontFamily: F_BODY, fontSize: 12.5, color: C.dim, lineHeight: 1.5 }}>{RADIO_EMPTY}</p>}
         </div>
       )}
+      </div>
       </>
     </div>
   );
@@ -9004,20 +9034,89 @@ function App() {
   const goTab = (t) => { setTab(t); setView("tab"); };
   // Swipe tra le schede (G29): solo con la barra in basso (view "tab"). Col dito gli eventi touch, col mouse i pointer
   // events; il gesto non parte dagli elementi con gesti propri (ownGesture) e lo decide classifySwipe (src/logic/gesture.js).
+  // 25/10: durante il gesto la pagina segue il dito (dragFollow) e ai lati compare la scheda accanto (TabPeek); col tocco
+  // sulla barra o con lo swipe la scheda vecchia esce (tabLeave, data-tab-leave) mentre entra la nuova (tabEnter). Lo
+  // stile durante il gesto si scrive direttamente sugli elementi: niente stato di React a ogni movimento del dito.
   const tabSwipe = useRef(null), swipeClick = useRef(0);
   const [tabEnter, setTabEnter] = useState(null);   // "left" | "right": da che parte arriva la scheda nuova
-  const swipeStart = (x, y, t, target, root) => { tabSwipe.current = ownGesture(target, root) ? null : { x, y, t }; };
+  const [tabLeave, setTabLeave] = useState(null);   // la scheda che esce: { id, body, dir, from, op, to }
+  const [tabIn, setTabIn] = useState(null);         // px da cui parte la nuova: attaccata alla vecchia (--tab-in)
+  const tabBody = useRef(null), tabPageRef = useRef(null), swipeBoxRef = useRef(null), navPillRef = useRef(null), peekRef = useRef({});
+  useEffect(() => { if (view !== "tab") { setTabEnter(null); setTabLeave(null); } }, [view]);
+  useEffect(() => {
+    if (!tabLeave) return undefined;
+    const t = setTimeout(() => setTabLeave(l => (l === tabLeave ? null : l)), 420);   // se animationend non arriva
+    return () => clearTimeout(t);
+  }, [tabLeave]);
+  const switchTab = (next, drag) => {
+    const i = TAB_IDS.indexOf(tab), j = TAB_IDS.indexOf(next);
+    if (next === tab || j < 0) return;
+    const dir = j > i ? "left" : "right", still = prefersReduced(), last = tabBody.current;
+    const width = (swipeBoxRef.current && swipeBoxRef.current.clientWidth) || 390, from = drag ? drag.off : 0;
+    setTabEnter(still ? null : dir);
+    setTabIn(still ? null : dir === "left" ? width + from : from - width);
+    setTabLeave(still || !last || last.id !== tab ? null : { id: tab, body: last.body, dir, from, op: drag ? drag.op : 1, to: leaveTo(from, dir, width) });
+    goTab(next);
+  };
+  const peeks = () => ["left", "right"].map(side => peekRef.current[side]).filter(Boolean);
+  const dragPaint = (s, dx) => {
+    const page = tabPageRef.current;
+    if (!page) return;
+    const i = TAB_IDS.indexOf(tab), j = dx < 0 ? i + 1 : i - 1, can = j >= 0 && j < TAB_IDS.length;
+    const width = page.clientWidth || 390, off = dragFollow(dx, width, can), pr = can ? dragProgress(dx, width) : 0, op = 1 - pr * 0.25;
+    s.off = off; s.op = op;
+    if (page.btBack) { clearTimeout(page.btBack); page.btBack = 0; }
+    page.classList.remove("tab-back");
+    page.style.transform = `translateX(${off}px)`; page.style.opacity = String(op);
+    peeks().forEach(k => {
+      const side = k.getAttribute("data-tab-peek"), show = can && (side === "right") === (dx < 0);
+      k.classList.add("dragging");
+      k.style.opacity = show ? String(Math.min(1, 0.3 + pr)) : "0";
+      k.style.transform = show ? `translateX(${off}px)` : "";
+      k.setAttribute("data-ready", show && pr >= 1 ? "1" : "");
+    });
+    const pill = navPillRef.current;
+    if (pill) { pill.classList.add("dragging"); pill.style.setProperty("--nav-drag", String(can ? (dx < 0 ? pr : -pr) * 0.5 : 0)); }
+  };
+  // Fine del gesto: se non si cambia scheda la pagina torna a posto (back); la scheda accanto e la pillola sempre.
+  const dragReset = back => {
+    const page = tabPageRef.current;
+    if (page && back) {
+      page.classList.add("tab-back");
+      page.style.transform = "translateX(0px)"; page.style.opacity = "1";
+      clearTimeout(page.btBack);
+      page.btBack = setTimeout(() => { page.btBack = 0; page.classList.remove("tab-back"); page.style.transform = ""; page.style.opacity = ""; }, 320);
+    }
+    peeks().forEach(k => { k.classList.remove("dragging"); k.style.opacity = "0"; k.style.transform = ""; k.setAttribute("data-ready", ""); });
+    const pill = navPillRef.current;
+    if (pill) { pill.classList.remove("dragging"); pill.style.removeProperty("--nav-drag"); }
+  };
+  const swipeStart = (x, y, t, target, root) => { tabSwipe.current = ownGesture(target, root) ? null : { x, y, t, still: prefersReduced(), on: false, off: 0, op: 1 }; };
+  const swipeMove = (x, y) => {
+    const s = tabSwipe.current;
+    if (!s || s.still || s.dead) return;
+    const dx = x - s.x, dy = y - s.y, ax = Math.abs(dx), ay = Math.abs(dy);
+    if (!s.on) {
+      if (ay > 12 && ay >= ax * SWIPE.ratio) { s.dead = true; return; }   // scorre in verticale: la pagina non segue
+      if (ax < 10 || ay >= ax * SWIPE.ratio) return;
+      s.on = true;
+    }
+    s.dx = dx;
+    if (!s.raf) s.raf = requestAnimationFrame(() => { s.raf = 0; if (tabSwipe.current === s) dragPaint(s, s.dx); });
+  };
   const swipeEnd = (x, y, t, width, mouse) => {
     const s = tabSwipe.current; tabSwipe.current = null;
     if (!s) return;
+    if (s.raf) { cancelAnimationFrame(s.raf); s.raf = 0; }
     const dir = classifySwipe({ dx: x - s.x, dy: y - s.y, dt: t - s.t, width });
-    if (!dir) return;
-    if (mouse) swipeClick.current = performance.now();   // il click che segue il trascinamento col mouse non apre niente
-    const i = TAB_IDS.indexOf(tab), j = dir === "left" ? i + 1 : i - 1;
-    if (j < 0 || j >= TAB_IDS.length) return;
+    const i = TAB_IDS.indexOf(tab), j = dir === "left" ? i + 1 : i - 1, go = !!dir && j >= 0 && j < TAB_IDS.length;
+    if (s.on) dragReset(!go);
+    if (mouse && (dir || s.on)) swipeClick.current = performance.now();   // il click che segue il trascinamento col mouse non apre niente
+    if (!go) return;
     fx.play("tick"); fx.buzz("select");
-    setTabEnter(dir); goTab(TAB_IDS[j]);
+    switchTab(TAB_IDS[j], s.on ? { off: s.off, op: s.op } : null);
   };
+  const swipeCancel = () => { const s = tabSwipe.current; tabSwipe.current = null; if (s && s.raf) cancelAnimationFrame(s.raf); if (s && s.on) dragReset(true); };
   const unreadCount = notifs.filter(n => n.unread).length;
 
   const castVote = (pollId, optionId) => {
@@ -9399,21 +9498,37 @@ function App() {
 
   const showTopHeader = view === "tab";
   const showBottomNav = view === "tab";
+  // Schede montate (25/10): quella attiva e, durante il passaggio, quella che esce (inert: non si tocca). Sempre
+  // nell'ordine della barra, così React non sposta i nodi (lo scroll della scheda resta dov'è).
+  const tabPages = () => {
+    tabBody.current = { id: tab, body };
+    const leave = tabLeave && tabLeave.id !== tab ? tabLeave : null;
+    return TAB_IDS.filter(id => id === tab || (leave && id === leave.id)).map(id => (id === tab
+      ? <div key={"tab-" + id} ref={tabPageRef} data-tab-page={id} data-tab-enter={tabEnter || undefined} className={tabEnter ? "tab-enter-" + tabEnter : undefined} style={{ height: "100%", "--tab-in": tabEnter && tabIn != null ? tabIn + "px" : undefined }}>{body}</div>
+      : <div key={"tab-" + id} data-tab-page={id} data-tab-leave={leave.dir} className="tab-leave" inert="true" aria-hidden="true"
+          style={{ "--tab-from": leave.from + "px", "--tab-from-op": leave.op, "--tab-to": leave.to + "px" }}
+          onAnimationEnd={e => { if (e.target === e.currentTarget) setTabLeave(l => (l === leave ? null : l)); }}>{leave.body}</div>));
+  };
 
   return shell(
       <div data-bg={pageBg || undefined} style={{ height: "100%", display: "flex", flexDirection: "column", position: "relative", background: pageBg && PAGE_BG[pageBg] ? PAGE_BG[pageBg] : undefined, transition: "background .3s" }}>
         {showTopHeader && <TopHeader trialDays={trialActive ? trialDaysLeft(trial) : 0} isPremium={isPremium} unread={unreadCount} onPremium={() => setPremiumOpen(true)} onBell={() => setView("notifiche")} onProfile={() => setView("profilo")} helmet={helmet} onTrack={isDemoLive(live) || !!sessionNow(realLiveRace, nowMs())} onLogoEgg={() => setEggFound(true)} />}
         {showTopHeader && offline && <div role="status" data-offline="" style={{ margin: "-6px 16px 10px", padding: "8px 12px", borderRadius: 10, background: "rgba(231,179,76,.12)", border: "1px solid rgba(231,179,76,.35)", fontFamily: F_BODY, fontSize: 12, color: C.text, lineHeight: 1.4, flexShrink: 0 }}>{OFFLINE_LINE}</div>}
-        <div data-tab-swipe={showBottomNav ? "" : undefined} style={{ flex: 1, minHeight: 0, overflow: "hidden" }}
-          onTouchStart={showBottomNav ? e => { const k = e.touches[0]; if (e.touches.length === 1) swipeStart(k.clientX, k.clientY, e.timeStamp, e.target, e.currentTarget); else tabSwipe.current = null; } : undefined}
+        <div ref={swipeBoxRef} data-tab-swipe={showBottomNav ? "" : undefined} style={{ flex: 1, minHeight: 0, overflow: "hidden", position: "relative" }}
+          onTouchStart={showBottomNav ? e => { const k = e.touches[0]; if (e.touches.length === 1) swipeStart(k.clientX, k.clientY, e.timeStamp, e.target, e.currentTarget); else swipeCancel(); } : undefined}
+          onTouchMove={showBottomNav ? e => { const k = e.touches[0]; if (k && e.touches.length === 1) swipeMove(k.clientX, k.clientY); } : undefined}
           onTouchEnd={showBottomNav ? e => { const k = e.changedTouches[0]; if (k) swipeEnd(k.clientX, k.clientY, e.timeStamp, e.currentTarget.clientWidth, false); } : undefined}
-          onTouchCancel={() => { tabSwipe.current = null; }}
+          onTouchCancel={swipeCancel}
           onPointerDown={showBottomNav ? e => { if (e.pointerType === "mouse" && e.button === 0) swipeStart(e.clientX, e.clientY, e.timeStamp, e.target, e.currentTarget); } : undefined}
+          onPointerMove={showBottomNav ? e => { if (e.pointerType === "mouse" && (e.buttons & 1)) swipeMove(e.clientX, e.clientY); } : undefined}
           onPointerUp={showBottomNav ? e => { if (e.pointerType === "mouse") swipeEnd(e.clientX, e.clientY, e.timeStamp, e.currentTarget.clientWidth, true); } : undefined}
           onClickCapture={e => { if (performance.now() - swipeClick.current < 400) { e.stopPropagation(); e.preventDefault(); } }}>
-          <div key={showBottomNav ? "tab-" + tab : "view"} data-tab-enter={showBottomNav && tabEnter ? tabEnter : undefined} className={showBottomNav && tabEnter ? "tab-enter-" + tabEnter : undefined} style={{ height: "100%" }}>{body}</div>
+          {showBottomNav ? tabPages() : <div key="view" style={{ height: "100%" }}>{body}</div>}
+          {/* Una per scheda accanto (key): cambiata scheda non resta il nome di quella di prima mentre svanisce. */}
+          {showBottomNav && <TabPeek key={"peek-left-" + tab} side="left" tab={TABS[TAB_IDS.indexOf(tab) - 1]} peekRef={el => { peekRef.current.left = el; }} />}
+          {showBottomNav && <TabPeek key={"peek-right-" + tab} side="right" tab={TABS[TAB_IDS.indexOf(tab) + 1]} peekRef={el => { peekRef.current.right = el; }} />}
         </div>
-        {showBottomNav && <BottomNav active={tab} onChange={t => { setTabEnter(null); goTab(t); }} />}
+        {showBottomNav && <BottomNav active={tab} pillRef={navPillRef} onChange={t => switchTab(t)} />}
         {showBottomNav && adH > 0 && <div data-ad-space="" aria-hidden="true" style={{ height: adH + AD_GAP, flexShrink: 0 }} />}
         {premiumOpen && <PremiumModal onClose={closePremium} isPremium={isPremium} plan={plan} setPlan={setPlan} onSubscribe={doSubscribe} subscribing={subscribing} subscribed={subscribed} trialUsed={!!trial} onTrial={doTrial} trial={trial} />}
         {selectedDriver && <DriverDetailModal driver={selectedDriver} lastRace={lastRace} races={races} onClose={() => setSelectedDriver(null)} />}
