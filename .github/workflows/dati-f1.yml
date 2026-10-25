@@ -10,6 +10,7 @@ on:
   schedule:
     - cron: '23 * * * 5,6,0'
     - cron: '23 */4 * * 1,4'
+    - cron: '41 12 * * 1'      # controllo del lunedì: se mancano dati di un GP già corso, GitHub manda un'email
   workflow_dispatch:
 
 permissions:
@@ -20,7 +21,18 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  controllo:
+    if: github.event.schedule == '41 12 * * 1'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: tappa-3
+      - name: Ci sono i dati di tutti i GP già corsi? (tools/check_live_data.py)
+        run: python3 tools/check_live_data.py
   dati:
+    if: github.event.schedule != '41 12 * * 1'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
