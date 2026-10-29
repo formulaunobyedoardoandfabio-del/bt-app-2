@@ -68,7 +68,7 @@ t('trophies: dal documento solo i campi validi; ensureTrophyDoc lo scrive solo s
   assert.deepStrictEqual((await A.loadShared(NOW)).values.trophies, {}, 'senza documento: nessuna modifica');
   assert.strictEqual(await A.ensureTrophyDoc(), true, 'scritto');
   const doc = firebase.__fake.doc('shared/bt-trophies');
-  assert.deepStrictEqual(doc.pitcrew, { name: 'Pit crew', how: 'Pit Stop Challenge in 2,30 secondi o meno', goal: 2.3, attivo: true });
+  assert.deepStrictEqual(doc.pitcrew, { name: 'Pit crew', how: 'Pit Stop Challenge in 2,35 secondi o meno', goal: 2.35, attivo: true });
   assert.strictEqual(Object.keys(doc).length, 15);
   // L'admin lo cambia nella console di Firebase: l'app lo legge e non lo riscrive.
   const f2 = seed({ 'shared/bt-trophies': { pitcrew: { goal: 2.1 }, sgasata: { attivo: false }, radar: { goal: 'tanti' } } }).firebase;
@@ -78,6 +78,12 @@ t('trophies: dal documento solo i campi validi; ensureTrophyDoc lo scrive solo s
   const v = (await B.loadShared(NOW)).values.trophies;
   assert.strictEqual(v.pitcrew.goal, 2.1); assert.strictEqual(v.sgasata.off, true); assert.strictEqual(v.radar.goal, undefined);
   assert.deepStrictEqual(D.sharedDefaults(NOW).trophies, {});
+  // 29/10: documento rimasto coi 2,30 di serie → 2,35; cambiato a mano (2,1) → resta.
+  const f3 = seed({ 'shared/bt-trophies': { pitcrew: { name: 'Pit crew', how: 'Pit Stop Challenge in 2,30 secondi o meno', goal: 2.3, attivo: true }, sgasata: { attivo: false } } }).firebase;
+  const E = D.createAppData();
+  assert.strictEqual(await E.ensureTrophyDoc(), true);
+  assert.deepStrictEqual(f3.__fake.doc('shared/bt-trophies').pitcrew, { name: 'Pit crew', how: 'Pit Stop Challenge in 2,35 secondi o meno', goal: 2.35, attivo: true });
+  assert.deepStrictEqual(f3.__fake.doc('shared/bt-trophies').sgasata, { attivo: false });
 });
 
 t('commonsPhotos: di serie vuote; dal documento solo i nomi dei file; si salvano in bt-commons-photos', async () => {

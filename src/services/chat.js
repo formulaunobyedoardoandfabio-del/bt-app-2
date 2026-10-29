@@ -77,6 +77,24 @@ function createChat({ sg = FB.sg, sgStrict = FB.sgStrict, ss = FB.ss, sharedAppe
     } catch (e) { throw mkErr("offline"); }
   }
 
+  // 29/10: entrando in una stanza il proprio profilo (tifo, casco, trofei) ci va come voce nascosta, così chi tocca il
+  // nome lo vede anche se non si è scritto niente dopo l'aggiornamento. Solo quando cambia (o dopo una settimana); la
+  // voce vecchia va via. true = mandato.
+  async function announce(roomId, me) {
+    const key = keyOf(roomId), e = C.profileEntryToStore(me, now());
+    if (!e) return false;
+    const j = JSON.stringify(e.p), sent = local.get(PROFILE_KEY(key));
+    if (sent && sent.j === j && now() - (sent.t || 0) < PROFILE_REFRESH_MS) return false;
+    const who = { aid: me.aid || "", name: me.name };
+    try {
+      if ((await read(BANNED_KEY)).some(b => sameWho(b, who))) return false;
+      await sharedRemoveWhere(key, x => !!x && x.pe === 1 && sameWho(who, { aid: x.aid || "", name: x.user }));
+      await sharedAppend(key, e);
+    } catch (err) { return false; }
+    local.set(PROFILE_KEY(key), { j, t: e.t });
+    return true;
+  }
+
   // ── Moderazione ─────────────────────────────────────────────────────
   async function report(roomId, msg, me) {
     const reps = await read(REPORTS_KEY);
@@ -141,7 +159,7 @@ function createChat({ sg = FB.sg, sgStrict = FB.sgStrict, ss = FB.ss, sharedAppe
     await sharedRemoveWhere(REPORTS_KEY, r => !!r && (r.byAid === aid || r.aid === aid || (!r.aid && !!user.name && r.author === user.name)));
   }
 
-  return { loadRoom, send, react, report, loadReports, loadBanned, deleteMessage, suspend, unsuspend, ignoreReport, block, unblock, blocked, unread, markSeen, migrateLegacy, cleanupFor };
+  return { loadRoom, send, announce, react, report, loadReports, loadBanned, deleteMessage, suspend, unsuspend, ignoreReport, block, unblock, blocked, unread, markSeen, migrateLegacy, cleanupFor };
 }
 
 module.exports = { CHAT_MSG, ROOM_IDS, createChat };

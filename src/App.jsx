@@ -1416,12 +1416,24 @@ function PwMeter({ level }) {
   );
 }
 
+// Mostra/nascondi la password come nel paddock (29/10): la visiera del casco si alza e la password si legge con le cifre
+// del tabellone dei tempi.
+const PW_SHOWN = { fontFamily: F_HEAD, fontWeight: 800, letterSpacing: 2, color: C.gold, fontVariantNumeric: "tabular-nums" };
+function PwEye({ on, onToggle }) {
+  return (
+    <button type="button" className="press" data-pw-eye={on ? "open" : "closed"} aria-pressed={on ? "true" : "false"} aria-label={on ? "Nascondi la password" : "Mostra la password"}
+      onClick={() => { fx.play("tick"); fx.buzz("select"); onToggle(!on); }} style={{ display: "flex", alignItems: "center", justifyContent: "center", width: 36, height: 30, padding: 0, flexShrink: 0 }}>
+      <HelmetArt spec={{ base: on ? C.accent : "#3A3A42", c1: "#FFFFFF", c2: "#111111", pattern: "stripes", visor: "iridium-gold", finish: "gloss" }} size={30} visorOpen={on} />
+    </button>
+  );
+}
 function LoginScreen({ auth, onDone, onGuest, onBack, reason, onHold }) {
   const [mode, setMode] = useState("login");
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [pw, setPw] = useState("");
   const [pw2, setPw2] = useState("");
+  const [showPw, setShowPw] = useState(false);   // 29/10: password visibile (visiera alzata)
   const [err, setErr] = useState("");
   const [info, setInfo] = useState("");
   const [busy, setBusy] = useState(false);
@@ -1510,14 +1522,14 @@ function LoginScreen({ auth, onDone, onGuest, onBack, reason, onHold }) {
         </div>
         <div style={{ marginBottom: 14 }}>
           <label style={labelStyle} htmlFor="authPw">Password</label>
-          <div style={fieldStyle}><Icon name="lock" size={15} color={C.dim} /><input id="authPw" type="password" style={inputStyle} placeholder="••••••••" value={pw} onChange={e => typePw(e.target.value)} /></div>
+          <div style={fieldStyle}><Icon name="lock" size={15} color={C.dim} /><input id="authPw" type={showPw ? "text" : "password"} style={showPw ? { ...inputStyle, ...PW_SHOWN } : inputStyle} placeholder="••••••••" value={pw} onChange={e => typePw(e.target.value)} /><PwEye on={showPw} onToggle={setShowPw} /></div>
           {!isLogin && pw && <PwMeter level={pwStrength(pw)} />}
         </div>
         {!isLogin && (
           <div style={{ marginBottom: 14 }}>
             <label style={labelStyle} htmlFor="regPw2">Conferma password</label>
             {/* Fuori pista: il bordo diventa un cordolo bianco e rosso (stesso campo, così chi scrive non perde il punto). */}
-            <div data-kerb={offTrack ? "" : undefined} style={offTrack ? { ...fieldStyle, padding: "12px 13px", border: "2px solid transparent", background: `linear-gradient(${C.card}, ${C.card}) padding-box, repeating-linear-gradient(135deg, #FFFFFF 0 9px, ${C.red} 9px 18px) border-box` } : fieldStyle}><Icon name="lock" size={15} color={C.dim} /><input id="regPw2" type="password" style={inputStyle} placeholder="••••••••" value={pw2} onChange={e => setPw2(e.target.value)} aria-invalid={offTrack ? "true" : undefined} aria-describedby={offTrack ? "regPw2Err" : undefined} /></div>
+            <div data-kerb={offTrack ? "" : undefined} style={offTrack ? { ...fieldStyle, padding: "12px 13px", border: "2px solid transparent", background: `linear-gradient(${C.card}, ${C.card}) padding-box, repeating-linear-gradient(135deg, #FFFFFF 0 9px, ${C.red} 9px 18px) border-box` } : fieldStyle}><Icon name="lock" size={15} color={C.dim} /><input id="regPw2" type={showPw ? "text" : "password"} style={showPw ? { ...inputStyle, ...PW_SHOWN } : inputStyle} placeholder="••••••••" value={pw2} onChange={e => setPw2(e.target.value)} aria-invalid={offTrack ? "true" : undefined} aria-describedby={offTrack ? "regPw2Err" : undefined} /></div>
             {offTrack && <p id="regPw2Err" role="alert" style={{ margin: "7px 2px 0", fontFamily: F_BODY, fontSize: 12, fontWeight: 600, color: "#ff6b6b" }}><b style={{ fontFamily: F_HEAD, fontWeight: 900, fontStyle: "italic" }}>Track Limits Exceeded:</b> le password non coincidono</p>}
           </div>
         )}
@@ -5502,7 +5514,19 @@ function Of1Status({ of1, standings, onRefresh }) {
   );
 }
 
-function RaceScreen({ isPremium, onPremium, onSelectDriver, races, standings, live, liveSt, onExpandMap, onTelemetry, onOpenCircuit, wxGuess, wxResult, onGuessWeather, onLapTimes, onSecondScreen, lastRace, dotdVote, onDotdVote, ratings = {}, onRate, onOpenChats, onOpenGhost, of1 = null, onOf1Refresh, replay = null, favDriver = null }) {
+// Chiama onEnd quando si arriva in fondo (29/10: la pubblicità in fondo alla classifica).
+function EndSpy({ onEnd }) {
+  const ref = useRef(null), cb = useRef(onEnd);
+  cb.current = onEnd;
+  useEffect(() => {
+    if (!ref.current || typeof IntersectionObserver === "undefined") return undefined;
+    const io = new IntersectionObserver(es => { if (es.some(e => e.isIntersecting)) cb.current(); });
+    io.observe(ref.current);
+    return () => io.disconnect();
+  }, []);
+  return <div ref={ref} data-end-spy="" aria-hidden="true" style={{ height: 1 }} />;
+}
+function RaceScreen({ onStandingsEnd = null, isPremium, onPremium, onSelectDriver, races, standings, live, liveSt, onExpandMap, onTelemetry, onOpenCircuit, wxGuess, wxResult, onGuessWeather, onLapTimes, onSecondScreen, lastRace, dotdVote, onDotdVote, ratings = {}, onRate, onOpenChats, onOpenGhost, of1 = null, onOf1Refresh, replay = null, favDriver = null }) {
   const [tab, setTab] = useState(null);
   // Pit Board (G27): si vede quando la tabella dei tempi arriva in cima alla pagina (stato cambiato solo al passaggio).
   const scRef = useRef(null), tblRef = useRef(null);
@@ -5651,6 +5675,7 @@ function RaceScreen({ isPremium, onPremium, onSelectDriver, races, standings, li
             })}
           </div>
           <p style={{ margin: "8px 4px 0", fontFamily: F_BODY, fontSize: 10.5, color: C.dim }}>{standings.note}</p>
+          {onStandingsEnd && <EndSpy onEnd={onStandingsEnd} />}
         </div>
       )}
 
@@ -7095,6 +7120,7 @@ function ProfiloScreen({ ig, onOpenIg, trial = null, trialUsed = false, onBack, 
   };
   // Eliminazione: si chiede la password, così Firebase la riconosce prima di cancellare qualsiasi cosa.
   const [delPw, setDelPw] = useState("");
+  const [showDelPw, setShowDelPw] = useState(false);
   const [delErr, setDelErr] = useState("");
   const [delBusy, setDelBusy] = useState(false);
   const doDelete = () => {
@@ -7257,7 +7283,7 @@ function ProfiloScreen({ ig, onOpenIg, trial = null, trialUsed = false, onBack, 
             <h2 style={{ fontFamily: F_HEAD, fontWeight: 900, fontStyle: "italic", fontSize: 19, color: C.text, margin: "12px 0 8px" }}>Eliminare l'account?</h2>
             <p style={{ fontFamily: F_BODY, fontSize: 13, color: C.muted, lineHeight: 1.6, margin: "0 0 14px" }}>Cancelleremo il tuo profilo, i messaggi che hai scritto in chat, le segnalazioni e i feedback che hai inviato. L'operazione non si può annullare.</p>
             <label htmlFor="delPw" style={{ display: "block", textAlign: "left", fontFamily: F_BODY, fontWeight: 600, fontSize: 12, color: C.muted, marginBottom: 6 }}>Per confermare scrivi la tua password</label>
-            <input id="delPw" type="password" value={delPw} onChange={e => { setDelPw(e.target.value); setDelErr(""); }} placeholder="••••••••" style={{ width: "100%", padding: "11px 13px", borderRadius: 12, background: C.bg, border: `1px solid ${C.border}`, fontFamily: F_BODY, fontSize: 14, color: C.text, marginBottom: 10 }} />
+            <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 10 }}><input id="delPw" type={showDelPw ? "text" : "password"} value={delPw} onChange={e => { setDelPw(e.target.value); setDelErr(""); }} placeholder="••••••••" style={{ flex: 1, minWidth: 0, padding: "11px 13px", borderRadius: 12, background: C.bg, border: `1px solid ${C.border}`, fontFamily: F_BODY, fontSize: 14, color: C.text, ...(showDelPw ? PW_SHOWN : {}) }} /><PwEye on={showDelPw} onToggle={setShowDelPw} /></div>
             {delErr && <p role="alert" style={{ margin: "0 0 10px", fontFamily: F_BODY, fontSize: 12, color: "#ff6b6b", lineHeight: 1.45 }}>{delErr}</p>}
             <button className="press" onClick={doDelete} disabled={delBusy} style={{ display: "block", width: "100%", padding: "14px 0", borderRadius: 14, background: delBusy ? "#555" : C.accent, fontFamily: F_HEAD, fontWeight: 900, fontStyle: "italic", fontSize: 13.5, color: "#fff", marginBottom: 6 }}>ELIMINA DEFINITIVAMENTE</button>
             <button className="press" onClick={() => { setConfirmDel(false); setDelPw(""); setDelErr(""); }} style={{ display: "block", width: "100%", padding: "12px 0", fontFamily: F_BODY, fontWeight: 600, fontSize: 13, color: C.muted }}>Annulla</button>
@@ -8206,7 +8232,7 @@ function AdminScreen({ photos, setPhotos, silly = {}, onSilly, highlights = [], 
   );
 }
 
-function PremiumModal({ onClose, isPremium, plan, setPlan, onSubscribe, subscribing, subscribed, trialUsed, onTrial, trial }) {
+function PremiumModal({ onClose, isPremium, plan, setPlan, onSubscribe, subscribing, subscribed, trialUsed, onTrial, trial, onAdPro = null, adBusy = false }) {
   const offer = premiumOffer({ trialUsed, isPremium });
   const price = SEASON_PRICE + " € a stagione";
   const heroGradient = `linear-gradient(135deg, ${shade(C.accent, .11)}, ${alpha(C.accentInk, .27)}, ${shade(C.accent, .11)})`;
@@ -8277,6 +8303,14 @@ function PremiumModal({ onClose, isPremium, plan, setPlan, onSubscribe, subscrib
                 <p style={{ textAlign: "center", fontFamily: F_BODY, fontSize: 11.5, color: C.muted, margin: "10px 0 0" }}>Si rinnova da solo a ogni stagione finché non disdici. Disdici quando vuoi.</p>
                 {trialUsed && <p style={{ textAlign: "center", fontFamily: F_BODY, fontSize: 11.5, color: C.muted, margin: "10px 0 0" }}>Hai già usato la prova gratuita di un GP.</p>}
               </>)}
+              {onAdPro && (
+                <div data-ad-pro="" style={{ marginTop: 14, padding: "12px 12px 10px", borderRadius: 14, background: "rgba(255,255,255,.04)", border: `1px solid ${C.border}` }}>
+                  <button className="press" disabled={adBusy} onClick={onAdPro} style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8, width: "100%", padding: "13px 0", borderRadius: 12, border: `1.5px solid ${C.gold}`, fontFamily: F_HEAD, fontWeight: 900, fontStyle: "italic", fontSize: 13.5, color: C.gold }}>
+                    {adBusy ? <ShiftLight label="Carico la pubblicità" /> : <><Icon name="play" size={14} color={C.gold} />GUARDA UNA PUBBLICITÀ: PRO GRATIS</>}
+                  </button>
+                  <p style={{ textAlign: "center", fontFamily: F_BODY, fontSize: 11, color: C.muted, margin: "8px 0 0", lineHeight: 1.45 }}>Il Pro resta attivo finché non chiudi l'app o spegni lo schermo.</p>
+                </div>
+              )}
               <p style={{ textAlign: "center", fontFamily: F_BODY, fontSize: 10.5, color: C.dim, lineHeight: 1.7, margin: "14px 0 0" }}>
                 Rinnovo automatico a ogni stagione al prezzo di quella stagione ({SEASON_PRICE} €, poi 1 € in meno ogni anno, fino a 1 €) finché non disdici. Si disdice quando vuoi da Google Play → Abbonamenti.<br /><span style={{ color: C.accentInk }}>Anteprima demo: nessun pagamento reale</span>
               </p>
@@ -8812,7 +8846,16 @@ function App() {
   // Premium: si salva nell'account (users/<email>.app2.premium) e torna riaprendo l'app; la prova finisce da sola.
   const [premium, setPremium] = useState(USER_INIT.premium);
   const trial = premium.trial;   // prova gratuita: { start, end } (una sola volta)
-  const isPremium = !!(account && account.isPremium) || premium.sub || (!!trial && nowMs() < trial.end);
+  // 29/10: Pro con una pubblicità con premio, solo in memoria: finisce chiudendo l'app o spegnendo lo schermo (pagina
+  // nascosta). Mentre l'annuncio è sullo schermo (e un attimo dopo) la pagina nascosta non conta.
+  const [adPro, setAdPro] = useState(false), [adBusy, setAdBusy] = useState(false);
+  const adShowing = useRef(0);
+  useEffect(() => {
+    const h = () => { if (document.hidden && performance.now() > adShowing.current) setAdPro(false); };
+    document.addEventListener("visibilitychange", h);
+    return () => document.removeEventListener("visibilitychange", h);
+  }, []);
+  const isPremium = !!(account && account.isPremium) || premium.sub || (!!trial && nowMs() < trial.end) || adPro;
   const [plan, setPlan] = useState("annual");
   const [subscribing, setSubscribing] = useState(false);
   const [subscribed, setSubscribed] = useState(false);
@@ -9573,6 +9616,12 @@ function App() {
     h: helmet ? { ...helmet, base: helmet.base || C.accent } : undefined,
     w: trophyList.filter(t => trophies[t.id]).map(t => t.id),
   });
+  // 29/10: entrando in una stanza ci va il proprio profilo (voce nascosta, solo quando cambia): così chi tocca il nome
+  // vede tifo, casco e trofei anche se non si è ancora scritto niente.
+  useEffect(() => {
+    if (view !== "chatThread" || !chatId || !account || account.loaded === false) return;
+    Chat.announce(chatId, { name: account.name, aid: account.aid, p: myProf() }).then(sent => { if (sent) loadRoomMsgs(chatId); }, () => {});
+  }, [view, chatId, account && account.aid, account && account.loaded, favTeam, favDriver, JSON.stringify(helmet || null), Object.keys(trophies || {}).length]);
   const postChat = (id, text, link = null) => {
     const u = Account.current(), who = u ? { name: u.name, aid: u.aid } : chatMe();
     const me = { ...(myMedal ? { ...who, medal: myMedal } : who), p: myProf() };   // la medaglia dei trofei viaggia con il messaggio (G31)
@@ -9676,6 +9725,15 @@ function App() {
     setTimeout(() => { const now = nowMs(); setPremium(p => ({ ...p, trial: { start: now, end: trialEndFor(races, now) } })); setSubscribing(false); setSubscribed("trial"); }, 900);
   };
   const closePremium = () => { setPremiumOpen(false); setTimeout(() => setSubscribed(false), 300); };
+  const watchAdPro = () => {
+    if (adBusy) return;
+    setAdBusy(true); adShowing.current = Infinity;
+    Ads.showRewarded().then(r => {
+      adShowing.current = performance.now() + 2500; setAdBusy(false);
+      if (r === "ok") { setAdPro(true); closePremium(); fx.play("done"); fx.buzz("success"); showToast("Pro sbloccato finché non chiudi l'app"); }
+      else showToast(r === "skipped" ? "Guarda la pubblicità fino in fondo per sbloccare il Pro" : "Nessuna pubblicità disponibile ora: riprova tra poco");
+    });
+  };
 
   // ── Tasto indietro di Android e barra di stato (nell'APK) ──────────────
   // Pagine interne: il tasto indietro fa come la freccia in alto a sinistra.
@@ -9888,7 +9946,7 @@ function App() {
     if (tab === "home") body = <HomeScreen ig={ig} highlights={highlights} onOpenIg={() => { setIgFrom("tab"); setView("instagram"); }} articles={articles} tagFilter={tagFilter} onTag={filterByTag} onClearTag={() => setTagFilter(null)} onOpenArticle={openArticle} isPremium={isPremium} onPremium={() => setPremiumOpen(true)} onToast={showToast} onLiveTrack={() => setLiveTrackOpen(true)} onGoFanta={() => goTab("fanta")}  saved={saved} onToggleSave={toggleSave} savedOnly={savedOnly} setSavedOnly={setSavedOnly} onOpenCircuit={openCircuit} homePoll={homePoll} homeVote={votes.home || null} onVote={castVote}
       hidden={hidden} onHide={hideArticle} onUnhideAll={() => { if (!userDataWait()) setHidden([]); }} onSwipeSave={saveFromSwipe}
       onRefresh={() => refreshShared(["news", "highlights", "ig", "homePoll"]).catch(() => {})} />;
-    else if (tab === "race") body = <RaceScreen favDriver={favDriver} dotdVote={live ? votesNow.dotd[live.raceId] : null} onDotdVote={(k, id) => live && voteDotd(live.raceId, k, id)} ratings={votesNow.ratings} onRate={rateDriver} onOpenChats={() => setView("chats")} onOpenGhost={() => setView("ghost")} races={races} standings={shownStandings} isPremium={isPremium} onPremium={() => setPremiumOpen(true)} onSelectDriver={setSelectedDriver} live={live} liveSt={liveSt} onExpandMap={() => setLiveTrackOpen(true)} onTelemetry={(carId, lapNo, sector) => setTelemetry({ carId, lapNo, sector })} onOpenCircuit={openCircuit} wxGuess={wxGuess} wxResult={wxResult} onGuessWeather={guessWeather} onLapTimes={setLapList} onSecondScreen={() => setSsOpen(true)} lastRace={lastRace} of1={of1} onOf1Refresh={() => of1TickRef.current && of1TickRef.current()} replay={replayCtl} />;
+    else if (tab === "race") body = <RaceScreen onStandingsEnd={isPremium ? null : Ads.standingsEnd} favDriver={favDriver} dotdVote={live ? votesNow.dotd[live.raceId] : null} onDotdVote={(k, id) => live && voteDotd(live.raceId, k, id)} ratings={votesNow.ratings} onRate={rateDriver} onOpenChats={() => setView("chats")} onOpenGhost={() => setView("ghost")} races={races} standings={shownStandings} isPremium={isPremium} onPremium={() => setPremiumOpen(true)} onSelectDriver={setSelectedDriver} live={live} liveSt={liveSt} onExpandMap={() => setLiveTrackOpen(true)} onTelemetry={(carId, lapNo, sector) => setTelemetry({ carId, lapNo, sector })} onOpenCircuit={openCircuit} wxGuess={wxGuess} wxResult={wxResult} onGuessWeather={guessWeather} onLapTimes={setLapList} onSecondScreen={() => setSsOpen(true)} lastRace={lastRace} of1={of1} onOf1Refresh={() => of1TickRef.current && of1TickRef.current()} replay={replayCtl} />;
     else if (tab === "garage") body = <GarageScreen races={races} pitBest={pitBest} onPitResult={t => { if (!userDataWait()) setPitBest(b => b == null || t < b ? t : b); }} sillyPreds={sillyPreds} onPredict={predictSeat} sillyOfficial={sillyOfficial} live={live} stratPreds={stratPreds} onStrat={(id, st) => { if (!userDataWait()) setStratPreds(x => ({ ...x, [id]: { stints: st, at: nowMs() } })); }} bluffTags={bluffNow} onBluffRefresh={loadBluffTags} />;
     else if (tab === "fanta") body = <FantaScreen standings={shownStandings} squad={squad} setSquad={setSquad} base={squadBase} freeTransfers={freeTransfers} budget={FANTA_BUDGET} stats={fantaStats} race={fantaRace} lock={teamLockInfo} weekends={fantaWeekends} isPremium={isPremium} onPremium={() => setPremiumOpen(true)} onToast={showToast} bonus={bonus} leagues={leagues} setLeagues={setLeagues} needAccount={needAccount} predictions={predictions} predAnswers={predAnswers} predLockOf={predLockOf} onAnswerPrediction={answerPrediction} />;
   }
@@ -9925,9 +9983,19 @@ function App() {
           {showBottomNav && <TabPeek key={"peek-left-" + tab} side="left" tab={TABS[TAB_IDS.indexOf(tab) - 1]} peekRef={el => { peekRef.current.left = el; }} />}
           {showBottomNav && <TabPeek key={"peek-right-" + tab} side="right" tab={TABS[TAB_IDS.indexOf(tab) + 1]} peekRef={el => { peekRef.current.right = el; }} />}
         </div>
-        {showBottomNav && <BottomNav active={tab} pillRef={navPillRef} onChange={t => switchTab(t)} />}
+        {/* 29/10: lo swipe cambia scheda anche partendo dalla barra in basso. */}
+        {showBottomNav && <div data-nav-swipe="" style={{ flexShrink: 0 }}
+          onTouchStart={showBottomNav ? e => { const k = e.touches[0]; if (e.touches.length === 1) swipeStart(k.clientX, k.clientY, e.timeStamp, e.target, e.currentTarget); else swipeCancel(); } : undefined}
+          onTouchMove={showBottomNav ? e => { const k = e.touches[0]; if (k && e.touches.length === 1) swipeMove(k.clientX, k.clientY); } : undefined}
+          onTouchEnd={showBottomNav ? e => { const k = e.changedTouches[0]; if (k) swipeEnd(k.clientX, k.clientY, e.timeStamp, e.currentTarget.clientWidth, false); } : undefined}
+          onTouchCancel={swipeCancel}
+          onPointerDown={showBottomNav ? e => { if (e.pointerType === "mouse" && e.button === 0) swipeStart(e.clientX, e.clientY, e.timeStamp, e.target, e.currentTarget); } : undefined}
+          onPointerMove={showBottomNav ? e => { if (e.pointerType === "mouse" && (e.buttons & 1)) swipeMove(e.clientX, e.clientY); } : undefined}
+          onPointerUp={showBottomNav ? e => { if (e.pointerType === "mouse") swipeEnd(e.clientX, e.clientY, e.timeStamp, e.currentTarget.clientWidth, true); } : undefined}
+          onClickCapture={e => { if (performance.now() - swipeClick.current < 400) { e.stopPropagation(); e.preventDefault(); } }}>
+          <BottomNav active={tab} pillRef={navPillRef} onChange={t => switchTab(t)} /></div>}
         {showBottomNav && adH > 0 && <div data-ad-space="" aria-hidden="true" style={{ height: adH + AD_GAP, flexShrink: 0 }} />}
-        {premiumOpen && <PremiumModal onClose={closePremium} isPremium={isPremium} plan={plan} setPlan={setPlan} onSubscribe={doSubscribe} subscribing={subscribing} subscribed={subscribed} trialUsed={!!trial} onTrial={doTrial} trial={trial} />}
+        {premiumOpen && <PremiumModal onClose={closePremium} isPremium={isPremium} plan={plan} setPlan={setPlan} onSubscribe={doSubscribe} subscribing={subscribing} subscribed={subscribed} trialUsed={!!trial} onTrial={doTrial} trial={trial} onAdPro={Ads.canReward() ? watchAdPro : null} adBusy={adBusy} />}
         {selectedDriver && <DriverDetailModal driver={selectedDriver} lastRace={lastRace} races={races} onClose={() => setSelectedDriver(null)} />}
         {liveTrackOpen && <LiveMapView race={live ? races.find(r => r.id === live.raceId) : weekendRace(races)} live={live} st={liveSt} onClose={() => setLiveTrackOpen(false)} />}
         {ssOpen && <SecondScreen chat={chats.find(c => c.id === "generale")} blocked={blocked} onChatSend={guest ? () => needLogin("Per scrivere in chat serve un account.") : t => sendMessage("generale", t)} race={live ? races.find(r => r.id === live.raceId) : weekendRace(races)} live={live} st={liveSt} standings={shownStandings} layout={ssLayout} setLayout={setSsLayout} prefs={ssPrefs} setPrefs={setSsPrefs} vote={live ? votesNow.dotd[live.raceId] || {} : {}} onVote={(k, id) => live && voteDotd(live.raceId, k, id)} notice={notice} onCloseNotice={nextNotice} onClose={() => setSsOpen(false)} />}

@@ -419,13 +419,22 @@ function chatFromStore(arr, me) {
     if (!old || (r.t || 0) >= old.t) per.set(k, { e: r.e, t: r.t || 0, mine: isMine(r) });
     last.set(r.re, per);
   });
-  return all.filter(m => !isReaction(m)).map(m => {
+  // 29/10: il profilo di ogni autore è l'ultimo che ha mandato, coi messaggi (p) o con la voce del profilo
+  // ({pe: 1, p}, che entra nella stanza anche senza scrivere e non è un messaggio).
+  const profBy = new Map();
+  all.forEach(m => {
+    const pr = !isReaction(m) && profOf(m.p);
+    if (!pr) return;
+    const k = whoKey(m), old = profBy.get(k);
+    if (!old || (m.t || 0) >= old.t) profBy.set(k, { p: pr, t: m.t || 0 });
+  });
+  return all.filter(m => !isReaction(m) && m.pe !== 1).map(m => {
     const per = [...(last.get(String(m.id)) || new Map()).values()];
     const mineR = per.find(r => r.mine);
     const reactions = sortReactions(REACTIONS.map(e => ({ e, n: per.filter(r => r.e === e).length, mine: !!mineR && mineR.e === e })));
     return {
       id: String(m.id), from: m.user || "", text: m.txt || "", at: m.t || 0, aid: m.aid || "",
-      mine: isMine(m), medal: medalOk(m.medal), prof: profOf(m.p), link: linkOf(m.k), reactions, myReaction: mineR ? mineR.e : null,
+      mine: isMine(m), medal: medalOk(m.medal), prof: (profBy.get(whoKey(m)) || {}).p || null, link: linkOf(m.k), reactions, myReaction: mineR ? mineR.e : null,
     };
   });
 }
@@ -438,6 +447,10 @@ function applyReaction(msg, emoji) {
 function reactionToStore(msgId, emoji, me, now = Date.now()) {
   if (!REACTIONS.includes(emoji)) return null;
   return { id: uid(), user: me.name, aid: me.aid || "", re: String(msgId), e: emoji, t: now };
+}
+function profileEntryToStore(me, now = Date.now()) {
+  const p = profOf(me && me.p);
+  return p && me.name ? { id: uid(), user: me.name, aid: me.aid || "", pe: 1, p, t: now } : null;
 }
 function chatMsgToStore(text, me, now = Date.now(), link = null) {
   const medal = medalOk(me && me.medal), p = profOf(me && me.p), k = linkOf(link);
@@ -474,7 +487,7 @@ module.exports = {
   circuitIdOf, mergeRaces, raceStatusesAt, racesToStore,
   teamIdOf, driverIdOf, standingsFromStore, standingsToStore,
   notifsFromStore, notifToStore,
-  igFromStore, igToStore, igProfileUrl, linkOf,
+  igFromStore, igToStore, igProfileUrl, linkOf, profileEntryToStore,
   CHAT_DB_KEY, ROOM_OLD_KEY, authorId, sameAuthor, chatFromStore, chatMsgToStore, reportToStore, reportFromStore,
   REACTIONS, applyReaction, reactionToStore,
   profileFromStore,

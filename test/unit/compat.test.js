@@ -339,6 +339,20 @@ t('link in chat: tipi previsti, titolo obbligatorio, testi accorciati, Ghost Lap
   assert.deepStrictEqual(m.map(x => x.link), [{ t: 'race', id: 'monza', ti: 'GP d\'Italia' }, null]);
 });
 
+// 29/10: voce del profilo nella stanza {id, user, aid, pe: 1, p, t}: non è un messaggio, dà il profilo all'autore.
+t('profilo nella stanza: la voce non si vede e dà il profilo ai messaggi dello stesso autore', () => {
+  const P1 = { t: 'ferrari', d: 'leclerc' }, P2 = { t: 'mclaren' };
+  const ms = C.chatFromStore([
+    { id: 'a', user: 'Marco', aid: 'u1', txt: 'vecchio', t: 1 },
+    { id: 'pe1', user: 'Marco', aid: 'u1', pe: 1, p: P1, t: 2 },
+    { id: 'b', user: 'Giulia', aid: 'u2', txt: 'ciao', t: 3 },
+    { id: 'pe2', user: 'Marco', aid: 'u1', pe: 1, p: P2, t: 4 },
+  ], {});
+  assert.deepStrictEqual(ms.map(m => m.id), ['a', 'b']);
+  assert.deepStrictEqual(ms[0].prof, { t: 'mclaren' });
+  assert.strictEqual(ms[1].prof, null);
+});
+
 (async () => {
   const filter = process.argv[2] ? new RegExp(process.argv[2], 'i') : null;
   for (const [name, fn] of tests) {

@@ -7,6 +7,9 @@
 //   volta: cambiando pagina il vecchio si toglie prima del nuovo.
 // - Interstitial "tra le notizie": tornando alla lista dopo almeno 3 notizie lette, al massimo uno ogni 4 minuti e mai
 //   nel primo minuto dall'apertura (AdMob vuole gli interstitial nelle pause naturali, non all'avvio).
+// - 29/10: con premio: guardata la pubblicità fino in fondo, il Pro si sblocca finché l'app non si chiude o lo schermo si
+//   spegne (lo decide l'App). Se un'unità non ha annunci si prova la successiva. Interstitial "in fondo alla classifica":
+//   arrivati in fondo si carica, la volta dopo si mostra, con gli stessi limiti di tempo di quello tra le notizie.
 // - test = annunci di prova di Google (scritta "Test Ad"): nell'APK di prova e nel test chiuso del Play Store, dove gli
 //   amici che toccano gli annunci veri metterebbero a rischio l'account AdMob.
 const TEST = "ca-app-pub-3940256099942544/";   // unità di prova pubbliche di Google
@@ -15,9 +18,14 @@ const UNITS = {
     home: "ca-app-pub-5787516371588469/2997561321",   // "Banner nelle News"
     race: "ca-app-pub-5787516371588469/3821223256",   // "Pubblicità Banner"
   },
-  interstitial: { news: "ca-app-pub-5787516371588469/9706030785" },   // "Pubblicità tra le News"
+  interstitial: {
+    news: "ca-app-pub-5787516371588469/9706030785",        // "Pubblicità tra le News"
+    standings: "ca-app-pub-5787516371588469/2087570220",   // "Pubblicità in fondo alla classifica"
+  },
+  // "Premium (Con premio)" x3, poi "Pubblicità (Con premio)": in quest'ordine, se una non ha annunci si prova la dopo.
+  rewarded: ["ca-app-pub-5787516371588469/5624901693", "ca-app-pub-5787516371588469/6784763097", "ca-app-pub-5787516371588469/9675827346", "ca-app-pub-5787516371588469/6456990840"],
 };
-const TEST_UNITS = { banner: TEST + "9214589741", interstitial: TEST + "1033173712" };   // banner adattivo, interstitial
+const TEST_UNITS = { banner: TEST + "9214589741", interstitial: TEST + "1033173712", rewarded: TEST + "5224354917" };   // banner adattivo, interstitial, con premio
 const INTERSTITIAL_AFTER = 3, INTERSTITIAL_GAP_MS = 4 * 60000, QUIET_START_MS = 60000;
 const OP_TIMEOUT_MS = 10000;
 
@@ -78,7 +86,7 @@ function createAds({ plugin = () => null, test = false, now = () => Date.now(), 
   function articleOpened() {
     sinceLast++;
     const A = plugin();
-    if (!A || loaded || loading || sinceLast < INTERSTITIAL_AFTER || !timeOk()) return;
+    if (!A || loaded || loading || sLoaded || sinceLast < INTERSTITIAL_AFTER || !timeOk()) return;
     loading = true;
     ready().then(ok => (ok ? withTimeout(A.prepareInterstitial({ adId: test ? TEST_UNITS.interstitial : UNITS.interstitial.news, isTesting: !!test }), 30000).then(() => { loaded = true; }) : null))
       .catch(() => {})   // Google senza annunci da mostrare: si riprova più avanti
@@ -91,6 +99,50 @@ function createAds({ plugin = () => null, test = false, now = () => Date.now(), 
     Promise.resolve(A.showInterstitial()).catch(() => {});
   }
 
+  // ── Interstitial in fondo alla classifica (29/10) ──
+  let sLoaded = false, sLoading = false;
+  function standingsEnd() {
+    const A = plugin();
+    if (!A) return;
+    if (sLoaded) {
+      if (!timeOk()) return;
+      sLoaded = false; lastShown = now();
+      Promise.resolve(A.showInterstitial()).catch(() => {});
+      return;
+    }
+    if (sLoading || loaded || now() - startedAt < QUIET_START_MS) return;
+    sLoading = true;
+    ready().then(ok => (ok ? withTimeout(A.prepareInterstitial({ adId: test ? TEST_UNITS.interstitial : UNITS.interstitial.standings, isTesting: !!test }), 30000).then(() => { sLoaded = true; }) : null))
+      .catch(() => {}).then(() => { sLoading = false; });
+  }
+
+  // ── Con premio (29/10): "ok" guardato fino in fondo, "skipped" chiuso prima, "unavailable" niente annunci ──
+  const canReward = () => !!plugin();
+  let rewarding = null;
+  function showRewarded() {
+    if (rewarding) return rewarding;
+    rewarding = (async () => {
+      const A = plugin();
+      if (!A || !(await ready())) return "unavailable";
+      let loadedUnit = null;
+      for (const adId of test ? [TEST_UNITS.rewarded] : UNITS.rewarded) {
+        try { await withTimeout(A.prepareRewardVideoAd({ adId, isTesting: !!test }), 30000); loadedUnit = adId; break; } catch (e) {}
+      }
+      if (!loadedUnit) return "unavailable";
+      let earned = false, closed;
+      const gone = new Promise(r => { closed = r; });
+      const subs = [A.addListener("onRewardedVideoAdReward", () => { earned = true; }), A.addListener("onRewardedVideoAdDismissed", () => closed()), A.addListener("onRewardedVideoAdFailedToShow", () => closed())];
+      try {
+        const item = await A.showRewardVideoAd();
+        if (item && (item.amount != null || item.type)) earned = true;
+        await Promise.race([gone, new Promise(r => setTimeout(r, 1500))]);
+      } catch (e) {}
+      subs.forEach(h => Promise.resolve(h).then(x => x && x.remove && x.remove()).catch(() => {}));
+      return earned ? "ok" : "skipped";
+    })().finally(() => { rewarding = null; });
+    return rewarding;
+  }
+
   // ── Scelte sulla privacy degli annunci (dal Profilo) ──
   const privacyRequired = () => privacy;
   async function openPrivacy() {
@@ -101,7 +153,7 @@ function createAds({ plugin = () => null, test = false, now = () => Date.now(), 
     return true;
   }
 
-  return { ready, setBanner, articleOpened, articleClosed, privacyRequired, openPrivacy };
+  return { ready, setBanner, articleOpened, articleClosed, standingsEnd, canReward, showRewarded, privacyRequired, openPrivacy };
 }
 
 module.exports = { createAds, UNITS, TEST_UNITS, INTERSTITIAL_AFTER, INTERSTITIAL_GAP_MS, QUIET_START_MS };

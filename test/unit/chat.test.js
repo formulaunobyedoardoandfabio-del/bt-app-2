@@ -205,7 +205,7 @@ t('profilo veloce: viaggia col messaggio solo quando cambia (o dopo una settiman
   assert.deepStrictEqual(arr.map(m => !!m.p), [true, false, true, true]);
   assert.ok(c.fs('shared/bt-chat-live-gara').__arr[0].p, 'in un\'altra stanza il profilo va col primo messaggio');
   const room = await c.chat.loadRoom('generale', OTHER);
-  assert.deepStrictEqual(room.map(m => m.prof && m.prof.w.length), [1, null, 2, 2]);
+  assert.deepStrictEqual(room.map(m => m.prof && m.prof.w.length), [2, 2, 2, 2]);   // 29/10: ogni messaggio ha l'ultimo profilo dell'autore
 });
 
 t('link in chat: si manda anche senza testo (al posto del testo il titolo, per l\'app di oggi)', async () => {
@@ -217,6 +217,20 @@ t('link in chat: si manda anche senza testo (al posto del testo il titolo, per l
   const room = await c.chat.loadRoom('generale', ME);
   assert.strictEqual(room[1].link.n, 4);
   await assert.rejects(c.chat.send('generale', '', ME, { t: 'nope', ti: 'x' }), e => e.code === 'empty');
+});
+
+t('profilo nella stanza: si manda entrando, una volta sola finché non cambia (e la vecchia voce va via)', async () => {
+  const c = ctx();
+  const me = { ...ME, p: { t: 'ferrari' } };
+  assert.strictEqual(await c.chat.announce('generale', me), true);
+  assert.strictEqual(await c.chat.announce('generale', me), false);
+  await c.chat.announce('generale', { ...ME, p: { t: 'mclaren' } });
+  const arr = c.fs('shared/bt-chat-generale').__arr;
+  assert.deepStrictEqual(arr.map(x => [x.pe, x.p && x.p.t, x.aid]), [[1, 'mclaren', ME.aid]]);
+  assert.strictEqual((await c.chat.loadRoom('generale', ME)).length, 0);
+  // Il messaggio dopo non porta di nuovo lo stesso profilo.
+  await c.chat.send('generale', 'ciao', { ...ME, p: { t: 'mclaren' } });
+  assert.strictEqual(c.fs('shared/bt-chat-generale').__arr[1].p, undefined);
 });
 
 (async () => {

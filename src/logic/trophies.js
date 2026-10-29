@@ -3,7 +3,7 @@
 // ms }); la medaglia (bronzo da 1 trofeo, argento da 5, oro da 10) va accanto al nome nei messaggi della chat.
 // goal: dove si conta, quanto serve (la bacheca mostra "3 di 5"); secret: si vede come "Trofeo segreto" finché non
 // lo si trova. 25/10: nome, testo, obiettivo e "spento" si cambiano da Firebase (shared/bt-trophies, trophyDefs);
-// Pit crew in 2,30 secondi o meno (prima sotto i 2,5).
+// Pit crew in 2,35 secondi o meno (29/10; prima 2,30, all'inizio sotto i 2,5).
 const TROPHIES = [
   { id: "superlicenza", name: "Superlicenza", how: "Completa \"Su di te\" nel Profilo" },
   { id: "casco", name: "Il mio casco", how: "Cambia i colori del tuo casco nel Profilo" },
@@ -12,7 +12,7 @@ const TROPHIES = [
   { id: "oracolo", name: "Oracolo", how: "Indovina 5 previsioni del weekend", goal: 5 },
   { id: "radar", name: "Uomo radar", how: "Indovina 1 pronostico meteo", goal: 1 },
   { id: "sondaggista", name: "Sondaggista", how: "Indovina 1 sondaggio", goal: 1 },
-  { id: "pitcrew", name: "Pit crew", how: "Pit Stop Challenge in 2,30 secondi o meno", goal: 2.3 },
+  { id: "pitcrew", name: "Pit crew", how: "Pit Stop Challenge in 2,35 secondi o meno", goal: 2.35 },
   { id: "pitperfetto", name: "Pit stop perfetto", how: "Pit Stop Challenge in 2,00 secondi o meno", goal: 2.0 },
   { id: "mercato", name: "Mercato piloti", how: "Fai 1 previsione della Silly Season" },
   { id: "pagellone", name: "Pagellone", how: "Dai la pagella ai piloti dopo una gara" },
@@ -71,7 +71,7 @@ function trophyProgress(input, defs = TROPHIES) {
   const pit = typeof x.pitBest === "number" && isFinite(x.pitBest) && x.pitBest > 0 ? x.pitBest : null;
   const goals = Object.fromEntries((Array.isArray(defs) ? defs : TROPHIES).map(t => [t.id, t.goal]));
   const count = (value, goal) => ({ done: value >= goal, value, goal });
-  const pitWithin = goal => ({ done: pit != null && pit <= goal + 1e-9, value: pit, goal });   // "in 2,30 secondi o meno"
+  const pitWithin = goal => ({ done: pit != null && pit <= goal + 1e-9, value: pit, goal });   // "in 2,35 secondi o meno"
   const fullList = (l, n) => Array.isArray(l) && l.length === n && l.every(filled);
   const all = {
     superlicenza: () => ({ done: !!about && filled(about.birth) && filled(about.fan) && (filled(about.years) || filled(about.follow)) }),

@@ -220,3 +220,19 @@ toccando il nome in chat (tifo, casco, trofei, segnalazione), reazioni con le em
   sua scheda, la domanda la pagina FANTA, il profilo il profilo veloce; scuderia, squadra, traguardi e team radio la
   scheda coi dettagli (`ChatLinkSheet`). Senza testo, `txt` = titolo del link (l'app di oggi vede solo quello).
   Prove: `test/e2e/run74-chat-link.js` (3), compat.test e chat.test.
+
+## 29/10 (Edoardo, uso al 95%: lavoro fermato a metà e salvato)
+Fatto (prove unitarie verdi; e2e nuove ancora da scrivere): Pit crew 2,35 s (`ensureTrophyDoc` aggiorna il documento
+rimasto coi 2,30 di serie); swipe anche sulla barra in basso (`data-nav-swipe`); password col casco (`PwEye`: visiera
+alzata = visibile, cifre oro); Pro con annuncio con premio fino a chiusura dell'app o schermo spento (`Ads.showRewarded`,
+UNITS.rewarded in ordine se una non ha annunci, `adPro` solo in memoria, `visibilitychange`, tasto nel PremiumModal);
+interstitial in fondo alla classifica (`Ads.standingsEnd`, `EndSpy`); profilo in chat anche senza scrivere
+(`Chat.announce`: voce {pe:1, p} nella stanza; ogni messaggio mostra l'ultimo profilo dell'autore).
+Da fare:
+- e2e: swipe sulla barra, PwEye, adPro (AdMob finto di run70 + prepareRewardVideoAd/showRewardVideoAd), announce.
+- Classifiche Fanta vere: leghe in `fanta/lega-<CODICE>` (regole: gli utenti autenticati leggono e scrivono), members[aid]
+  = {name, team, hist:[{t, d, c, b}]} (squadra pubblicata a ogni cambio); i punti li calcola ogni telefono coi risultati
+  veri di Jolpica (results, qualifying, sprint per round, in cache) con BtLogic.sessionPoints/squadScore/transfers e la
+  squadra all'ora di blocco del weekend; togliere LEAGUE e LEAGUES_INIT finti; codici delle leghe nell'account.
+- Disegni geometrici al posto delle foto di Commons (piloti, auto, loghi); le foto delle notizie restano.
+- Suoni e vibrazioni F1 in fx.js (semaforo, radio, DRS, cambio marcia, bandiera a scacchi).

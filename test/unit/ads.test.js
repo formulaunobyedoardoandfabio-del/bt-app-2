@@ -113,6 +113,50 @@ t('pubblicità: se l\'avvio di AdMob fallisce (senza rete) si riprova alla volta
   assert.strictEqual(p.names().filter(n => n === 'initialize').length, 2);
 });
 
+// 29/10: annuncio con premio → Pro fino alla chiusura dell'app. Premio solo se il video si guarda fino in fondo; senza
+// annunci della prima unità si provano le altre (3 "Premium" e "Pubblicità con premio").
+const rewardPlugin = ({ reward = true, failUnits = [] } = {}) => {
+  const p = fakeAdMob();
+  p.prepareRewardVideoAd = o => { p.calls.push('prepareRewardVideoAd:' + o.adId); return failUnits.includes(o.adId) ? Promise.reject(new Error('No fill')) : Promise.resolve({ adUnitId: o.adId }); };
+  p.showRewardVideoAd = () => { p.calls.push('showRewardVideoAd'); if (reward) p.emit('onRewardedVideoAdReward', { type: 'coins', amount: 1 }); p.emit('onRewardedVideoAdDismissed'); return Promise.resolve(reward ? { type: 'coins', amount: 1 } : null); };
+  return p;
+};
+t('con premio: guardato fino in fondo → ok; chiuso prima → skipped; senza plugin → unavailable', async () => {
+  const p = rewardPlugin();
+  const A = createAds({ plugin: () => p });
+  assert.strictEqual(A.canReward(), true);
+  assert.strictEqual(await A.showRewarded(), 'ok');
+  assert.ok(p.calls.includes('prepareRewardVideoAd:' + UNITS.rewarded[0]), p.calls.join(' '));
+  const q = rewardPlugin({ reward: false });
+  assert.strictEqual(await createAds({ plugin: () => q }).showRewarded(), 'skipped');
+  const N = createAds({ plugin: () => null });
+  assert.strictEqual(N.canReward(), false);
+  assert.strictEqual(await N.showRewarded(), 'unavailable');
+});
+t('con premio: senza annunci nella prima unità prova le altre; di prova con test', async () => {
+  const p = rewardPlugin({ failUnits: UNITS.rewarded.slice(0, 2) });
+  assert.strictEqual(await createAds({ plugin: () => p }).showRewarded(), 'ok');
+  assert.deepStrictEqual(p.calls.filter(c => c.startsWith('prepareRewardVideoAd')).map(c => c.split(':').pop()), UNITS.rewarded.slice(0, 3));
+  assert.strictEqual(UNITS.rewarded.length, 4);
+  const all = rewardPlugin({ failUnits: UNITS.rewarded });
+  assert.strictEqual(await createAds({ plugin: () => all }).showRewarded(), 'unavailable');
+  const tp = rewardPlugin();
+  await createAds({ plugin: () => tp, test: true }).showRewarded();
+  assert.ok(tp.calls.includes('prepareRewardVideoAd:' + TEST_UNITS.rewarded), tp.calls.join(' '));
+});
+t('in fondo alla classifica: prima si carica, la volta dopo si mostra (con gli stessi limiti di tempo)', async () => {
+  let clock = 0;
+  const p = fakeAdMob();
+  const A = createAds({ plugin: () => p, now: () => clock });
+  clock = 2 * 60000;
+  A.standingsEnd(); await settle();
+  assert.ok(p.calls.includes('prepareInterstitial:' + JSON.stringify({ adId: UNITS.interstitial.standings, isTesting: false })), p.calls.join(' '));
+  A.standingsEnd(); await settle();
+  assert.strictEqual(p.names().filter(n => n === 'showInterstitial').length, 1);
+  A.standingsEnd(); await settle(); A.standingsEnd(); await settle();
+  assert.strictEqual(p.names().filter(n => n === 'showInterstitial').length, 1, 'non più di uno ogni 4 minuti');
+});
+
 (async () => {
   const filter = process.argv[2] ? new RegExp(process.argv[2], 'i') : null;
   for (const [name, fn] of tests) {

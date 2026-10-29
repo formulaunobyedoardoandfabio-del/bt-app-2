@@ -184,7 +184,17 @@ function createAppData({ fb = FB } = {}) {
   // Trofei da Firebase (25/10): se shared/bt-trophies non c'è, lo scrive con i valori di serie (lo chiama l'app di un
   // admin), così nella console ci sono già tutti i trofei da cambiare. Se c'è non lo tocca. → true se l'ha scritto.
   async function ensureTrophyDoc() {
-    if ((await fb.sgStrict("bt-trophies")) != null) return false;
+    const cur = await fb.sgStrict("bt-trophies");
+    // 29/10: il Pit crew passa da 2,30 a 2,35 secondi; un documento rimasto coi 2,30 di serie si aggiorna (se l'admin
+    // l'ha cambiato a mano, resta il suo).
+    const old = cur && cur.pitcrew;
+    if (old && old.goal === 2.3 && old.how === "Pit Stop Challenge in 2,30 secondi o meno") {
+      const pitcrew = { ...old, goal: 2.35, how: "Pit Stop Challenge in 2,35 secondi o meno" };
+      await fb.ss("bt-trophies", { ...cur, pitcrew });
+      base.set("bt-trophies", { ...cur, pitcrew });
+      return true;
+    }
+    if (cur != null) return false;
     await fb.ss("bt-trophies", T.trophyConfigDefaults());
     base.set("bt-trophies", T.trophyConfigDefaults());
     return true;

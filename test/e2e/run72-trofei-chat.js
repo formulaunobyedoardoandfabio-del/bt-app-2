@@ -1,5 +1,5 @@
 // 25/10: trofei da Firebase e chat più ricca.
-// - Trofei: Pit crew in 2,30 secondi o meno; nome, testo, obiettivo e "spento" da shared/bt-trophies; l'app di un admin
+// - Trofei: Pit crew in 2,35 secondi o meno; nome, testo, obiettivo e "spento" da shared/bt-trophies; l'app di un admin
 //   crea il documento coi valori di serie se manca; il pilota del giorno votato nella prova DEMO vale per il trofeo.
 // - Chat: toccando il nome si vede il profilo veloce (tifo, casco, trofei, Segnala); reazioni con le emoji come su
 //   WhatsApp (una per persona, si cambia o si toglie).
@@ -50,13 +50,13 @@ const menuState = p => p.evaluate(() => {
 });
 
 run({
-  async 'Pit crew: 2,30 secondi bastano (prima serviva meno di 2,5)'(b) {
-    const { ctx, p, errs } = await open(b, { seed: { addDocs: USER({ pitBest: 2.3 }) } });
+  async 'Pit crew: 2,35 secondi bastano (prima serviva meno di 2,5)'(b) {
+    const { ctx, p, errs } = await open(b, { seed: { addDocs: USER({ pitBest: 2.35 }) } });
     await login(p); await w(p, 800);
     await openProfile(p); await openTrophies(p);
     const r = await row(p, 'pitcrew');
     await ctx.close();
-    assert(r && r.won === '1', 'con 2,30 s il Pit crew non arriva: ' + JSON.stringify(r));
+    assert(r && r.won === '1', 'con 2,35 s il Pit crew non arriva: ' + JSON.stringify(r));
     assert(!errs.length, errs.join(' | '));
   },
 
@@ -66,7 +66,7 @@ run({
     await openProfile(p); await openTrophies(p);
     const r = await row(p, 'pitcrew');
     await ctx.close();
-    assert(r && r.won === '0' && /2,30/.test(r.text), 'con 2,40 s il Pit crew non deve arrivare: ' + JSON.stringify(r));
+    assert(r && r.won === '0' && /2,35/.test(r.text), 'con 2,40 s il Pit crew non deve arrivare: ' + JSON.stringify(r));
     assert(!errs.length, errs.join(' | '));
   },
 
@@ -110,7 +110,7 @@ run({
     const fs = await doc(p, 'shared/bt-trophies');
     await ctx.close();
     assert(fs && Object.keys(fs).length === 15, 'documento dei trofei: ' + JSON.stringify(fs));
-    assert(fs.pitcrew.goal === 2.3 && fs.pitcrew.attivo === true && Object.values(fs).every(t => t.attivo === true) && /2,30/.test(fs.pitcrew.how), 'Pit crew nel documento: ' + JSON.stringify(fs.pitcrew));
+    assert(fs.pitcrew.goal === 2.35 && fs.pitcrew.attivo === true && Object.values(fs).every(t => t.attivo === true) && /2,35/.test(fs.pitcrew.how), 'Pit crew nel documento: ' + JSON.stringify(fs.pitcrew));
     assert(!errs.length, errs.join(' | '));
   },
 
