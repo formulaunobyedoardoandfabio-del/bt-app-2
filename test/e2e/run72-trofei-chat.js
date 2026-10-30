@@ -194,10 +194,11 @@ run({
     await say(p, 'Primo'); await say(p, 'Secondo');
     const room = (await doc(p, 'shared/bt-chat-generale')).__arr;
     await ctx.close();
-    const [m1, m2] = room;
-    assert(m1 && m1.p && m1.p.t === 'ferrari' && m1.p.d === 'leclerc' && m1.p.f === 'vivo', 'tifo nel messaggio: ' + JSON.stringify(m1));
-    assert(m1.p.h && m1.p.h.pattern === 'stars' && m1.p.h.number === 16 && /^#[0-9A-F]{6}$/i.test(m1.p.h.base), 'casco nel messaggio (col colore dei tasti): ' + JSON.stringify(m1.p.h));
-    assert(Array.isArray(m1.p.w) && m1.p.w.includes('radio') && m1.p.w.includes('pitcrew'), 'trofei nel messaggio: ' + JSON.stringify(m1.p.w));
+    // 29/10: entrando nella stanza il profilo ci va come voce a parte (pe); i messaggi non lo ripetono.
+    const pe = room.find(x => x.pe === 1), [m1, m2] = room.filter(x => x.pe !== 1), P = { p: pe ? pe.p : m1 && m1.p };
+    assert(m1 && P.p && P.p.t === 'ferrari' && P.p.d === 'leclerc' && P.p.f === 'vivo', 'tifo nel messaggio: ' + JSON.stringify(room));
+    assert(P.p.h && P.p.h.pattern === 'stars' && P.p.h.number === 16 && /^#[0-9A-F]{6}$/i.test(P.p.h.base), 'casco nel messaggio (col colore dei tasti): ' + JSON.stringify(P.p.h));
+    assert(Array.isArray(P.p.w) && P.p.w.includes('radio') && P.p.w.includes('pitcrew'), 'trofei nel messaggio: ' + JSON.stringify(P.p.w));
     assert(m2 && m2.txt === 'Secondo' && !m2.p, 'il profilo uguale non deve ripartire a ogni messaggio: ' + JSON.stringify(m2));
     assert(!errs.length, errs.join(' | '));
   },

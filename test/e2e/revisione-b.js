@@ -116,7 +116,8 @@ run({
     assert(!/Pannello Admin/.test(prof1), 'senza sapere se è admin il Pannello non si mostra');
     assert(/profilo non è ancora arrivato/.test(t1), 'chat senza profilo: ' + t1);
     assert(!room.some(m => m.txt === 'prima della rete'), 'il messaggio senza profilo è partito: ' + JSON.stringify(room));
-    assert(room.length === 1 && room[0].user === 'Tester' && room[0].txt === 'dopo la rete', 'messaggio dopo la rete: ' + JSON.stringify(room));
+    const msgs = room.filter(m => m.pe !== 1);   // 29/10: nella stanza c'è anche la voce del profilo
+    assert(msgs.length === 1 && msgs[0].user === 'Tester' && msgs[0].txt === 'dopo la rete', 'messaggio dopo la rete: ' + JSON.stringify(room));
     assert(/Tester/.test(prof2) && /Pannello Admin/.test(prof2) && !/Profilo in caricamento/.test(prof2), 'profilo dopo la rete: ' + prof2.slice(0, 200));
     assert(!errs.length, errs.join(' | '));
   },
@@ -152,7 +153,8 @@ run({
     await openGenerale(p); await say(p, 'ciao');
     const room = ((await doc(p, 'shared/bt-chat-generale')) || { __arr: [] }).__arr; await ctx.close();
     assert(!/Stai navigando come ospite/.test(prof) && /Esci/.test(prof) && /Tester/.test(prof), 'profilo: ' + prof.slice(0, 200));
-    assert(room.length === 1 && room[0].user === 'Tester', 'chat: ' + JSON.stringify(room));
+    const msgs = room.filter(m => m.pe !== 1);   // 29/10: nella stanza c'è anche la voce del profilo
+    assert(msgs.length === 1 && msgs[0].user === 'Tester', 'chat: ' + JSON.stringify(room));
     assert(!errs.length, errs.join(' | '));
   },
   // ── I2: rete bloccata (gli script di Firebase non arrivano mai) ──────────────────────

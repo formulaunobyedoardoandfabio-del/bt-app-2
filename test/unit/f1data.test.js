@@ -23,6 +23,8 @@ function fakeFetch({ fail = false } = {}) {
 }
 const memStore = () => { const m = new Map(); return { get: k => (m.has(k) ? JSON.parse(m.get(k)) : null), set: (k, v) => m.set(k, JSON.stringify(v)), del: k => m.delete(k), m }; };
 
+// I GP corsi crescono a ogni weekend (workflow Dati F1): quanti e l'ultimo si leggono dal file vero.
+const WEEK = require('../../public/data/f1/weekend.json');
 let pass = 0, fail = 0;
 const tests = [];
 const t = (name, fn) => tests.push([name, fn]);
@@ -31,7 +33,7 @@ t('dati F1: indice, gare e qualifiche e il Ghost Lap delle ultime qualifiche (Au
   const f = fakeFetch();
   const r = await D.createF1Data({ fetch: f, now: () => NOW }).refresh();
   assert.deepStrictEqual(f.calls, ['index.json', 'weekend.json', 'ghost-us-2012.json', 'ghost-sg-2008.json']);
-  assert.strictEqual(r.weekend.races[r.weekend.races.length - 1].circuitId, 'sg-2008');
+  assert.strictEqual(r.weekend.races[r.weekend.races.length - 1].circuitId, WEEK.races[WEEK.races.length - 1].circuitId);
   assert.ok(r.weekend.quali.some(q => q.circuitId === 'us-2012'));
   assert.ok(r.weekend.practice['us-2012'] && r.weekend.practice['us-2012'].FP1);
   assert.deepStrictEqual(r.ghosts.map(g => [g.id, g.circuitId, g.place]), [['us-2012-2026-q', 'us-2012', 'Austin'], ['sg-2008-2026-q', 'sg-2008', 'Singapore']]);
@@ -79,7 +81,7 @@ t('dati F1: aggiornare i dati dell\'app (gare, prove, Ghost Lap) senza perdere q
   const sessions = [['baku2026q', 'Baku']], circuit = { baku2026q: 'az-2016' };
   const changed = D.apply(r, { weekend: W, ghostData: G, ghostSessions: sessions, ghostCircuit: circuit });
   assert.strictEqual(changed, true);
-  assert.strictEqual(W.races.length, 17);
+  assert.strictEqual(W.races.length, WEEK.races.length);
   assert.ok(W.practice['az-2016'] && W.practice['us-2012']);
   assert.deepStrictEqual(sessions.map(s => s[1]), ['Austin', 'Singapore', 'Baku']);
   assert.strictEqual(circuit['us-2012-2026-q'], 'us-2012');

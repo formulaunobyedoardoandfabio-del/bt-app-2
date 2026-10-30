@@ -241,3 +241,5 @@ Da fare:
   MainActivity: screenshot, registrazioni e "Cerchia e cerca" danno nero; uscendo si spegne. Prova: run75. Attenzione:
   l'useEffect sta prima dei return anticipati dell'App (messo dopo, la pagina dopo l'accesso andava in errore).
   Le prove e2e cercano Chromium in /opt/pw-browsers/chromium-1194 solo se c'è (altrimenti quello di Playwright).
+  Verificato il 30/10: `JOBS=2 bash test/all.sh` a c3e135d → tutto verde tranne 3 file, ora sistemati: f1data.test (legge
+  quanti GP ci sono dal file vero), revisione-b e run72 (nella stanza c.è anche la voce del profilo).
