@@ -236,3 +236,8 @@ Da fare:
   squadra all'ora di blocco del weekend; togliere LEAGUE e LEAGUES_INIT finti; codici delle leghe nell'account.
 - Disegni geometrici al posto delle foto di Commons (piloti, auto, loghi); le foto delle notizie restano.
 - Suoni e vibrazioni F1 in fx.js (semaforo, radio, DRS, cambio marcia, bandiera a scacchi).
+- 30/10 (Edoardo): notizie protette. Con una notizia aperta (view "article") l'app accende FLAG_SECURE col plugin
+  nativo SecureScreen (`set({ on })`), che `scripts/prepare_android.py` scrive in SecureScreenPlugin.java e registra in
+  MainActivity: screenshot, registrazioni e "Cerchia e cerca" danno nero; uscendo si spegne. Prova: run75. Attenzione:
+  l'useEffect sta prima dei return anticipati dell'App (messo dopo, la pagina dopo l'accesso andava in errore).
+  Le prove e2e cercano Chromium in /opt/pw-browsers/chromium-1194 solo se c'è (altrimenti quello di Playwright).

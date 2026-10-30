@@ -3,7 +3,7 @@
 // quindi il Firebase finto riparte dai dati di partenza (o da opts.seed).
 const path = require('path');
 const { chromium } = require('/opt/node-tools/node_modules/playwright');
-const EXE = '/opt/pw-browsers/chromium-1194/chrome-linux/chrome';
+const EXE = require('fs').existsSync('/opt/pw-browsers/chromium-1194/chrome-linux/chrome') ? '/opt/pw-browsers/chromium-1194/chrome-linux/chrome' : undefined;
 const PAGE = 'file://' + path.join(__dirname, process.env.PAGE || 'test.html');
 // Ora fissa (mercoledì prima del GP di Singapore): così chiusure e orari non dipendono dal giorno delle prove.
 const NOW = '2026-10-07T10:00:00Z';

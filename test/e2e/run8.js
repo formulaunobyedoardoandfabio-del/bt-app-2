@@ -5,7 +5,7 @@ const { chromium } = require('/opt/node-tools/node_modules/playwright');
 // Le notizie, le previsioni, i video e il calendario d'esempio della 2.0 ora stanno su Firebase (Task 6): il Firebase
 // finto parte con quei documenti, così le prove li ritrovano.
 const SEED_20 = require('../fixtures/seed-2.0.json');
-const EXE = '/opt/pw-browsers/chromium-1194/chrome-linux/chrome';
+const EXE = require('fs').existsSync('/opt/pw-browsers/chromium-1194/chrome-linux/chrome') ? '/opt/pw-browsers/chromium-1194/chrome-linux/chrome' : undefined;
 
 // fresh: primo avvio dell'app (Termini ancora da accettare, Task 9); di serie il Firebase finto li dà già accettati.
 async function open(b, { fresh = false } = {}) {

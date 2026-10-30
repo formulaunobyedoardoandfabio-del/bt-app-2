@@ -6,7 +6,7 @@ const { chromium } = require('/opt/node-tools/node_modules/playwright');
 // Le notizie, le previsioni, i video e il calendario d'esempio della 2.0 ora stanno su Firebase (Task 6): il Firebase
 // finto parte con quei documenti, così le prove li ritrovano.
 const SEED_20 = require('../fixtures/seed-2.0.json');
-const EXE = '/opt/pw-browsers/chromium-1194/chrome-linux/chrome';
+const EXE = require('fs').existsSync('/opt/pw-browsers/chromium-1194/chrome-linux/chrome') ? '/opt/pw-browsers/chromium-1194/chrome-linux/chrome' : undefined;
 const NOW = '2026-09-30T11:48:00Z';   // mercoledì prima del GP: la squadra chiude tra 2 giorni, 20 ore e 12 minuti
 
 async function open(b, { now = NOW } = {}) {

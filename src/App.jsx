@@ -9745,6 +9745,10 @@ function App() {
   };
   const closeLogin = () => { setLoginOpen(false); setLoginReason(null); };
   const inApp = authed || guest;
+  // 30/10 (Edoardo): mentre una notizia è aperta niente screenshot, registrazioni né "Cerchia e cerca" (FLAG_SECURE col
+  // plugin nativo SecureScreen di scripts/prepare_android.py; per condividere la notizia c'è Condividi).
+  const secureOn = view === "article";
+  useEffect(() => { const S = capPlugin("SecureScreen"); if (S && S.set) Promise.resolve().then(() => S.set({ on: secureOn })).catch(() => {}); }, [secureOn]);
   useBack(inApp && view !== "tab", () => (viewBack[view] || (() => setView("tab")))());
   useBack(loginOpen && !authed, closeLogin);
   useBack(premiumOpen, () => closePremium());

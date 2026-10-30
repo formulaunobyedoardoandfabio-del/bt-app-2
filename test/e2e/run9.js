@@ -4,7 +4,7 @@ const { chromium } = require('/opt/node-tools/node_modules/playwright');
 // finto parte con quei documenti, così le prove li ritrovano.
 const SEED_20 = require('../fixtures/seed-2.0.json');
 (async () => {
-  const b = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium-1194/chrome-linux/chrome' });
+  const b = await chromium.launch({ executablePath: require('fs').existsSync('/opt/pw-browsers/chromium-1194/chrome-linux/chrome') ? '/opt/pw-browsers/chromium-1194/chrome-linux/chrome' : undefined });
   const ctx = await b.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 3, hasTouch: true, isMobile: true });
   await ctx.addInitScript(seed => { window.__btSeed = seed; }, { ...SEED_20, freshInstall: true });   // primo avvio: Termini (Task 9)
   await ctx.addInitScript(() => { window.open = () => null; });

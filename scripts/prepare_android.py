@@ -100,3 +100,57 @@ android {
     print("Firma di release configurata")
 
 open(GRADLE, "w").write(gradle)
+
+# ── PAGINE PROTETTE (30/10): nelle notizie niente screenshot, registrazioni né "Cerchia e cerca" ──
+# Plugin nativo SecureScreen (set({ on })): accende o spegne FLAG_SECURE sulla finestra; con il flag acceso lo screenshot
+# viene nero. Lo usa l'app (src/App.jsx) solo mentre è aperta una notizia.
+JAVA_ROOT = "android/app/src/main/java"
+main_act = None
+for root, _, files in os.walk(JAVA_ROOT):
+    if "MainActivity.java" in files:
+        main_act = os.path.join(root, "MainActivity.java")
+        break
+if not main_act:
+    sys.exit(f"ERRORE: MainActivity.java non trovato in {JAVA_ROOT}")
+src = open(main_act, encoding="utf-8").read()
+pkg = re.search(r"^package\s+([\w.]+)\s*;", src, flags=re.M)
+if not pkg:
+    sys.exit(f"ERRORE: package non trovato in {main_act}")
+pkg = pkg.group(1)
+open(os.path.join(os.path.dirname(main_act), "SecureScreenPlugin.java"), "w", encoding="utf-8").write(f"""package {pkg};
+
+import android.view.WindowManager;
+import com.getcapacitor.Plugin;
+import com.getcapacitor.PluginCall;
+import com.getcapacitor.PluginMethod;
+import com.getcapacitor.annotation.CapacitorPlugin;
+
+@CapacitorPlugin(name = "SecureScreen")
+public class SecureScreenPlugin extends Plugin {{
+    @PluginMethod
+    public void set(PluginCall call) {{
+        final boolean on = Boolean.TRUE.equals(call.getBoolean("on", false));
+        getActivity().runOnUiThread(() -> {{
+            if (on) getActivity().getWindow().addFlags(WindowManager.LayoutParams.FLAG_SECURE);
+            else getActivity().getWindow().clearFlags(WindowManager.LayoutParams.FLAG_SECURE);
+            call.resolve();
+        }});
+    }}
+}}
+""")
+if "SecureScreenPlugin" not in src:
+    src, n = re.subn(
+        r"public class MainActivity extends BridgeActivity\s*\{\s*\}",
+        "public class MainActivity extends BridgeActivity {\n"
+        "    @Override\n"
+        "    public void onCreate(android.os.Bundle savedInstanceState) {\n"
+        "        registerPlugin(SecureScreenPlugin.class);\n"
+        "        super.onCreate(savedInstanceState);\n"
+        "    }\n"
+        "}",
+        src,
+    )
+    if not n:
+        sys.exit(f"ERRORE: MainActivity diversa da quella di Capacitor, SecureScreen non registrato ({main_act})")
+    open(main_act, "w", encoding="utf-8").write(src)
+print("Plugin SecureScreen aggiunto (notizie protette dagli screenshot)")
