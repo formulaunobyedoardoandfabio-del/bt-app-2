@@ -2,12 +2,12 @@
 // per un'app piccola con pubblicità: mail di Bruno Godefroy del 30/10) i dati in diretta richiedono l'accesso: utente e
 // password stanno SOLO nelle variabili di Vercel (OPENF1_USERNAME, OPENF1_PASSWORD), mai nell'app né su GitHub.
 // È l'unica che parla con OpenF1 (come chiede OpenF1): il pass (token) dura un'ora e si rinnova da solo; le risposte
-// restano 10 secondi nella cache di Vercel e in memoria, così tanti telefoni fanno poche richieste (limite: 60/min).
+// restano 15 secondi nella cache di Vercel e in memoria, così tanti telefoni fanno poche richieste (limite: 60/min).
 // GET /api/live?p=laps&session_key=9876  → la risposta di OpenF1 (stesso formato)
 // GET /api/live?check=1                   → { ok, reason } (le credenziali funzionano? senza mostrarle)
 const OF1 = "https://api.openf1.org";
 const ALLOWED = ["sessions", "meetings", "drivers", "laps", "stints", "pit", "position", "intervals", "race_control", "team_radio", "weather", "session_result", "car_data", "starting_grid"];
-const CACHE_S = 10;
+const CACHE_S = 15;   // l'app chiede ~12 indirizzi ogni 15 s: con 15 s di cache OpenF1 ne riceve al massimo ~48 al minuto (limite 60)
 const PART_OK = /^[a-z_]+(%3[cCeE](=|%3[dD])?|<=?|>=?|=)[A-Za-z0-9_.:%+-]*$/;
 
 function createLive({ fetchImpl = (...a) => fetch(...a), env = process.env, now = () => Date.now() } = {}) {

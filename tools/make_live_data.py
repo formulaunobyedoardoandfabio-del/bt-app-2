@@ -232,14 +232,7 @@ for i in with_fp[-3:][::-1]:
     p = practice(folder(i), CIRCUIT_IDS[i])
     if p: weekend['practice'][CIRCUIT_IDS[i]] = p
 ghosts = []
-# Weekend in corso senza qualifiche (ancora): il Ghost Lap dell'ultima sessione di prove libere che ha i giri.
-if with_fp and (not with_quali or with_fp[-1] > with_quali[-1]):
-    i = with_fp[-1]; cid = CIRCUIT_IDS[i]
-    for sess in ('Practice 3', 'Practice 2', 'Practice 1'):
-        g = ghost(i, folder(i), sess=sess)
-        if g:
-            ghosts.append({'id': g['id'], 'circuitId': cid, 'round': i + 1, 'place': PLACE[cid], 'h': dump(f'ghost-{cid}.json', g)})
-            break
+# Ghost Lap: solo qualifiche (1/11, Edoardo: niente prove libere), le ultime 2 con i giri.
 for i in with_quali[-2:][::-1]:
     if len(ghosts) >= 2: break
     g = ghost(i, folder(i))

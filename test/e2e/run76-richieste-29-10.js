@@ -171,8 +171,8 @@ run({
   },
 
   // 31/10 sera (Edoardo: "non ci sono i dati che si aggiornano in Ghost Lap e Tire degradation"): nel weekend in corso
-  // il Degrado gomme parte dalle prove libere scaricate (qui i file veri di public/data/f1, Messico FP1 e FP2).
-  async 'degrado gomme nel weekend del Messico: prove libere scaricate, FP2 di serie, long run veri'(b) {
+  // il Degrado gomme parte dalle prove libere scaricate (qui i file veri di public/data/f1: le sessioni del Messico che ci sono).
+  async 'degrado gomme nel weekend del Messico: prove libere scaricate, l\'ultima di serie, long run veri'(b) {
     const F1DIR = require('path').join(__dirname, '../../public/data/f1');
     const routes = { 'https://bt-app-2.vercel.app/data/f1/**': r => {
       const f = require('path').join(F1DIR, new URL(r.request().url()).pathname.split('/').pop());
@@ -188,8 +188,9 @@ run({
     }));
     await ctx.close();
     assert(st.src === 'practice', 'di serie le prove libere del weekend in corso: ' + JSON.stringify(st));
-    assert(st.fps.join(',') === 'FP1,FP2*', 'sessioni FP1 e FP2, l\'ultima scelta: ' + st.fps.join(','));
-    assert(st.rows >= 5, 'long run di FP2: ' + st.rows);
+    const fpsMx = Object.keys(require(require('path').join(F1DIR, 'weekend.json')).practice['mx-1962']);   // le attese dai file (cambiano a ogni sessione)
+    assert(st.fps.join(',') === fpsMx.map((k, i) => k + (i === fpsMx.length - 1 ? '*' : '')).join(','), 'sessioni ' + fpsMx.join(', ') + ', l\'ultima scelta: ' + st.fps.join(','));
+    assert(st.rows >= 5, 'long run: ' + st.rows);
     assert(/Messico/.test(st.text), 'manca il nome del GP: ' + st.text);
     assert(!errs.length, errs.join(' | '));
   },

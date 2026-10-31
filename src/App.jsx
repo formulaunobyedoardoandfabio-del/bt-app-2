@@ -5310,7 +5310,7 @@ function GarageScreen({ races, pitBest, onPitResult, sillyPreds, onPredict, sill
       {card("guide", "Guida 2D dei tracciati", "Tocca le curve: marcia, velocità, punto di staccata, rischio di bloccaggio e il momento storico B&T.", "Dati veri")}
       {card("clash", "Circuit Spec Clash", "Due piste a confronto: Safety Car, sorpassi, frenate, gas a tavoletta e carico aerodinamico.", null)}
       <div style={{ padding: "6px 18px 8px", fontFamily: F_BODY, fontWeight: 700, fontSize: 11, letterSpacing: 1.2, color: C.gold }}>ANALISI CON DATI VERI</div>
-      {card("ghost", (g => `Ghost Lap · ${g ? ghostSessLabel(g[0]) + " di " + g[1] : "qualifiche di Baku"}`)(ghostForNow(races, nowMs()) || ghostSessions()[0]), "Due giri veri a confronto: velocità, frenate e replay 2D di ogni curva.", "Dati veri")}
+      {card("ghost", `Ghost Lap · qualifiche di ${(ghostForNow(races, nowMs()) || ghostSessions()[0] || [null, "Baku"])[1]}`, "Due giri veri a confronto: velocità, frenate e replay 2D di ogni curva.", "Dati veri")}
       {/* Idee di Edoardo del 3-6/10 (documento "Idee nuove"): per ora solo annunciate (18/10: "creale ma mettile come in arrivo"). */}
       <div style={{ padding: "6px 18px 8px", fontFamily: F_BODY, fontWeight: 700, fontSize: 11, letterSpacing: 1.2, color: C.gold }}>IN ARRIVO</div>
       {GARAGE_SOON.map(([id, title, sub]) => (
@@ -5420,15 +5420,11 @@ const ghostSessions = () => GHOST_SESSIONS.filter(([id]) => typeof BtRealData !=
 // Ghost Lap nella pagina Race (18/10): solo dopo le qualifiche di quel GP. Si guarda il GP delle ultime qualifiche
 // corse: se l'app ha i suoi giri veri si vede, altrimenti (qualifiche di un GP dopo) no.
 const GHOST_CIRCUIT = { sepang2026q: "my-1999", baku2026q: "az-2016" };
-// Sessione del Ghost Lap dal suo id: "…-fp2" → prove libere 2, altrimenti qualifiche.
-const ghostSessLabel = id => (/-fp(\d)$/.test(id) ? "prove libere " + id.slice(-1) : "qualifiche");
 function ghostForNow(races, now) {
   let last = null;
   (races || []).forEach(r => {
     const w = CIRCUIT_INFO[r.circuitId] && CIRCUIT_INFO[r.circuitId].weekend;
-    // 31/10 sera: se il Ghost Lap del circuito è delle prove libere (…-fp2), la card c'è dall'inizio del weekend.
-    const fp = ghostSessions().some(([id]) => GHOST_CIRCUIT[id] === r.circuitId && /-fp\d$/.test(id));
-    const q = Array.isArray(w) ? (fp ? w[0] : w.find(x => x.key === "QUALI")) : null;
+    const q = Array.isArray(w) ? w.find(x => x.key === "QUALI") : null;
     const t = q ? Date.parse(q.utc) : Date.parse(String(r.date || "").slice(0, 10) + "T12:00:00Z") - 86400000;
     if (isFinite(t) && t <= now && (!last || t > last.t)) last = { r, t };
   });
@@ -5753,7 +5749,7 @@ function RaceScreen({ onStandingsEnd = null, isPremium, onPremium, onSelectDrive
       </button>
       {onOpenGhost && !st && ghostForNow(races, nowMs()) && (() => { const [gid, gname] = ghostForNow(races, nowMs()), gc = Object.keys(BtRealData[gid].laps), surn = c => ghostInfo(c).name.split(" ").slice(-1)[0]; return (
         <button className="press" data-ghost-open={gid} onClick={onOpenGhost} style={{ display: "block", width: "calc(100% - 32px)", margin: "0 16px 14px", padding: 14, borderRadius: 16, textAlign: "left", background: `linear-gradient(120deg, ${alpha(C.accentInk, .24)}, rgba(24,24,28,1) 62%)`, border: `1px solid ${alpha(C.accentInk, .45)}` }}>
-          <span style={{ display: "flex", alignItems: "center", gap: 8 }}><span style={{ flexShrink: 0, whiteSpace: "nowrap", padding: "2px 7px", borderRadius: 6, background: C.accent, fontFamily: F_HEAD, fontWeight: 900, fontSize: 10, color: "#fff" }}>DATI VERI</span><span style={{ fontFamily: F_HEAD, fontWeight: 900, fontStyle: "italic", fontSize: 15, color: C.text }}>GHOST LAP · {ghostSessLabel(gid).toUpperCase()} DI {gname.toUpperCase()}</span></span>
+          <span style={{ display: "flex", alignItems: "center", gap: 8 }}><span style={{ flexShrink: 0, whiteSpace: "nowrap", padding: "2px 7px", borderRadius: 6, background: C.accent, fontFamily: F_HEAD, fontWeight: 900, fontSize: 10, color: "#fff" }}>DATI VERI</span><span style={{ fontFamily: F_HEAD, fontWeight: 900, fontStyle: "italic", fontSize: 15, color: C.text }}>GHOST LAP · QUALIFICHE DI {gname.toUpperCase()}</span></span>
           <span style={{ display: "block", marginTop: 5, fontFamily: F_BODY, fontSize: 12, color: C.muted, lineHeight: 1.4 }}>Il giro più veloce di {surn(gc[0])} contro {gc.slice(1, 4).map(surn).join(", ")} e gli altri: velocità metro per metro, curva per curva e replay 2D.</span>
           <span style={{ display: "inline-flex", alignItems: "center", gap: 4, marginTop: 8, fontFamily: F_HEAD, fontWeight: 800, fontSize: 12, color: C.gold }}>Apri il Ghost Lap <Icon name="chevron" size={12} color={C.gold} sw={2.6} /></span>
         </button>
@@ -9588,13 +9584,18 @@ function App() {
       busy = true; checkedAt = nowMs();
       try {
         const race = racesRef.current.find(r => r.id === realLiveId);
-        const s = await OF1.latestSession();
+        // 31/10 notte: in diretta OpenF1 gratis è bloccato per tutto, anche per sapere qual è l'ultima sessione: se non
+        // risponde (bloccato o irraggiungibile) si chiede tutto alla nostra funzione su Vercel (api/live, l'abbonamento).
+        // Prima si chiedeva solo lì e durante le qualifiche del Messico la diretta non arrivava mai.
+        let s, viaLive = false;
+        try { s = await OF1.latestSession(); }
+        catch (e) { try { s = await OF1.latestSession({ live: true }); viaLive = true; } catch (e2) { throw e; } }
         if (!alive) return;
         if (!s || !race || !sessionOfWeekend(s, race)) { if (!loaded) setOf1({ status: "empty", raceId: realLiveId }); return; }
         // Sessioni del weekend già cominciate, per scegliere quale rivedere: una richiesta quando cambia l'ultima sessione
         // (e allora si torna all'ultima). Se non arrivano si riprova al giro dopo; intanto c'è l'ultima.
         if (listFor !== s.session_key) {
-          const all = await OF1.weekendSessions(s.meeting_key, { before: nowMs() }).catch(() => null);
+          const all = await OF1.weekendSessions(s.meeting_key, { before: nowMs(), live: viaLive }).catch(() => null);
           if (!alive) return;
           if (all) { listFor = s.session_key; list = all.some(x => x.session_key === s.session_key) ? all : [...all, s]; of1PickRef.current = null; }
           else if (!list.some(x => x.session_key === s.session_key)) list = [...list, s];
@@ -9614,10 +9615,10 @@ function App() {
         let raw, liveNow = false;
         const hit = switching ? cache.get(target.session_key) : null;
         if (hit && !of1NeedsReload(target, hit.at, nowMs())) raw = hit.raw;
+        else if (viaLive) { raw = await OF1.loadSession(target.session_key, { live: true }); liveNow = true; }
         else {
           try { raw = await OF1.loadSession(target.session_key); }
           catch (e) {
-            if (!(e && e.locked)) throw e;
             try { raw = await OF1.loadSession(target.session_key, { live: true }); liveNow = true; } catch (e2) { throw e; }
           }
           if (raw && (raw.laps.length || raw.session_result.length) && !(liveNow && isLatest)) { cache.delete(target.session_key); cache.set(target.session_key, { raw, at: nowMs() }); if (cache.size > 4) cache.delete(cache.keys().next().value); }
@@ -9634,13 +9635,13 @@ function App() {
           return;
         }
         const sim = buildReplay(raw, track, { drivers: LIVE_DRIVERS, of1: OF1 });
-        // Una sessione passata presa da api/live (OpenF1 gratis bloccato da un'altra sessione) non si ricarica ogni 15 s.
-        loaded = shownKey = target.session_key; loadedAt = nowMs(); empty = false; liveMode = liveNow && isLatest;
-        setReplay(r => ({ ...r, playing: false }));
         // ongoing (31/10): dati della diretta (api/live) con la sessione non ancora finita: non è "finita" anche se si
-        // vede l'ultimo momento arrivato.
+        // vede l'ultimo momento arrivato. Solo allora si ricarica ogni 15 s (una sessione passata presa da api/live no).
         const endAt = endOf(target);
-        setOf1Live({ raceId: race.id, type: sim.type, sim, track, source: "openf1", raw, sessionKey: target.session_key, ongoing: liveNow && isLatest && (!isFinite(endAt) || nowMs() < endAt) });
+        const ongoing = liveNow && isLatest && (!isFinite(endAt) || nowMs() < endAt);
+        loaded = shownKey = target.session_key; loadedAt = nowMs(); empty = false; liveMode = ongoing;
+        setReplay(r => ({ ...r, playing: false }));
+        setOf1Live({ raceId: race.id, type: sim.type, sim, track, source: "openf1", raw, sessionKey: target.session_key, ongoing });
         setOf1({ status: "ok", raceId: realLiveId });
       } catch (e) {
         if (!alive) return;

@@ -26,18 +26,18 @@ function res() {
 }
 const ENV = { OPENF1_USERNAME: ' utente ', OPENF1_PASSWORD: 'segreta' };
 
-t('dati in diretta: token con utente e password (senza spazi), poi la richiesta con il pass; 10 secondi in cache', async () => {
+t('dati in diretta: token con utente e password (senza spazi), poi la richiesta con il pass; 15 secondi in cache (limite 60 al minuto)', async () => {
   const f = fakeOpenF1(); let now = 1000;
   const h = createLive({ fetchImpl: f.fetchImpl, env: ENV, now: () => now });
   const r1 = res(); await h({ url: '/api/live?p=laps&session_key=9876' }, r1);
   assert.strictEqual(r1.code, 200); assert.deepStrictEqual(r1.body, [{ lap_number: 1 }]);
   assert.ok(f.calls[0].url.endsWith('/token') && /username=utente&password=segreta/.test(f.calls[0].body));
   assert.strictEqual(f.calls[1].url, 'https://api.openf1.org/v1/laps?session_key=9876');
-  assert.ok(/s-maxage=10/.test(r1.headers['Cache-Control']));
-  const r2 = res(); now += 5000; await h({ url: '/api/live?p=laps&session_key=9876' }, r2);
-  assert.strictEqual(f.calls.length, 2, 'entro 10 secondi dalla memoria');
-  const r3 = res(); now += 6000; await h({ url: '/api/live?p=laps&session_key=9876' }, r3);
-  assert.strictEqual(f.calls.length, 3, 'dopo 10 secondi si richiede (stesso pass)');
+  assert.ok(/s-maxage=15/.test(r1.headers['Cache-Control']), r1.headers['Cache-Control']);
+  const r2 = res(); now += 14000; await h({ url: '/api/live?p=laps&session_key=9876' }, r2);
+  assert.strictEqual(f.calls.length, 2, 'entro 15 secondi dalla memoria');
+  const r3 = res(); now += 2000; await h({ url: '/api/live?p=laps&session_key=9876' }, r3);
+  assert.strictEqual(f.calls.length, 3, 'dopo 15 secondi si richiede (stesso pass)');
 });
 t('check: dice se le credenziali vanno, senza mostrarle; senza variabili lo dice', async () => {
   const ok = res(); await createLive({ fetchImpl: fakeOpenF1().fetchImpl, env: ENV })({ url: '/api/live?check=1' }, ok);

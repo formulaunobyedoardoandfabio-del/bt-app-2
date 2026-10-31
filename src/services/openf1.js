@@ -81,7 +81,7 @@ function createOpenF1({ fetchImpl, now = Date.now, sleep = ms => new Promise(r =
     return Array.isArray(body) ? body : [];
   }
   const keyQ = sessionKey => "session_key=" + encodeURIComponent(sessionKey);
-  async function latestSession() { return (await get("sessions", "session_key=latest"))[0] || null; }
+  async function latestSession({ live = false } = {}) { return (await get("sessions", "session_key=latest", { live }))[0] || null; }
   // Sessioni del weekend (31/10 sera: per rivedere anche PL1, PL2, qualifiche…), dalla prima; con before solo quelle già
   // cominciate a quell'ora. Una richiesta.
   async function weekendSessions(meetingKey, { before = null, live = false } = {}) {
