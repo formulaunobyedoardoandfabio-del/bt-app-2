@@ -188,21 +188,19 @@ run({
     assert(!errs.length, errs.join(' | '));
   },
 
-  // 31/10: tifo, casco e trofei stanno una volta sola nel profilo pubblico (fanta/profilo-<aid>): i messaggi e le
-  // stanze non li ripetono più (prima ogni messaggio e ogni stanza ne avevano una copia).
-  async 'chat: tifo, casco e trofei nel profilo pubblico, non ripetuti nei messaggi né nelle stanze'(b) {
+  async 'chat: il mio messaggio porta tifo, casco e trofei, solo quando cambiano'(b) {
     const app2 = { favTeam: 'ferrari', favDriver: 'leclerc', helmet: { base: null, c1: '#FFFFFF', c2: '#111111', pattern: 'stars', number: 16, visor: 'smoke', finish: 'gloss' }, trophies: { radio: T0, pitcrew: T0 } };
     const { ctx, p, errs } = await open(b, { seed: { addDocs: USER(app2) } });
     await login(p); await w(p, 900); await openRoom(p);
     await say(p, 'Primo'); await say(p, 'Secondo');
-    const room = (await doc(p, 'shared/bt-chat-generale')).__arr, pub = await doc(p, 'fanta/profilo-' + ME);
+    const room = (await doc(p, 'shared/bt-chat-generale')).__arr;
     await ctx.close();
-    const mine = room.filter(x => x.aid === ME);
-    assert(mine.length === 2 && mine.every(x => !x.p && x.pe !== 1), 'nella stanza niente copie del profilo: ' + JSON.stringify(mine));
-    const P = pub && pub.p;
-    assert(P && P.t === 'ferrari' && P.d === 'leclerc' && P.f === 'vivo', 'tifo nel profilo pubblico: ' + JSON.stringify(pub));
-    assert(P.h && P.h.pattern === 'stars' && P.h.number === 16 && /^#[0-9A-F]{6}$/i.test(P.h.base), 'casco (col colore dei tasti): ' + JSON.stringify(P.h));
-    assert(Array.isArray(P.w) && P.w.includes('radio') && P.w.includes('pitcrew'), 'trofei: ' + JSON.stringify(P.w));
+    // 29/10: entrando nella stanza il profilo ci va come voce a parte (pe); i messaggi non lo ripetono.
+    const pe = room.find(x => x.pe === 1), [m1, m2] = room.filter(x => x.pe !== 1), P = { p: pe ? pe.p : m1 && m1.p };
+    assert(m1 && P.p && P.p.t === 'ferrari' && P.p.d === 'leclerc' && P.p.f === 'vivo', 'tifo nel messaggio: ' + JSON.stringify(room));
+    assert(P.p.h && P.p.h.pattern === 'stars' && P.p.h.number === 16 && /^#[0-9A-F]{6}$/i.test(P.p.h.base), 'casco nel messaggio (col colore dei tasti): ' + JSON.stringify(P.p.h));
+    assert(Array.isArray(P.p.w) && P.p.w.includes('radio') && P.p.w.includes('pitcrew'), 'trofei nel messaggio: ' + JSON.stringify(P.p.w));
+    assert(m2 && m2.txt === 'Secondo' && !m2.p, 'il profilo uguale non deve ripartire a ogni messaggio: ' + JSON.stringify(m2));
     assert(!errs.length, errs.join(' | '));
   },
 });

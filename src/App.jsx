@@ -9775,16 +9775,15 @@ function App() {
     h: helmet ? { ...helmet, base: helmet.base || C.accent } : undefined,
     w: trophyList.filter(t => trophies[t.id]).map(t => t.id),
   });
-  // 31/10: entrando in una stanza si tolgono le proprie voci vecchie del profilo (dal 29/10 al 31/10 ce n'era una per
-  // stanza): ora il profilo sta una volta sola nel profilo pubblico (Profiles), una pulizia per stanza.
+  // 29/10: entrando in una stanza ci va il proprio profilo (voce nascosta, solo quando cambia): così chi tocca il nome
+  // vede tifo, casco e trofei anche se non si è ancora scritto niente.
   useEffect(() => {
     if (view !== "chatThread" || !chatId || !account || account.loaded === false) return;
-    Chat.tidyProfile(chatId, { name: account.name, aid: account.aid }).then(done => { if (done) loadRoomMsgs(chatId); }, () => {});
-  }, [view, chatId, account && account.aid, account && account.loaded]);
+    Chat.announce(chatId, { name: account.name, aid: account.aid, p: myProf() }).then(sent => { if (sent) loadRoomMsgs(chatId); }, () => {});
+  }, [view, chatId, account && account.aid, account && account.loaded, favTeam, favDriver, JSON.stringify(helmet || null), Object.keys(trophies || {}).length]);
   const postChat = (id, text, link = null) => {
     const u = Account.current(), who = u ? { name: u.name, aid: u.aid } : chatMe();
-    // La medaglia dei trofei viaggia col messaggio (G31); il profilo no (31/10): sta una volta sola nel profilo pubblico.
-    const me = myMedal ? { ...who, medal: myMedal } : who;
+    const me = { ...(myMedal ? { ...who, medal: myMedal } : who), p: myProf() };   // la medaglia dei trofei viaggia con il messaggio (G31)
     const temp = { id: "invio-" + Date.now(), from: me.name, text: text.trim() || (link ? link.ti : ""), at: nowMs(), aid: me.aid, mine: true, medal: myMedal || null, link: link || null };
     setChatMsgs(x => ({ ...x, [id]: [...(x[id] || []), temp] }));
     return Chat.send(id, text, me, link).then(m => {
