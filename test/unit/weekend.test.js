@@ -9,6 +9,20 @@ let pass = 0, fail = 0;
 const t = (name, fn) => { try { fn(); pass++; console.log('PASS  ' + name); } catch (e) { fail++; console.log('FAIL  ' + name + '\n      → ' + e.message); } };
 
 // ── Degrado gomme ─────────────────────────────────────────────────────
+// 31/10 sera (Edoardo: "non ci sono i dati che si aggiornano"): il degrado anche dalle prove libere del weekend in
+// corso (i long run), coi dati veri scaricati dall'app (public/data/f1/weekend.json, Messico FP2).
+t('degrado dalle prove libere: Messico FP2, long run con almeno 5 giri buoni e stint giusti', () => {
+  const WK = require('../../public/data/f1/weekend.json');
+  const R = B.practiceRace(WK.practice['mx-1962'].FP2);
+  assert.ok(R && R.practice, 'manca la sessione');
+  const alb = R.drivers.ALB;
+  assert.deepStrictEqual(alb.st.map(x => [x[0], x[1], x[2]]), [['S', 1, 8], ['S', 9, 11], ['S', 12, 19], ['S', 20, 31]], 'stint di Albon dal numero di stint');
+  const list = B.raceDeg(R);
+  assert.ok(list.length >= 5, 'troppo pochi long run: ' + list.length);
+  assert.ok(list.every(d => d.used >= 5 && typeof d.slope === 'number'), 'ogni stint ha almeno 5 giri buoni e un degrado');
+  assert.ok(list.every(d => d.pts.every(pt => pt.lap >= d.from && pt.lap <= d.to)), 'i giri restano nel loro stint');
+  assert.strictEqual(B.practiceRace(null), null);
+});
 t('degrado: Russell a Baku, primo stint sulle Medie, senza i giri dietro la Safety Car', () => {
   const D = race('az-2016').drivers.RUS, d = B.degradation(D, 0);
   assert.strictEqual(d.c, 'M'); assert.strictEqual(d.from, 1); assert.strictEqual(d.to, 31);

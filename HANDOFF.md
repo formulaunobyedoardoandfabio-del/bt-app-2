@@ -298,3 +298,16 @@ Da fare:
   ricorda la sua posizione per scheda/pagina + titolo della pagina interna (tasto Indietro: i giochi del Garage hanno
   la loro); tornando si rimette lì. La chat no (va in fondo). Si riaggancia anche dopo l'accesso (deps: appShown).
   Prove: test/e2e/run77-scroll.js.
+- Ghost Lap e Degrado gomme nel weekend in corso: la catena dei dati funzionava già (workflow ogni ora nel weekend,
+  sito aggiornato, app che riscarica ogni 30 minuti), ma il Ghost Lap usava solo le qualifiche e il Degrado solo le
+  gare: durante il weekend si vedeva il GP prima. Ora:
+  - tools/make_live_data.py: se l'ultimo weekend ha prove libere ma non ancora le qualifiche, il Ghost Lap è quello
+    dell'ultima sessione di prove (FP3, poi FP2, poi FP1), id `<circuito>-2026-fp2`, nome "… · Prove Libere 2"; poi le
+    ultime qualifiche (sempre 2 Ghost Lap in tutto). Rigenerato il 31/10 da TracingInsights 0d9f163: Messico FP2 + Austin.
+  - App: card della Race ed elenco del Garage dicono "prove libere N" o "qualifiche" (`ghostSessLabel`); la card del
+    Ghost Lap di prove c'è dall'inizio del weekend; il Garage mostra il weekend già iniziato (ghostForNow).
+  - Degrado gomme: sorgente "Prove libere" (di serie se l'ultimo weekend non ha ancora la gara nei dati) con FP1/FP2/FP3:
+    `BtWk.practiceRace` trasforma la sessione in stint (numero di stint, mescola, giri delle gomme) e `raceDeg` la
+    calcola senza confronto col gruppo (giri non allineati) e contando dal primo giro.
+  - test/unit/f1data.test.js ora legge le attese da index.json (prima scritte a mano: si rompeva a ogni weekend).
+  Prove: test/unit/weekend.test.js (Messico FP2), run76 (Degrado nel weekend del Messico), run70 ok.

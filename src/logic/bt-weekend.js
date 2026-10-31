@@ -26,9 +26,10 @@
   // della mediana: traffico, errori). Non contano neanche i primi giri dello stint più lenti di oltre WARMUP secondi
   // della mediana dei 3 giri dopo: gomme ancora da scaldare o pista che si asciuga dopo la pioggia (Sepang 2026).
   const WARMUP = 1.0;
-  function stintPoints(D, si, raceLaps) {
+  // first: primo giro che conta (4 in gara; 1 nelle prove libere, dove contano solo i giri di uscita dai box).
+  function stintPoints(D, si, raceLaps, first = 4) {
     const [c, from, to, , life0] = D.st[si], P = [];
-    for (let lap = Math.max(from, 4); lap <= to; lap++) {
+    for (let lap = Math.max(from, first); lap <= to; lap++) {
       if (raceLaps && lap >= raceLaps) continue;                   // l'ultimo giro: spesso si alza il piede
       const ms = D.t[lap - 1], f = D.f[lap - 1] || 0;
       if (!ms || (f & BAD)) continue;
@@ -64,8 +65,8 @@
   // calo deve essere di almeno mezzo secondo più di quello del gruppo negli stessi giri: se rallentano tutti (pioggia,
   // bandiere, risparmio di energia) non è la gomma. Degrado negativo = il passo migliora (benzina che cala, pista più
   // gommata). raceLaps: giri della gara (l'ultimo non conta).
-  function degradation(D, si, raceLaps, R, code) {
-    const { c, from, to, pts } = stintPoints(D, si, raceLaps), n = pts.length;
+  function degradation(D, si, raceLaps, R, code, first = 4) {
+    const { c, from, to, pts } = stintPoints(D, si, raceLaps, first), n = pts.length;
     const out = { si, c, from, to, n: to - from + 1, used: n, slope: null, base: null, pts, cliff: null };
     if (n < 5) return out;
     let F = fit(pts), cliff = null;
@@ -87,10 +88,29 @@
     const list = [];
     Object.entries(R.drivers).forEach(([code, D]) => D.st.forEach((s, si) => {
       if (compound && s[0] !== compound) return;
-      const d = degradation(D, si, R.laps, R, code); if (d.slope == null) return;
+      // Nelle prove libere i giri dei piloti non sono negli stessi momenti: niente confronto col gruppo.
+      const d = R.practice ? degradation(D, si, null, null, code, 1) : degradation(D, si, R.laps, R, code); if (d.slope == null) return;
       list.push({ code, team: D.team, ...d });
     }));
     return list.sort((a, b) => a.slope - b.slope);
+  }
+
+  // Una sessione di prove libere (public/data/f1/weekend.json: per pilota t, c mescola giro per giro, life, s numero
+  // dello stint, f) come una gara per il degrado: gli stint dal numero di stint, mescola e giri delle gomme del primo giro.
+  function practiceRace(P) {
+    if (!P || typeof P !== "object") return null;
+    const drivers = {};
+    Object.entries(P).forEach(([code, e]) => {
+      if (!e || !Array.isArray(e.t)) return;
+      const st = [];
+      for (let i = 0; i < e.t.length; i++) {
+        const s0 = (e.s || [])[i], life = (e.life || [])[i] || 1;
+        if (i === 0 || s0 !== (e.s || [])[i - 1]) st.push([(e.c || "")[i] || "?", i + 1, i + 1, life <= 1 ? 1 : 0, life]);
+        else st[st.length - 1][2] = i + 1;
+      }
+      drivers[code] = { team: e.team || null, t: e.t, f: e.f || [], st };
+    });
+    return { circuitId: null, laps: null, drivers, practice: true };
   }
 
   // ── Strategia ───────────────────────────────────────────────────────
@@ -267,6 +287,6 @@
     return { laps: totalLaps, drivers };
   }
 
-  const api = { FUEL, COMP_NAME, median, degradation, raceDeg, strategy, validatePred, strategyPoints, communityPicks, qualiDuel, racePace, teammates, runs, profile, bluffVerdict, lapsOf, demoClaims, fromSim };
+  const api = { FUEL, COMP_NAME, median, degradation, raceDeg, practiceRace, strategy, validatePred, strategyPoints, communityPicks, qualiDuel, racePace, teammates, runs, profile, bluffVerdict, lapsOf, demoClaims, fromSim };
   if (typeof module !== "undefined" && module.exports) module.exports = api; else root.BtWeekendLogic = api;
 })(typeof window !== "undefined" ? window : globalThis);

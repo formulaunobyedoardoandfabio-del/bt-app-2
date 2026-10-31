@@ -170,8 +170,8 @@ def practice(ev, cid):
     return out
 
 # ── Ghost Lap (come tools/make_realdata.py) ───────────────────────────
-def fastest_laps(ev, n):
-    Q = f'{ev}/Qualifying/'; out = []
+def fastest_laps(ev, n, sess='Qualifying'):
+    Q = f'{ev}/{sess}/'; out = []
     for f in sorted(p for p in TREE if p.startswith(Q) and p.endswith('/laptimes.json')):
         x = load(f); drv = f.split('/')[-2]
         if not x: continue
@@ -181,17 +181,20 @@ def fastest_laps(ev, n):
             t, l = min(v); i = x['lap'].index(l)
             out.append({'time': t, 'drv': drv, 'lap': l, 'compound': x['compound'][i], 'team': x['team'][i], 'sectors': [x['s1'][i], x['s2'][i], x['s3'][i]], 'vst': x['vst'][i]})
     out.sort(key=lambda r: r['time']); return out[:n]
-def telemetry(ev, drv, lap):
-    x = load(f'{ev}/Qualifying/{drv}/{lap}_tel.json')
+def telemetry(ev, drv, lap, sess='Qualifying'):
+    x = load(f'{ev}/{sess}/{drv}/{lap}_tel.json')
     if not x: return None
     t = x['tel']
     return {'d': [max(0.0, v or 0) for v in t['distance']], 't': [v or 0 for v in t['time']], 'v': [v or 0 for v in t['speed']],
             'thr': [min(100, max(0, v or 0)) for v in t['throttle']], 'brk': [1 if v else 0 for v in t['brake']], 'g': [v or 0 for v in t['gear']],
             'x': [v or 0 for v in t['x']], 'y': [v or 0 for v in t['y']]}
-def ghost(i, ev, n=8):
+# sess: 'Qualifying' (di serie) o 'Practice 1/2/3' (31/10 sera: nel weekend, prima delle qualifiche).
+FP_NAME = {'Practice 1': 'Prove Libere 1', 'Practice 2': 'Prove Libere 2', 'Practice 3': 'Prove Libere 3'}
+FP_ID = {'Practice 1': 'fp1', 'Practice 2': 'fp2', 'Practice 3': 'fp3'}
+def ghost(i, ev, n=8, sess='Qualifying'):
     cid = CIRCUIT_IDS[i]; LEN = CIRC[cid]['len']; laps = {}; first = None
-    for r in fastest_laps(ev, n):
-        L = telemetry(ev, r['drv'], r['lap'])
+    for r in fastest_laps(ev, n, sess):
+        L = telemetry(ev, r['drv'], r['lap'], sess)
         if not L or len(L['d']) < 50 or not L['d'][-1]: continue
         first = first or L
         end = L['d'][-1]
@@ -199,14 +202,14 @@ def ghost(i, ev, n=8):
                           'd': [rnd(v * LEN / end, 1, 0) for v in L['d']], 't': [rnd(v, 3, 0) for v in L['t']], 'v': [rnd(v) for v in L['v']],
                           'thr': [rnd(v) for v in L['thr']], 'brk': L['brk'], 'g': [rnd(v) for v in L['g']], 'x': [rnd(v) for v in L['x']], 'y': [rnd(v) for v in L['y']]}
     if len(laps) < 2: return None
-    cj = load(f'{ev}/Qualifying/corners.json')
+    cj = load(f'{ev}/{sess}/corners.json')
     if cj:
         rot = cj['Rotation'][0] if isinstance(cj['Rotation'], list) else cj['Rotation']
         corners = [{'n': int(c), 'd': round(d, 1), 'x': round(x), 'y': round(y), 'detected': False} for c, d, x, y in zip(cj['CornerNumber'], cj['Distance'], cj['X'], cj['Y'])]
     else:
         rot = 0; corners = [{'n': c['n'], 'd': c['d'], 'x': c['x'], 'y': c['y'], 'detected': True} for c in GUIDE[cid]['corners']]
-    name = (GP[i] if i < len(GP) else ev) + ' 2026 · Qualifiche'
-    return {'id': cid + '-2026-q', 'name': name, 'circuitId': cid, 'source': SOURCE, 'laps': laps, 'rotation': rot,
+    name = (GP[i] if i < len(GP) else ev) + ' 2026 · ' + FP_NAME.get(sess, 'Qualifiche')
+    return {'id': cid + '-2026-' + FP_ID.get(sess, 'q'), 'name': name, 'circuitId': cid, 'source': SOURCE, 'laps': laps, 'rotation': rot,
             'cornersDetected': not cj, 'corners': corners}
 
 def dump(path, data):
@@ -229,7 +232,16 @@ for i in with_fp[-3:][::-1]:
     p = practice(folder(i), CIRCUIT_IDS[i])
     if p: weekend['practice'][CIRCUIT_IDS[i]] = p
 ghosts = []
+# Weekend in corso senza qualifiche (ancora): il Ghost Lap dell'ultima sessione di prove libere che ha i giri.
+if with_fp and (not with_quali or with_fp[-1] > with_quali[-1]):
+    i = with_fp[-1]; cid = CIRCUIT_IDS[i]
+    for sess in ('Practice 3', 'Practice 2', 'Practice 1'):
+        g = ghost(i, folder(i), sess=sess)
+        if g:
+            ghosts.append({'id': g['id'], 'circuitId': cid, 'round': i + 1, 'place': PLACE[cid], 'h': dump(f'ghost-{cid}.json', g)})
+            break
 for i in with_quali[-2:][::-1]:
+    if len(ghosts) >= 2: break
     g = ghost(i, folder(i))
     if not g: continue
     cid = CIRCUIT_IDS[i]

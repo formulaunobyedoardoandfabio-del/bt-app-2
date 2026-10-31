@@ -4803,12 +4803,27 @@ function WearTyre({ s }) {
     </div>
   );
 }
+// Prove libere più recenti tra quelle scaricate (public/data/f1/weekend.json): il circuito con la data di gara più vicina
+// a oggi tra quelli già iniziati, e le sue sessioni (FP1, FP2, FP3).
+const PRACTICE_KEYS = ["FP1", "FP2", "FP3"];
+function latestPractice(races) {
+  const P = BtWeekend.practice || {}, now = nowMs();
+  const dateOf = cid => { const r = (races || []).find(x => x.circuitId === cid); return r ? Date.parse(String(r.date).slice(0, 10) + "T12:00:00Z") : 0; };
+  const cids = Object.keys(P).filter(c => PRACTICE_KEYS.some(k => P[c] && P[c][k]) && dateOf(c) && dateOf(c) - 4 * 86400000 <= now);
+  if (!cids.length) return null;
+  const cid = cids.sort((a, b) => dateOf(b) - dateOf(a))[0];
+  return { cid, sessions: PRACTICE_KEYS.filter(k => P[cid][k]) };
+}
 function TyreDegTool({ races, live, onBack }) {
   const RS = BtWeekend.races.slice().sort((a, b) => b.round - a.round), liveRace = !!(live && live.type === "RACE");
-  const [src0, setSrc] = useState(liveRace ? "live" : "real");
-  const src = src0 === "live" && liveRace ? "live" : "real";
+  // Prove libere solo se sono di un weekend dopo l'ultima gara con i dati (quello in corso o appena finito).
+  const PL = (() => { const x = latestPractice(races); return x && !RS.some(r => r.circuitId === x.cid) ? x : null; })();
+  const [src0, setSrc] = useState(liveRace ? "live" : PL ? "practice" : "real");
+  const src = src0 === "live" && liveRace ? "live" : src0 === "practice" && PL ? "practice" : "real";
+  const [fp0, setFp] = useState(null);
+  const fp = PL ? (PL.sessions.includes(fp0) ? fp0 : PL.sessions[PL.sessions.length - 1]) : null;
   const [cid, setCid] = useState(RS[0].circuitId), [comp, setComp] = useState("all"), [sel, setSel] = useState(null), [, setTick] = useState(0);
-  const R = src === "live" ? raceFromLive(live) : RS.find(r => r.circuitId === cid);
+  const R = src === "live" ? raceFromLive(live) : src === "practice" ? BtWk.practiceRace(BtWeekend.practice[PL.cid][fp]) : RS.find(r => r.circuitId === cid);
   const list = BtWk.raceDeg(R, comp === "all" ? {} : { compound: comp }).sort((a, b) => (b.cliff ? 1 : 0) - (a.cliff ? 1 : 0) || b.slope - a.slope);
   const cur = list.find(s => s.code + ":" + s.si === sel) || null;
   const comps = [...new Set(Object.values(R.drivers).flatMap(D => D.st.map(s => s[0])))].filter(c => c !== "?");
@@ -4818,9 +4833,15 @@ function TyreDegTool({ races, live, onBack }) {
       <div style={WK_CARD}>
         <div style={{ display: "flex", gap: 6, marginBottom: 10 }}>
           <WkChip attrs={{ "data-deg-src": "real" }} on={src === "real"} onClick={() => { setSrc("real"); setSel(null); }}>Gare vere 2026</WkChip>
+          {PL && <WkChip attrs={{ "data-deg-src": "practice" }} on={src === "practice"} onClick={() => { setSrc("practice"); setSel(null); }}>Prove libere</WkChip>}
           {liveRace && <WkChip attrs={{ "data-deg-src": "live" }} on={src === "live"} onClick={() => { setSrc("live"); setSel(null); }}>{liveSrcLabel(live)}</WkChip>}
         </div>
-        {src === "real" ? <select id="degRace" value={cid} onChange={e => { setCid(e.target.value); setSel(null); }} style={{ width: "100%", padding: "10px 12px", marginBottom: 10, borderRadius: 12, background: C.bg, border: `1px solid ${C.border}`, color: C.text, fontFamily: F_BODY, fontSize: 13 }}>{RS.map(r => <option key={r.circuitId} value={r.circuitId}>{raceNameOfCid(races, r.circuitId)} · {r.laps} giri</option>)}</select>
+        {src === "practice" ? (
+          <div style={{ marginBottom: 10 }}>
+            <div style={{ fontFamily: F_BODY, fontSize: 12.5, color: C.text, marginBottom: 8 }}>{raceNameOfCid(races, PL.cid)}: i long run delle prove libere (si aggiorna da solo dopo ogni sessione)</div>
+            <div style={{ display: "flex", gap: 6 }}>{PL.sessions.map(k => <WkChip key={k} attrs={{ "data-deg-fp": k }} on={fp === k} onClick={() => { setFp(k); setSel(null); }}>{k}</WkChip>)}</div>
+          </div>
+        ) : src === "real" ? <select id="degRace" value={cid} onChange={e => { setCid(e.target.value); setSel(null); }} style={{ width: "100%", padding: "10px 12px", marginBottom: 10, borderRadius: 12, background: C.bg, border: `1px solid ${C.border}`, color: C.text, fontFamily: F_BODY, fontSize: 13 }}>{RS.map(r => <option key={r.circuitId} value={r.circuitId}>{raceNameOfCid(races, r.circuitId)} · {r.laps} giri</option>)}</select>
           : <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10, fontFamily: F_BODY, fontSize: 12.5, color: C.text }}><span style={{ flex: 1 }}>{liveSrcLabel(live)}: giro {R.lap} di {R.laps}</span><button className="press" data-deg-refresh="" onClick={() => setTick(n => n + 1)} style={{ padding: "6px 10px", borderRadius: 9, background: "rgba(255,255,255,.07)", border: `1px solid ${C.border}`, fontFamily: F_HEAD, fontWeight: 800, fontSize: 11.5, color: C.text }}>Aggiorna</button></div>}
         <div className="scrollrow" style={{ display: "flex", gap: 6, overflowX: "auto", scrollbarWidth: "none" }}>
           {["all", ...comps].map(c => <WkChip key={c} attrs={{ "data-deg-comp": c }} on={comp === c} onClick={() => { setComp(c); setSel(null); }}>{c === "all" ? "Tutte" : <><CompDot c={c} />{compUi(c)[1]}</>}</WkChip>)}
@@ -5193,7 +5214,7 @@ function GarageScreen({ races, pitBest, onPitResult, sillyPreds, onPredict, sill
       {card("guide", "Guida 2D dei tracciati", "Tocca le curve: marcia, velocità, punto di staccata, rischio di bloccaggio e il momento storico B&T.", "Dati veri")}
       {card("clash", "Circuit Spec Clash", "Due piste a confronto: Safety Car, sorpassi, frenate, gas a tavoletta e carico aerodinamico.", null)}
       <div style={{ padding: "6px 18px 8px", fontFamily: F_BODY, fontWeight: 700, fontSize: 11, letterSpacing: 1.2, color: C.gold }}>ANALISI CON DATI VERI</div>
-      {card("ghost", `Ghost Lap · qualifiche di ${ghostSessions().length ? ghostSessions()[0][1] : "Baku"}`, "Due giri veri a confronto: velocità, frenate e replay 2D di ogni curva.", "Dati veri")}
+      {card("ghost", (g => `Ghost Lap · ${g ? ghostSessLabel(g[0]) + " di " + g[1] : "qualifiche di Baku"}`)(ghostForNow(races, nowMs()) || ghostSessions()[0]), "Due giri veri a confronto: velocità, frenate e replay 2D di ogni curva.", "Dati veri")}
       {/* Idee di Edoardo del 3-6/10 (documento "Idee nuove"): per ora solo annunciate (18/10: "creale ma mettile come in arrivo"). */}
       <div style={{ padding: "6px 18px 8px", fontFamily: F_BODY, fontWeight: 700, fontSize: 11, letterSpacing: 1.2, color: C.gold }}>IN ARRIVO</div>
       {GARAGE_SOON.map(([id, title, sub]) => (
@@ -5303,11 +5324,15 @@ const ghostSessions = () => GHOST_SESSIONS.filter(([id]) => typeof BtRealData !=
 // Ghost Lap nella pagina Race (18/10): solo dopo le qualifiche di quel GP. Si guarda il GP delle ultime qualifiche
 // corse: se l'app ha i suoi giri veri si vede, altrimenti (qualifiche di un GP dopo) no.
 const GHOST_CIRCUIT = { sepang2026q: "my-1999", baku2026q: "az-2016" };
+// Sessione del Ghost Lap dal suo id: "…-fp2" → prove libere 2, altrimenti qualifiche.
+const ghostSessLabel = id => (/-fp(\d)$/.test(id) ? "prove libere " + id.slice(-1) : "qualifiche");
 function ghostForNow(races, now) {
   let last = null;
   (races || []).forEach(r => {
     const w = CIRCUIT_INFO[r.circuitId] && CIRCUIT_INFO[r.circuitId].weekend;
-    const q = Array.isArray(w) ? w.find(x => x.key === "QUALI") : null;
+    // 31/10 sera: se il Ghost Lap del circuito è delle prove libere (…-fp2), la card c'è dall'inizio del weekend.
+    const fp = ghostSessions().some(([id]) => GHOST_CIRCUIT[id] === r.circuitId && /-fp\d$/.test(id));
+    const q = Array.isArray(w) ? (fp ? w[0] : w.find(x => x.key === "QUALI")) : null;
     const t = q ? Date.parse(q.utc) : Date.parse(String(r.date || "").slice(0, 10) + "T12:00:00Z") - 86400000;
     if (isFinite(t) && t <= now && (!last || t > last.t)) last = { r, t };
   });
@@ -5612,7 +5637,7 @@ function RaceScreen({ onStandingsEnd = null, isPremium, onPremium, onSelectDrive
       </button>
       {onOpenGhost && !st && ghostForNow(races, nowMs()) && (() => { const [gid, gname] = ghostForNow(races, nowMs()), gc = Object.keys(BtRealData[gid].laps), surn = c => ghostInfo(c).name.split(" ").slice(-1)[0]; return (
         <button className="press" data-ghost-open={gid} onClick={onOpenGhost} style={{ display: "block", width: "calc(100% - 32px)", margin: "0 16px 14px", padding: 14, borderRadius: 16, textAlign: "left", background: `linear-gradient(120deg, ${alpha(C.accentInk, .24)}, rgba(24,24,28,1) 62%)`, border: `1px solid ${alpha(C.accentInk, .45)}` }}>
-          <span style={{ display: "flex", alignItems: "center", gap: 8 }}><span style={{ flexShrink: 0, whiteSpace: "nowrap", padding: "2px 7px", borderRadius: 6, background: C.accent, fontFamily: F_HEAD, fontWeight: 900, fontSize: 10, color: "#fff" }}>DATI VERI</span><span style={{ fontFamily: F_HEAD, fontWeight: 900, fontStyle: "italic", fontSize: 15, color: C.text }}>GHOST LAP · QUALIFICHE DI {gname.toUpperCase()}</span></span>
+          <span style={{ display: "flex", alignItems: "center", gap: 8 }}><span style={{ flexShrink: 0, whiteSpace: "nowrap", padding: "2px 7px", borderRadius: 6, background: C.accent, fontFamily: F_HEAD, fontWeight: 900, fontSize: 10, color: "#fff" }}>DATI VERI</span><span style={{ fontFamily: F_HEAD, fontWeight: 900, fontStyle: "italic", fontSize: 15, color: C.text }}>GHOST LAP · {ghostSessLabel(gid).toUpperCase()} DI {gname.toUpperCase()}</span></span>
           <span style={{ display: "block", marginTop: 5, fontFamily: F_BODY, fontSize: 12, color: C.muted, lineHeight: 1.4 }}>Il giro più veloce di {surn(gc[0])} contro {gc.slice(1, 4).map(surn).join(", ")} e gli altri: velocità metro per metro, curva per curva e replay 2D.</span>
           <span style={{ display: "inline-flex", alignItems: "center", gap: 4, marginTop: 8, fontFamily: F_HEAD, fontWeight: 800, fontSize: 12, color: C.gold }}>Apri il Ghost Lap <Icon name="chevron" size={12} color={C.gold} sw={2.6} /></span>
         </button>

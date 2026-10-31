@@ -169,4 +169,28 @@ run({
     assert(!/prossimo messaggio/.test(sheet.text), 'c\'è ancora la scritta vecchia: ' + sheet.text);
     assert(!errs.length, errs.join(' | '));
   },
+
+  // 31/10 sera (Edoardo: "non ci sono i dati che si aggiornano in Ghost Lap e Tire degradation"): nel weekend in corso
+  // il Degrado gomme parte dalle prove libere scaricate (qui i file veri di public/data/f1, Messico FP1 e FP2).
+  async 'degrado gomme nel weekend del Messico: prove libere scaricate, FP2 di serie, long run veri'(b) {
+    const F1DIR = require('path').join(__dirname, '../../public/data/f1');
+    const routes = { 'https://bt-app-2.vercel.app/data/f1/**': r => {
+      const f = require('path').join(F1DIR, new URL(r.request().url()).pathname.split('/').pop());
+      return require('fs').existsSync(f) ? r.fulfill({ status: 200, contentType: 'application/json', headers: { 'access-control-allow-origin': '*' }, body: require('fs').readFileSync(f, 'utf8') }) : r.fulfill({ status: 404, body: '' });
+    } };
+    const { ctx, p, errs } = await open(b, { now: '2026-10-31T10:00:00Z', routes }); await login(p); await w(p, 1500);
+    await tapSel(p, '[data-nav-tab="garage"]'); await w(p, 500); await tapSel(p, '[data-game="deg"]'); await w(p, 600);
+    const st = await p.evaluate(() => ({
+      src: (document.querySelector('[data-deg-src][aria-pressed="true"]') || {}).getAttribute ? document.querySelector('[data-deg-src][aria-pressed="true"]').getAttribute('data-deg-src') : null,
+      fps: [...document.querySelectorAll('[data-deg-fp]')].map(e => e.getAttribute('data-deg-fp') + (e.getAttribute('aria-pressed') === 'true' ? '*' : '')),
+      rows: document.querySelectorAll('[data-deg-row]').length,
+      text: document.querySelector('[data-deg]').innerText.replace(/\s+/g, ' ').slice(0, 300),
+    }));
+    await ctx.close();
+    assert(st.src === 'practice', 'di serie le prove libere del weekend in corso: ' + JSON.stringify(st));
+    assert(st.fps.join(',') === 'FP1,FP2*', 'sessioni FP1 e FP2, l\'ultima scelta: ' + st.fps.join(','));
+    assert(st.rows >= 5, 'long run di FP2: ' + st.rows);
+    assert(/Messico/.test(st.text), 'manca il nome del GP: ' + st.text);
+    assert(!errs.length, errs.join(' | '));
+  },
 });

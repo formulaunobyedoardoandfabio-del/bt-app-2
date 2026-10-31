@@ -1,5 +1,6 @@
 // Prove dei dati F1 che si aggiornano da soli (src/services/f1data.js) con i file veri generati da
-// tools/make_live_data.py (public/data/f1: Ghost Lap di Austin e Singapore, gare fino a Singapore, qualifiche fino ad Austin).
+// tools/make_live_data.py (public/data/f1). I file cambiano a ogni weekend (workflow Dati F1): quello che ci si aspetta
+// (Ghost Lap, GP con le prove) si legge da index.json, così le prove restano valide anche dopo ogni aggiornamento.
 // Uso: node test/unit/f1data.test.js [filtro]
 const assert = require('assert');
 const fs = require('fs');
@@ -25,19 +26,22 @@ const memStore = () => { const m = new Map(); return { get: k => (m.has(k) ? JSO
 
 // I GP corsi crescono a ogni weekend (workflow Dati F1): quanti e l'ultimo si leggono dal file vero.
 const WEEK = require('../../public/data/f1/weekend.json');
+const IDX = require('../../public/data/f1/index.json');
+const GH = IDX.ghosts, FP_CID = IDX.weekend.practice[0];
 let pass = 0, fail = 0;
 const tests = [];
 const t = (name, fn) => tests.push([name, fn]);
 
-t('dati F1: indice, gare e qualifiche e il Ghost Lap delle ultime qualifiche (Austin)', async () => {
+t('dati F1: indice, gare, qualifiche, prove e i Ghost Lap più recenti', async () => {
   const f = fakeFetch();
   const r = await D.createF1Data({ fetch: f, now: () => NOW }).refresh();
-  assert.deepStrictEqual(f.calls, ['index.json', 'weekend.json', 'ghost-us-2012.json', 'ghost-sg-2008.json']);
+  assert.deepStrictEqual(f.calls, ['index.json', 'weekend.json', ...GH.map(g => `ghost-${g.circuitId}.json`)]);
   assert.strictEqual(r.weekend.races[r.weekend.races.length - 1].circuitId, WEEK.races[WEEK.races.length - 1].circuitId);
-  assert.ok(r.weekend.quali.some(q => q.circuitId === 'us-2012'));
-  assert.ok(r.weekend.practice['us-2012'] && r.weekend.practice['us-2012'].FP1);
-  assert.deepStrictEqual(r.ghosts.map(g => [g.id, g.circuitId, g.place]), [['us-2012-2026-q', 'us-2012', 'Austin'], ['sg-2008-2026-q', 'sg-2008', 'Singapore']]);
-  assert.strictEqual(Object.keys(r.ghosts[0].data.laps)[0], 'ANT');
+  assert.strictEqual(r.weekend.quali.length, WEEK.quali.length);
+  assert.ok(r.weekend.practice[FP_CID] && r.weekend.practice[FP_CID].FP1, 'prove libere dell\'ultimo weekend');
+  assert.deepStrictEqual(r.ghosts.map(g => [g.id, g.circuitId, g.place]), GH.map(g => [g.id, g.circuitId, g.place]));
+  assert.ok(GH.length === 2 && GH.every(g => /-2026-(q|fp[123])$/.test(g.id)), 'due Ghost Lap, di qualifiche o prove libere: ' + GH.map(g => g.id));
+  assert.ok(Object.keys(r.ghosts[0].data.laps).length >= 2);
 });
 
 t('dati F1: si riscarica solo quello che è cambiato; indice al massimo ogni 15 minuti', async () => {
@@ -82,10 +86,10 @@ t('dati F1: aggiornare i dati dell\'app (gare, prove, Ghost Lap) senza perdere q
   const changed = D.apply(r, { weekend: W, ghostData: G, ghostSessions: sessions, ghostCircuit: circuit });
   assert.strictEqual(changed, true);
   assert.strictEqual(W.races.length, WEEK.races.length);
-  assert.ok(W.practice['az-2016'] && W.practice['us-2012']);
-  assert.deepStrictEqual(sessions.map(s => s[1]), ['Austin', 'Singapore', 'Baku']);
-  assert.strictEqual(circuit['us-2012-2026-q'], 'us-2012');
-  assert.ok(G['us-2012-2026-q'].laps.ANT && G.baku2026q);
+  assert.ok(W.practice['az-2016'] && W.practice[FP_CID]);
+  assert.deepStrictEqual(sessions.map(s => s[1]), [...GH.map(g => g.place), 'Baku']);
+  assert.strictEqual(circuit[GH[0].id], GH[0].circuitId);
+  assert.ok(Object.keys(G[GH[0].id].laps).length >= 2 && G.baku2026q);
   assert.strictEqual(D.apply(r, { weekend: W, ghostData: G, ghostSessions: sessions, ghostCircuit: circuit }), false, 'di nuovo uguale: niente cambia');
 });
 
