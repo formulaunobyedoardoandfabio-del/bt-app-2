@@ -1,11 +1,13 @@
 // Leghe FantaF1 vere (31/10; prove in test/unit/fantaleague.test.js).
 // - Risultati veri della stagione da Jolpica (gare, qualifiche, Sprint), a pagine da 100 righe, tenuti sul telefono per
 //   3 ore (senza rete: gli ultimi letti). Jolpica è per uso non commerciale: vedi HANDOFF (JOLPICA_ON).
-// - Una lega è il documento fanta/lega-<CODICE> { name, owner, created, members: { <aid>: { name, team, color, log, gone } } }:
+// - Una lega è il documento fanta/lega-<CODICE> { name, owner, created, members: { <aid>: { name, team, color, log, bonus, gone } } }:
 //   ognuno scrive solo il suo membro (la storia della sua squadra, log); i punti li calcola ogni telefono coi risultati
-//   veri e le regole di sempre (src/logic/fanta-season.js), così sono uguali per tutti.
+//   veri e le regole di sempre (src/logic/fanta-season.js), così sono uguali per tutti; bonus = i punti dei pronostici
+//   indovinati (meteo, sondaggi, previsioni), che conta l'app di ognuno.
 const FB = require("./firebase");
 const FS = require("../logic/fanta-season");
+const { authorId } = require("./compat");
 
 const BASE = "https://api.jolpi.ca/ergast/f1";
 const FRESH_MS = 3 * 3600000, PAGE = 100, MAX_PAGES = 12, LOG_MAX = 80;
@@ -14,12 +16,13 @@ const isObj = v => !!v && typeof v === "object" && !Array.isArray(v);
 const mkErr = code => Object.assign(new Error(code), { code });
 const codeOk = c => (typeof c === "string" && /^BT-[A-Z0-9]{4,6}$/.test(c) ? c : null);
 const docId = code => "lega-" + code;
+const bonusOk = v => (Number.isInteger(v) && v >= 0 && v <= 5000 ? v : 0);
 
 function cleanLeague(code, d) {
   if (!isObj(d)) return null;
   const members = Object.entries(isObj(d.members) ? d.members : {})
     .filter(([aid, m]) => /^[A-Za-z0-9_-]{1,40}$/.test(aid) && isObj(m) && !m.gone)
-    .map(([aid, m], i) => ({ aid, name: String(m.name || "Tifoso").slice(0, 30), team: String(m.team || "").slice(0, 40), color: /^#[0-9A-F]{6}$/i.test(m.color || "") ? m.color : COLORS[i % COLORS.length], log: FS.cleanLog(m.log).slice(-LOG_MAX) }));
+    .map(([aid, m], i) => ({ aid, name: String(m.name || "Tifoso").slice(0, 30), team: String(m.team || "").slice(0, 40), color: /^#[0-9A-F]{6}$/i.test(m.color || "") ? m.color : COLORS[i % COLORS.length], log: FS.cleanLog(m.log).slice(-LOG_MAX), bonus: bonusOk(m.bonus) }));
   return { code, name: String(d.name || "Lega").slice(0, 40), owner: String(d.owner || ""), created: Number(d.created) || 0, members };
 }
 
@@ -57,7 +60,7 @@ function createFantaLeague({ fetch: f = (...a) => fetch(...a), now = () => Date.
   const results = () => (inflight = inflight || load().finally(() => { inflight = null; }));
 
   const loadLeague = async code => (codeOk(code) ? cleanLeague(code, await dbGet("fanta", docId(code))) : null);
-  const member = (me, log, i = 0) => ({ name: me.name, team: me.team || "", color: COLORS[i % COLORS.length], log: FS.cleanLog(log).slice(-LOG_MAX), gone: false });
+  const member = (me, log, i = 0) => ({ name: me.name, team: me.team || "", color: COLORS[i % COLORS.length], log: FS.cleanLog(log).slice(-LOG_MAX), bonus: bonusOk(me.bonus), gone: false });
   async function createLeague(name, me, log) {
     const n = String(name || "").trim().slice(0, 40);
     if (!n) throw mkErr("name");
@@ -81,7 +84,7 @@ function createFantaLeague({ fetch: f = (...a) => fetch(...a), now = () => Date.
   // Squadra cambiata (o nome della squadra): la storia aggiornata va in tutte le mie leghe.
   async function pushLog(codes, me, log) {
     for (const c of (codes || []).filter(codeOk)) {
-      await dbSet("fanta", docId(c), { members: { [me.aid]: { name: me.name, team: me.team || "", log: FS.cleanLog(log).slice(-LOG_MAX), gone: false } } }).catch(() => {});
+      await dbSet("fanta", docId(c), { members: { [me.aid]: { name: me.name, team: me.team || "", log: FS.cleanLog(log).slice(-LOG_MAX), bonus: bonusOk(me.bonus), gone: false } } }).catch(() => {});
     }
   }
   const leaveLeague = (code, aid) => (codeOk(code) ? dbSet("fanta", docId(code), { members: { [aid]: { gone: true } } }) : Promise.resolve());
@@ -89,11 +92,22 @@ function createFantaLeague({ fetch: f = (...a) => fetch(...a), now = () => Date.
 
   // Classifica di una lega: punti veri di ogni membro (dalla sua storia e dai risultati), dal primo all'ultimo.
   function standings(league, rounds, lockOf) {
-    return (league ? league.members : []).map(m => ({ ...m, pts: FS.seasonPoints({ log: m.log, rounds, lockOf }).total }))
+    return (league ? league.members : []).map(m => ({ ...m, pts: FS.seasonPoints({ log: m.log, rounds, lockOf }).total + m.bonus }))
       .sort((a, b) => b.pts - a.pts || a.name.localeCompare(b.name));
   }
 
-  return { results, loadLeague, createLeague, joinLeague, pushLog, leaveLeague, renameLeague, standings };
+  // Eliminazione dell'account: nelle sue leghe (codici nei dati dell'account) il membro resta solo come "uscito",
+  // senza nome, squadra e storia.
+  async function cleanupFor(user) {
+    const email = String((user && user.email) || "").toLowerCase();
+    if (!email) return;
+    const doc = await dbGet("users", email).catch(() => null);
+    const codes = doc && doc.app2 && Array.isArray(doc.app2.leagues) ? doc.app2.leagues : [];
+    const aid = (user && user.aid) || authorId(email);
+    for (const c of codes.filter(codeOk)) await dbSet("fanta", docId(c), { members: { [aid]: { gone: true, name: "", team: "", log: [], bonus: 0 } } }).catch(() => {});
+  }
+
+  return { cleanupFor, results, loadLeague, createLeague, joinLeague, pushLog, leaveLeague, renameLeague, standings };
 }
 
 module.exports = { createFantaLeague, cleanLeague, BASE, LOG_MAX };

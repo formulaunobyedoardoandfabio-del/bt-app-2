@@ -337,7 +337,7 @@ t('loadUserData: solo le chiavi dei dati personali; flushUserData salva subito',
   await A.flushUserData();
   assert.deepStrictEqual(firebase.__fake.doc('users/a@b.it').app2, { saved: ['n1'], votes: { home: 'norris' }, strano: 1, pitBest: 2.41 });
   // Tappa 3: colori dell'app, suoni, vibrazioni, casco e notizie nascoste si salvano nell'account.
-  assert.ok(D.USER_KEYS.includes('notifSeenAt') && ['theme', 'sounds', 'haptics', 'helmet', 'hidden'].every(k => D.USER_KEYS.includes(k)) && D.USER_KEYS.length === 23);
+  assert.ok(D.USER_KEYS.includes('notifSeenAt') && ['theme', 'sounds', 'haptics', 'helmet', 'hidden'].every(k => D.USER_KEYS.includes(k)) && ['squadLog', 'leagues'].every(k => D.USER_KEYS.includes(k)) && D.USER_KEYS.length === 25)   // 31/10: storia della squadra e leghe FantaF1;
   // Trofei vinti (G31): { id: data in ms } nell'account.
   assert.ok(D.USER_KEYS.includes('trophies'), 'trofei nei dati dell\'account');
   // 24/10: il Premium dell'anteprima (abbonamento di prova e prova per un GP) resta nell'account.

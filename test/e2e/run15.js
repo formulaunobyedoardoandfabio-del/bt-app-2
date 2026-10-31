@@ -6,14 +6,15 @@ const { chromium } = require('/opt/node-tools/node_modules/playwright');
 // Le notizie, le previsioni, i video e il calendario d'esempio della 2.0 ora stanno su Firebase (Task 6): il Firebase
 // finto parte con quei documenti, così le prove li ritrovano.
 const SEED_20 = require('../fixtures/seed-2.0.json');
+const { leagueSeed } = require('../fake/leagues');   // 31/10: leghe FantaF1 vere
 const EXE = require('fs').existsSync('/opt/pw-browsers/chromium-1194/chrome-linux/chrome') ? '/opt/pw-browsers/chromium-1194/chrome-linux/chrome' : undefined;
 const NOW = '2026-09-30T11:48:00Z';   // mercoledì prima del GP: la squadra chiude tra 2 giorni, 20 ore e 12 minuti
 
-async function open(b, { now = NOW } = {}) {
+async function open(b, { now = NOW, seed = null } = {}) {
   const ctx = await b.newContext({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true });
   await ctx.route('https://api.jolpi.ca/**', r => r.abort());               // 24/10: classifiche di Jolpica e previsioni
   await ctx.route('https://bt-app-2.vercel.app/**', r => r.abort());   // meteo di serie non rispondono (come helpers.js)
-  await ctx.addInitScript(seed => { window.__btSeed = seed; }, SEED_20);
+  await ctx.addInitScript(seed => { window.__btSeed = seed; }, seed ? { ...SEED_20, addDocs: { ...(SEED_20.addDocs || {}), ...(seed.addDocs || {}) } } : SEED_20);
   await ctx.addInitScript(now => { window.open = () => null; window.__btNow = Date.parse(now); }, now);
   const p = await ctx.newPage(); const errs = []; p.on('pageerror', e => errs.push(e.message));
   await p.goto('file://' + __dirname + '/' + (process.env.PAGE || 'test.html')); await p.waitForTimeout(400);
@@ -252,12 +253,14 @@ const tests = {
     assert(total1 === total0, `la prova DEMO ha cambiato il totale: ${total0} → ${total1}`);
     assert(!errs.length, errs.join(' | '));
   },
-  async 'fanta: podio dei migliori di tutte le leghe coi nickname'(b) {
-    const { ctx, p } = await open(b); await login(p); await goTab(p, 'FANTA');
+  // 31/10: podio dai membri veri delle mie leghe (punti dei GP veri + bonus dei pronostici).
+  async 'fanta: podio dei migliori di tutte le leghe'(b) {
+    const seed = leagueSeed({ members: [{ name: 'Bianchi', bonus: 30 }, { name: 'Greco', bonus: 20 }, { name: 'Conti', bonus: 10 }] });
+    const { ctx, p } = await open(b, { seed: { addDocs: seed } }); await login(p); await goTab(p, 'FANTA'); await w(p, 600);
     const pd = await podium(p, '[data-fanta-podium]'); await ctx.close();
     assert(pd && pd.map(x => x.place).join() === '2,1,3', 'ordine: ' + JSON.stringify(pd));
-    assert(/@bianchi_bj/.test(pd[1].text) && /1\.284 pt/.test(pd[1].text), '1°: ' + pd[1].text);
-    assert(/@undercut_af/.test(pd[0].text) && /@ferrarista92/.test(pd[2].text), 'podio: ' + JSON.stringify(pd));
+    assert(/Bianchi/.test(pd[1].text) && /30 pt/.test(pd[1].text), '1°: ' + pd[1].text);
+    assert(/Greco/.test(pd[0].text) && /Conti/.test(pd[2].text), 'podio: ' + JSON.stringify(pd));
   },
   async 'fanta: regole e punti come F1 Fantasy più i bonus B&T'(b) {
     const { ctx, p } = await open(b); await login(p); await goTab(p, 'FANTA');

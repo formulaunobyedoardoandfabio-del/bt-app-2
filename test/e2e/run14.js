@@ -6,16 +6,17 @@ const { chromium } = require('/opt/node-tools/node_modules/playwright');
 // Le notizie, le previsioni, i video e il calendario d'esempio della 2.0 ora stanno su Firebase (Task 6): il Firebase
 // finto parte con quei documenti, così le prove li ritrovano.
 const SEED_20 = require('../fixtures/seed-2.0.json');
+const { leagueSeed } = require('../fake/leagues');   // 31/10: leghe FantaF1 vere
 const EXE = require('fs').existsSync('/opt/pw-browsers/chromium-1194/chrome-linux/chrome') ? '/opt/pw-browsers/chromium-1194/chrome-linux/chrome' : undefined;
 
 // Ora fissa (mercoledì prima del GP della Malesia, nessuna sessione in corso): così le chiusure del meteo e del
 // FantaF1 non dipendono dal giorno in cui si lanciano le prove.
 const NOW = '2026-09-30T11:48:00Z';
-async function open(b, { width = 390, height = 844, now = NOW } = {}) {
+async function open(b, { width = 390, height = 844, now = NOW, seed = null } = {}) {
   const ctx = await b.newContext({ viewport: { width, height }, hasTouch: true, isMobile: true });
   await ctx.route('https://api.jolpi.ca/**', r => r.abort());               // 24/10: classifiche di Jolpica e previsioni
   await ctx.route('https://bt-app-2.vercel.app/**', r => r.abort());   // meteo di serie non rispondono (come helpers.js)
-  await ctx.addInitScript(seed => { window.__btSeed = seed; }, SEED_20);
+  await ctx.addInitScript(seed => { window.__btSeed = seed; }, seed ? { ...SEED_20, addDocs: { ...(SEED_20.addDocs || {}), ...(seed.addDocs || {}) } } : SEED_20);
   await ctx.addInitScript(now => { window.open = () => null; window.__btNow = Date.parse(now); }, now);
   const p = await ctx.newPage(); const errs = []; p.on('pageerror', e => errs.push(e.message));
   await p.goto('file://' + __dirname + '/' + (process.env.PAGE || 'test.html')); await p.waitForTimeout(400);
@@ -232,43 +233,48 @@ const tests = {
     assert(!errs.length, 'errori JS: ' + errs.join(' | '));
   },
   // Task 10 (D23): la squadra si blocca con l'ora vera delle qualifiche (la prova DEMO non la blocca più).
-  async 'fanta: durante le qualifiche (ora vera) squadra e lega sono bloccate'(b) {
+  async 'fanta: durante le qualifiche (ora vera) la squadra è bloccata'(b) {
     const { ctx, p } = await open(b, { now: '2026-10-03T08:05:00Z' }); await login(p);
     await goTab(p, 'FANTA'); const t = norm(await text(p));
     await tapSel(p, '[aria-label="Cambia Lewis Hamilton"]').catch(() => {}); await w(p, 300);
     const picker = /SCEGLI IL PILOTA/.test(await text(p));
-    const editDisabled = await p.evaluate(() => { const b = [...document.querySelectorAll('button')].find(x => /Modifica lega/.test(x.textContent)); return b ? b.disabled : null; });
     await ctx.close();
     assert(/Squadra bloccata/.test(t) && /si riapre a fine gara/i.test(t), 'non dice che la squadra è bloccata');
     assert(!picker, 'durante le qualifiche la squadra si può ancora cambiare');
-    assert(editDisabled === true, 'durante le qualifiche la lega si può ancora modificare');
   },
-  async 'fanta: la mia lega si modifica (nome e membri) quando non ci sono sessioni'(b) {
-    const { ctx, p } = await open(b); await login(p); await goTab(p, 'FANTA');
-    await tapText(p, 'Modifica lega'); await w(p, 300);
-    await p.fill('#leagueName', 'Amici del Box'); await tapText(p, 'Salva nome'); await w(p, 200);
-    await p.fill('#leagueAdd', 'Marco R.'); await tapText(p, 'Aggiungi', { exact: true }); await w(p, 200);
-    await tapSel(p, '[aria-label="Rimuovi G. Villa"]'); await w(p, 200);
-    await tapText(p, 'Fatto', { exact: true }); await w(p, 300);
-    const t = norm(await text(p)); const table = await p.evaluate(() => document.querySelector('[data-league-table]').innerText); await ctx.close();
-    assert(/Amici del Box/.test(t), 'il nome della lega non cambia');
-    assert(/Marco R\./.test(table), 'il nuovo membro non compare nella classifica della lega');
-    assert(!/G\. Villa/.test(table), 'il membro rimosso è ancora in classifica');
+  // 31/10: leghe vere. Chi l'ha creata la rinomina; tutti invitano col codice.
+  async 'fanta: la mia lega si rinomina e si invita col codice'(b) {
+    const { ctx, p } = await open(b, { seed: { addDocs: leagueSeed({ members: [{ name: 'Marco' }] }) } }); await login(p); await goTab(p, 'FANTA'); await w(p, 600);
+    const card0 = await p.evaluate(() => { const e = document.querySelector('[data-league-card]'); return e ? e.innerText.replace(/\s+/g, ' ') : ''; });
+    await tapText(p, 'Rinomina', { exact: true }); await w(p, 200);
+    await p.fill('#leagueDraft', 'Amici del Box'); await tapText(p, 'Salva nome', { exact: true }); await w(p, 600);
+    const doc = await p.evaluate(() => window.firebase.__fake.doc('fanta/lega-BT-TEST'));
+    await tapText(p, 'Invita amici', { exact: true }); await w(p, 400);
+    const t = norm(await text(p)), table = await p.evaluate(() => document.querySelector('[data-league-table]').innerText); await ctx.close();
+    assert(/Creata da te/.test(card0) && /2 partecipanti/.test(card0) && /codice BT-TEST/.test(card0), 'lega: ' + card0);
+    assert(/Amici del Box/.test(t) && doc && doc.name === 'Amici del Box', 'il nome della lega non cambia: ' + JSON.stringify(doc && doc.name));
+    assert(/Marco/.test(table) && /Tester/.test(table), 'classifica della lega: ' + table);
+    assert(/BT-TEST/.test(t), "l'invito deve dare il codice della lega");
   },
-  async 'fanta: la lega di un altro non si modifica; se ne crea una nuova (Premium)'(b) {
-    const { ctx, p } = await open(b); await login(p); await goTab(p, 'FANTA');
-    await tapText(p, 'Lega Ufficio', { exact: true }); await w(p, 300);
-    const other = await p.evaluate(() => [...document.querySelectorAll('button')].some(x => /Modifica lega/.test(x.textContent)));
+  async 'fanta: si entra in una lega col codice (non si rinomina); se ne crea una nuova (Premium)'(b) {
+    const seed = leagueSeed({ code: 'BT-UFF1', name: 'Lega Ufficio', owner: 'u0', members: [{ name: 'A. Ferri' }], meIn: false, myCodes: [] });
+    const { ctx, p } = await open(b, { seed: { addDocs: seed } }); await login(p); await goTab(p, 'FANTA'); await w(p, 500);
+    await tapSel(p, '[data-league-join]'); await w(p, 200);
+    await p.fill('#leagueDraft', 'bt-uff1'); await tapText(p, 'Entra', { exact: true }); await w(p, 800);
+    const card = await p.evaluate(() => { const e = document.querySelector('[data-league-card]'); return e ? e.innerText.replace(/\s+/g, ' ') : ''; });
+    const doc = await p.evaluate(() => window.firebase.__fake.doc('fanta/lega-BT-UFF1'));
     await tapSel(p, '[aria-label="Profilo"]'); await w(p); await tapText(p, 'Passa a Premium'); await w(p, 300); await tapText(p, 'PROVA GRATIS'); await w(p, 1600);
     await tapText(p, 'INIZIA'); await w(p, 300); await tapSel(p, '[aria-label="Indietro"]').catch(() => {}); await w(p, 200);
     await goTab(p, 'FANTA'); await tapText(p, '+ Nuova lega'); await w(p, 300);
-    await p.fill('#leagueNew', 'Pit Stop Club'); await tapText(p, 'Crea lega'); await w(p, 300);
-    const t = norm(await text(p)); await ctx.close();
-    assert(!other, 'la lega di un altro si può modificare');
-    assert(/Pit Stop Club/.test(t) && /creata da te/i.test(t) && /Modifica lega/.test(t), 'la nuova lega non viene creata come mia');
+    await p.fill('#leagueDraft', 'Pit Stop Club'); await tapText(p, 'Crea lega', { exact: true }); await w(p, 800);
+    const t = norm(await text(p));
+    await ctx.close();
+    assert(/Lega Ufficio/.test(card) && /Sei un membro/.test(card) && !/Rinomina/.test(card), 'entrato nella lega di un altro: ' + card);
+    assert(doc && Object.values(doc.members).some(m => m.name === 'Tester'), 'nel documento della lega manca il nuovo membro');
+    assert(/Pit Stop Club/.test(t) && /Creata da te/.test(t) && /Rinomina/.test(t), 'la nuova lega non viene creata come mia');
   },
   async 'fanta: i punti bonus salgono anche nella classifica della lega'(b) {
-    const { ctx, p } = await open(b); await login(p);
+    const { ctx, p } = await open(b, { seed: { addDocs: leagueSeed({ members: [{ name: 'Marco', bonus: 4 }] }) } }); await login(p); await w(p, 400);
     await goTab(p, 'FANTA'); const me0 = await p.evaluate(() => document.querySelector('[data-league-me]').getAttribute('data-league-me'));
     // Task 10 (D23): il bonus viene da un sondaggio con la risposta esatta segnata dall'admin (la prova DEMO non dà più
     // l'esito del meteo).

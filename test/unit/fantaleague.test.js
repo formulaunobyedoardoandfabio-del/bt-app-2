@@ -61,6 +61,10 @@ t('lega: creata, un amico entra col codice, la storia della squadra va nel propr
   const st = L.standings(await L.loadLeague(lg.code), await L.results(), () => 100);
   assert.deepStrictEqual(st.map(m => m.name), ['Tester', 'Marco']);   // il 2X su Leclerc (1°) vale più del 2X su Hamilton (2°)
   assert.ok(st[0].pts > st[1].pts && st[1].pts > 0, JSON.stringify(st.map(m => m.pts)));
+  // Eliminazione dell'account: nelle sue leghe resta solo "uscito", senza nome né storia.
+  firebase.__fake.setDoc('users/marco@b.it', { name: 'Marco', app2: { leagues: [lg.code] } });
+  await L.cleanupFor({ email: 'marco@b.it', aid: 'umarco' });
+  assert.deepStrictEqual(firebase.__fake.doc('fanta/lega-' + lg.code).members.umarco, { name: '', team: '', color: doc.members.umarco.color, log: [], bonus: 0, gone: true });
   await L.leaveLeague(lg.code, 'umarco');
   assert.deepStrictEqual((await L.loadLeague(lg.code)).members.map(m => m.name), ['Tester']);
 });

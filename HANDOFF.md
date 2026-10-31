@@ -243,3 +243,23 @@ Da fare:
   Le prove e2e cercano Chromium in /opt/pw-browsers/chromium-1194 solo se c'è (altrimenti quello di Playwright).
   Verificato il 30/10: `JOBS=2 bash test/all.sh` a c3e135d → tutto verde tranne 3 file, ora sistemati: f1data.test (legge
   quanti GP ci sono dal file vero), revisione-b e run72 (nella stanza c.è anche la voce del profilo).
+
+## 31/10: FantaF1 vero (leghe e punti veri)
+- Punti dei GP veri: risultati della stagione da Jolpica (results, qualifying, sprint, a pagine da 100, cache 3 ore sul
+  telefono, senza rete gli ultimi letti) → `src/logic/fanta-season.js` (roundsFromJolpica, seasonPoints) con le regole
+  di sempre (BtLogic.sessionPoints/squadScore/transfers/nextFree) e la squadra che c'era al blocco del weekend
+  (teamLock: inizio delle qualifiche o delle Qualifiche Sprint, da CIRCUIT_INFO[...].weekend).
+- Storia della squadra nell'account (`squadLog`: {t, d, c, b, n}, una voce a ogni cambio della squadra completa, dopo
+  che i dati dell'account sono arrivati; max 80). I punti contano dai weekend da quando si ha la storia: i GP prima
+  non hanno la squadra di allora (niente numeri inventati).
+- Leghe vere su Firebase: `fanta/lega-<CODICE>` {name, owner, created, members: {aid: {name, team, color, log, bonus,
+  gone}}} (`src/services/fantaleague.js`); codici delle mie leghe nell'account (`leagues`). Si crea una lega (Premium,
+  come prima), si entra col codice, si invita (condivisione del telefono o copia), chi l'ha creata la rinomina, si esce
+  (gone). Ognuno scrive solo il proprio membro: storia della squadra e bonus dei pronostici; i punti li calcola ogni
+  telefono, uguali per tutti. Classifica di lega = punti dei GP + bonus. Eliminando l'account il membro resta "uscito"
+  senza nome né storia. Tolte le leghe finte (LEAGUE, LEAGUES_INIT, MY_SEASON_PTS).
+- Regole di Firestore: `fanta/{doc}` già leggibile e scrivibile dagli utenti con l'accesso (docs/firestore.rules), quindi
+  nessun cambio. Limite noto: un utente potrebbe scrivere anche i membri degli altri (servirebbe una regola per campo).
+- Prove: `test/unit/{fanta-season,fantaleague}.test.js`, e2e aggiornate sulle leghe vere (run14, run15, run63 con
+  `test/fake/leagues.js`).
+- Restano: disegni geometrici al posto delle foto di Commons (piloti, auto, loghi); suoni e vibrazioni F1 in fx.js.

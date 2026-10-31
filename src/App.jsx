@@ -37,6 +37,8 @@ import { createJolpica, pick as pickStandings } from "./services/jolpica";
 import { createMeteo, sessionForecast, skyOf } from "./services/meteo";
 import { createAds } from "./services/ads";
 import { createF1Data, apply as applyF1Data } from "./services/f1data";
+import FantaSeason from "./logic/fanta-season";
+import { createFantaLeague } from "./services/fantaleague";
 
 /* ── DESIGN TOKENS (matches the B&T concept style) ─────────────────── */
 // Tappa 3 (G01-G02): sfondo nero puro (schermi OLED) e il colore dei tasti scelto da chi usa l'app. applyTheme cambia
@@ -356,6 +358,7 @@ const OF1 = createOpenF1();
 // permesso di Jolpica (HANDOFF.md). false = solo le classifiche dell'admin.
 const JOLPICA_ON = true;
 const Jolpica = createJolpica({ store: local, now: nowMs });
+const FantaL = createFantaLeague({ store: local, now: nowMs });   // 31/10: leghe FantaF1 vere e risultati veri
 // Previsioni meteo del weekend (24/10): MET Norway tramite la funzione su Vercel api/meteo.js (src/services/meteo.js).
 const Meteo = createMeteo({ store: local, now: nowMs });
 // Dati F1 che si aggiornano da soli (25/10, src/services/f1data.js): Ghost Lap delle ultime qualifiche, gare, qualifiche e
@@ -491,15 +494,6 @@ const articlePoll = a => a && a.poll ? { ...a.poll, id: "art-" + a.id } : null;
 const NEWS_CATEGORIES = ["NEWS", "GARA", "APP", "ANALISI", "FANTA", "PILOTI", "SCUDERIE", "METEO", "TECNICA"];   // METEO e TECNICA: Tappa 3 (G09-G10)
 const STATS_NOTE = "Statistiche carriera aggiornate a settembre 2026";
 
-const LEAGUE = [
-  { pos: 1, name: "M. Bianchi", nick: "@bianchi_bj", team: "Scuderia BlackJack", pts: "1.284 pt", color: "#2E9E8F" },
-  { pos: 2, name: "F. Greco", nick: "@ferrarista92", team: "I Ferraristi", pts: "1.201 pt", color: "#3B6FD4" },
-  { pos: 3, name: "Tu", team: "La tua squadra", pts: "1.166 pt", color: LED_RED, me: true },
-  { pos: 4, name: "S. Conti", nick: "@boxboys_sc", team: "Box Boys", pts: "1.098 pt", color: "#E8842C" },
-  { pos: 5, name: "E. Marino", nick: "@pitwall_em", team: "Pit Wall Crew", pts: "1.034 pt", color: "#7B5FC4" },
-  { pos: 6, name: "L. Rinaldi", nick: "@podiumhunter", team: "Podium Hunters", pts: "980 pt", color: "#D9B830" },
-  { pos: 7, name: "G. Villa", nick: "@slipstream_g", team: "Slipstream", pts: "915 pt", color: "#9AA0A6" },
-];
 
 // Stanze della chat dei tifosi (nome, colore e icona della 2.0). I messaggi sono su Firebase, una stanza per documento
 // (shared/bt-chat-*, come nell'app di oggi): src/services/chat.js.
@@ -6206,14 +6200,6 @@ function ChatThreadScreen({ chat, onBack, onSend, isPremium, blocked = [], onRep
   );
 }
 
-// Leghe FantaF1: quella creata da te si modifica (nome, membri, inviti); le altre no.
-const LEAGUES_INIT = [
-  { id: "amici", name: "Amici del Bar", owner: true, code: "BT-7Q2K",
-    members: LEAGUE.filter(u => !u.me).map(u => ({ name: u.name, nick: u.nick, team: u.team, pts: parseInt(u.pts.replace(/\D/g, ""), 10), color: u.color })) },
-  { id: "ufficio", name: "Lega Ufficio", owner: false, code: "BT-3M8D",
-    members: [{ name: "A. Ferri", nick: "@undercut_af", team: "Undercut Club", pts: 1210, color: "#3B6FD4" }, { name: "C. Galli", nick: "@pole_galli", team: "Pole Position", pts: 1102, color: "#E8842C" }, { name: "R. Sala", nick: "@boxboxbox_rs", team: "Box Box Box", pts: 1040, color: "#2E9E8F" }] },
-];
-const MY_SEASON_PTS = 1166;   // punti della tua squadra nelle gare già corse (demo)
 const fmtPts = n => String(n).replace(/\B(?=(\d{3})+(?!\d))/g, ".") + " pt";
 const MEMBER_COLORS = ["#2E9E8F", "#3B6FD4", "#E8842C", "#7B5FC4", "#D9B830", "#9AA0A6", "#C2185B"];
 const sessionLabelIt = type => LiveSim.SESSION_LABEL[type] || type;
@@ -6797,46 +6783,38 @@ const LEAGUE_ZONES = {
   q1: { label: "ZONA Q1", bg: "rgba(255,24,1,.13)", line: "rgba(255,90,95,.45)", ink: "#FF5A5F" },
   q2: { label: "ZONA Q2", bg: "rgba(255,210,31,.11)", line: "rgba(255,210,31,.45)", ink: "#FFD23F" },
 };
-function FantaScreen({ squad, setSquad, base, freeTransfers, budget, stats, race, lock, weekends = [], isPremium, onPremium, onToast, bonus = [], leagues, setLeagues, needAccount, predictions = [], predAnswers = {}, predLockOf, onAnswerPrediction, standings }) {
+function FantaScreen({ squad, setSquad, base, freeTransfers, budget, stats, race, lock, weekends = [], isPremium, onPremium, onToast, bonus = [], leagues = [], seasonPts = 0, realWeek = null, meAid = null, onCreateLeague, onJoinLeague, onLeaveLeague, onRenameLeague, needAccount, predictions = [], predAnswers = {}, predLockOf, onAnswerPrediction, standings }) {
   const [, setTick] = useState(0);
   useEffect(() => { const iv = setInterval(() => setTick(n => n + 1), 30000); return () => clearInterval(iv); }, []);
   const bonusPts = bonus.reduce((a, b) => a + b.pts, 0);
   const weekendPts = weekends.reduce((a, w) => a + w.total, 0);
-  const total = MY_SEASON_PTS + weekendPts + bonusPts;
-  const [activeLeague, setActiveLeague] = useState(leagues[0] ? leagues[0].id : null);
-  const [editing, setEditing] = useState(false);
-  const [creating, setCreating] = useState(false);
-  useBack(editing, () => setEditing(false));
-  useBack(creating, () => setCreating(false));
-  const [nameDraft, setNameDraft] = useState("");
-  const [addDraft, setAddDraft] = useState("");
-  const [newDraft, setNewDraft] = useState("");
-  const league = leagues.find(l => l.id === activeLeague) || leagues[0];
-  const me = { name: "Tu", nick: "Tu", team: squad.name, pts: total, color: C.accent, me: true };
-  const rows = league ? [...league.members, me].sort((a, b) => b.pts - a.pts) : [me];
+  // 31/10: punti veri dei GP già corsi (risultati di Jolpica, regole di sempre, squadra al via di ogni weekend) + quelli
+  // della sessione in corso non ancora nei risultati + i bonus dei pronostici.
+  const total = seasonPts + weekendPts + bonusPts;
+  const [activeLeague, setActiveLeague] = useState(null);
+  const [mode, setMode] = useState(null);   // "create" | "join" | "rename"
+  const [draft, setDraft] = useState("");
+  const [leaveArmed, setLeaveArmed] = useState(false);
+  useBack(!!mode, () => setMode(null));
+  const league = leagues.find(l => l.code === activeLeague) || leagues[0] || null;
+  const rows = league ? league.members.map(m => ({ ...m, me: m.aid === meAid })) : [];
   const myPos = rows.findIndex(r => r.me) + 1;
-  // I migliori di tutte le leghe (ognuno contato una volta sola).
-  const everyone = [...new Map(leagues.flatMap(l => l.members).map(m => [m.name, m])).values(), me].sort((a, b) => b.pts - a.pts);
-  const lockMsg = "Le leghe si modificano quando la squadra non è bloccata.";
+  // I migliori di tutte le mie leghe (ognuno contato una volta sola).
+  const everyone = [...new Map(leagues.flatMap(l => l.members).map(m => [m.aid, { ...m, me: m.aid === meAid }])).values()].sort((a, b) => b.pts - a.pts);
   const TIPS = [
     { driver: "C. Leclerc", note: "Veloce nelle ultime gare: buon potenziale su un tracciato con curve veloci come Sepang." },
     { driver: "K. Antonelli", note: "Leader del mondiale: il 2X più sicuro per il weekend." },
   ];
-  const updateLeague = fn => setLeagues(ls => ls.map(l => l.id === league.id ? fn(l) : l));
-  const startEdit = () => { if (lock.locked) return; setNameDraft(league.name); setAddDraft(""); setEditing(true); };
-  const saveName = () => { const n = nameDraft.trim(); if (!n) return; updateLeague(l => ({ ...l, name: n })); onToast("Nome della lega aggiornato"); };
-  const addMember = () => {
-    const n = addDraft.trim(); if (!n) return;
-    if (league.members.some(m => m.name.toLowerCase() === n.toLowerCase())) { onToast(`${n} è già nella lega`); return; }
-    updateLeague(l => ({ ...l, members: [...l.members, { name: n, nick: n.startsWith("@") ? n : "@" + n.toLowerCase().replace(/[^a-z0-9]+/g, "_"), team: "Nuova squadra", pts: 0, color: MEMBER_COLORS[l.members.length % MEMBER_COLORS.length] }] }));
-    setAddDraft(""); onToast(`${n} aggiunto alla lega`);
+  const openMode = m => { if (m === "create" && !isPremium) { onPremium(); return; } setDraft(m === "rename" && league ? league.name : ""); setMode(mode === m ? null : m); };
+  const submit = () => {
+    const v = draft.trim(); if (!v) return;
+    const p = mode === "create" ? onCreateLeague(v) : mode === "join" ? onJoinLeague(v) : onRenameLeague(league.code, v);
+    Promise.resolve(p).then(r => { if (!r) return; setMode(null); setDraft(""); if (typeof r === "string") setActiveLeague(r); });
   };
-  const removeMember = name => { updateLeague(l => ({ ...l, members: l.members.filter(m => m.name !== name) })); onToast(`${name} rimosso dalla lega`); };
-  const createLeague = () => {
-    const n = newDraft.trim(); if (!n) return;
-    const id = "l" + Date.now(), code = "BT-" + Math.random().toString(36).slice(2, 6).toUpperCase();
-    setLeagues(ls => [...ls, { id, name: n, owner: true, code, members: [] }]);
-    setActiveLeague(id); setCreating(false); setNewDraft(""); onToast(`Lega "${n}" creata`);
+  const invite = () => {
+    const txt = `Entra nella mia lega FantaF1 "${league.name}" su B&T: FANTA → Entra con un codice → ${league.code}`;
+    if (nativeShareKind()) { shareNative({ title: "Lega FantaF1", text: txt }, "Invita nella lega"); return; }
+    Promise.resolve(copyText(txt)).then(ok => onToast(ok ? "Invito copiato: mandalo ai tuoi amici" : "Codice della lega: " + league.code), () => onToast("Codice della lega: " + league.code));
   };
   const input = { flex: 1, minWidth: 0, padding: "10px 12px", borderRadius: 10, background: "rgba(255,255,255,.05)", border: `1px solid ${C.border}`, fontFamily: F_BODY, fontSize: 13, color: C.text, outline: "none" };
   const smallBtn = (label, onClick, opts = {}) => <button className="press" onClick={onClick} disabled={opts.disabled} aria-label={opts.aria} style={{ flexShrink: 0, padding: "9px 12px", borderRadius: 10, background: opts.primary ? C.accent : "rgba(255,255,255,.07)", border: `1px solid ${opts.primary ? C.accent : C.border}`, fontFamily: F_HEAD, fontWeight: 800, fontSize: 12, color: "#fff", opacity: opts.disabled ? .45 : 1 }}>{label}</button>;
@@ -6847,7 +6825,8 @@ function FantaScreen({ squad, setSquad, base, freeTransfers, budget, stats, race
       {right && <span style={{ marginLeft: "auto", fontFamily: F_BODY, fontSize: 11, color: C.dim }}>{right}</span>}
     </div>
   );
-  const wk = race ? weekends.filter(w => w.raceId === race.id) : [];
+  const wkLive = race ? weekends.filter(w => w.raceId === race.id) : [];
+  const wk = realWeek ? realWeek.lines.map(l => ({ id: realWeek.round + ":" + l.type, type: l.type, total: l.pts })) : wkLive;
   return (
     <div className="scrollcol" style={{ height: "100%" }}>
       <FantaSquadCard squad={squad} setSquad={setSquad} base={base} freeTransfers={freeTransfers} budget={budget} stats={stats} race={race} lock={lock} onToast={onToast} needAccount={needAccount} standings={standings} />
@@ -6855,7 +6834,7 @@ function FantaScreen({ squad, setSquad, base, freeTransfers, budget, stats, race
       <div style={{ margin: "0 16px 16px", padding: "16px", borderRadius: 18, background: C.card, border: `1px solid ${C.border}` }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
           <span style={{ fontFamily: F_BODY, fontWeight: 700, fontSize: 11, color: C.dim, letterSpacing: 1 }}>PUNTI DELLA STAGIONE</span>
-          <span style={{ padding: "4px 10px", borderRadius: 8, background: "rgba(231,179,76,.14)", fontFamily: F_HEAD, fontWeight: 800, fontSize: 11, color: C.gold }}>#{myPos} in lega</span>
+          {myPos > 0 && <span style={{ padding: "4px 10px", borderRadius: 8, background: "rgba(231,179,76,.14)", fontFamily: F_HEAD, fontWeight: 800, fontSize: 11, color: C.gold }}>#{myPos} in lega</span>}
         </div>
         <div style={{ display: "flex", alignItems: "baseline", gap: 6 }}>
           <span data-fanta-total="" style={{ fontFamily: F_HEAD, fontWeight: 900, fontSize: 30, color: C.accentInk }}>{total}</span>
@@ -6870,7 +6849,7 @@ function FantaScreen({ squad, setSquad, base, freeTransfers, budget, stats, race
             <div key={w.id} data-weekend-row={w.type} style={{ display: "flex", alignItems: "center", gap: 8, padding: "3px 0", fontFamily: F_BODY, fontSize: 12, color: C.muted }}>
               <span style={{ flex: 1 }}>{w.type === "PEN" ? "Cambi oltre i gratis" : sessionLabelIt(w.type)}</span><b style={{ color: w.total < 0 ? "#FF5A5F" : TIMING.green }}>{w.total > 0 ? "+" : ""}{w.total}</b>
             </div>
-          )) : <p style={{ margin: 0, fontFamily: F_BODY, fontSize: 11.5, color: C.dim, lineHeight: 1.45 }}>I punti arrivano con qualifiche e gara (nella demo: Profilo → Pannello Admin → GARA LIVE).</p>}
+          )) : <p style={{ margin: 0, fontFamily: F_BODY, fontSize: 11.5, color: C.dim, lineHeight: 1.45 }}>I punti arrivano con qualifiche e gara: si calcolano dai risultati veri con la squadra che avevi al via del weekend.</p>}
         </div>
       </div>
 
@@ -6892,73 +6871,53 @@ function FantaScreen({ squad, setSquad, base, freeTransfers, budget, stats, race
         )) : <p style={{ margin: 0, fontFamily: F_BODY, fontSize: 11.5, color: C.dim, lineHeight: 1.45 }}>Meteo delle sessioni (pagina Race → Meteo) e sondaggi indovinati valgono +2 punti; ogni previsione avanzata giusta +1.</p>}
       </div>
 
-      {heading("trophy", "I MIGLIORI DI TUTTE LE LEGHE")}
-      <div data-fanta-podium="" style={{ margin: "0 16px 16px", padding: "14px 12px 0", borderRadius: 18, background: C.card, border: `1px solid ${C.border}`, overflow: "hidden" }}>
-        <Podium label="Podio di tutte le leghe B&T" items={everyone.slice(0, 3).map((u, i) => ({ title: u.me ? "Tu" : u.nick || u.name, value: fmtPts(u.pts), figure: <UserFigure user={u} place={i + 1} /> }))} />
-      </div>
+      {everyone.length >= 2 && <>
+        {heading("trophy", "I MIGLIORI DI TUTTE LE LEGHE")}
+        <div data-fanta-podium="" style={{ margin: "0 16px 16px", padding: "14px 12px 0", borderRadius: 18, background: C.card, border: `1px solid ${C.border}`, overflow: "hidden" }}>
+          <Podium label="Podio di tutte le mie leghe" items={everyone.slice(0, 3).map((u, i) => ({ title: u.me ? "Tu" : u.name, value: fmtPts(u.pts), figure: <UserFigure user={u} place={i + 1} /> }))} />
+        </div>
+      </>}
 
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 16px 10px" }}>
         <span style={{ fontFamily: F_BODY, fontWeight: 700, fontSize: 11, color: C.dim, letterSpacing: 1 }}>LE MIE LEGHE</span>
       </div>
-      <div style={{ display: "flex", gap: 8, padding: "0 16px 12px", overflowX: "auto" }}>
+      <div className="scrollrow" style={{ display: "flex", gap: 8, padding: "0 16px 12px", overflowX: "auto", scrollbarWidth: "none" }}>
         {leagues.map(l => (
-          <button key={l.id} className="press" onClick={() => { setActiveLeague(l.id); setEditing(false); }} style={{ flexShrink: 0, padding: "9px 14px", borderRadius: 20, background: league && league.id === l.id ? C.accent : C.card, border: `1px solid ${league && league.id === l.id ? C.accent : C.border}`, fontFamily: F_HEAD, fontWeight: 700, fontSize: 12, color: league && league.id === l.id ? "#fff" : C.muted }}>{l.name}</button>
+          <button key={l.code} className="press" data-league={l.code} onClick={() => { setActiveLeague(l.code); setMode(null); setLeaveArmed(false); }} style={{ flexShrink: 0, padding: "9px 14px", borderRadius: 20, background: league && league.code === l.code ? C.accent : C.card, border: `1px solid ${league && league.code === l.code ? C.accent : C.border}`, fontFamily: F_HEAD, fontWeight: 700, fontSize: 12, color: league && league.code === l.code ? "#fff" : C.muted }}>{l.name}</button>
         ))}
-        <button className="press" onClick={() => isPremium ? (lock.locked ? onToast(lockMsg) : setCreating(c => !c)) : onPremium()} style={{ flexShrink: 0, display: "flex", alignItems: "center", gap: 5, padding: "9px 14px", borderRadius: 20, background: "rgba(231,179,76,.1)", border: "1px solid rgba(231,179,76,.3)" }}>
+        <button className="press" data-league-new="" onClick={() => openMode("create")} style={{ flexShrink: 0, display: "flex", alignItems: "center", gap: 5, padding: "9px 14px", borderRadius: 20, background: "rgba(231,179,76,.1)", border: "1px solid rgba(231,179,76,.3)" }}>
           {!isPremium && <Icon name="lock" size={11} color={C.gold} />}
           <span style={{ fontFamily: F_HEAD, fontWeight: 700, fontSize: 12, color: C.gold }}>+ Nuova lega</span>
         </button>
+        <button className="press" data-league-join="" onClick={() => openMode("join")} style={{ flexShrink: 0, padding: "9px 14px", borderRadius: 20, background: C.card, border: `1px solid ${C.border}`, fontFamily: F_HEAD, fontWeight: 700, fontSize: 12, color: C.text }}>Entra con un codice</button>
       </div>
-      {creating && (
+      {mode && (
         <div style={{ display: "flex", gap: 8, margin: "0 16px 12px" }}>
-          <label htmlFor="leagueNew" style={{ position: "absolute", width: 1, height: 1, overflow: "hidden" }}>Nome della nuova lega</label>
-          <input id="leagueNew" value={newDraft} onChange={e => setNewDraft(e.target.value)} placeholder="Nome della nuova lega" style={input} />
-          {smallBtn("Crea lega", createLeague, { primary: true, disabled: !newDraft.trim() })}
+          <label htmlFor="leagueDraft" style={{ position: "absolute", width: 1, height: 1, overflow: "hidden" }}>{mode === "join" ? "Codice della lega" : "Nome della lega"}</label>
+          <input id="leagueDraft" value={draft} onChange={e => setDraft(mode === "join" ? e.target.value.toUpperCase() : e.target.value)} placeholder={mode === "join" ? "Codice, per esempio BT-7Q2K" : "Nome della lega"} maxLength={40} style={input} />
+          {smallBtn(mode === "create" ? "Crea lega" : mode === "join" ? "Entra" : "Salva nome", submit, { primary: true, disabled: !draft.trim() })}
         </div>
       )}
+      {!leagues.length && !mode && <p data-league-empty="" style={{ margin: "0 20px 16px", fontFamily: F_BODY, fontSize: 12, color: C.dim, lineHeight: 1.5 }}>Crea una lega o entra col codice di un amico. I punti si calcolano dai risultati veri di ogni GP, con le regole del FantaF1 e la squadra che ognuno aveva al via del weekend.</p>}
       {league && (
-        <div style={{ margin: "0 16px 14px", padding: "12px 14px", borderRadius: 16, background: C.card, border: `1px solid ${C.border}` }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ fontFamily: F_HEAD, fontWeight: 800, fontSize: 14, color: C.text }}>{league.name}</div>
-              <div style={{ fontFamily: F_BODY, fontSize: 11, color: C.dim, marginTop: 2 }}>{league.owner ? "Creata da te" : "Sei un membro"} · {league.members.length + 1} {league.members.length ? "partecipanti" : "partecipante"} · codice invito {league.code}</div>
-            </div>
-            {league.owner && !editing && smallBtn("Modifica lega", startEdit, { disabled: lock.locked })}
+        <div data-league-card={league.code} style={{ margin: "0 16px 14px", padding: "12px 14px", borderRadius: 16, background: C.card, border: `1px solid ${C.border}` }}>
+          <div style={{ fontFamily: F_HEAD, fontWeight: 800, fontSize: 14, color: C.text }}>{league.name}</div>
+          <div style={{ fontFamily: F_BODY, fontSize: 11, color: C.dim, marginTop: 2 }}>{league.owner === meAid ? "Creata da te" : "Sei un membro"} · {league.members.length} {league.members.length === 1 ? "partecipante" : "partecipanti"} · codice {league.code}</div>
+          <div style={{ display: "flex", gap: 8, marginTop: 10, flexWrap: "wrap" }}>
+            {smallBtn("Invita amici", invite, { primary: true })}
+            {league.owner === meAid && smallBtn("Rinomina", () => openMode("rename"))}
+            {smallBtn(leaveArmed ? "Esci davvero?" : "Esci dalla lega", () => { if (leaveArmed) { setLeaveArmed(false); onLeaveLeague(league.code); } else setLeaveArmed(true); })}
           </div>
-          {league.owner && lock.locked && <p style={{ margin: "8px 0 0", fontFamily: F_BODY, fontSize: 11.5, color: C.dim }}>{lockMsg}</p>}
-          {editing && !lock.locked && (
-            <div style={{ marginTop: 12, paddingTop: 12, borderTop: `1px solid ${C.divider}` }}>
-              <label htmlFor="leagueName" style={{ display: "block", fontFamily: F_BODY, fontWeight: 700, fontSize: 10.5, color: C.dim, letterSpacing: .8, marginBottom: 6 }}>NOME DELLA LEGA</label>
-              <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
-                <input id="leagueName" value={nameDraft} onChange={e => setNameDraft(e.target.value)} style={input} />
-                {smallBtn("Salva nome", saveName, { disabled: !nameDraft.trim() })}
-              </div>
-              <span style={{ display: "block", fontFamily: F_BODY, fontWeight: 700, fontSize: 10.5, color: C.dim, letterSpacing: .8, marginBottom: 6 }}>MEMBRI</span>
-              {league.members.map(m => (
-                <div key={m.name} style={{ display: "flex", alignItems: "center", gap: 10, padding: "6px 0" }}>
-                  <span style={{ width: 10, height: 10, borderRadius: "50%", background: m.color, flexShrink: 0 }} />
-                  <span style={{ flex: 1, fontFamily: F_BODY, fontSize: 13, color: C.text }}>{m.name}</span>
-                  <button className="press" aria-label={`Rimuovi ${m.name}`} onClick={() => removeMember(m.name)} style={{ width: 30, height: 30, borderRadius: "50%", background: "rgba(255,255,255,.06)", display: "flex", alignItems: "center", justifyContent: "center" }}><Icon name="close" size={11} sw={2.4} /></button>
-                </div>
-              ))}
-              <label htmlFor="leagueAdd" style={{ display: "block", fontFamily: F_BODY, fontWeight: 700, fontSize: 10.5, color: C.dim, letterSpacing: .8, margin: "10px 0 6px" }}>AGGIUNGI UN AMICO</label>
-              <div style={{ display: "flex", gap: 8 }}>
-                <input id="leagueAdd" value={addDraft} onChange={e => setAddDraft(e.target.value)} placeholder="Nome o nickname" style={input} />
-                {smallBtn("Aggiungi", addMember, { disabled: !addDraft.trim() })}
-              </div>
-              <p style={{ margin: "8px 0 12px", fontFamily: F_BODY, fontSize: 11, color: C.dim }}>Oppure manda il codice invito {league.code}: chi lo inserisce entra nella lega.</p>
-              {smallBtn("Fatto", () => setEditing(false), { primary: true })}
-            </div>
-          )}
         </div>
       )}
 
-      {heading("trophy", "CLASSIFICA LEGA", league ? league.name : "")}
+      {league && <>
+      {heading("trophy", "CLASSIFICA LEGA", league.name)}
       <div data-league-table="" style={{ margin: "0 16px 16px", borderRadius: 18, background: C.card, border: `1px solid ${C.border}`, overflow: "hidden" }}>
         {rows.map((u, i) => { const zone = zoneOf(i + 1, rows.length), Z = LEAGUE_ZONES[zone], first = Z && (i === 0 || zoneOf(i, rows.length) !== zone); return (
-          <React.Fragment key={u.name}>
+          <React.Fragment key={u.aid}>
           {first && <div data-zone-label={zone} style={{ padding: "6px 14px 4px", background: Z.bg, borderTop: `1px solid ${Z.line}`, fontFamily: F_HEAD, fontWeight: 900, fontSize: 10, letterSpacing: 1.2, color: Z.ink }}>{Z.label}</div>}
-          <div data-zone={zone} data-league-me={u.me ? u.pts : undefined}>
+          <div data-zone={zone} data-league-row={u.aid} data-league-me={u.me ? u.pts : undefined}>
             <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "11px 14px", background: Z ? Z.bg : u.me ? alpha(C.accentInk, .07) : "transparent", boxShadow: Z && u.me ? `inset 3px 0 0 ${C.accentInk}` : "none" }}>
               <span style={{ width: 20, fontFamily: F_HEAD, fontWeight: 800, fontSize: 15, color: Z ? Z.ink : C.text }}>{i + 1}</span>
               <span style={{ width: 10, height: 10, borderRadius: "50%", background: u.color, flexShrink: 0 }} />
@@ -6967,7 +6926,7 @@ function FantaScreen({ squad, setSquad, base, freeTransfers, budget, stats, race
                   <span style={{ fontFamily: F_BODY, fontWeight: u.me ? 700 : 600, fontSize: 13, color: C.text }}>{u.name}</span>
                   {u.me && <span style={{ padding: "1px 6px", borderRadius: 5, background: C.accent, fontFamily: F_HEAD, fontWeight: 800, fontSize: 9, color: "#fff" }}>TU</span>}
                 </div>
-                <div style={{ fontFamily: F_BODY, fontSize: 10, color: C.dim }}>{u.me ? squad.name : `${u.nick || ""}${u.nick ? " · " : ""}${u.team}`}{u.me && bonusPts ? ` · +${bonusPts} bonus pronostici` : ""}</div>
+                <div style={{ fontFamily: F_BODY, fontSize: 10, color: C.dim }}>{u.team || "Squadra senza nome"}</div>
               </div>
               <span style={{ fontFamily: F_BODY, fontWeight: u.me ? 700 : 600, fontSize: 12, color: u.me ? C.text : C.dim, flexShrink: 0 }}>{fmtPts(u.pts)}</span>
             </div>
@@ -6976,7 +6935,8 @@ function FantaScreen({ squad, setSquad, base, freeTransfers, budget, stats, race
           </React.Fragment>
         ); })}
       </div>
-      {qZones(rows.length).q1 > 0 && <p data-zone-note="" style={{ margin: "-8px 20px 16px", fontFamily: F_BODY, fontSize: 10.5, color: C.dim, lineHeight: 1.45 }}>Come nelle qualifiche 2026 (22 vetture, 6 fuori in Q1 e 6 in Q2): con {rows.length} squadre le ultime {qZones(rows.length).q1} sono in Zona Q1 e le {qZones(rows.length).q2} prima in Zona Q2.</p>}
+      <p data-league-note="" style={{ margin: "-8px 20px 16px", fontFamily: F_BODY, fontSize: 10.5, color: C.dim, lineHeight: 1.45 }}>Punti dei GP veri (gara, qualifiche, Sprint) con le regole del FantaF1 e la squadra di ognuno al via del weekend; i cambi oltre i gratis tolgono punti. Contano i weekend da quando si ha la squadra in app.{qZones(rows.length).q1 > 0 ? ` Come nelle qualifiche 2026: con ${rows.length} squadre le ultime ${qZones(rows.length).q1} sono in Zona Q1 e le ${qZones(rows.length).q2} prima in Zona Q2.` : ""}</p>
+      </>}
 
       <div style={{ padding: "0 16px 12px" }}>
         {isPremium ? (
@@ -8735,6 +8695,7 @@ ACCOUNT_CLEANUPS.push(u => Chat.cleanupFor(u));
 // Feedback (src/services/feedback.js): eliminando l'account si cancellano anche quelli che ha mandato.
 const Feedback = createFeedback({ now: nowMs });
 ACCOUNT_CLEANUPS.push(u => Feedback.cleanupFor(u));
+ACCOUNT_CLEANUPS.push(u => FantaL.cleanupFor(u));   // 31/10: leghe FantaF1
 const TERMS_KEY = "bt-terms-accepted";   // Termini accettati: solo su questo telefono, {ts}, come oggi
 // Richiesta di feedback come notifica nella campanella, al 5° accesso (solo su questo telefono, come oggi i Termini):
 // un accesso è un'apertura dell'app o un ritorno dopo almeno 30 minuti in secondo piano.
@@ -8756,7 +8717,7 @@ const USER_INIT = {
   squad: FANTA_SQUAD_INIT, squadBase: { drivers: FANTA_SQUAD_INIT.drivers.slice(), teams: FANTA_SQUAD_INIT.teams.slice() }, freeTransfers: 3,
   predAnswers: {}, sillyPreds: {}, stratPreds: {}, pitBest: null, wxGuess: {}, ratings: {}, dotd: {}, notifSeenAt: 0,
   theme: { mode: "team", color: null }, sounds: true, haptics: true, helmet: null, hidden: [], trophies: {},
-  premium: { sub: false, trial: null },
+  premium: { sub: false, trial: null }, squadLog: [], leagues: [],
 };
 // Premium dell'anteprima salvato nell'account (24/10): sub = abbonamento di prova, trial = prova per un GP { start, end }.
 const cleanPremium = v => {
@@ -8836,7 +8797,12 @@ function App() {
   const [predictions, setPredictions] = useState(shared0.predictions);   // previsioni avanzate (+1 punto), dell'admin
   const [predAnswers, setPredAnswers] = useState(USER_INIT.predAnswers);   // { idDomanda: risposta }
   const [lastRace, setLastRace] = useState(LAST_RACE_INIT);           // ultima gara: podio e classifica
-  const [leagues, setLeagues] = useState(LEAGUES_INIT);   // leghe FantaF1 (quella creata da te si modifica)
+  // 31/10: FantaF1 vero. squadLog = storia della squadra (account); leagueCodes = codici delle mie leghe (account);
+  // leagues = le leghe lette da Firebase; fantaRounds = risultati veri della stagione (Jolpica).
+  const [squadLog, setSquadLog] = useState(USER_INIT.squadLog);
+  const [leagueCodes, setLeagueCodes] = useState(USER_INIT.leagues);
+  const [leagues, setLeagues] = useState([]);
+  const [fantaRounds, setFantaRounds] = useState([]);
   const [homePoll, setHomePoll] = useState(shared0.homePoll);    // sondaggio della Home (Premium); null = nessuno
   const [votes, setVotes] = useState(USER_INIT.votes);           // { idSondaggio: idRisposta }
   const [notifsRaw, setNotifsRaw] = useState(shared0.notifs);    // shared/bt-notifs come sono salvate
@@ -9088,7 +9054,7 @@ function App() {
   const userReady = useRef(false);   // dati dell'account letti: da qui in poi le modifiche si salvano
   const userSnap = useRef({});       // ultimo valore letto o salvato di ogni dato (JSON): si manda solo quello che cambia
   const userVals = { saved, favTeam, favDriver, notifPrefs, votes, squad, squadBase, freeTransfers, predAnswers, sillyPreds, stratPreds, pitBest, wxGuess, ratings, dotd, notifSeenAt,
-    theme, sounds, haptics, helmet, hidden, trophies, premium };
+    theme, sounds, haptics, helmet, hidden, trophies, premium, squadLog, leagues: leagueCodes };
   const userValsRef = useRef(userVals);
   userValsRef.current = userVals;
   const userSet = { saved: setSaved, favTeam: setFavTeam, favDriver: setFavDriver, notifPrefs: setNotifPrefs, votes: setVotes, squad: setSquad, squadBase: setSquadBase,
@@ -9096,7 +9062,8 @@ function App() {
     ratings: setRatings, dotd: setDotd, notifSeenAt: setNotifSeenAt,
     theme: v => setTheme(cleanTheme(v) || USER_INIT.theme), sounds: v => setSounds(v !== false), haptics: v => setHaptics(v !== false),
     helmet: v => setHelmet(v == null ? null : cleanHelmet(v)), hidden: v => setHidden(Array.isArray(v) ? v : []),
-    trophies: v => setTrophies(cleanTrophies(v)), premium: v => setPremium(cleanPremium(v)) };
+    trophies: v => setTrophies(cleanTrophies(v)), premium: v => setPremium(cleanPremium(v)),
+    squadLog: v => setSquadLog(FantaSeason.cleanLog(v).slice(-80)), leagues: v => setLeagueCodes(Array.isArray(v) ? v.filter(c => /^BT-[A-Z0-9]{4,6}$/.test(c)).slice(0, 10) : []) };
   // Dati dell'account arrivati (per quale email): finché non arrivano, il colore dell'app resta quello del telefono.
   const [userLoaded, setUserLoaded] = useState(null);
   const loadUser = em => AppData.loadUserData(em).then(data => {
@@ -9108,6 +9075,23 @@ function App() {
     userReady.current = true;
     setUserLoaded(em);
   }, () => {});   // senza rete i dati restano in memoria: si riprova alla prossima rilettura
+  // FantaF1 vero (31/10): a ogni cambio della squadra (completa, coi dati dell'account arrivati) una voce nella storia,
+  // salvata nell'account e mandata alle mie leghe; leghe e risultati veri si rileggono aprendo FANTA.
+  const fantaUserReady = !!userEmail && userLoaded === userEmail;
+  const fantaBonusRef = useRef(0);
+  useEffect(() => {
+    if (!fantaUserReady || !account) return;
+    const e = FantaSeason.logEntry(squad, nowMs()), last = squadLog[squadLog.length - 1];
+    if (!e.d.every(Boolean) || !e.c.every(Boolean) || (last && FantaSeason.sameSquad(last, e) && (last.n || "") === (e.n || ""))) return;
+    const next = [...squadLog, e].slice(-80);
+    setSquadLog(next);
+    FantaL.pushLog(leagueCodes, { aid: account.aid, name: account.name, team: squad.name, bonus: fantaBonusRef.current }, next);
+  }, [fantaUserReady, JSON.stringify([squad.drivers, squad.teams, squad.boost, squad.name])]);
+  useEffect(() => {
+    if (!fantaUserReady) return;
+    Promise.all(leagueCodes.map(c => FantaL.loadLeague(c).catch(() => null))).then(ls => setLeagues(ls.filter(Boolean)));
+  }, [fantaUserReady, leagueCodes.join(","), tab === "fanta"]);
+  useEffect(() => { if (tab === "fanta" && JOLPICA_ON) FantaL.results().then(setFantaRounds, () => {}); }, [tab]);
   // Colori dell'app (G01-G02): si applicano qui, prima di disegnare le pagine. Finché Authentication non ha risposto o
   // i dati dell'account non sono arrivati vale il colore usato l'ultima volta su questo telefono.
   const themePending = account === undefined || (!!userEmail && userLoaded !== userEmail);
@@ -9650,6 +9634,25 @@ function App() {
       });
     });
   };
+  // Leghe FantaF1 vere (31/10).
+  const leagueMe = () => (account ? { aid: account.aid, name: account.name, team: squad.name, bonus: fantaBonusRef.current } : null);
+  const addLeague = l => { setLeagueCodes(cs => [...cs.filter(c => c !== l.code), l.code]); setLeagues(ls => [...ls.filter(x => x.code !== l.code), l]); };
+  const createLeague = name => {
+    const me = leagueMe();
+    if (!me) { needLogin("Per creare una lega serve un account."); return null; }
+    return FantaL.createLeague(name, me, squadLog).then(l => { addLeague(l); fx.play("done"); showToast(`Lega "${l.name}" creata: invita i tuoi amici col codice ${l.code}`); return l.code; }, () => { showToast(NOT_SAVED); return null; });
+  };
+  const joinLeague = code => {
+    const me = leagueMe();
+    if (!me) { needLogin("Per entrare in una lega serve un account."); return null; }
+    return FantaL.joinLeague(code, me, squadLog).then(l => { addLeague(l); fx.play("done"); showToast(`Sei entrato nella lega "${l.name}"`); return l.code; }, e => { showToast(e && e.code === "not-found" ? "Nessuna lega con questo codice" : NOT_SAVED); return null; });
+  };
+  const leaveLeague = code => { const me = leagueMe(); if (!me) return; FantaL.leaveLeague(code, me.aid).then(() => { setLeagueCodes(cs => cs.filter(c => c !== code)); setLeagues(ls => ls.filter(l => l.code !== code)); showToast("Sei uscito dalla lega"); }, () => showToast(NOT_SAVED)); };
+  const renameLeague = (code, name) => FantaL.renameLeague(code, name).then(() => { setLeagues(ls => ls.map(l => (l.code === code ? { ...l, name: name.trim() } : l))); showToast("Nome della lega aggiornato"); return true; }, () => { showToast(NOT_SAVED); return null; });
+  const fantaLockOf = round => {
+    const r = races.find(x => x.round === round), w = r && CIRCUIT_INFO[r.circuitId] ? CIRCUIT_INFO[r.circuitId].weekend || [] : [];
+    return w.length ? BtLogic.teamLock({ sessions: w, now: 0 }).lockAt : null;
+  };
   // "Invia in chat" (notizia, gara, Ghost Lap): prima si sceglie la stanza.
   const shareToChat = k => { if (guest) { needLogin("Per scrivere in chat serve un account."); return; } setShareId(null); setLinkShare(k); };
   // Un link toccato in chat: la sua pagina dell'app (Indietro torna in chat).
@@ -9819,6 +9822,14 @@ function App() {
     ...allPolls.filter(pl => pl.answer && votes[pl.id] === pl.answer).map(pl => ({ id: "poll:" + pl.id, kind: "sondaggio", label: "Sondaggio · " + pl.q, pts: 2 })),
     ...predictions.filter(q => BtLogic.predictionCorrect(q, predAnswers[q.id]) === true).map(q => ({ id: "pred:" + q.id, kind: "previsione", label: "Previsione · " + q.q, pts: BtLogic.RULES.predictionBonus })),
   ];
+  // 31/10: il totale dei bonus va nelle mie leghe quando cambia (anche la classifica di lega conta i pronostici).
+  const bonusTotal = bonus.reduce((a, x) => a + x.pts, 0);
+  fantaBonusRef.current = bonusTotal;
+  useEffect(() => {
+    if (!fantaUserReady || !account || !leagueCodes.length) return;
+    FantaL.pushLog(leagueCodes, { aid: account.aid, name: account.name, team: squad.name, bonus: bonusTotal }, squadLog);
+    setLeagues(ls => ls.map(l => ({ ...l, members: l.members.map(m => (m.aid === account.aid ? { ...m, bonus: bonusTotal } : m)) })));
+  }, [fantaUserReady, bonusTotal, leagueCodes.join(",")]);
   // Trofei (G31): dai dati veri dell'account e dei documenti condivisi (src/logic/trophies.js). Solo con un account e i
   // suoi dati letti (si salvano lì); un trofeo nuovo si segna con la data, con l'avviso, il suono della Shift Light e
   // la vibrazione. La squadra del FantaF1 conta solo se non è più quella di partenza.
@@ -9908,6 +9919,10 @@ function App() {
   const trialActive = isPremium && !!trial && !trial.converted;
   // Weekend del FantaF1: quello in diretta, altrimenti la prossima gara. La squadra si blocca all'inizio delle qualifiche.
   const fantaRace = (live && !demoOn && races.find(r => r.id === live.raceId)) || weekendRace(races);
+  const fantaSeason = FantaSeason.seasonPoints({ log: squadLog, rounds: fantaRounds, lockOf: fantaLockOf });
+  const fantaReal = new Set(fantaRounds.map(r => r.round));
+  const fantaLive = fantaWeekends.filter(w => { const r = races.find(x => x.id === w.raceId); return !(r && fantaReal.has(r.round)); });
+  const leagueRows = leagues.map(l => ({ ...l, members: FantaL.standings(l, fantaRounds, fantaLockOf) }));
   const fantaSessions = fantaRace && CIRCUIT_INFO[fantaRace.circuitId] ? CIRCUIT_INFO[fantaRace.circuitId].weekend || [] : [];
   const teamLockInfo = BtLogic.teamLock({ sessions: fantaSessions, now: nowMs() });   // solo l'ora vera: la prova DEMO non blocca (D23)
   // Previsioni sul weekend: si chiudono all'inizio della sessione a cui si riferiscono (o quando l'admin segna la risposta).
@@ -9952,7 +9967,7 @@ function App() {
       onRefresh={() => refreshShared(["news", "highlights", "ig", "homePoll"]).catch(() => {})} />;
     else if (tab === "race") body = <RaceScreen onStandingsEnd={isPremium ? null : Ads.standingsEnd} favDriver={favDriver} dotdVote={live ? votesNow.dotd[live.raceId] : null} onDotdVote={(k, id) => live && voteDotd(live.raceId, k, id)} ratings={votesNow.ratings} onRate={rateDriver} onOpenChats={() => setView("chats")} onOpenGhost={() => setView("ghost")} races={races} standings={shownStandings} isPremium={isPremium} onPremium={() => setPremiumOpen(true)} onSelectDriver={setSelectedDriver} live={live} liveSt={liveSt} onExpandMap={() => setLiveTrackOpen(true)} onTelemetry={(carId, lapNo, sector) => setTelemetry({ carId, lapNo, sector })} onOpenCircuit={openCircuit} wxGuess={wxGuess} wxResult={wxResult} onGuessWeather={guessWeather} onLapTimes={setLapList} onSecondScreen={() => setSsOpen(true)} lastRace={lastRace} of1={of1} onOf1Refresh={() => of1TickRef.current && of1TickRef.current()} replay={replayCtl} />;
     else if (tab === "garage") body = <GarageScreen races={races} pitBest={pitBest} onPitResult={t => { if (!userDataWait()) setPitBest(b => b == null || t < b ? t : b); }} sillyPreds={sillyPreds} onPredict={predictSeat} sillyOfficial={sillyOfficial} live={live} stratPreds={stratPreds} onStrat={(id, st) => { if (!userDataWait()) setStratPreds(x => ({ ...x, [id]: { stints: st, at: nowMs() } })); }} bluffTags={bluffNow} onBluffRefresh={loadBluffTags} />;
-    else if (tab === "fanta") body = <FantaScreen standings={shownStandings} squad={squad} setSquad={setSquad} base={squadBase} freeTransfers={freeTransfers} budget={FANTA_BUDGET} stats={fantaStats} race={fantaRace} lock={teamLockInfo} weekends={fantaWeekends} isPremium={isPremium} onPremium={() => setPremiumOpen(true)} onToast={showToast} bonus={bonus} leagues={leagues} setLeagues={setLeagues} needAccount={needAccount} predictions={predictions} predAnswers={predAnswers} predLockOf={predLockOf} onAnswerPrediction={answerPrediction} />;
+    else if (tab === "fanta") body = <FantaScreen standings={shownStandings} squad={squad} setSquad={setSquad} base={squadBase} freeTransfers={freeTransfers} budget={FANTA_BUDGET} stats={fantaStats} race={fantaRace} lock={teamLockInfo} weekends={fantaLive} isPremium={isPremium} onPremium={() => setPremiumOpen(true)} onToast={showToast} bonus={bonus} leagues={leagueRows} seasonPts={fantaSeason.total} realWeek={fantaRace ? fantaSeason.rounds.find(r => r.round === fantaRace.round) || null : null} meAid={account ? account.aid : null} onCreateLeague={createLeague} onJoinLeague={joinLeague} onLeaveLeague={leaveLeague} onRenameLeague={renameLeague} needAccount={needAccount} predictions={predictions} predAnswers={predAnswers} predLockOf={predLockOf} onAnswerPrediction={answerPrediction} />;
   }
 
   const showTopHeader = view === "tab";

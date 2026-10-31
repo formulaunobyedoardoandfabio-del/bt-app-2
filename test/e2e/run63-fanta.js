@@ -6,6 +6,7 @@
 // - Carte che si girano in 3D: davanti il pilota e il prezzo, dietro punti, quotazione e numeri veri della stagione.
 // Uso: node test/build-test.js && node test/e2e/run63-fanta.js [filtro]
 const { open, w, text, tapText, tapSel, goTab, login, assert, run } = require('./helpers');
+const { leagueSeed } = require('../fake/leagues');
 
 // Singapore (r17): Qualifiche Sprint ven 9 ott 12:30Z (14:30 in Italia), gara dom 11 ott.
 const LOCKED = '2026-10-09T13:00:00Z';
@@ -57,13 +58,16 @@ run({
     assert(!errs.length && !o.errs.length && !r.errs.length, [...errs, ...o.errs, ...r.errs].join(' | '));
   },
 
+  // 31/10: le leghe sono quelle vere (Firebase): una di 7 non ha zone, una di 12 sì.
+  // 31/10: le leghe sono quelle vere (Firebase): una di 7 non ha zone, una di 12 sì.
+  // 31/10: le leghe sono quelle vere (Firebase): una di 7 non ha zone, una di 12 sì.
   async 'lega di 12: zone Q1 e Q2 colorate'(b) {
-    const { ctx, p, errs } = await open(b); await login(p); await goTab(p, 'FANTA');
-    const zones0 = await p.evaluate(() => [...document.querySelectorAll('[data-league-table] [data-zone]')].map(e => e.getAttribute('data-zone')));
-    await tapText(p, 'Modifica lega', { exact: true }); await w(p, 300);
-    for (const n of ['Anna', 'Bruno', 'Carla', 'Dario', 'Elena']) { await p.fill('#leagueAdd', n); await tapText(p, 'Aggiungi', { exact: true }); await w(p, 150); }
-    await tapText(p, 'Fatto', { exact: true }); await w(p, 400);
-    const rows = await p.evaluate(() => [...document.querySelectorAll('[data-league-table] [data-zone]')].map(e => ({ zone: e.getAttribute('data-zone'), bg: getComputedStyle(e.firstElementChild).backgroundColor, text: e.innerText.replace(/\s+/g, ' ').trim() })));
+    const zonesOf = p => p.evaluate(() => [...document.querySelectorAll('[data-league-table] [data-zone]')].map(e => e.getAttribute('data-zone')));
+    const seven = await open(b, { seed: { addDocs: leagueSeed({ members: ['Anna', 'Bruno', 'Carla', 'Dario', 'Elena', 'Fabio', 'Gina', 'Ivo', 'Luca', 'Mara', 'Nico'].slice(0, 6).map(name => ({ name })) }) } }); await login(seven.p); await goTab(seven.p, 'FANTA'); await w(seven.p, 600);
+    const zones0 = await zonesOf(seven.p); await seven.ctx.close();
+    const members = ['Anna', 'Bruno', 'Carla', 'Dario', 'Elena', 'Fabio', 'Gina', 'Ivo', 'Luca', 'Mara', 'Nico'].map((name, i) => ({ name, bonus: 100 - i }));
+    const { ctx, p, errs } = await open(b, { seed: { addDocs: leagueSeed({ members }) } }); await login(p); await goTab(p, 'FANTA'); await w(p, 600);
+    const rows = await p.evaluate(() => [...document.querySelectorAll('[data-league-table] [data-zone]')].map(e => ({ zone: e.getAttribute('data-zone'), bg: getComputedStyle(e.firstElementChild).backgroundColor, text: e.innerText.replace(/\s+/g, ' ') })));
     const labels = await p.evaluate(() => [...document.querySelectorAll('[data-league-table] [data-zone-label]')].map(e => ({ zone: e.getAttribute('data-zone-label'), text: e.innerText.trim(), color: getComputedStyle(e).color })));
     await ctx.close();
     assert(zones0.length === 7 && zones0.every(z => z === 'q3'), 'lega di 7: niente zone ' + JSON.stringify(zones0));
@@ -76,7 +80,6 @@ run({
     assert(labels.map(l => l.text).join() === 'ZONA Q2,ZONA Q1', 'etichette delle zone: ' + JSON.stringify(labels));
     assert(!errs.length, errs.join(' | '));
   },
-
   async 'carta del pilota: tocco e si gira con punti, prezzo e statistiche veri'(b) {
     const { ctx, p, errs } = await open(b); await login(p); await goTab(p, 'FANTA');
     const a = await card(p, 'russell');
