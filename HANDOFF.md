@@ -276,3 +276,5 @@ Da fare:
 - Prove delle richieste del 29/10: `test/e2e/run76-richieste-29-10.js` (swipe sulla barra, casco della password, Pro
   con la pubblicità e spegnimento dello schermo, pubblicità chiusa prima, profilo in chat una voce sola, vibrazioni F1)
   e `test/unit/fx.test.js` (suoni nuovi, sequenze nell'APK).
+- Verificato il 31/10: `JOBS=2 bash test/all.sh` a 5763965 → tutto verde tranne run66 e run68, che aspettavano i suoni
+  di prima (tic sullo swipe, Shift Light sul trofeo): aggiornate a DRS e bandiera a scacchi, ora 8/8 e 5/5.

@@ -38,7 +38,7 @@ run({
     await ctx.close();
     assert(n && n.label === 'Trofeo sbloccato: Indovino' && /Trofeo sbloccato/.test(n.text) && /Indovino/.test(n.text), 'avviso del trofeo: ' + JSON.stringify(n));
     assert(n.pe === 'none', 'l\'avviso non deve coprire i tocchi: ' + n.pe);
-    assert(fx.played.includes('shift') && fx.buzzed.includes('success'), 'suono della Shift Light e vibrazione: ' + JSON.stringify(fx));
+    assert(fx.played.includes('flag') && fx.buzzed.includes('flag'), 'bandiera a scacchi, suono e vibrazione (31/10, prima la Shift Light): ' + JSON.stringify(fx));
     const tr = user && user.app2 && user.app2.trophies;
     assert(tr && typeof tr.indovino === 'number' && tr.indovino > 0 && Object.keys(tr).join() === 'indovino', 'trofeo salvato nell\'account: ' + JSON.stringify(tr));
     assert(!gone, 'l\'avviso deve sparire da solo');
