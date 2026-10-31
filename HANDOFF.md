@@ -1,5 +1,5 @@
 # Handoff
-Updated: 2026-10-25 by Claude (claude-opus-5-5)   Branch: tappa-3   (vedi "25/10 sera" in fondo per l'ultimo lavoro)
+Updated: 2026-10-31 by Claude (claude-opus-5-5)   Branch: tappa-3   (vedi "31/10 notte" in fondo per l'ultimo lavoro)
 
 ## Goal
 Tappa 3 della 2.0: "fai prima tutti gli easter egg e le nuove grafiche, poi vedo l'apk di prova e poi ci sono altre
@@ -334,3 +334,35 @@ Da fare:
 - Prove: a@b.it non è più admin di serie (seed.admin per averlo); openAdmin() lo rende admin e l'app rilegge
   admins/<email> toccando il Profilo (Account.refreshAdmin, account nuovo così si ridisegna). Il tester ha una squadra
   Fanta sua (fake-firebase).
+
+## 31/10 notte: temi delle feste e OpenF1 in tempo reale
+- Temi delle feste (`src/logic/holidays.js`, date di Roma): Halloween 30/10-1/11 (#FF7A1A), Natale 1/12-26/12
+  (#D7263D), Befana 5-6/1 (#F2A541), Monza dal giovedì al lunedì del GP del circuito it-1922 (#CE2B37).
+  Cambiano colore dei tasti, caricamento (HolidayLoader), splash, segno nella testata, alcuni suoni (fx.setHoliday:
+  es. a Halloween lo swipe fa "howl"). Card della festa in Home (HOLIDAY_STORY: la stagione raccontata coi dati veri).
+  Interruttore "Temi delle feste" nel Profilo (users app2.holidays, sul telefono bt-holidays-on); movimento ridotto
+  rispettato. Admin: scheda TEMI del Pannello → shared/bt-holidays {force, off} (forzare una festa o spegnerne una).
+  Progetto grafico: docs/design/temi-feste.html.
+- Halloween fatto tutto: zucche che compaiono ogni 2 cambi di scheda (al massimo 3 al giorno, bt-pumpkins), scherzo
+  con la bandiera gialla, trofeo "Zucche" (events.pumpkins >= 3). Trofei nuovi anche avvento, calza, monza (segreto):
+  19 in tutto.
+- Da fare (task #21-#24): Natale = calendario dell'Avvento (logica pronta in `src/logic/advent.js`, manca la UI e la
+  chiave "advent" tra i dati dell'utente), regalo del 25/12, cartolina da condividere; Befana = calza (finitura
+  carbone); Monza = invasione di pista + trofeo "Ero a Monza" + VMAX solo con dati veri; holidayOpen per Natale e
+  Befana (ora null). Poi prove e APK.
+- OpenF1 in tempo reale: Edoardo ha il piano Sponsor (9,90 euro/mese, uso commerciale piccolo, 6 richieste/s e
+  60/min; Bruno di OpenF1 chiede una sola connessione dal server e gradisce la citazione). `api/live.js` su Vercel
+  (progetto bt-app-2): prende il token con OPENF1_USERNAME / OPENF1_PASSWORD (SOLO nelle variabili di Vercel, mai
+  nel codice né in chat), lo tiene per l'ora di validità, cache 10 s in memoria e s-maxage 10 sul CDN, solo gli
+  endpoint dell'elenco ALLOWED; `?check=1` dice se le credenziali vanno ({"ok":true} il 31/10).
+  App: durante una sessione l'API gratis è bloccata → `OF1.loadSession(key, {live: true})` passa da api/live, ogni
+  15 s; "Aggiorna" forza subito (tick(true)); `ongoing` = sessione non ancora finita → niente bandiera a scacchi.
+  Provato il 31/10 con le FP3 del Messico: 22 auto, posizioni, stint e meteo (giri ancora vuoti in quel momento).
+  Crediti in "Informazioni": OpenF1, Jolpica F1, TracingInsights, MET Norway.
+  Attenzione: l'abbonamento OpenF1 finisce il 18/11 se Edoardo non preme "Non annullare l'abbonamento"; il piano
+  Hobby di Vercel potrebbe non essere per uso commerciale (Pro o Cloudflare se serve).
+  Prove: test/unit/live-api.test.js, test/unit/openf1.test.js (diretta).
+- Prove: test/unit/holidays.test.js, advent.test.js, trophies (19), appdata (26 chiavi); e2e run79-feste (6).
+  a@b.it nelle prove non è admin: `seed: { admin: true }` dove serve dall'avvio (revisione-b C1, run34 DEMO, run72).
+  La prova DEMO di "Voce del paddock" ora controlla che il voto resti sul telefono (l'admin ha già tutti i trofei).
+- Verificato il 31/10 notte: JOBS=2 bash test/all.sh a 3aa5db3 → 87 file su 89 verdi; run68 (totale dei trofei scritto a mano) ora prende il numero da logic/trophies ed è verde; run33 "caricamento lento" è rossa solo con 2 prove alla volta (da sola 22/22: questione di tempi). APK di prova da 3aa5db3: GitHub run 41232720813 riuscito.

@@ -2,7 +2,7 @@
 // documenti condivisi); il trofeo vinto si salva nell'account (app2.trophies: { id: data in ms }) con l'avviso
 // "Trofeo sbloccato: <nome>", il suono della Shift Light e la vibrazione. Medaglia di bronzo da 1 trofeo, d'argento
 // da 5, d'oro da 10: nel Profilo e accanto al nome nei messaggi della chat (viaggia con il messaggio). Bacheca nel
-// Profilo: casco, medaglia, "N di 15 trofei", vinti con la data, da vincere con cosa serve e quanto manca.
+// Profilo: casco, medaglia, "N di 19 trofei", vinti con la data, da vincere con cosa serve e quanto manca.
 // Uso: node test/build-test.js && node test/e2e/run68-trofei.js [filtro]
 const { open, w, text, tapText, tapSel, goTab, login, assert, run } = require('./helpers');
 const { authorId } = require('../../src/services/compat');
@@ -71,8 +71,8 @@ run({
     await ctx.close();
     assert(card && card.helmet, 'casco nella bacheca: ' + JSON.stringify(card));
     assert(card.medal === 'bronzo' && /Medaglia di bronzo/.test(card.text), 'medaglia: ' + JSON.stringify(card));
-    assert(/1 di 15 trofei/.test(card.text), 'conteggio dei trofei: ' + card.text);
-    assert(Object.keys(rows).length === 15, 'trofei nella bacheca: ' + Object.keys(rows).length);
+    assert(new RegExp('1 di ' + require('../../src/logic/trophies').TROPHIES.length + ' trofei').test(card.text), 'conteggio dei trofei: ' + card.text);
+    assert(Object.keys(rows).length === require('../../src/logic/trophies').TROPHIES.length, 'trofei nella bacheca: ' + Object.keys(rows).length);
     assert(rows.casco.won === '1' && /Il mio casco/.test(rows.casco.text) && /12 ottobre 2026/.test(rows.casco.text), 'trofeo vinto con la data: ' + JSON.stringify(rows.casco));
     assert(rows.archivio.won === '0' && /Salva 5 notizie/.test(rows.archivio.text) && /2 di 5/.test(rows.archivio.text), 'da vincere con quanto manca: ' + JSON.stringify(rows.archivio));
     assert(/2,73 s/.test(rows.pitcrew.text), 'Pit crew: il record per sapere quanto manca: ' + JSON.stringify(rows.pitcrew));
