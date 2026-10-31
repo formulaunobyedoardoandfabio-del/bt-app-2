@@ -110,6 +110,13 @@ t('profilo coi campi doppi: entrando restano name, email, app2 (Premium in app2.
   assert.strictEqual(writes, 0, 'profilo già pulito riscritto');
   assert.strictEqual(B.current().isPremium, false);
   void c2;
+  // Abbonamento Stripe dell'app di prima: isPremium e plan restano (li gestisce il suo server), il resto si sistema.
+  const c3 = ctx({ docs: { 'users/s@b.it': { email: 's@b.it', name: 'Sara', nick: 'Sara', isPremium: true, plan: 'annual', stripeSubscriptionId: 'sub_1', app2: {} } }, users: { 's@b.it': { pw: 'abcdef12', uid: 'uid-s' } } });
+  await make().login('s@b.it', 'abcdef12');
+  await new Promise(r => setTimeout(r, 30));
+  const d3 = c3.fs('users/s@b.it');
+  assert.strictEqual(d3.isPremium, true); assert.strictEqual(d3.plan, 'annual'); assert.strictEqual(d3.nick, undefined);
+  assert.ok(!(d3.app2.premium && d3.app2.premium.sub), 'con Stripe il Premium non si copia in app2');
 });
 
 // 18/10 (Edoardo): creando l'account "Errore di connessione, riprova tra poco" senza codice: era il salvataggio del

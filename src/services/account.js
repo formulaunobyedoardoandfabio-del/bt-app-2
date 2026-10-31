@@ -104,12 +104,15 @@ function createAccount({
   // notif (interruttori mai usati). Entrando si tolgono; un Premium dato a mano (isPremium: true) passa in app2.premium.
   const LEGACY_FIELDS = ["nick", "isPremium", "premium", "plan", "notif"];
   function tidyProfile(email, doc) {
-    const old = LEGACY_FIELDS.filter(k => doc[k] !== undefined);
+    // Con un abbonamento Stripe dell'app di prima (stripeSubscriptionId) isPremium e plan li scrive il suo server (anche
+    // per togliere il Premium alla disdetta): quelli restano.
+    const stripe = !!doc.stripeSubscriptionId;
+    const old = LEGACY_FIELDS.filter(k => doc[k] !== undefined && !(stripe && (k === "isPremium" || k === "plan")));
     if (!old.length) return doc;
     const patch = {}, app2 = doc.app2 && typeof doc.app2 === "object" ? doc.app2 : {};
     if (!doc.name && typeof doc.nick === "string" && doc.nick.trim()) patch.name = doc.nick.trim();
     const pr = app2.premium && typeof app2.premium === "object" ? app2.premium : { sub: false, trial: null };
-    if ((doc.isPremium === true || doc.premium === true) && pr.sub !== true) patch.app2 = { premium: { ...pr, sub: true } };
+    if (!stripe && (doc.isPremium === true || doc.premium === true) && pr.sub !== true) patch.app2 = { premium: { ...pr, sub: true } };
     dbSet("users", email, patch, { remove: old }).catch(() => {});   // senza rete si riprova al prossimo accesso
     const out = { ...doc, ...patch, app2: patch.app2 ? { ...app2, ...patch.app2 } : doc.app2 };
     old.forEach(k => { delete out[k]; });

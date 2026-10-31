@@ -330,3 +330,4 @@ Da fare:
   solo (account.js tidyProfile); un isPremium: true dato a mano passa in app2.premium.sub; i nuovi account nascono
   puliti. compat.profileFromStore: isPremium = isPremium vecchio o app2.premium.sub. test/unit/account.test.js.
   Nota: per dare il Premium a mano da Firebase ora si mette app2 → premium → sub = true.
+  Con un abbonamento Stripe dell'app di prima (stripeSubscriptionId) isPremium e plan restano: li scrive il suo server.
