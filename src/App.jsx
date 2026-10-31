@@ -10106,6 +10106,8 @@ function App() {
     check();
     return () => { box.removeEventListener("scroll", onScroll, true); mo.disconnect(); cancelAnimationFrame(raf); };
   }, [scrollBase, appShown]);   // appShown: dopo l'accesso la pagina c'è davvero
+  // 31/10: aprendo il Profilo (anche da un'altra pagina, non solo dal tasto in alto) si rilegge chi è admin.
+  useEffect(() => { if (view === "profilo" && account && Account.refreshAdmin) Account.refreshAdmin().catch(() => {}); }, [view]);
   if (account === undefined && !guest) {   // si aspetta Authentication: forse c'è già una sessione
     return shell(
       <div data-auth-wait="" style={{ height: "100%", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 12, fontFamily: F_BODY, fontSize: 13, color: C.muted }}><LedGrid mode="seq" size={7} />Caricamento…</div>
@@ -10216,7 +10218,7 @@ function App() {
 
   return shell(
       <div data-bg={pageBg || undefined} style={{ height: "100%", display: "flex", flexDirection: "column", position: "relative", background: pageBg && PAGE_BG[pageBg] ? PAGE_BG[pageBg] : undefined, transition: "background .3s" }}>
-        {showTopHeader && <TopHeader trialDays={trialActive ? trialDaysLeft(trial) : 0} isPremium={isPremium} unread={unreadCount} onPremium={() => setPremiumOpen(true)} onBell={() => setView("notifiche")} onProfile={() => setView("profilo")} helmet={helmet} onTrack={isDemoLive(live) || !!sessionNow(realLiveRace, nowMs())} onLogoEgg={() => setEggFound(true)} />}
+        {showTopHeader && <TopHeader trialDays={trialActive ? trialDaysLeft(trial) : 0} isPremium={isPremium} unread={unreadCount} onPremium={() => setPremiumOpen(true)} onBell={() => setView("notifiche")} onProfile={() => { setView("profilo"); if (account && Account.refreshAdmin) Account.refreshAdmin().catch(() => {}); }} helmet={helmet} onTrack={isDemoLive(live) || !!sessionNow(realLiveRace, nowMs())} onLogoEgg={() => setEggFound(true)} />}
         {showTopHeader && offline && <div role="status" data-offline="" style={{ margin: "-6px 16px 10px", padding: "8px 12px", borderRadius: 10, background: "rgba(231,179,76,.12)", border: "1px solid rgba(231,179,76,.35)", fontFamily: F_BODY, fontSize: 12, color: C.text, lineHeight: 1.4, flexShrink: 0 }}>{OFFLINE_LINE}</div>}
         <div ref={swipeBoxRef} data-tab-swipe={showBottomNav ? "" : undefined} style={{ flex: 1, minHeight: 0, overflow: "hidden", position: "relative" }}
           onTouchStart={showBottomNav ? e => { const k = e.touches[0]; if (e.touches.length === 1) swipeStart(k.clientX, k.clientY, e.timeStamp, e.target, e.currentTarget); else swipeCancel(); } : undefined}

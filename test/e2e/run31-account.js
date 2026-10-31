@@ -67,7 +67,7 @@ run({
     assert(!/edoardo@bt-app\.demo/.test(t) && !/Edoardo/.test(t), 'nel profilo ci sono ancora i dati di prova');
     assert(!/Accesso anticipato/.test(t), 'c\'è ancora "Accesso anticipato · BETA"');
     assert(!emailInput, 'l\'email non si deve poter modificare');
-    assert(/Tester Due/.test(t2) && user.name === 'Tester Due' && user.nick === 'Tester Due', 'nome modificato: ' + JSON.stringify({ name: user.name, nick: user.nick }));
+    assert(/Tester Due/.test(t2) && user.name === 'Tester Due' && user.nick === undefined, 'nome modificato (31/10: niente nick doppio): ' + JSON.stringify({ name: user.name, nick: user.nick }));
     assert(!errs.length, errs.join(' | '));
   },
 
@@ -105,7 +105,7 @@ run({
   },
 
   async 'account non admin: nessuna riga "Pannello Admin"'(b) {
-    const { ctx, p, errs } = await open(b);
+    const { ctx, p, errs } = await open(b, { seed: { admin: true } });   // a@b.it admin (31/10: non lo è più di serie)
     await register(p);
     await tapSel(p, '[aria-label="Profilo"]'); await w(p, 400);
     const t = await text(p);

@@ -9,7 +9,7 @@ const OLD = { name: 'Scuderia B&T', drivers: ['hamilton', 'russell', 'hulkenberg
 
 run({
   async 'admin: Premium attivo e tutti i trofei vinti, senza pagare'(b) {
-    const { ctx, p, errs } = await open(b); await login(p); await w(p, 1800);
+    const { ctx, p, errs } = await open(b, { seed: { admin: true } }); await login(p); await w(p, 1800);
     const c = await chip(p), u = await user(p);
     await ctx.close();
     const tr = (u && u.app2 && u.app2.trophies) || {};
@@ -28,7 +28,7 @@ run({
     assert(!errs.length, errs.join(' | '));
   },
   async 'nuovo utente: squadra vuota da comporre (5 piloti e 2 scuderie), nessun cambio contato'(b) {
-    const { ctx, p, errs } = await open(b, { seed: { noAdmin: true } }); await login(p);
+    const { ctx, p, errs } = await open(b, { seed: { addDocs: { 'users/a@b.it': { name: 'Nuovo', email: 'a@b.it', about: {} } } } }); await login(p);
     await goTab(p, 'FANTA'); await w(p, 900);
     const adds = await p.evaluate(() => [...document.querySelectorAll('[data-fanta-add]')].map(e => e.getAttribute('data-fanta-add')));
     const cards = await p.evaluate(() => document.querySelectorAll('[data-fanta-card]').length);

@@ -79,7 +79,10 @@ async function login(p, { email = 'a@b.it', pw = 'x' } = {}) {
   await p.evaluate(() => { const bs = [...document.querySelectorAll('button')].filter(b => b.textContent.replace(/\s+/g, ' ').trim() === 'ACCEDI'); bs[bs.length - 1].click(); });
   await w(p, 1500);
 }
+// 31/10: a@b.it non è admin di serie (gli admin hanno Premium e tutti i trofei): lo diventa qui (l'app lo rilegge
+// aprendo il Profilo).
 async function openAdmin(p, tab) {
+  await p.evaluate(() => { if (!window.firebase.__fake.doc('admins/a@b.it')) window.firebase.__fake.setDoc('admins/a@b.it', { ruolo: 'admin' }); });
   await tapSel(p, '[aria-label="Profilo"]'); await w(p);
   await tapText(p, 'Pannello Admin'); await w(p);
   const keypad = await p.evaluate(() => [...document.querySelectorAll('button')].some(b => b.textContent.trim() === '8'));

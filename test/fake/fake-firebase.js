@@ -1,7 +1,7 @@
 // Firebase finto per le prove: la parte dell'API compat 10 (Firestore + Authentication) usata dai servizi dell'app.
 // Si carica prima dell'app: i servizi trovano window.firebase e non scaricano niente da gstatic.
 // Salva nel localStorage (chiavi bt-fake-fs e bt-fake-auth), quindi i dati restano ricaricando la pagina.
-// Dati di partenza: window.__btSeed = { docs, addDocs, noAdmin, users, freshInstall, requireRecentLogin, holdReads } (vedi
+// Dati di partenza: window.__btSeed = { docs, addDocs, admin, users, freshInstall, requireRecentLogin, holdReads } (vedi
 // seedDefaults): docs sostituisce i documenti di serie, addDocs si aggiunge a quelli (l'account di prova a@b.it resta).
 // Comandi per le prove: firebase.__fake.offline = true (niente rete: le letture falliscono, le scritture restano in
 // sospeso finché la rete torna, come in Firestore), .failWrites = true (scritture rifiutate dalle regole: permission-denied),
@@ -22,7 +22,10 @@
   function seedDefaults() {
     return {
       docs: {
-        'users/a@b.it': { name: 'Tester', nick: 'Tester', email: 'a@b.it', about: { birth: null, follow: 2, fan: 'vivo' } },
+        // 31/10: i nuovi utenti partono senza squadra Fanta; il tester ne ha una scelta da lui (i piloti di prima).
+        'users/a@b.it': { name: 'Tester', email: 'a@b.it', about: { birth: null, follow: 2, fan: 'vivo' }, app2: {
+          squad: { name: 'Squadra del Tester', drivers: ['hamilton', 'russell', 'hulkenberg', 'perez', 'antonelli'], teams: ['audi', 'haas'], boost: 'russell' },
+          squadBase: { drivers: ['hamilton', 'russell', 'hulkenberg', 'perez', 'antonelli'], teams: ['audi', 'haas'] } } },
         'admins/a@b.it': { ruolo: 'admin' },
       },
       users: { 'a@b.it': { pw: 'x', uid: 'uid-a' } },
@@ -34,7 +37,8 @@
     if (load(FS_KEY) && st) { if (st.recent) { st.recent = false; save(AUTH_KEY, st); } return; }
     const s = root.__btSeed || {}, d = seedDefaults();
     const docs0 = clone({ ...(s.docs || d.docs), ...(s.addDocs || {}) });   // addDocs: in più dei documenti di serie
-    if (s.noAdmin) delete docs0['admins/a@b.it'];   // 31/10: a@b.it utente normale (gli admin hanno Premium e tutti i trofei)
+    // 31/10: a@b.it è un utente normale (gli admin hanno Premium e tutti i trofei); admin con seed.admin o openAdmin().
+    if (!s.admin) delete docs0['admins/a@b.it'];
     save(FS_KEY, docs0);
     save(AUTH_KEY, { users: clone(s.users || d.users), current: null, resetSent: [], requireRecentLogin: !!s.requireRecentLogin, recent: false });
     if (!s.freshInstall) ls().setItem('bt_bt-terms-accepted', JSON.stringify({ ts: 1 }));

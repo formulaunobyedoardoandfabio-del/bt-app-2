@@ -331,3 +331,6 @@ Da fare:
   puliti. compat.profileFromStore: isPremium = isPremium vecchio o app2.premium.sub. test/unit/account.test.js.
   Nota: per dare il Premium a mano da Firebase ora si mette app2 → premium → sub = true.
   Con un abbonamento Stripe dell'app di prima (stripeSubscriptionId) isPremium e plan restano: li scrive il suo server.
+- Prove: a@b.it non è più admin di serie (seed.admin per averlo); openAdmin() lo rende admin e l'app rilegge
+  admins/<email> toccando il Profilo (Account.refreshAdmin, account nuovo così si ridisegna). Il tester ha una squadra
+  Fanta sua (fake-firebase).

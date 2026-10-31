@@ -344,6 +344,14 @@ function createAccount({
     start, retry, updateName, updateAbout,
     current: () => current,
     isAdmin: () => !!current && admin,
+    // 31/10: rilegge admins/<email> (aprendo il Profilo): un admin nominato con l'app aperta vede subito il pannello.
+    refreshAdmin: async () => {
+      if (!current || !current.email) return false;
+      const was = admin;
+      await readAdmin(current.email);
+      if (was !== admin) { current = { ...current }; remember(current); notify(); }   // oggetto nuovo: l'app si ridisegna
+      return admin;
+    },
     onChange(cb) { listeners.push(cb); return () => { const i = listeners.indexOf(cb); if (i >= 0) listeners.splice(i, 1); }; },
   };
 }
