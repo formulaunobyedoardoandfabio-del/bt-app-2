@@ -82,6 +82,14 @@ function createOpenF1({ fetchImpl, now = Date.now, sleep = ms => new Promise(r =
   }
   const keyQ = sessionKey => "session_key=" + encodeURIComponent(sessionKey);
   async function latestSession() { return (await get("sessions", "session_key=latest"))[0] || null; }
+  // Sessioni del weekend (31/10 sera: per rivedere anche PL1, PL2, qualifiche…), dalla prima; con before solo quelle già
+  // cominciate a quell'ora. Una richiesta.
+  async function weekendSessions(meetingKey, { before = null, live = false } = {}) {
+    if (meetingKey == null || meetingKey === "") return [];
+    const list = await get("sessions", "meeting_key=" + encodeURIComponent(meetingKey), { live });
+    const at = x => Date.parse(x && x.date_start);
+    return list.filter(x => isFinite(at(x)) && (before == null || at(x) <= before)).sort((a, b) => at(a) - at(b));
+  }
   // Tutto quello che serve per rivedere una sessione: al massimo 11 richieste (intervals solo in gara e Sprint).
   // Senza sessione, piloti, giri o posizioni non c'è niente da vedere (l'errore passa); il resto può mancare.
   async function loadSession(sessionKey, { live = false } = {}) {
@@ -101,7 +109,7 @@ function createOpenF1({ fetchImpl, now = Date.now, sleep = ms => new Promise(r =
   // Telemetria di un pezzo di sessione (date ISO in UTC, senza fuso: come negli esempi di OpenF1).
   const carData = (sessionKey, driverNumber, fromIso, toIso) =>
     get("car_data", `${keyQ(sessionKey)}&driver_number=${encodeURIComponent(driverNumber)}&date>=${fromIso}&date<=${toIso}`);
-  return { get, latestSession, loadSession, weatherOf, carData };
+  return { get, latestSession, weekendSessions, loadSession, weatherOf, carData };
 }
 
 // ── Sessione rivista ────────────────────────────────────────────────────
@@ -114,6 +122,14 @@ function sessionType(s) {
   return ty === "race" ? "RACE" : ty === "qualifying" ? "QUALI" : "FP1";
 }
 const isRaceType = type => type === "RACE" || type === "SPRINT";
+// Quale sessione rivedere: quella scelta, se è ancora tra le sessioni del weekend; se no l'ultima.
+function replayTarget({ latest, list, pick }) {
+  const hit = pick != null && Array.isArray(list) ? list.find(x => x && x.session_key === pick) : null;
+  return hit || latest;
+}
+// Sigla corta della sessione, per i tasti della scelta.
+const SHORT = { FP1: "PL1", FP2: "PL2", FP3: "PL3", SQ: "Q SPRINT", SPRINT: "SPRINT", QUALI: "QUALIFICHE", RACE: "GARA" };
+const sessionShort = s => SHORT[sessionType(s)];
 const COMPOUND = { SOFT: "S", MEDIUM: "M", HARD: "H", INTERMEDIATE: "I", WET: "W" };
 const SEGMENT = { 2051: "purple", 2049: "green", 2048: "yellow", 2064: "pit" };
 const STATUS_BG = { yellow: "yellow", sc: "yellow", vsc: "yellow", red: "red" };
@@ -214,6 +230,16 @@ function buildReplay(raw = {}, track = null, { drivers = [], of1 = null } = {}) 
   const ivBy = group(arr(raw.intervals).map(p => ({ num: p.driver_number, t: tOf(p.date), gap: parseGap(p.gap_to_leader), iv: parseGap(p.interval) })).filter(p => p.t != null), p => p.num);
   ivBy.forEach(list => list.sort((a, b) => a.t - b.t));
   const resultBy = new Map(arr(raw.session_result).filter(r => r && r.driver_number != null).map(r => [r.driver_number, r]));
+  // Prove o qualifiche con la classifica ma ancora senza giri (OpenF1 li aggiunge qualche ora dopo, 31/10): posizione e
+  // miglior giro dalla classifica (duration: il miglior giro; in qualifica uno per Q1/Q2/Q3, vale il più veloce).
+  const fromResult = !isRace && !lapsIn.length && resultBy.size > 0;
+  const resultBest = num => {
+    const r = fromResult ? resultBy.get(num) : null;
+    if (!r) return null;
+    const t = (Array.isArray(r.duration) ? r.duration : [r.duration]).filter(isNum).sort((a, b) => a - b)[0];
+    return t == null ? null : { lapNo: isNum(r.number_of_laps) ? r.number_of_laps : null, time: t };
+  };
+  const resultPos = num => { const r = fromResult ? resultBy.get(num) : null; return r && isNum(r.position) ? r.position : null; };
   arr(raw.position).forEach(p => p && p.driver_number != null && addDriver(p.driver_number));
 
   // Giri: inizio e fine nel tempo della sessione, poi i giri nella forma del simulatore.
@@ -321,6 +347,7 @@ function buildReplay(raw = {}, track = null, { drivers = [], of1 = null } = {}) 
     const frac = inLap ? clamp((at - cur.start) / (cur.dur || typical), 0, 0.9999) : 0;
     let best = null;
     for (let i = 0; i < nDone; i++) { const r = R[i]; if (r.time != null && (!isRace || r.lapNo > 1) && (!best || r.time < best.time)) best = { lapNo: r.lapNo, time: r.time }; }
+    if (!best) best = resultBest(num);
     const sectors = [null, null, null], minis = new Array(3 * PER).fill("none");
     if (inLap && curRec) {
       let acc = cur.start;
@@ -348,7 +375,7 @@ function buildReplay(raw = {}, track = null, { drivers = [], of1 = null } = {}) 
       pit: !dnf && (inPit || garage), out: false, outIn: null, tyre: tyreRec ? tyreRec.tyre : null,
       tyreAge: tyreRec && tyreRec.age != null ? tyreRec.age + (inLap || !nDone ? 0 : 1) : null, finished,   // fuori dal giro: compreso l'ultimo fatto
       tyreLife: null, wear: null, stops: pits.filter(p => p.t <= at).length, dnf,
-      _pos: pi >= 0 ? P[pi].position : null, _first: P.length ? P[0].position : null, _iv: ii >= 0 ? IV[ii] : null,
+      _pos: fromResult ? resultPos(num) : pi >= 0 ? P[pi].position : null, _first: P.length ? P[0].position : null, _iv: ii >= 0 ? IV[ii] : null,
       _s: inLap && !inPit && !dnf ? frac * L : 0, _pre: isRace && nStarted === 0, _done: nDone, _dnfT: D ? D.t : 0,
     };
   }
@@ -512,4 +539,4 @@ function lastRaceFromResult(raw = {}, races = [], { drivers = [] } = {}) {
     fastest: fastest != null ? idOf(fastest) : null, rows };
 }
 
-module.exports = { OF1_BASE, createOpenF1, sessionType, buildReplay, lastRaceFromResult, fmtRaceTime };
+module.exports = { OF1_BASE, createOpenF1, sessionType, sessionShort, replayTarget, buildReplay, lastRaceFromResult, fmtRaceTime };

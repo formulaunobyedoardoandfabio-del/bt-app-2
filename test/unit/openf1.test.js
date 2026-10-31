@@ -262,6 +262,56 @@ t('scorrere la sessione: dall\'inizio, avanti, ultimo giro e fine', () => {
   assert.strictEqual(r.state().flag, 'green');
 });
 
+// 31/10 sera: rivedere le altre sessioni del weekend (Edoardo: "quando voglio rivedere le prove libere o le qualifiche
+// non fa vedere niente": l'ultima sessione, PL3 del Messico, su OpenF1 non aveva ancora i giri).
+t('weekendSessions: le sessioni del weekend già cominciate, in ordine, con una richiesta', async () => {
+  const urls = [];
+  const S = (k, name, at) => ({ ...FX.session, session_key: k, session_name: name, date_start: at, date_end: at, meeting_key: 77 });
+  const list = [S(3, 'Race', '2026-11-01T20:00:00+00:00'), S(1, 'Practice 1', '2026-10-30T18:30:00+00:00'), S(2, 'Qualifying', '2026-10-31T21:00:00+00:00')];
+  const o = O(async url => { urls.push(url); return res(200, list); });
+  const got = await o.weekendSessions(77, { before: Date.parse('2026-10-31T21:30:00Z') });
+  assert.strictEqual(urls.length, 1);
+  assert.ok(urls[0].startsWith(OF1_BASE + '/sessions?meeting_key=77'), urls[0]);
+  assert.deepStrictEqual(got.map(x => x.session_key), [1, 2], 'solo le già cominciate, dalla prima: ' + JSON.stringify(got.map(x => x.session_key)));
+  assert.deepStrictEqual((await o.weekendSessions(77)).map(x => x.session_key), [1, 2, 3]);
+  assert.deepStrictEqual(await o.weekendSessions(null), []);
+});
+
+t('replayTarget: la sessione scelta se c\'è nel weekend, se no l\'ultima', () => {
+  const { replayTarget } = require('../../src/services/openf1');
+  const a = { session_key: 1 }, b = { session_key: 2 }, latest = { session_key: 3 };
+  assert.strictEqual(replayTarget({ latest, list: [a, b, latest], pick: 1 }), a);
+  assert.strictEqual(replayTarget({ latest, list: [a, b, latest], pick: null }), latest);
+  assert.strictEqual(replayTarget({ latest, list: [a, b, latest], pick: 99 }), latest, 'scelta non più nel weekend');
+  assert.strictEqual(replayTarget({ latest, list: [], pick: 1 }), latest);
+});
+
+// PL3 del Messico (31/10): per qualche ora OpenF1 ha la classifica (session_result) ma non ancora i giri. Prima la
+// sessione si vedeva vuota (tutti "–" e in ordine di numero); ora classifica e miglior giro vengono da session_result.
+t('prove libere senza giri: classifica e miglior giro da session_result', () => {
+  const session = { ...FX.session, session_name: 'Practice 3', session_type: 'Practice' };
+  const start = FX.position.filter((x, i, l) => l.findIndex(y => y.driver_number === x.driver_number) === i)
+    .map((x, i) => ({ ...x, date: FX.session.date_start, position: i + 1 }));   // come OpenF1: una posizione a testa all'inizio
+  const session_result = [
+    { driver_number: 16, position: 1, duration: 101.234, number_of_laps: 21, gap_to_leader: 0 },
+    { driver_number: 1, position: 2, duration: 101.5, number_of_laps: 19, gap_to_leader: 0.266 },
+    { driver_number: 63, position: 3, duration: [102.1, 101.9, null], number_of_laps: 18, gap_to_leader: 0.666 },
+  ];
+  const sim = buildReplay({ ...FX, session, laps: [], intervals: [], position: start, session_result }, track, ctx);
+  const st = sim.state();
+  assert.strictEqual(sim.type, 'FP3');
+  assert.ok(st.finished, 'parte dalla fine');
+  const top = st.cars.slice(0, 3).map(c => [c.number, c.best && c.best.time, c.gap]);
+  assert.deepStrictEqual(top, [[16, 101.234, 0], [1, 101.5, 0.266], [63, 101.9, 0.666]], 'primi tre: ' + JSON.stringify(top));
+  assert.ok(st.cars.slice(3).every(c => !c.best), 'chi non è in classifica resta senza tempo');
+});
+
+t('sessionShort: sigle corte per i tasti', () => {
+  const { sessionShort } = require('../../src/services/openf1');
+  assert.deepStrictEqual(['Practice 1', 'Practice 2', 'Practice 3', 'Sprint Qualifying', 'Sprint', 'Qualifying', 'Race'].map(n => sessionShort({ session_name: n })),
+    ['PL1', 'PL2', 'PL3', 'Q SPRINT', 'SPRINT', 'QUALIFICHE', 'GARA']);
+});
+
 (async () => {
   const filter = process.argv[2] ? new RegExp(process.argv[2], 'i') : null;
   for (const [name, fn] of tests) {

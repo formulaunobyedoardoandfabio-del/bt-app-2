@@ -33,7 +33,7 @@ import { local, IMG_REF, uploadImage, loadImage as loadStoredImage, dropImage } 
 import { generateArticle } from "./services/backend";
 import { fx } from "./services/fx";
 import { createCommons, normFile as commonsFileOf } from "./services/commons";
-import { createOpenF1, buildReplay, lastRaceFromResult, sessionType as of1SessionType } from "./services/openf1";
+import { createOpenF1, buildReplay, lastRaceFromResult, sessionType as of1SessionType, sessionShort, replayTarget } from "./services/openf1";
 import { createJolpica, pick as pickStandings } from "./services/jolpica";
 import { createMeteo, sessionForecast, skyOf } from "./services/meteo";
 import { createAds } from "./services/ads";
@@ -2675,6 +2675,32 @@ function PitBoard({ st, driverId, visible }) {
         {cell("DISTACCO", timingGap(st, c, i), "#FFFFFF")}
         {cell(isRaceType(st.type) ? "GIRO" : "SESSIONE", liveCounter(st), "#FFFFFF")}
       </div>
+    </div>
+  );
+}
+
+// Mini Pit Board (31/10 sera, Edoardo): la Pit Board in piccolo in fondo a ogni pagina durante una sessione in corso
+// (o rivista mentre scorre): pilota del cuore (o il primo), posizione, tempo sul giro (l'ultimo in gara, il migliore nelle
+// altre sessioni), distacco e giro. Toccandola si va alla Race; la X la toglie per questa sessione.
+function MiniPitBoard({ st, driverId, onOpen, onClose }) {
+  const i0 = st.cars.findIndex(c => c.id === driverId), i = i0 >= 0 ? i0 : 0, c = st.cars[i];
+  if (!c) return null;
+  const d = driverById(c.id);
+  const main = isRaceType(st.type) ? c.last : c.best;
+  const lapCol = main && main.st === "purple" ? TIMING.purple : main && main.st === "green" ? TIMING.green : "#FFFFFF";
+  const gap = timingGap(st, c, i);
+  return (
+    <div data-mini-pit={c.id} style={{ flexShrink: 0, margin: "0 12px 6px", display: "flex", alignItems: "stretch", borderRadius: 12, background: "linear-gradient(180deg, #121215, #070708)", border: "1px solid #2C2C33", boxShadow: "0 6px 16px rgba(0,0,0,.5)", overflow: "hidden" }}>
+      <button className="press" data-mini-pit-open="" onClick={onOpen} aria-label={`Mini Pit Board: ${c.code}, posizione ${c.pos}, ${gap}, ${liveCounter(st)}. Apri la Race`}
+        style={{ flex: 1, minWidth: 0, minHeight: 44, display: "flex", alignItems: "center", gap: 9, padding: "6px 10px 6px 0", textAlign: "left" }}>
+        <span style={{ alignSelf: "stretch", width: 4, flexShrink: 0, background: d ? d.color : c.color }} />
+        <span style={{ fontFamily: F_HEAD, fontWeight: 900, fontStyle: "italic", fontSize: 15, color: "#FFFFFF" }}>{c.code}</span>
+        <span style={{ fontFamily: F_HEAD, fontWeight: 900, fontStyle: "italic", fontSize: 15, color: "#FFD23F", fontVariantNumeric: "tabular-nums" }}>P{c.pos}</span>
+        <span style={{ fontFamily: F_HEAD, fontWeight: 800, fontSize: 13, color: main ? lapCol : C.dim, fontVariantNumeric: "tabular-nums" }}>{main ? LiveSim.fmtLap(main.time) : "–"}</span>
+        <span style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontFamily: F_BODY, fontWeight: 600, fontSize: 11, color: C.muted, fontVariantNumeric: "tabular-nums" }}>{gap}</span>
+        <span style={{ marginLeft: "auto", flexShrink: 0, fontFamily: F_BODY, fontWeight: 700, fontSize: 10, letterSpacing: .6, color: "#8D8C93", whiteSpace: "nowrap" }}>{liveCounter(st)}</span>
+      </button>
+      <button className="press" aria-label="Chiudi la mini Pit Board" onClick={onClose} style={{ width: 44, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", borderLeft: "1px solid #2C2C33" }}><Icon name="close" size={14} color="#9A99A0" /></button>
     </div>
   );
 }
@@ -5604,6 +5630,25 @@ function RatingsCard({ sessionKey, title, field, seed, mine = {}, onRate }) {
   );
 }
 
+// Tasti delle sessioni del weekend da rivedere (31/10 sera): PL1, PL2, PL3, QUALIFICHE, GARA… quelle già cominciate.
+// Con una sola sessione non servono. note: la sessione mostrata ha solo la classifica (giri non ancora su OpenF1).
+function SessionPicker({ sessions, onPick, note }) {
+  if (!sessions || !sessions.list || sessions.list.length < 2 || !onPick) return null;
+  return (
+    <div data-session-picker="" style={{ margin: "0 16px 12px" }}>
+      <div style={{ display: "flex", gap: 6, overflowX: "auto", scrollbarWidth: "none" }}>
+        {sessions.list.map(x => { const on = x.key === sessions.shown; return (
+          <button key={x.key} className="press" data-session-pick={x.key} aria-pressed={on ? "true" : "false"} onClick={() => onPick(x.key)}
+            style={{ flexShrink: 0, display: "flex", alignItems: "center", gap: 6, padding: "8px 12px", borderRadius: 10, background: on ? C.accent : "rgba(255,255,255,.05)", border: `1px solid ${on ? C.accent : C.border}`, fontFamily: F_HEAD, fontWeight: 800, fontSize: 12, letterSpacing: .4, color: "#fff" }}>
+            {x.label}{x.live && <span aria-label="in corso" style={{ width: 6, height: 6, borderRadius: "50%", background: on ? "#fff" : C.accent }} />}
+          </button>
+        ); })}
+      </div>
+      {note && <p data-session-note="" style={{ margin: "8px 2px 0", fontFamily: F_BODY, fontSize: 11.5, color: C.muted, lineHeight: 1.45 }}>{note}</p>}
+    </div>
+  );
+}
+
 // Stato di OpenF1 per la gara LIVE quando non c'è ancora la sessione da rivedere: bloccato durante la sessione, dati
 // che non arrivano, elenchi vuoti o caricamento.
 function Of1Status({ of1, standings, onRefresh }) {
@@ -5650,7 +5695,7 @@ function EndSpy({ onEnd }) {
   }, []);
   return <div ref={ref} data-end-spy="" aria-hidden="true" style={{ height: 1 }} />;
 }
-function RaceScreen({ onStandingsEnd = null, isPremium, onPremium, onSelectDriver, races, standings, live, liveSt, onExpandMap, onTelemetry, onOpenCircuit, wxGuess, wxResult, onGuessWeather, onLapTimes, onSecondScreen, lastRace, dotdVote, onDotdVote, ratings = {}, onRate, onOpenChats, onOpenGhost, of1 = null, onOf1Refresh, replay = null, favDriver = null }) {
+function RaceScreen({ onStandingsEnd = null, isPremium, onPremium, onSelectDriver, races, standings, live, liveSt, onExpandMap, onTelemetry, onOpenCircuit, wxGuess, wxResult, onGuessWeather, onLapTimes, onSecondScreen, lastRace, dotdVote, onDotdVote, ratings = {}, onRate, onOpenChats, onOpenGhost, of1 = null, onOf1Refresh, replay = null, favDriver = null, of1Sessions = null, onOf1Pick = null, sessionNote = null }) {
   const [tab, setTab] = useState(null);
   // Pit Board (G27): si vede quando la tabella dei tempi arriva in cima alla pagina (stato cambiato solo al passaggio).
   const scRef = useRef(null), tblRef = useRef(null);
@@ -5674,6 +5719,7 @@ function RaceScreen({ onStandingsEnd = null, isPremium, onPremium, onSelectDrive
     <div className="scrollcol" ref={scRef} onScroll={checkBoard} style={{ height: "100%" }}>
       {st && curTab === "classifica" && <PitBoard st={st} driverId={favDriver} visible={board} />}
       {st && liveRace && st.finished && isRaceType(st.type) && <FinishPodium st={st} race={liveRace} onSelectDriver={onSelectDriver} />}
+      {realLive && (!live || live.source === "openf1") && <SessionPicker sessions={of1Sessions} onPick={onOf1Pick} note={st ? sessionNote : null} />}
       {st && liveRace ? <LiveCard race={liveRace} st={st} track={live.track} source={live.source} onExpand={onExpandMap} replay={replay} /> : (
       <div style={{ position: "relative", margin: "4px 16px 14px", borderRadius: 18, overflow: "hidden", background: C.card, border: `1px solid ${C.border}` }}>
         {shown && <CircuitArt circuitId={shown.circuitId} uid="next" />}
@@ -7230,7 +7276,7 @@ function TrophyCase({ trophies = {}, progress = {}, helmet = null, defs = TROPHI
   );
 }
 
-function ProfiloScreen({ holidays = true, onHolidays = null, ig, onOpenIg, trial = null, trialUsed = false, onBack, onNotifiche, onPremium, onAdmin, onLogout, isPremium, onAbout, onHelp, onFeedback, aboutMe, onSaveAboutMe, favTeam, favDriver, onPickTeam, onPickDriver, guest, onLogin, onTerms, blocked = [], onUnblock, onDeleteAccount, savedCount = 0, onOpenSaved, account = null, onSaveName, isAdmin = false, onTheme, sounds = true, haptics = true, onSounds, onHaptics, helmet = null, onHelmet, trophies = {}, trophyProg = {}, trophyList = TROPHIES, onAdPrivacy = null }) {
+function ProfiloScreen({ holidays = true, onHolidays = null, miniPit = true, onMiniPit = null, ig, onOpenIg, trial = null, trialUsed = false, onBack, onNotifiche, onPremium, onAdmin, onLogout, isPremium, onAbout, onHelp, onFeedback, aboutMe, onSaveAboutMe, favTeam, favDriver, onPickTeam, onPickDriver, guest, onLogin, onTerms, blocked = [], onUnblock, onDeleteAccount, savedCount = 0, onOpenSaved, account = null, onSaveName, isAdmin = false, onTheme, sounds = true, haptics = true, onSounds, onHaptics, helmet = null, onHelmet, trophies = {}, trophyProg = {}, trophyList = TROPHIES, onAdPrivacy = null }) {
   const ft = favTeam ? teamById(favTeam) : null;
   const fd = favDriver ? driverById(favDriver) : null;
   const favRows = [
@@ -7271,6 +7317,7 @@ function ProfiloScreen({ holidays = true, onHolidays = null, ig, onOpenIg, trial
     { icon: "sound", label: "Suoni", toggle: { on: sounds, onChange: onSounds } },
     { icon: "vibrate", label: "Vibrazioni", toggle: { on: haptics, onChange: onHaptics } },
     ...(onHolidays ? [{ icon: "sparkle", label: "Temi delle feste", toggle: { on: holidays !== false, onChange: onHolidays } }] : []),
+    ...(onMiniPit ? [{ icon: "stopwatch", label: "Pit Board in tutta l'app", toggle: { on: miniPit !== false, onChange: onMiniPit } }] : []),
     ...(isAdmin ? [{ icon: "gear", label: "Pannello Admin · Pubblica notizia", onClick: onAdmin, badge: "ADMIN" }] : []),
     { icon: "help", label: "Assistenza", onClick: onHelp, chevron: true },
     { icon: "chat", label: "Invia feedback", onClick: onFeedback, chevron: true },   // come oggi, ma dal Profilo (niente pulsante fluttuante)
@@ -9097,6 +9144,9 @@ function App() {
   // 31/10: temi delle feste: comando dell'admin (shared/bt-holidays) e scelta dell'utente (Profilo; sul telefono per l'avvio).
   const [holidayCfg, setHolidayCfg] = useState(() => shared0.holidays || local.get("bt-holidays-cfg") || { force: null, off: [] });
   const [holidaysOn, setHolidaysOn] = useState(() => local.get("bt-holidays-on") !== false);
+  // Mini Pit Board in tutta l'app (31/10 sera): interruttore nel Profilo (sul telefono) e sessione chiusa con la X.
+  const [miniPitOn, setMiniPitOn] = useState(() => local.get("bt-minipit-on") !== false);
+  const [miniPitHidden, setMiniPitHidden] = useState(null);
   const [votes, setVotes] = useState(USER_INIT.votes);           // { idSondaggio: idRisposta }
   const [notifsRaw, setNotifsRaw] = useState(shared0.notifs);    // shared/bt-notifs come sono salvate
   const [localNotifs, setLocalNotifs] = useState([]);            // avvisi di questo telefono (notizia sul tuo preferito)
@@ -9205,6 +9255,9 @@ function App() {
   const live = demoLive || of1Live;
   const [of1, setOf1] = useState({ status: "idle", raceId: null });   // gara LIVE: "loading" | "locked" | "error" | "empty" | "ok"
   const of1TickRef = useRef(null);
+  // Sessioni del weekend da rivedere (31/10 sera): elenco per i tasti, quella mostrata, l'ultima; la scelta (null = l'ultima).
+  const [of1Sessions, setOf1Sessions] = useState({ list: [], shown: null, latest: null });
+  const of1PickRef = useRef(null);
   // Sessione rivista: parte ferma alla fine; "Rivedi dall'inizio" la fa scorrere ×10 (o ×60).
   const [replay, setReplay] = useState({ playing: false, speed: 10 });
   const replayRef = useRef(replay);
@@ -9519,11 +9572,18 @@ function App() {
   const realLiveId = realLiveRace ? realLiveRace.id : null;
   useEffect(() => {
     setOf1Live(null);
+    of1PickRef.current = null;
+    setOf1Sessions({ list: [], shown: null, latest: null });
     if (!realLiveId) { setOf1({ status: "idle", raceId: null }); return undefined; }
-    let alive = true, busy = false, loaded = null, loadedAt = 0, liveMode = false, checkedAt = 0;
+    // loaded: la sessione chiesta per ultima (anche se era vuota, empty); shownKey: quella che si vede davvero.
+    let alive = true, busy = false, again = false, loaded = null, shownKey = null, empty = false, loadedAt = 0, liveMode = false, checkedAt = 0;
+    let listFor = null, list = [], sessSig = "";
+    // Sessioni finite già caricate (al massimo 4): tornandoci non si rifanno le ~11 richieste (OpenF1 gratis: 30 al minuto).
+    const cache = new Map();
     setOf1({ status: "loading", raceId: realLiveId });
     const tick = async (force = false) => {
-      if (busy || !alive) return;
+      if (!alive) return;
+      if (busy) { if (force === true) again = true; return; }   // una scelta fatta durante un caricamento: subito dopo
       if (force !== true && !liveMode && checkedAt && nowMs() - checkedAt < OF1_POLL_MS - 1000) return;   // fuori dalla diretta: ogni 30 s
       busy = true; checkedAt = nowMs();
       try {
@@ -9531,33 +9591,66 @@ function App() {
         const s = await OF1.latestSession();
         if (!alive) return;
         if (!s || !race || !sessionOfWeekend(s, race)) { if (!loaded) setOf1({ status: "empty", raceId: realLiveId }); return; }
-        if (loaded === s.session_key && !liveMode && !of1NeedsReload(s, loadedAt, nowMs())) return;
-        if (loaded === s.session_key && liveMode && nowMs() - loadedAt < OF1_LIVE_MS - 1000) return;
-        if (!loaded) setOf1({ status: "loading", raceId: realLiveId });
+        // Sessioni del weekend già cominciate, per scegliere quale rivedere: una richiesta quando cambia l'ultima sessione
+        // (e allora si torna all'ultima). Se non arrivano si riprova al giro dopo; intanto c'è l'ultima.
+        if (listFor !== s.session_key) {
+          const all = await OF1.weekendSessions(s.meeting_key, { before: nowMs() }).catch(() => null);
+          if (!alive) return;
+          if (all) { listFor = s.session_key; list = all.some(x => x.session_key === s.session_key) ? all : [...all, s]; of1PickRef.current = null; }
+          else if (!list.some(x => x.session_key === s.session_key)) list = [...list, s];
+        }
+        const target = replayTarget({ latest: s, list, pick: of1PickRef.current });
+        const isLatest = target.session_key === s.session_key;
+        const endOf = x => Date.parse((x && x.date_end) || "");
+        const sess = { list: list.map(x => ({ key: x.session_key, label: sessionShort(x), live: x.session_key === s.session_key && !(nowMs() >= endOf(x)) })), shown: target.session_key, latest: s.session_key };
+        const sig = JSON.stringify(sess);
+        if (sig !== sessSig) { sessSig = sig; setOf1Sessions(sess); }
+        const stale = empty && nowMs() - loadedAt >= OF1_RELOAD_MS;   // sessione vuota: si riprova ogni 5 minuti
+        if (loaded === target.session_key && !liveMode && !stale && !of1NeedsReload(target, loadedAt, nowMs())) return;
+        if (loaded === target.session_key && liveMode && nowMs() - loadedAt < OF1_LIVE_MS - 1000) return;
+        const switching = loaded !== target.session_key;
+        if (!loaded || switching) setOf1({ status: "loading", raceId: realLiveId });
         // Sessione in corso (OpenF1 gratis bloccato): i dati dalla nostra funzione su Vercel; se non va, "SESSIONE IN CORSO".
         let raw, liveNow = false;
-        try { raw = await OF1.loadSession(s.session_key); }
-        catch (e) {
-          if (!(e && e.locked)) throw e;
-          try { raw = await OF1.loadSession(s.session_key, { live: true }); liveNow = true; } catch (e2) { throw e; }
+        const hit = switching ? cache.get(target.session_key) : null;
+        if (hit && !of1NeedsReload(target, hit.at, nowMs())) raw = hit.raw;
+        else {
+          try { raw = await OF1.loadSession(target.session_key); }
+          catch (e) {
+            if (!(e && e.locked)) throw e;
+            try { raw = await OF1.loadSession(target.session_key, { live: true }); liveNow = true; } catch (e2) { throw e; }
+          }
+          if (raw && (raw.laps.length || raw.session_result.length) && !(liveNow && isLatest)) { cache.delete(target.session_key); cache.set(target.session_key, { raw, at: nowMs() }); if (cache.size > 4) cache.delete(cache.keys().next().value); }
         }
         if (!alive) return;
+        if (replayTarget({ latest: s, list, pick: of1PickRef.current }).session_key !== target.session_key) return;   // scelta cambiata intanto
         const track = trackOf(race.circuitId);
-        if (!raw || !track || (!raw.laps.length && !raw.position.length)) { if (!loaded) setOf1({ status: "empty", raceId: realLiveId }); return; }
+        // Da vedere: i giri, o la classifica (prove e qualifiche: i giri arrivano su OpenF1 ore dopo), o in diretta le posizioni.
+        const has = !!raw && !!track && (raw.laps.length > 0 || raw.session_result.length > 0 || (liveNow && raw.position.length > 0));
+        if (!has) {
+          if (shownKey === target.session_key) return;   // ricaricando la stessa sessione: si tiene quello che c'è
+          loaded = target.session_key; loadedAt = nowMs(); empty = true; liveMode = false;
+          setOf1Live(null); setOf1({ status: "empty", raceId: realLiveId });
+          return;
+        }
         const sim = buildReplay(raw, track, { drivers: LIVE_DRIVERS, of1: OF1 });
-        loaded = s.session_key; loadedAt = nowMs(); liveMode = liveNow;
+        // Una sessione passata presa da api/live (OpenF1 gratis bloccato da un'altra sessione) non si ricarica ogni 15 s.
+        loaded = shownKey = target.session_key; loadedAt = nowMs(); empty = false; liveMode = liveNow && isLatest;
         setReplay(r => ({ ...r, playing: false }));
         // ongoing (31/10): dati della diretta (api/live) con la sessione non ancora finita: non è "finita" anche se si
         // vede l'ultimo momento arrivato.
-        const endAt = Date.parse(s.date_end || "");
-        setOf1Live({ raceId: race.id, type: sim.type, sim, track, source: "openf1", raw, sessionKey: s.session_key, ongoing: liveNow && (!isFinite(endAt) || nowMs() < endAt) });
+        const endAt = endOf(target);
+        setOf1Live({ raceId: race.id, type: sim.type, sim, track, source: "openf1", raw, sessionKey: target.session_key, ongoing: liveNow && isLatest && (!isFinite(endAt) || nowMs() < endAt) });
         setOf1({ status: "ok", raceId: realLiveId });
       } catch (e) {
         if (!alive) return;
         // Bloccato: è cominciata un'altra sessione. Senza rete (o OpenF1 occupato) si tiene quello che c'è.
-        if (e && e.locked) { loaded = null; liveMode = false; setOf1Live(null); setOf1({ status: "locked", raceId: realLiveId }); }
+        if (e && e.locked) { loaded = shownKey = null; liveMode = false; setOf1Live(null); setOf1({ status: "locked", raceId: realLiveId }); }
         else if (!loaded) setOf1({ status: "error", raceId: realLiveId });
-      } finally { busy = false; }
+      } finally {
+        busy = false;
+        if (again && alive) { again = false; setTimeout(() => tick(true), 0); }
+      }
     };
     of1TickRef.current = tick;
     tick();
@@ -10324,6 +10417,11 @@ function App() {
     return { locked: q.answer != null || (at != null && nowMs() >= at) || liveHere || endedHere, lockAt: at, text: `all'inizio ${SESSION_DEL[q.about] || ""}${at ? ` (${fmtRome(at)})` : ""}` };
   };
   const onRaceTab = view === "tab" && tab === "race";
+  // Mini Pit Board: sessione in corso (o rivista mentre scorre), non nella Race (ha la sua), non nella chat aperta (sotto
+  // il campo per scrivere) né nel Pannello Admin; chiusa con la X solo per questa sessione.
+  const miniPitKey = live ? [live.raceId, live.type, live.sessionKey || live.source].join(":") : "";
+  const miniPitShow = miniPitOn && !!live && !!liveSt && !liveSt.finished && miniPitHidden !== miniPitKey && !onRaceTab
+    && view !== "chatThread" && view !== "admin" && !ssOpen && !liveTrackOpen;
   liveShown.current = !!live && (onRaceTab || liveTrackOpen || ssOpen || view === "admin");
   // Pannello Admin: i comandi della prova DEMO valgono solo per la prova (la sessione vera di OpenF1 non si tocca).
   const liveProps = { live: demoLive, liveSt: demoLive ? (demoLive === live ? liveSt : demoLive.sim.state()) : null, onStartLive: startLive, onStopLive: stopLive, onFlag: liveFlag, onLastLap: liveLastLap, onRetire: liveRetire, liveSpeed, setLiveSpeed, bluff: { live: of1Live, tags: bluffNow, onTag: tagBluffRadio, onUntag: untagBluffRadio } };
@@ -10347,13 +10445,16 @@ function App() {
   else if (view === "profilo") body = <ProfiloScreen ig={ig} onOpenIg={() => { setIgFrom("profilo"); setView("instagram"); }} aboutMe={aboutMe} onSaveAboutMe={a => Account.updateAbout(a).catch(e => showToast(e && (e.code === "too-young" || e.code === "not-loaded") ? messageOf(e) : NOT_SAVED))} account={account} onSaveName={n => Account.updateName(n)} isAdmin={Account.isAdmin()} trial={trialActive ? trial : null} trialUsed={!!trial} onBack={viewBack.profilo} onNotifiche={() => setView("notifiche")} onPremium={() => setPremiumOpen(true)} onAdmin={() => guest ? needLogin("Accedi per usare il pannello admin.") : setView(adminUnlocked ? "admin" : "adminLock")} onLogout={logout} isPremium={isPremium} onAbout={() => setInfoModal({ title: "Info su B&T", body: ABOUT_TEXT, credits: true })} onFeedback={() => setFeedbackOpen(true)} onHelp={() => setInfoModal({ title: "Assistenza", body: HELP_TEXT })} favTeam={favTeam} favDriver={favDriver} onPickTeam={() => guest ? needLogin("Per scegliere scuderia e pilota del cuore serve un account.") : setPicker("team")} onPickDriver={() => guest ? needLogin("Per scegliere scuderia e pilota del cuore serve un account.") : setPicker("driver")} guest={guest} onLogin={() => needLogin(null)} onTerms={() => setTermsOpen(true)} blocked={blocked} onUnblock={unblockUser} onDeleteAccount={deleteAccount} savedCount={saved.length} onOpenSaved={openSaved} onTheme={() => setThemeOpen(true)} helmet={helmet} onHelmet={() => setHelmetOpen(true)} trophies={trophies} trophyProg={trophyProg} trophyList={trophyList}
     onAdPrivacy={Ads.privacyRequired() ? () => Ads.openPrivacy().catch(() => showToast("Le preferenze sulla privacy degli annunci non sono disponibili in questo momento.")) : null}
     sounds={sounds} haptics={haptics} onSounds={v => { if (userDataWait()) return; setSounds(v); fx.setSounds(v); if (v) fx.play("tick"); }} onHaptics={v => { if (userDataWait()) return; setHaptics(v); fx.setHaptics(v); if (v) fx.buzz("light"); }}
-    holidays={holidaysOn} onHolidays={v => { if (userDataWait()) return; setHolidaysOn(v); local.set("bt-holidays-on", v); fx.play("tick"); }} />;
+    holidays={holidaysOn} onHolidays={v => { if (userDataWait()) return; setHolidaysOn(v); local.set("bt-holidays-on", v); fx.play("tick"); }}
+    miniPit={miniPitOn} onMiniPit={v => { setMiniPitOn(v); local.set("bt-minipit-on", v); fx.play("tick"); }} />;
   else if (view === "notifiche") body = <NotificheScreen offline={offline} onBack={viewBack.notifiche} onAction={a => { if (a === "feedback") { if (feedbackAsk && !feedbackAsk.read) saveAsk({ ...feedbackAsk, read: true }); setFeedbackOpen(true); } }} notifs={notifs} onReadAll={readAll} isPremium={isPremium} onPremium={() => setPremiumOpen(true)} favTeam={favTeam} favDriver={favDriver} prefs={notifPrefs} onPrefs={v => { if (!userDataWait()) setNotifPrefs(v); }} onGoProfilo={() => setView("profilo")} />;
   else {
     if (tab === "home") body = <HomeScreen holidayTop={holiday ? <HolidayCard id={holiday} onOpen={holidayOpen(holiday)} /> : null} ig={ig} highlights={highlights} onOpenIg={() => { setIgFrom("tab"); setView("instagram"); }} articles={articles} tagFilter={tagFilter} onTag={filterByTag} onClearTag={() => setTagFilter(null)} onOpenArticle={openArticle} isPremium={isPremium} onPremium={() => setPremiumOpen(true)} onToast={showToast} onLiveTrack={() => setLiveTrackOpen(true)} onGoFanta={() => goTab("fanta")}  saved={saved} onToggleSave={toggleSave} savedOnly={savedOnly} setSavedOnly={setSavedOnly} onOpenCircuit={openCircuit} homePoll={homePoll} homeVote={votes.home || null} onVote={castVote}
       hidden={hidden} onHide={hideArticle} onUnhideAll={() => { if (!userDataWait()) setHidden([]); }} onSwipeSave={saveFromSwipe}
       onRefresh={() => refreshShared(["news", "highlights", "ig", "homePoll"]).catch(() => {})} />;
-    else if (tab === "race") body = <RaceScreen onStandingsEnd={isPremium ? null : Ads.standingsEnd} favDriver={favDriver} dotdVote={live ? votesNow.dotd[live.raceId] : null} onDotdVote={(k, id) => live && voteDotd(live.raceId, k, id)} ratings={votesNow.ratings} onRate={rateDriver} onOpenChats={() => setView("chats")} onOpenGhost={() => setView("ghost")} races={races} standings={shownStandings} isPremium={isPremium} onPremium={() => setPremiumOpen(true)} onSelectDriver={setSelectedDriver} live={live} liveSt={liveSt} onExpandMap={() => setLiveTrackOpen(true)} onTelemetry={(carId, lapNo, sector) => setTelemetry({ carId, lapNo, sector })} onOpenCircuit={openCircuit} wxGuess={wxGuess} wxResult={wxResult} onGuessWeather={guessWeather} onLapTimes={setLapList} onSecondScreen={() => setSsOpen(true)} lastRace={lastRace} of1={of1} onOf1Refresh={() => of1TickRef.current && of1TickRef.current(true)} replay={replayCtl} />;
+    else if (tab === "race") body = <RaceScreen onStandingsEnd={isPremium ? null : Ads.standingsEnd} favDriver={favDriver} dotdVote={live ? votesNow.dotd[live.raceId] : null} onDotdVote={(k, id) => live && voteDotd(live.raceId, k, id)} ratings={votesNow.ratings} onRate={rateDriver} onOpenChats={() => setView("chats")} onOpenGhost={() => setView("ghost")} races={races} standings={shownStandings} isPremium={isPremium} onPremium={() => setPremiumOpen(true)} onSelectDriver={setSelectedDriver} live={live} liveSt={liveSt} onExpandMap={() => setLiveTrackOpen(true)} onTelemetry={(carId, lapNo, sector) => setTelemetry({ carId, lapNo, sector })} onOpenCircuit={openCircuit} wxGuess={wxGuess} wxResult={wxResult} onGuessWeather={guessWeather} onLapTimes={setLapList} onSecondScreen={() => setSsOpen(true)} lastRace={lastRace} of1={of1} onOf1Refresh={() => of1TickRef.current && of1TickRef.current(true)} of1Sessions={of1Sessions}
+      onOf1Pick={key => { of1PickRef.current = key === of1Sessions.latest ? null : key; setOf1Sessions(x => ({ ...x, shown: key })); if (of1TickRef.current) of1TickRef.current(true); }}
+      sessionNote={of1Live && of1Live.raw && !of1Live.raw.laps.length && of1Live.raw.session_result.length ? "I tempi giro per giro non sono ancora su OpenF1 (arrivano qualche ora dopo la fine): intanto la classifica con il miglior giro di ognuno." : null} replay={replayCtl} />;
     else if (tab === "garage") body = <GarageScreen races={races} pitBest={pitBest} onPitResult={t => { if (!userDataWait()) setPitBest(b => b == null || t < b ? t : b); }} sillyPreds={sillyPreds} onPredict={predictSeat} sillyOfficial={sillyOfficial} live={live} stratPreds={stratPreds} onStrat={(id, st) => { if (!userDataWait()) setStratPreds(x => ({ ...x, [id]: { stints: st, at: nowMs() } })); }} bluffTags={bluffNow} onBluffRefresh={loadBluffTags} />;
     else if (tab === "fanta") body = <FantaScreen standings={shownStandings} squad={squad} setSquad={setSquad} base={squadBase} freeTransfers={freeTransfers} budget={FANTA_BUDGET} stats={fantaStats} race={fantaRace} lock={teamLockInfo} weekends={fantaLive} isPremium={isPremium} onPremium={() => setPremiumOpen(true)} onToast={showToast} bonus={bonus} leagues={leagueRows} seasonPts={fantaSeason.total} realWeek={fantaRace ? fantaSeason.rounds.find(r => r.round === fantaRace.round) || null : null} meAid={account ? account.aid : null} onCreateLeague={createLeague} onJoinLeague={joinLeague} onLeaveLeague={leaveLeague} onRenameLeague={renameLeague} needAccount={needAccount} predictions={predictionsOpen} predAnswers={predAnswers} predLockOf={predLockOf} onAnswerPrediction={answerPrediction} />;
   }
@@ -10390,6 +10491,7 @@ function App() {
           {showBottomNav && <TabPeek key={"peek-left-" + tab} side="left" tab={TABS[TAB_IDS.indexOf(tab) - 1]} peekRef={el => { peekRef.current.left = el; }} />}
           {showBottomNav && <TabPeek key={"peek-right-" + tab} side="right" tab={TABS[TAB_IDS.indexOf(tab) + 1]} peekRef={el => { peekRef.current.right = el; }} />}
         </div>
+        {miniPitShow && <MiniPitBoard st={liveSt} driverId={favDriver} onOpen={() => { setView("tab"); if (tab !== "race") switchTab("race"); }} onClose={() => { setMiniPitHidden(miniPitKey); fx.play("tick"); }} />}
         {/* 29/10: lo swipe cambia scheda anche partendo dalla barra in basso. */}
         {showBottomNav && <div data-nav-swipe="" style={{ flexShrink: 0 }}
           onTouchStart={showBottomNav ? e => { const k = e.touches[0]; if (e.touches.length === 1) swipeStart(k.clientX, k.clientY, e.timeStamp, e.target, e.currentTarget); else swipeCancel(); } : undefined}
