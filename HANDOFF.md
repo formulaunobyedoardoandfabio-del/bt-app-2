@@ -1,5 +1,5 @@
 # Handoff
-Updated: 2026-10-31 by Claude (claude-opus-5-5)   Branch: tappa-3   (vedi "31/10 tarda sera" in fondo per l'ultimo lavoro)
+Updated: 2026-11-01 by Claude (claude-opus-5-5)   Branch: tappa-3   (vedi "1/11 notte" in fondo per l'ultimo lavoro)
 
 ## Goal
 Tappa 3 della 2.0: "fai prima tutti gli easter egg e le nuove grafiche, poi vedo l'apk di prova e poi ci sono altre
@@ -390,3 +390,19 @@ Da fare:
   Toccandola si va alla Race; la X la chiude per quella sessione (torna con la sessione dopo); interruttore "Pit Board in
   tutta l'app" nel Profilo (sul telefono: bt-minipit-on). Prove: test/e2e/run81-minipit.js.
 - Verificato il 31/10 tarda sera: JOBS=2 bash test/all.sh a 7f9f129 → TUTTO VERDE (91 file).
+
+## 1/11 notte: diretta che non arrivava durante le qualifiche del Messico, Ghost Lap solo qualifiche
+- Edoardo, durante le qualifiche: solo un messaggio tipo "riprova / connessione", caricato solo dopo la fine. Causa:
+  in diretta OpenF1 gratis è bloccato per TUTTO, anche `sessions?session_key=latest`; l'app chiedeva l'ultima sessione
+  solo lì, quindi non arrivava mai ad api/live (provato prima solo con uno script che conosceva già la session_key).
+  Ora: se OpenF1 gratis non risponde (bloccato, irraggiungibile, occupato) ultima sessione, sessioni del weekend e dati
+  arrivano da api/live (`OF1.latestSession({live: true})`); se anche api/live non risponde resta "SESSIONE IN CORSO".
+  Ricarica ogni 15 s solo con la sessione in corso (ongoing). Prova: test/e2e/run82-diretta.js (OpenF1 gratis bloccato
+  per tutto, api/live finta; e api/live giù).
+- api/live: cache 15 s (era 10): l'app chiede ~12 indirizzi ogni 15 s, con 10 s OpenF1 poteva riceverne fino a 72 al
+  minuto (limite del piano 60). test/unit/live-api.test.js.
+- Ghost Lap: solo qualifiche (Edoardo). Tolto il Ghost Lap dalle prove libere di 2009f67 (tools/make_live_data.py,
+  ghostSessLabel, ghostForNow dall'inizio del weekend); la card del Garage resta sul GP delle ultime qualifiche già corse
+  (ghostForNow). Dati rigenerati da TracingInsights 2b8da62: Ghost Lap Messico Q + Austin Q. Il Degrado gomme dalle
+  prove libere resta (run76 ora legge le sessioni attese da weekend.json).
+- Verificato il 1/11 notte: JOBS=2 bash test/all.sh a 54396d4 → TUTTO VERDE (92 file). APK di prova da 54396d4 (GitHub, 00:30).
