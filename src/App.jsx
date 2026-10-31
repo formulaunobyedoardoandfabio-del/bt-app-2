@@ -317,11 +317,20 @@ function useCommonsTick() {
   const [, set] = useState(0);
   useEffect(() => { const fn = () => set(n => n + 1); commons.subs.add(fn); return () => { commons.subs.delete(fn); }; }, []);
 }
+// 31/10 (Edoardo): niente foto di piloti, monoposto e loghi: al loro posto i disegni geometrici dell'app (DriverMark,
+// TeamMark, CarSilhouette). Le foto delle notizie restano. Per riaccendere Commons: GEO_ONLY = false.
+const GEO_ONLY = !(typeof window !== "undefined" && window.__btCommons);   // le prove di Commons (run67) lo riaccendono
 function useCommonsPhoto(kind, id) {
   useCommonsTick();
+  if (GEO_ONLY) return null;
   if (kind === "logos" && !CommonsData.SHOW_TEAM_LOGOS) return null;
   return commonsPhotoOf(commonsFile(kind, id));
 }
+// Disegno del pilota: un casco geometrico nel colore della sua scuderia, con una grafica diversa per ognuno (così i
+// compagni di squadra si distinguono) e, se c'è spazio, la sigla.
+const GEO_PATTERNS = ["stripes", "bolt", "checks", "stars", "pinstripes", "dots", "flames"];
+const geoHash = id => String(id || "").split("").reduce((h, c) => (h * 31 + c.charCodeAt(0)) >>> 0, 7);
+const driverHelmet = d => ({ base: d.color, c1: "#FFFFFF", c2: "#111114", pattern: GEO_PATTERNS[geoHash(d.id) % GEO_PATTERNS.length], visor: ["smoke", "iridium-blue", "iridium-gold", "mirror-red"][geoHash(d.id + "v") % 4], finish: "gloss", number: null });
 
 /* ── DIRETTA: tracciati, numeri di gara e simulatore ─────────────────── */
 // Tracciati dei circuiti: "f1-circuits" di Tomislav Bacinger (licenza MIT), lisciati e ruotati per la mappa.
@@ -947,15 +956,18 @@ function Headshot({ driver, size = 32 }) {
   if (!driver) return <span style={{ width: size, height: size, borderRadius: "50%", background: "rgba(255,255,255,.1)", flexShrink: 0 }} />;
   const ring = Math.max(2, Math.round(size / 14));
   // Foto piccola = il casco del pilota; se manca, il volto; poi la foto di Commons; altrimenti le iniziali.
-  const kind = driver.helmet ? "casco" : driver.avatar ? "volto" : driver.photo ? "foto" : ph ? "commons" : "iniziali";
+  const kind = driver.helmet ? "casco" : driver.avatar ? "volto" : driver.photo ? "foto" : ph ? "commons" : "disegno";
   const bg = driver.helmet ? `#1c1c20 url(${driver.helmet}) 50% 55% / 86% auto no-repeat`
     : driver.avatar ? `#1c1c20 url(${driver.avatar}) center / cover no-repeat`
     : driver.photo ? `#1c1c20 url(${driver.photo}) 50% 3% / 190% auto no-repeat`
-    : ph ? `#1c1c20 url("${ph.thumb}") 50% 22% / cover no-repeat` : "#26262b";
+    : ph ? `#1c1c20 url("${ph.thumb}") 50% 22% / cover no-repeat` : `radial-gradient(circle at 50% 30%, ${alpha(driver.color, .35)}, #141418 70%)`;
   return (
     <span aria-hidden="true" style={{ width: size, height: size, borderRadius: "50%", flexShrink: 0, padding: ring, background: driver.color, display: "inline-block", boxSizing: "border-box" }}>
       <span data-img={kind} style={{ display: "flex", alignItems: "center", justifyContent: "center", width: "100%", height: "100%", borderRadius: "50%", background: bg, overflow: "hidden" }}>
-        {kind === "iniziali" && <span style={{ fontFamily: F_HEAD, fontWeight: 800, fontSize: size * .34, color: C.muted }}>{driver.full.split(" ").map(w => w[0]).slice(-2).join("")}</span>}
+        {kind === "disegno" && <span data-geo-driver={driver.id} style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 1 }}>
+          <HelmetArt spec={driverHelmet(driver)} size={Math.round(size * (size >= 50 ? .56 : .7))} />
+          {size >= 50 && <span style={{ fontFamily: F_HEAD, fontWeight: 900, fontStyle: "italic", fontSize: Math.round(size * .17), letterSpacing: .5, color: "#fff", lineHeight: 1 }}>{driverCode(driver)}</span>}
+        </span>}
       </span>
     </span>
   );
@@ -6273,7 +6285,23 @@ function TeamFigure({ team, place }) {
 function TeamBadge({ team, size = 32 }) {
   const ph = useCommonsPhoto("logos", team.id);
   if (ph) return <img data-team-logo={team.id} src={ph.thumb} alt={team.name} title={ph.credit} style={{ width: size, height: size, padding: 3, boxSizing: "border-box", objectFit: "contain", borderRadius: 10, background: "#F4F2EF", flexShrink: 0 }} />;
-  return <span style={{ width: size, height: size, borderRadius: 10, background: team.color + "33", border: `2px solid ${team.color}`, flexShrink: 0 }} />;
+  return <TeamMark team={team} size={size} />;
+}
+// Emblema geometrico della scuderia (31/10): scudo nel suo colore con una banda in diagonale e la sigla.
+function TeamMark({ team, size = 32 }) {
+  const id = "tm" + team.id.replace(/[^a-z0-9]/gi, "");
+  const short = (team.name || team.id).replace(/[^A-Za-z]/g, "").slice(0, 3).toUpperCase();
+  return (
+    <svg data-geo-team={team.id} viewBox="0 0 40 40" width={size} height={size} aria-hidden="true" style={{ flexShrink: 0, display: "block" }}>
+      <defs><clipPath id={id}><path d="M6 4 H34 Q36 4 36 6 V22 Q36 32 20 37 Q4 32 4 22 V6 Q4 4 6 4 Z" /></clipPath></defs>
+      <path d="M6 4 H34 Q36 4 36 6 V22 Q36 32 20 37 Q4 32 4 22 V6 Q4 4 6 4 Z" fill={team.color} />
+      <g clipPath={`url(#${id})`}>
+        <path d="M-2 26 L42 6 L42 14 L-2 34 Z" fill="rgba(255,255,255,.22)" />
+        <path d="M-2 31 L42 11 L42 13 L-2 33 Z" fill="rgba(0,0,0,.25)" />
+      </g>
+      {size >= 28 && <text x="20" y="21" textAnchor="middle" fontFamily="Titillium Web, sans-serif" fontWeight="900" fontStyle="italic" fontSize="10.5" fill="#fff" stroke="rgba(0,0,0,.35)" strokeWidth=".6" paintOrder="stroke">{short}</text>}
+    </svg>
+  );
 }
 function UserFigure({ user, place }) {
   const s = place === 1 ? 60 : 50;
@@ -8586,10 +8614,9 @@ function DriverDetailModal({ driver, lastRace = null, races = [], onClose }) {
               <img data-commons-photo="" src={ph.thumb} alt={driver.full} style={{ position: "absolute", right: 0, top: 0, height: "100%", width: "56%", objectFit: "cover", objectPosition: "50% 18%", WebkitMaskImage: "linear-gradient(90deg, transparent 0%, #000 34%)", maskImage: "linear-gradient(90deg, transparent 0%, #000 34%)" }} />
             </>
           ) : (
-            <svg viewBox="0 0 120 150" style={{ position: "absolute", right: 22, bottom: 0, height: 190 }} aria-hidden="true">
-              <circle cx="60" cy="42" r="28" fill="rgba(0,0,0,.28)" />
-              <path d="M8 150 C10 100 30 80 60 80 C90 80 110 100 112 150 Z" fill="rgba(0,0,0,.28)" />
-            </svg>
+            <span data-geo-driver-big={driver.id} aria-hidden="true" style={{ position: "absolute", right: 14, bottom: 22, filter: "drop-shadow(0 10px 18px rgba(0,0,0,.45))" }}>
+              <HelmetArt spec={driverHelmet(driver)} size={170} />
+            </span>
           )}
           <button className="press" aria-label="Chiudi" onClick={onClose} style={{ position: "absolute", top: 14, right: 14, width: 32, height: 32, borderRadius: "50%", background: "rgba(0,0,0,.45)", display: "flex", alignItems: "center", justifyContent: "center" }}>
             <Icon name="close" size={13} sw={2.2} color="#fff" />

@@ -263,3 +263,7 @@ Da fare:
 - Prove: `test/unit/{fanta-season,fantaleague}.test.js`, e2e aggiornate sulle leghe vere (run14, run15, run63 con
   `test/fake/leagues.js`).
 - Restano: disegni geometrici al posto delle foto di Commons (piloti, auto, loghi); suoni e vibrazioni F1 in fx.js.
+- Disegni geometrici (31/10): `GEO_ONLY` in App.jsx spegne le foto di Commons (piloti, monoposto, loghi; le foto delle
+  notizie restano). Pilota = casco geometrico nel colore della scuderia (`driverHelmet`: grafica e visiera diverse per
+  pilota) + sigla se c'è spazio (Headshot "disegno"); scuderia = scudo `TeamMark` con banda e sigla; scheda pilota =
+  casco grande. run67 riaccende Commons con `window.__btCommons = true`.

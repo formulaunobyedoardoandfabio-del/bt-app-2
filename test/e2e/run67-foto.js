@@ -5,7 +5,11 @@
 // SHOW_TEAM_LOGOS (versioni di prova).
 // Qui Commons è finto (routes): "NonLibera" nel nome = CC BY-NC 2.0, gli altri CC BY-SA 4.0 con autore "Autore <nome>".
 // Uso: node test/build-test.js && node test/e2e/run67-foto.js [filtro]
-const { open, w, text, tapText, tapSel, goTab, login, openAdmin, assert, run } = require('./helpers');
+const H = require('./helpers');
+const { w, text, tapText, tapSel, goTab, login, openAdmin, assert, run } = H;
+// 31/10: di serie l'app mostra i disegni geometrici al posto delle foto; queste prove riaccendono Commons.
+const COMMONS_ON = () => { window.__btCommons = true; };
+const open = (b, o = {}) => H.open(b, { ...o, init: o.init ? `(${COMMONS_ON})();(${o.init})();` : COMMONS_ON });
 
 const PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADElEQVR42mP8z8AARgEB/3rZ0kQAAAAASUVORK5CYII=', 'base64');
 const ROUTES = {
@@ -51,8 +55,8 @@ run({
     const o = await open(b, { routes: { 'https://commons.wikimedia.org/**': r => r.abort() }, seed: { addDocs: PHOTOS({ leclerc: 'File:Leclerc Uno.jpg' }) } }); await login(o.p);
     const off = await champRow(o.p, 5);
     await o.ctx.close();
-    assert(lec && lec.kind === 'iniziali', 'con licenza non libera la foto si vede: ' + JSON.stringify(lec));
-    assert(off && off.kind === 'iniziali', 'senza Commons: ' + JSON.stringify(off));
+    assert(lec && lec.kind === 'disegno', 'con licenza non libera la foto si vede: ' + JSON.stringify(lec));
+    assert(off && off.kind === 'disegno', 'senza Commons: ' + JSON.stringify(off));
     assert(!errs.length && !o.errs.length, [...errs, ...o.errs].join(' | '));
   },
 
@@ -115,7 +119,7 @@ run({
     await p.evaluate(() => window.dispatchEvent(new Event('online'))); await w(p, 900);
     const after = await p.evaluate(() => { const r = document.querySelector('[data-champ-row="5"]'); const i = r && r.querySelector('[data-img]'); return i ? i.getAttribute('data-img') : null; });
     await ctx.close();
-    assert(before && before.kind === 'iniziali', 'senza Commons: le iniziali: ' + JSON.stringify(before));
+    assert(before && before.kind === 'disegno', 'senza Commons: le iniziali: ' + JSON.stringify(before));
     assert(after === 'commons', 'tornata la rete la foto deve arrivare: ' + after);
     assert(!errs.length, errs.join(' | '));
   },
