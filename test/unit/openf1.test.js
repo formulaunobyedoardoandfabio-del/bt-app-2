@@ -47,6 +47,25 @@ t('sessione bloccata: errore locked', async () => {
   await assert.rejects(O(async () => res(500, { detail: 'Internal error' })).get('laps', ''), e => e.locked === false && !!e.code);
 });
 
+// 31/10: con l'abbonamento, durante la sessione i dati arrivano dalla nostra funzione su Vercel (api/live.js).
+t('sessione in corso: con liveBase la stessa richiesta passa da api/live (anche loadSession)', async () => {
+  const urls = [];
+  const c = clock();
+  const of1 = createOpenF1({ ...c, liveBase: 'https://bt-app-2.vercel.app/api/live', fetchImpl: async url => {
+    urls.push(url);
+    if (url.startsWith('https://api.openf1.org')) return res(401, { detail: 'No access: a live F1 session in progress' });
+    const path = (/[?&]p=([a-z_]+)/.exec(url) || [])[1];
+    return res(200, path === 'sessions' ? [{ session_key: 9, session_name: 'Race', session_type: 'Race', date_start: '2026-11-01T20:00:00Z', date_end: '2026-11-01T22:00:00Z' }] : []);
+  } });
+  const live = await of1.get('laps', 'session_key=9', { live: true });
+  assert.deepStrictEqual(live, []);
+  assert.strictEqual(urls[urls.length - 1], 'https://bt-app-2.vercel.app/api/live?p=laps&session_key=9');
+  await assert.rejects(of1.get('laps', 'session_key=9'), e => e.locked === true, 'senza live resta bloccato');
+  const before = urls.length;
+  const raw = await of1.loadSession(9, { live: true });
+  assert.ok(raw && raw.session.session_key === 9);
+  assert.ok(urls.slice(before).every(u => u.startsWith('https://bt-app-2.vercel.app/api/live?p=')), 'tutte da api/live: ' + urls.slice(before).join(' '));
+});
 t('limite: mai più di 3 richieste in un secondo né 30 in un minuto', async () => {
   const calls = [];
   const o = make({ onCall: ms => calls.push(ms) });

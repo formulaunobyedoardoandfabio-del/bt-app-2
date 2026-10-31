@@ -432,7 +432,10 @@ const driverCode = d => d.full.split(" ").slice(-1)[0].normalize("NFD").replace(
 const LIVE_DRIVERS = DRIVERS.map(d => ({ id: d.id, code: driverCode(d), number: CAR_NUMBERS[d.id] || d.pos, color: d.color }));
 // Dati veri di OpenF1 (src/services/openf1.js): una sola coda di richieste per tutta l'app (3 al secondo, 30 al minuto).
 // Gara LIVE: ogni 30 secondi si guarda l'ultima sessione; finita (non più bloccata) si carica una volta e si rivede.
-const OF1 = createOpenF1();
+// 31/10: con l'abbonamento Sponsor di OpenF1 la diretta passa dalla nostra funzione su Vercel (api/live.js, credenziali
+// solo nelle variabili di Vercel); durante la sessione si ricarica ogni 15 secondi.
+const OF1_LIVE_BASE = "https://bt-app-2.vercel.app/api/live", OF1_LIVE_MS = 15000;
+const OF1 = createOpenF1({ liveBase: OF1_LIVE_BASE });
 // Classifiche del mondiale in automatico (24/10): Jolpica F1, gratis e senza chiave (src/services/jolpica.js), lette al
 // massimo ogni 30 minuti. È pensato per uso non commerciale: prima dell'uscita pubblica con la pubblicità serve il
 // permesso di Jolpica (HANDOFF.md). false = solo le classifiche dell'admin.
@@ -9517,37 +9520,45 @@ function App() {
   useEffect(() => {
     setOf1Live(null);
     if (!realLiveId) { setOf1({ status: "idle", raceId: null }); return undefined; }
-    let alive = true, busy = false, loaded = null, loadedAt = 0;
+    let alive = true, busy = false, loaded = null, loadedAt = 0, liveMode = false, checkedAt = 0;
     setOf1({ status: "loading", raceId: realLiveId });
     const tick = async () => {
       if (busy || !alive) return;
-      busy = true;
+      if (!liveMode && checkedAt && nowMs() - checkedAt < OF1_POLL_MS - 1000) return;   // fuori dalla diretta: ogni 30 s
+      busy = true; checkedAt = nowMs();
       try {
         const race = racesRef.current.find(r => r.id === realLiveId);
         const s = await OF1.latestSession();
         if (!alive) return;
         if (!s || !race || !sessionOfWeekend(s, race)) { if (!loaded) setOf1({ status: "empty", raceId: realLiveId }); return; }
-        if (loaded === s.session_key && !of1NeedsReload(s, loadedAt, nowMs())) return;
+        if (loaded === s.session_key && !liveMode && !of1NeedsReload(s, loadedAt, nowMs())) return;
+        if (loaded === s.session_key && liveMode && nowMs() - loadedAt < OF1_LIVE_MS - 1000) return;
         if (!loaded) setOf1({ status: "loading", raceId: realLiveId });
-        const raw = await OF1.loadSession(s.session_key);
+        // Sessione in corso (OpenF1 gratis bloccato): i dati dalla nostra funzione su Vercel; se non va, "SESSIONE IN CORSO".
+        let raw, liveNow = false;
+        try { raw = await OF1.loadSession(s.session_key); }
+        catch (e) {
+          if (!(e && e.locked)) throw e;
+          try { raw = await OF1.loadSession(s.session_key, { live: true }); liveNow = true; } catch (e2) { throw e; }
+        }
         if (!alive) return;
         const track = trackOf(race.circuitId);
         if (!raw || !track || (!raw.laps.length && !raw.position.length)) { if (!loaded) setOf1({ status: "empty", raceId: realLiveId }); return; }
         const sim = buildReplay(raw, track, { drivers: LIVE_DRIVERS, of1: OF1 });
-        loaded = s.session_key; loadedAt = nowMs();
+        loaded = s.session_key; loadedAt = nowMs(); liveMode = liveNow;
         setReplay(r => ({ ...r, playing: false }));
         setOf1Live({ raceId: race.id, type: sim.type, sim, track, source: "openf1", raw, sessionKey: s.session_key });
         setOf1({ status: "ok", raceId: realLiveId });
       } catch (e) {
         if (!alive) return;
         // Bloccato: è cominciata un'altra sessione. Senza rete (o OpenF1 occupato) si tiene quello che c'è.
-        if (e && e.locked) { loaded = null; setOf1Live(null); setOf1({ status: "locked", raceId: realLiveId }); }
+        if (e && e.locked) { loaded = null; liveMode = false; setOf1Live(null); setOf1({ status: "locked", raceId: realLiveId }); }
         else if (!loaded) setOf1({ status: "error", raceId: realLiveId });
       } finally { busy = false; }
     };
     of1TickRef.current = tick;
     tick();
-    const iv = setInterval(tick, OF1_POLL_MS);
+    const iv = setInterval(tick, OF1_LIVE_MS);   // in diretta ogni 15 s; fuori, tick salta finché non passano 30 s
     return () => { alive = false; clearInterval(iv); of1TickRef.current = null; };
   }, [realLiveId]);
   // Rilevatore di bluff: le radio della sessione vera segnate dall'admin (shared/bt-bluff-<sessione>). Si leggono quando
@@ -9700,7 +9711,7 @@ function App() {
     });
   };
 
-  const ABOUT_TEXT = APP_NAME + " è l'app di B&T, nata dalla passione di un gruppo di amici per la Formula 1: un posto solo nostro per seguire le gare, parlarne insieme e tenere traccia di come va la nostra lega FantaF1.\n\nQui trovi le news, la diretta gara, la nostra chat e il nostro Instagram, tutto in un'unica app.\n\nTracciati dei circuiti: f1-circuits di Tomislav Bacinger, licenza MIT.\nCaratteri: Titillium Web (Accademia di Belle Arti di Urbino) e Work Sans, licenza SIL Open Font License 1.1.\n\nIcone: Tabler Icons, licenza MIT.\n\nVersione 2.0, 2026.";
+  const ABOUT_TEXT = APP_NAME + " è l'app di B&T, nata dalla passione di un gruppo di amici per la Formula 1: un posto solo nostro per seguire le gare, parlarne insieme e tenere traccia di come va la nostra lega FantaF1.\n\nQui trovi le news, la diretta gara, la nostra chat e il nostro Instagram, tutto in un'unica app.\n\nTracciati dei circuiti: f1-circuits di Tomislav Bacinger, licenza MIT.\nCaratteri: Titillium Web (Accademia di Belle Arti di Urbino) e Work Sans, licenza SIL Open Font License 1.1.\n\nIcone: Tabler Icons, licenza MIT.\nDati delle sessioni e della diretta: OpenF1 (openf1.org). Classifiche: Jolpica F1. Dati dei weekend e Ghost Lap: TracingInsights. Meteo: MET Norway.\n\nVersione 2.0, 2026.";
   const HELP_TEXT = "Hai domande o hai trovato un problema nell'app? Scrivici, ti rispondiamo il prima possibile.\n\nEmail: bt.formula1@gmail.com\n\nOppure passa dalla Chat Generale: la community è sempre pronta a dare una mano.";
 
   const showToast = (msg) => {

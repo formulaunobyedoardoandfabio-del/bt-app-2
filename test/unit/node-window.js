@@ -17,7 +17,8 @@ function memoryStorage() {
 
 function setupWindow({ seed, storage } = {}) {
   const localStorage = storage || memoryStorage();
-  const win = { localStorage, location: { search: '' }, __btSeed: seed };
+  // 31/10: nelle prove "unit" il tester è admin e il suo profilo non ha dati dell'app (come prima): plainTester.
+  const win = { localStorage, location: { search: '' }, __btSeed: { admin: true, plainTester: true, ...(seed || {}) } };
   global.window = win;
   global.localStorage = localStorage;
   const file = path.join(__dirname, '..', 'fake', 'fake-firebase.js');

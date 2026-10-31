@@ -69,7 +69,7 @@ t('trophies: dal documento solo i campi validi; ensureTrophyDoc lo scrive solo s
   assert.strictEqual(await A.ensureTrophyDoc(), true, 'scritto');
   const doc = firebase.__fake.doc('shared/bt-trophies');
   assert.deepStrictEqual(doc.pitcrew, { name: 'Pit crew', how: 'Pit Stop Challenge in 2,35 secondi o meno', goal: 2.35, attivo: true });
-  assert.strictEqual(Object.keys(doc).length, 15);
+  assert.strictEqual(Object.keys(doc).length, 19);   // 31/10: +4 trofei segreti delle feste
   // L'admin lo cambia nella console di Firebase: l'app lo legge e non lo riscrive.
   const f2 = seed({ 'shared/bt-trophies': { pitcrew: { goal: 2.1 }, sgasata: { attivo: false }, radar: { goal: 'tanti' } } }).firebase;
   const B = D.createAppData();
@@ -337,7 +337,7 @@ t('loadUserData: solo le chiavi dei dati personali; flushUserData salva subito',
   await A.flushUserData();
   assert.deepStrictEqual(firebase.__fake.doc('users/a@b.it').app2, { saved: ['n1'], votes: { home: 'norris' }, strano: 1, pitBest: 2.41 });
   // Tappa 3: colori dell'app, suoni, vibrazioni, casco e notizie nascoste si salvano nell'account.
-  assert.ok(D.USER_KEYS.includes('notifSeenAt') && ['theme', 'sounds', 'haptics', 'helmet', 'hidden'].every(k => D.USER_KEYS.includes(k)) && ['squadLog', 'leagues'].every(k => D.USER_KEYS.includes(k)) && D.USER_KEYS.length === 25)   // 31/10: storia della squadra e leghe FantaF1;
+  assert.ok(D.USER_KEYS.includes('notifSeenAt') && ['theme', 'sounds', 'haptics', 'helmet', 'hidden'].every(k => D.USER_KEYS.includes(k)) && ['squadLog', 'leagues'].every(k => D.USER_KEYS.includes(k)) && D.USER_KEYS.length === 26 && D.USER_KEYS.includes('holidays'))   // 31/10: storia della squadra e leghe FantaF1;
   // Trofei vinti (G31): { id: data in ms } nell'account.
   assert.ok(D.USER_KEYS.includes('trophies'), 'trofei nei dati dell\'account');
   // 24/10: il Premium dell'anteprima (abbonamento di prova e prova per un GP) resta nell'account.

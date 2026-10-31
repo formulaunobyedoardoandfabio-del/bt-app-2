@@ -39,6 +39,7 @@
     const docs0 = clone({ ...(s.docs || d.docs), ...(s.addDocs || {}) });   // addDocs: in più dei documenti di serie
     // 31/10: a@b.it è un utente normale (gli admin hanno Premium e tutti i trofei); admin con seed.admin o openAdmin().
     if (!s.admin) delete docs0['admins/a@b.it'];
+    if (s.plainTester && docs0['users/a@b.it'] && !(s.addDocs || {})['users/a@b.it'] && !(s.docs || {})['users/a@b.it']) delete docs0['users/a@b.it'].app2;
     save(FS_KEY, docs0);
     save(AUTH_KEY, { users: clone(s.users || d.users), current: null, resetSent: [], requireRecentLogin: !!s.requireRecentLogin, recent: false });
     if (!s.freshInstall) ls().setItem('bt_bt-terms-accepted', JSON.stringify({ ts: 1 }));

@@ -35,7 +35,9 @@ function failure(code, message, extra = {}) {
 }
 
 // ── Richieste ───────────────────────────────────────────────────────────
-function createOpenF1({ fetchImpl, now = Date.now, sleep = ms => new Promise(r => setTimeout(r, ms)), base = OF1_BASE } = {}) {
+// liveBase (31/10): la nostra funzione su Vercel (api/live.js) che, con l'abbonamento di OpenF1, dà i dati anche durante
+// la sessione: get(path, query, { live: true }) passa da lì ("…/api/live?p=laps&session_key=…").
+function createOpenF1({ fetchImpl, now = Date.now, sleep = ms => new Promise(r => setTimeout(r, ms)), base = OF1_BASE, liveBase = null } = {}) {
   const doFetch = fetchImpl || ((...a) => fetch(...a));
   const sent = [];                    // quando sono partite le ultime richieste (ms)
   let queue = Promise.resolve();
@@ -61,9 +63,9 @@ function createOpenF1({ fetchImpl, now = Date.now, sleep = ms => new Promise(r =
     try { body = await r.json(); } catch (e) { body = null; }
     return { r, body };
   }
-  async function get(path, query = "") {
+  async function get(path, query = "", { live = false } = {}) {
     const q = typeof query === "string" ? query : Object.entries(query).map(([k, v]) => k + "=" + encodeURIComponent(v)).join("&");
-    const url = `${base}/${path}${q ? "?" + q : ""}`;
+    const url = live && liveBase ? `${liveBase}?p=${path}${q ? "&" + q : ""}` : `${base}/${path}${q ? "?" + q : ""}`;
     let { r, body } = await request(url);
     if (r.status === 429) {
       await sleep(RETRY_429_MS);
@@ -82,13 +84,13 @@ function createOpenF1({ fetchImpl, now = Date.now, sleep = ms => new Promise(r =
   async function latestSession() { return (await get("sessions", "session_key=latest"))[0] || null; }
   // Tutto quello che serve per rivedere una sessione: al massimo 11 richieste (intervals solo in gara e Sprint).
   // Senza sessione, piloti, giri o posizioni non c'è niente da vedere (l'errore passa); il resto può mancare.
-  async function loadSession(sessionKey) {
-    const q = keyQ(sessionKey);
-    const [session] = await get("sessions", q);
+  async function loadSession(sessionKey, { live = false } = {}) {
+    const q = keyQ(sessionKey), o = { live };
+    const [session] = await get("sessions", q, o);
     if (!session) return null;
     const race = isRaceType(sessionType(session));
-    const must = p => get(p, q);
-    const opt = p => get(p, q).catch(e => { if (e.locked) throw e; return []; });
+    const must = p => get(p, q, o);
+    const opt = p => get(p, q, o).catch(e => { if (e.locked) throw e; return []; });
     const [drivers, laps, stints, pit, position, intervals, race_control, team_radio, weather, session_result] = await Promise.all([
       must("drivers"), must("laps"), opt("stints"), opt("pit"), must("position"), race ? opt("intervals") : Promise.resolve([]),
       opt("race_control"), opt("team_radio"), opt("weather"), opt("session_result"),
