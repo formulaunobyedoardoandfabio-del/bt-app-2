@@ -39,6 +39,7 @@ import { createAds } from "./services/ads";
 import { createF1Data, apply as applyF1Data } from "./services/f1data";
 import FantaSeason from "./logic/fanta-season";
 import { createFantaLeague } from "./services/fantaleague";
+import { createProfiles } from "./services/profiles";
 
 /* ── DESIGN TOKENS (matches the B&T concept style) ─────────────────── */
 // Tappa 3 (G01-G02): sfondo nero puro (schermi OLED) e il colore dei tasti scelto da chi usa l'app. applyTheme cambia
@@ -1422,14 +1423,20 @@ function PwMeter({ level }) {
   );
 }
 
-// Mostra/nascondi la password come nel paddock (29/10): la visiera del casco si alza e la password si legge con le cifre
-// del tabellone dei tempi.
+// Mostra/nascondi la password (31/10 sera): etichetta MOSTRA / NASCONDI con l'occhio; la password si legge con le cifre del tabellone.
 const PW_SHOWN = { fontFamily: F_HEAD, fontWeight: 800, letterSpacing: 2, color: C.gold, fontVariantNumeric: "tabular-nums" };
 function PwEye({ on, onToggle }) {
+  const ink = on ? C.gold : C.muted;
   return (
     <button type="button" className="press" data-pw-eye={on ? "open" : "closed"} aria-pressed={on ? "true" : "false"} aria-label={on ? "Nascondi la password" : "Mostra la password"}
-      onClick={() => { fx.play("tick"); fx.buzz("select"); onToggle(!on); }} style={{ display: "flex", alignItems: "center", justifyContent: "center", width: 36, height: 30, padding: 0, flexShrink: 0 }}>
-      <HelmetArt spec={{ base: on ? C.accent : "#3A3A42", c1: "#FFFFFF", c2: "#111111", pattern: "stripes", visor: "iridium-gold", finish: "gloss" }} size={30} visorOpen={on} />
+      onClick={() => { fx.play("tick"); fx.buzz("select"); onToggle(!on); }}
+      style={{ display: "flex", alignItems: "center", gap: 5, height: 28, minWidth: 44, padding: "0 8px", flexShrink: 0, borderRadius: 8, background: on ? alpha(C.gold, .12) : "rgba(255,255,255,.04)", border: `1px solid ${on ? alpha(C.gold, .55) : C.border}`, transition: "background-color .18s, border-color .18s" }}>
+      <svg viewBox="0 0 16 16" width={15} height={15} aria-hidden="true" style={{ display: "block" }}>
+        <path d="M1.2 8 C3.6 3.8 12.4 3.8 14.8 8 C12.4 12.2 3.6 12.2 1.2 8 Z" fill="none" stroke={ink} strokeWidth="1.5" strokeLinejoin="round" />
+        <circle cx="8" cy="8" r="2.2" fill={ink} />
+        {!on && <path d="M2.5 13.5 L13.5 2.5" stroke={ink} strokeWidth="1.5" strokeLinecap="round" />}
+      </svg>
+      <span style={{ fontFamily: F_HEAD, fontWeight: 900, fontStyle: "italic", fontSize: 10, letterSpacing: .6, color: ink }}>{on ? "NASCONDI" : "MOSTRA"}</span>
     </button>
   );
 }
@@ -1439,7 +1446,7 @@ function LoginScreen({ auth, onDone, onGuest, onBack, reason, onHold }) {
   const [email, setEmail] = useState("");
   const [pw, setPw] = useState("");
   const [pw2, setPw2] = useState("");
-  const [showPw, setShowPw] = useState(false);   // 29/10: password visibile (visiera alzata)
+  const [showPw, setShowPw] = useState(false);   // 29/10: password visibile (tasto MOSTRA)
   const [err, setErr] = useState("");
   const [info, setInfo] = useState("");
   const [busy, setBusy] = useState(false);
@@ -6046,13 +6053,25 @@ function ShareChatBtn({ k, label = "Invia in chat", round = false }) {
 
 // Profilo veloce (25/10): toccando il nome in chat, tifo (squadra e pilota del cuore, tipo di tifoso), casco e trofei
 // dall'ultimo messaggio dell'autore che li ha (viaggiano coi messaggi, src/services/chat.js), e Segnala.
-function ChatProfileSheet({ msg, messages, trophyList = TROPHIES, myWon = {}, onReport, onClose }) {
+// 31/10 sera: anche dal profilo pubblico (src/services/profiles.js, salvato da ognuno entrando nell'app), così si vede
+// anche chi non ha ancora scritto; e sempre la scheda completa coi numeri veri della stanza (messaggi, da quando).
+function ChatProfileSheet({ msg, messages, trophyList = TROPHIES, myWon = {}, loadProfile, onReport, onClose }) {
   const same = x => (msg.aid ? x.aid === msg.aid : !x.aid && x.from === msg.from);
+  const [pub, setPub] = useState(undefined);   // undefined: lo sto leggendo; null: non c'è
+  useEffect(() => {
+    let live = true;
+    if (!msg.aid || !loadProfile) { setPub(null); return; }
+    Promise.resolve(loadProfile(msg.aid)).then(v => { if (live) setPub(v || null); }, () => { if (live) setPub(null); });
+    return () => { live = false; };
+  }, [msg.aid]);
   const withProf = [...messages].reverse().find(x => same(x) && x.prof);
-  const prof = withProf ? withProf.prof : null;
+  const pubNewer = pub && pub.p && (!withProf || (pub.t || 0) >= (withProf.at || 0));
+  const prof = pubNewer ? pub.p : withProf ? withProf.prof : null;
+  const theirs = messages.filter(x => same(x) && !x.re);
+  const firstAt = theirs.length ? Math.min(...theirs.map(x => x.at || Infinity)) : null;
   const team = prof && prof.t ? teamById(prof.t) : null, drv = prof && prof.d ? driverById(prof.d) : null;
   const won = prof && prof.w ? trophyList.filter(t => prof.w.includes(t.id)) : [];
-  const medal = (withProf && withProf.medal) || msg.medal;
+  const medal = (pubNewer && pub.medal) || (withProf && withProf.medal) || msg.medal;
   return (
     <div data-chat-profile={msg.id} role="dialog" aria-modal="true" aria-label={"Profilo di " + msg.from} onClick={e => { if (e.target === e.currentTarget) onClose(); }}
       style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,.62)", zIndex: 560, display: "flex", alignItems: "flex-end" }}>
@@ -6072,7 +6091,16 @@ function ChatProfileSheet({ msg, messages, trophyList = TROPHIES, myWon = {}, on
             {team && <span data-chat-profile-team={team.id} style={{ display: "flex", alignItems: "center", gap: 6, fontFamily: F_BODY, fontSize: 13, color: C.muted }}><span style={{ width: 8, height: 8, borderRadius: "50%", background: team.color, flexShrink: 0 }} />Tifa <b style={{ color: C.text, fontWeight: 600 }}>{team.name}</b></span>}
             {drv && <span style={{ fontFamily: F_BODY, fontSize: 13, color: C.muted }}>Pilota del cuore: <b style={{ color: C.text, fontWeight: 600 }}>{drv.full || drv.name}</b></span>}
             {prof && prof.f && <span style={{ fontFamily: F_BODY, fontSize: 12, color: C.dim }}>{fanLabel(prof.f)}</span>}
+            {!team && !drv && pub !== undefined && <span data-chat-profile-nofav="" style={{ fontFamily: F_BODY, fontSize: 13, color: C.dim }}>Squadra e pilota del cuore non ancora scelti</span>}
           </div>
+        </div>
+        <div data-chat-profile-stats="" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+          {[["MESSAGGI QUI", String(theirs.length)], ["IN CHAT DAL", firstAt && isFinite(firstAt) ? fmtDMY(firstAt) : "Oggi"]].map(([k, v]) => (
+            <div key={k} style={{ padding: "10px 12px", borderRadius: 14, background: C.card, border: `1px solid ${C.border}` }}>
+              <div style={{ fontFamily: F_HEAD, fontWeight: 900, fontStyle: "italic", fontSize: 10, letterSpacing: .6, color: C.dim }}>{k}</div>
+              <div style={{ fontFamily: F_HEAD, fontWeight: 900, fontSize: 19, color: C.text, fontVariantNumeric: "tabular-nums", marginTop: 2 }}>{v}</div>
+            </div>
+          ))}
         </div>
         {prof ? (
           <section aria-label={"Trofei di " + msg.from} data-chat-profile-trophies={won.length} style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 16, padding: "12px 12px 10px" }}>
@@ -6091,7 +6119,13 @@ function ChatProfileSheet({ msg, messages, trophyList = TROPHIES, myWon = {}, on
             ) : <p style={{ margin: 0, fontFamily: F_BODY, fontSize: 12.5, color: C.dim }}>Nessun trofeo per ora.</p>}
           </section>
         ) : (
-          <p data-chat-profile-empty="" style={{ margin: 0, fontFamily: F_BODY, fontSize: 12.5, lineHeight: 1.45, color: C.dim }}>Il tifo, il casco e i trofei di {msg.from} si vedono dal suo prossimo messaggio in chat.</p>
+          <section data-chat-profile-empty="" aria-label={"Trofei di " + msg.from} style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 16, padding: "12px 12px 12px" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 6 }}>
+              <span style={{ fontFamily: F_HEAD, fontWeight: 900, fontStyle: "italic", fontSize: 15, color: C.text }}>TROFEI</span>
+              <span style={{ fontFamily: F_BODY, fontSize: 12, color: C.muted }}>{pub === undefined ? "…" : "–"} di {trophyList.length}</span>
+            </div>
+            <p style={{ margin: 0, fontFamily: F_BODY, fontSize: 12.5, lineHeight: 1.45, color: C.dim }}>{pub === undefined ? "Carico il profilo…" : `${msg.from} non ha ancora condiviso casco e trofei: arrivano appena apre l'app aggiornata.`}</p>
+          </section>
         )}
         <button className="press" data-chat-profile-report="" onClick={() => { onReport && onReport(msg); onClose(); }} style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8, height: 48, borderRadius: 14, border: "1.5px solid rgba(255,90,95,.45)", fontFamily: F_HEAD, fontWeight: 800, fontSize: 14, color: "#FF7A7E" }}><Icon name="flag" size={15} color="#FF7A7E" /> Segnala {msg.from}</button>
       </div>
@@ -6211,7 +6245,7 @@ function ChatThreadScreen({ chat, onBack, onSend, isPremium, blocked = [], onRep
           </div>
         </div>
       )}
-      {peek && <ChatProfileSheet msg={peek} messages={shown} trophyList={trophyList} myWon={myWon || {}} onReport={m => onReport && onReport(chat.id, m)} onClose={() => setPeek(null)} />}
+      {peek && <ChatProfileSheet msg={peek} messages={shown} trophyList={trophyList} myWon={myWon || {}} loadProfile={aid => Profiles.load(aid)} onReport={m => onReport && onReport(chat.id, m)} onClose={() => setPeek(null)} />}
       {picking && <ChatLinkPicker onPick={k => { setAttach(k); setPicking(false); }} onClose={() => setPicking(false)} />}
       {linkOpen && <ChatLinkSheet k={linkOpen.link} from={linkOpen.mine ? null : linkOpen.from} onClose={() => setLinkOpen(null)} />}
     </div>
@@ -8729,6 +8763,9 @@ ACCOUNT_CLEANUPS.push(u => Chat.cleanupFor(u));
 const Feedback = createFeedback({ now: nowMs });
 ACCOUNT_CLEANUPS.push(u => Feedback.cleanupFor(u));
 ACCOUNT_CLEANUPS.push(u => FantaL.cleanupFor(u));   // 31/10: leghe FantaF1
+// Profilo pubblico (31/10 sera): tifo, casco e trofei di ognuno, visibili nel profilo veloce della chat.
+const Profiles = createProfiles({ store: local, now: nowMs });
+ACCOUNT_CLEANUPS.push(u => Profiles.cleanupFor(u));
 const TERMS_KEY = "bt-terms-accepted";   // Termini accettati: solo su questo telefono, {ts}, come oggi
 // Richiesta di feedback come notifica nella campanella, al 5° accesso (solo su questo telefono, come oggi i Termini):
 // un accesso è un'apertura dell'app o un ritorno dopo almeno 30 minuti in secondo piano.
@@ -9894,6 +9931,12 @@ function App() {
   }, [trophyNew]);
   useEffect(() => () => clearTimeout(trophyTimer.current), []);
   const myMedal = medalOf(trophyList.filter(t => trophies[t.id]).length);
+  // Profilo pubblico (31/10 sera): coi dati dell'account arrivati si salva (solo se cambia, o una volta al giorno).
+  const pubProfJ = account && account.aid && userLoaded ? JSON.stringify([account.name, myProf(), myMedal]) : "";
+  useEffect(() => {
+    if (!pubProfJ || guest) return;
+    Profiles.publish({ name: account.name, aid: account.aid, p: myProf(), medal: myMedal }).catch(() => {});
+  }, [pubProfJ]);
   // 25/10: con l'app di un admin il documento dei trofei su Firebase (shared/bt-trophies) si crea coi valori di serie se
   // manca: nella console ci sono già tutti, pronti da cambiare (nome, how, goal, off).
   const adminNow = !!account && Account.isAdmin();

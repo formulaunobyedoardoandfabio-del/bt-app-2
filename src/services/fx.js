@@ -14,16 +14,10 @@ const BUZZ = {
   // la bandiera a scacchi.
   lights: 45, go: [70, 50, 40], gun: [14, 22, 14, 22, 14], drs: [8, 40, 18], flag: [25, 70, 25, 70, 25, 70, 90],
 };
-// Nell'APK le vibrazioni a sequenza sono più colpi del plugin Haptics: [millisecondi dall'inizio, forza].
-const HAPTIC_SEQ = {
-  lights: [[0, "HEAVY"]],
-  go: [[0, "HEAVY"], [110, "MEDIUM"]],
-  gun: [[0, "LIGHT"], [36, "LIGHT"], [72, "MEDIUM"]],
-  drs: [[0, "LIGHT"], [48, "MEDIUM"]],
-  flag: [[0, "MEDIUM"], [95, "MEDIUM"], [190, "MEDIUM"], [300, "HEAVY"]],
-};
-const IMPACT = { light: "LIGHT", medium: "MEDIUM", heavy: "HEAVY" };      // ImpactStyle di @capacitor/haptics
-const NOTIFY = { error: "ERROR", success: "SUCCESS" };                  // NotificationType di @capacitor/haptics
+// Nell'APK (31/10 sera) le vibrazioni sono vibrate({duration}) del plugin Haptics: la vibrazione vera del telefono,
+// che si sente sempre. impact/selection seguono invece "Vibrazione al tocco" di Android, spesso spenta: per questo
+// Edoardo non le sentiva. Ogni colpo dura almeno MIN_PULSE ms (sotto il motore di molti telefoni non parte).
+const MIN_PULSE = 15;
 
 // ── Suoni: piccoli sintetizzatori ────────────────────────────────────────
 // Un tono con il volume che sale in 5 ms e poi scende; la frequenza va da f0 a f1.
@@ -148,7 +142,7 @@ function createFx({ audioCtx = null, haptics = null, vibrate = null, local = nul
         ctx = audioCtx ? audioCtx() : null;
         if (!ctx) return false;
         master = ctx.createGain();
-        master.gain.value = 0.8;
+        master.gain.value = 1.4;   // 31/10 sera: più forte, dallo speaker del telefono si sentiva poco
         master.connect(ctx.destination);
       }
       if (ctx.state !== "running" && !isHidden() && typeof ctx.resume === "function") quiet(ctx.resume());
@@ -173,15 +167,14 @@ function createFx({ audioCtx = null, haptics = null, vibrate = null, local = nul
     try {
       const h = typeof haptics === "function" ? haptics() : haptics;
       if (h) {
-        if (HAPTIC_SEQ[kind]) {
-          HAPTIC_SEQ[kind].forEach(([ms, style]) => {
-            const hit = () => { try { if (hapticsOn) quiet(h.impact({ style })); } catch (e) {} };
-            if (ms) later(hit, ms); else hit();
-          });
+        const pat = [].concat(BUZZ[kind]);   // [vibra, pausa, vibra, ...]
+        let at = 0;
+        for (let i = 0; i < pat.length; i += 2) {
+          const duration = Math.max(MIN_PULSE, pat[i]);
+          const hit = () => { try { if (hapticsOn) quiet(h.vibrate({ duration })); } catch (e) {} };
+          if (at) later(hit, at); else hit();
+          at += pat[i] + (pat[i + 1] || 0);
         }
-        else if (IMPACT[kind]) quiet(h.impact({ style: IMPACT[kind] }));
-        else if (NOTIFY[kind]) quiet(h.notification({ type: NOTIFY[kind] }));
-        else quiet(Promise.resolve().then(() => h.selectionStart()).then(() => h.selectionChanged()).then(() => h.selectionEnd()));
         return true;
       }
       if (vibrate) { vibrate(BUZZ[kind]); return true; }

@@ -278,3 +278,15 @@ Da fare:
   e `test/unit/fx.test.js` (suoni nuovi, sequenze nell'APK).
 - Verificato il 31/10: `JOBS=2 bash test/all.sh` a 5763965 → tutto verde tranne run66 e run68, che aspettavano i suoni
   di prima (tic sullo swipe, Shift Light sul trofeo): aggiornate a DRS e bandiera a scacchi, ora 8/8 e 5/5.
+
+## 31/10 sera: richieste dopo la prova dell'APK
+- Vibrazioni: nell'APK ora `Haptics.vibrate({duration})` con gli schemi di BUZZ (colpi da almeno 15 ms, sequenze con
+  `later`). Prima impact/selection/notification: seguono "Vibrazione al tocco" di Android, spesso spenta, ed Edoardo
+  non sentiva niente. Volume dei suoni 1,4 (era 0,8). Non provato su un telefono vero da qui.
+- Password: via il casco, etichetta MOSTRA / NASCONDI con l'occhio disegnato (oro quando si vede). run76.
+- Profilo pubblico: `src/services/profiles.js` → `fanta/profilo-<aid>` {name, aid, p, medal, t, gone}; ognuno lo
+  salva entrando nell'app (solo se cambia o una volta al giorno), il profilo veloce della chat lo legge (vince il più
+  recente tra profilo pubblico e messaggi). Scheda sempre completa: "Messaggi qui" e "In chat dal" (dati veri della
+  stanza); senza profilo "non ha ancora condiviso casco e trofei". Eliminando l'account il profilo si svuota.
+  Regole di Firestore invariate (fanta/* già aperto a chi ha l'accesso; stesso limite noto delle leghe).
+  Prove: test/unit/profiles.test.js, run76 (profilo pubblico), run72 aggiornata.

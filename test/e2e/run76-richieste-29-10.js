@@ -148,4 +148,25 @@ run({
     assert(done === 'done' && has(end, 'flag'), 'a fine pit stop la bandiera a scacchi: ' + done + ' ' + end.slice(-3).join(' '));
     assert(!errs.length, errs.join(' | '));
   },
+
+  // 31/10 sera (Edoardo, screenshot): il profilo di FT22 mostrava solo "si vedono dal suo prossimo messaggio".
+  async 'profilo pubblico: entrando nell\'app si salva il mio; in chat si vede quello di chi non ha mai mandato il profilo'(b) {
+    const FT = authorId('ft22@b.it');
+    const seed = {
+      'shared/bt-chat-generale': { __arr: [{ id: 'f1', user: 'FT22', aid: FT, txt: 'ehh Kimi sicuro', t: Date.parse('2026-10-25T20:10:00Z') }] },
+      ['fanta/profilo-' + FT]: { name: 'FT22', aid: FT, p: { t: 'mercedes', d: 'antonelli', h: { base: '#00D2BE', c1: '#FFFFFF', c2: '#111111', pattern: 'stripes', visor: 'smoke', finish: 'gloss' }, w: ['pitcrew'] }, medal: 'bronzo', t: Date.parse('2026-10-30T10:00:00Z') },
+    };
+    const { ctx, p, errs } = await open(b, { seed: { addDocs: seed } }); await login(p); await w(p, 1500);
+    const mine = await p.evaluate(k => window.firebase.__fake.doc(k), 'fanta/profilo-' + authorId('a@b.it'));
+    await tapSel(p, '[data-nav-tab="race"]'); await w(p, 400); await tapSel(p, '[data-race-chat]'); await w(p, 500); await tapText(p, 'Chat Generale'); await w(p, 800);
+    await tapText(p, 'FT22'); await w(p, 900);
+    const sheet = await p.evaluate(() => { const e = document.querySelector('[data-chat-profile]'); return e ? { text: e.innerText.replace(/\s+/g, ' '), team: (e.querySelector('[data-chat-profile-team]') || {}).getAttribute ? e.querySelector('[data-chat-profile-team]').getAttribute('data-chat-profile-team') : null, empty: !!e.querySelector('[data-chat-profile-empty]'), trophy: !!e.querySelector('[data-chat-profile-trophy="pitcrew"]'), stats: !!e.querySelector('[data-chat-profile-stats]') } : null; });
+    await ctx.close();
+    assert(mine && mine.name && mine.aid === authorId('a@b.it') && !('email' in mine), 'il mio profilo pubblico non è stato salvato (o porta l\'email): ' + JSON.stringify(mine));
+    assert(sheet, 'il profilo veloce non si apre');
+    assert(sheet.team === 'mercedes' && sheet.trophy && !sheet.empty, 'deve vedersi il profilo pubblico di FT22: ' + JSON.stringify(sheet));
+    assert(sheet.stats && /MESSAGGI QUI 1/.test(sheet.text) && /25\/10\/2026/.test(sheet.text), 'mancano i numeri della stanza: ' + sheet.text);
+    assert(!/prossimo messaggio/.test(sheet.text), 'c\'è ancora la scritta vecchia: ' + sheet.text);
+    assert(!errs.length, errs.join(' | '));
+  },
 });

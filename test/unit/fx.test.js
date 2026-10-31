@@ -50,11 +50,10 @@ const tests = {
     const h = fakeHaptics(), q = [];
     const fx = createFx({ haptics: h, local: fakeLocal(), later: (fn, ms) => q.push([ms, fn]) });
     assert.strictEqual(fx.buzz('flag'), true);
-    const first = h.calls.filter(c => c[0] === 'impact').length;
-    assert.ok(first >= 1, 'il primo colpo parte subito');
-    assert.ok(q.length >= 2, 'gli altri colpi sono programmati');
-    q.sort((x, y) => x[0] - y[0]).forEach(([, fn]) => fn());
-    assert.strictEqual(h.calls.filter(c => c[0] === 'impact').length, first + q.length);
+    assert.deepStrictEqual(h.calls, [['vibrate', { duration: BUZZ.flag[0] }]], 'il primo colpo parte subito');
+    assert.deepStrictEqual(q.map(x => x[0]), [95, 190, 285], 'gli altri colpi dopo le pause dello schema');
+    q.forEach(([, fn]) => fn());
+    assert.deepStrictEqual(h.calls.map(c => c[1].duration), [25, 25, 25, 90]);
     for (const k of ['lights', 'go', 'gun', 'drs', 'flag']) assert.ok(k in BUZZ, 'manca la vibrazione ' + k);
   },
   async 'vibrazioni a sequenza: spegnendo Vibrazioni i colpi rimasti non partono; nel browser lo schema intero'() {
@@ -103,7 +102,7 @@ const tests = {
     assert.strictEqual(fx.play('tick'), false);
     assert.strictEqual(a.log.osc.length + a.log.noise.length, 0);
     assert.strictEqual(fx.buzz('light'), true);
-    assert.deepStrictEqual(h.calls, [['impact', { style: 'LIGHT' }]]);
+    assert.deepStrictEqual(h.calls, [['vibrate', { duration: 15 }]]);
     fx.setHaptics(false);
     assert.strictEqual(fx.buzz('heavy'), false);
     assert.strictEqual(h.calls.length, 1, 'con Vibrazioni spento il telefono vibra');
@@ -115,12 +114,10 @@ const tests = {
   async 'Haptics dell\'APK per buzz("error"), navigator.vibrate nel browser'() {
     const h = fakeHaptics(), vib = [];
     const apk = createFx({ haptics: h, vibrate: p => vib.push(p), local: fakeLocal() });
+    apk.buzz('medium'); apk.buzz('heavy'); apk.buzz('select');
+    assert.deepStrictEqual(h.calls.map(c => c[0]), ['vibrate', 'vibrate', 'vibrate'], 'nell\'APK vibrate di Haptics (sempre sentita)');
+    assert.deepStrictEqual(h.calls.map(c => c[1].duration), [BUZZ.medium, BUZZ.heavy, 15], 'anche il tic più leggero dura almeno 15 ms');
     assert.strictEqual(apk.buzz('error'), true);
-    assert.deepStrictEqual(h.calls, [['notification', { type: 'ERROR' }]]);
-    apk.buzz('success'); apk.buzz('medium'); apk.buzz('heavy');
-    assert.deepStrictEqual(h.calls.slice(1), [['notification', { type: 'SUCCESS' }], ['impact', { style: 'MEDIUM' }], ['impact', { style: 'HEAVY' }]]);
-    apk.buzz('select'); await tick(); await tick();
-    assert.deepStrictEqual(h.calls.slice(4).map(c => c[0]), ['selectionStart', 'selectionChanged', 'selectionEnd']);
     assert.deepStrictEqual(vib, [], 'nell\'APK si usa Haptics, non navigator.vibrate');
     const web = createFx({ vibrate: p => vib.push(p), local: fakeLocal() });
     assert.strictEqual(web.buzz('error'), true);

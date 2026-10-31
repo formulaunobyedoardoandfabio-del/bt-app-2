@@ -490,5 +490,5 @@ module.exports = {
   igFromStore, igToStore, igProfileUrl, linkOf, profileEntryToStore,
   CHAT_DB_KEY, ROOM_OLD_KEY, authorId, sameAuthor, chatFromStore, chatMsgToStore, reportToStore, reportFromStore,
   REACTIONS, applyReaction, reactionToStore,
-  profileFromStore,
+  profileFromStore, profOf, medalOk,
 };

@@ -133,7 +133,8 @@ run({
     assert(/Trofeo segreto/.test(s.text) && !/Sgasata/.test(s.text), 'il trofeo segreto di un altro non deve dire il suo nome: ' + s.text);
     assert(/Segnalazione inviata/.test(msg) && gone, 'Segnala dal profilo: ' + msg);
     assert(reps && reps.__arr.length === 1 && reps.__arr[0].msgId === 'mm2' && reps.__arr[0].aid === MARCO.aid, 'segnalazione salvata: ' + JSON.stringify(reps));
-    assert(g && /prossimo messaggio/.test(g.text) && !g.helmet && g.none && !/Tifa/.test(g.text), 'profilo di chi non l\'ha ancora mandato: ' + JSON.stringify(g));
+    // 31/10 sera: niente più "si vedono dal suo prossimo messaggio": scheda completa coi numeri della stanza.
+    assert(g && /non ha ancora condiviso casco e trofei/.test(g.text) && /MESSAGGI QUI 1/.test(g.text) && !g.helmet && g.none && !/Tifa/.test(g.text), 'profilo di chi non l\'ha ancora mandato: ' + JSON.stringify(g));
     assert(!errs.length, errs.join(' | '));
   },
 
