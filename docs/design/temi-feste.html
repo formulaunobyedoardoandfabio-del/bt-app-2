@@ -1,0 +1,334 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Temi delle feste B&amp;T</title>
+<link href="https://fonts.googleapis.com/css2?family=Titillium+Web:ital,wght@0,400;0,700;0,900;1,700;1,900&family=Work+Sans:wght@400;600&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#0B0B0D;--ink:#F3F1EE;--mut:#9A9AA3;--card:#16161A;--line:rgba(255,255,255,.09)}
+*{box-sizing:border-box;margin:0}
+body{background:var(--bg);color:var(--ink);font-family:"Work Sans",system-ui,sans-serif;padding:28px 16px 60px}
+h1,h2,h3,.h{font-family:"Titillium Web",sans-serif;font-style:italic;font-weight:900;letter-spacing:.2px}
+header.top{max-width:1180px;margin:0 auto 26px}
+header.top h1{font-size:34px;line-height:1}
+header.top p{color:var(--mut);margin-top:8px;max-width:760px;line-height:1.5;font-size:14px}
+section.theme{max-width:1180px;margin:0 auto 46px;border-top:1px solid var(--line);padding-top:22px}
+.th-head{display:flex;flex-wrap:wrap;align-items:baseline;gap:10px 16px;margin-bottom:16px}
+.th-head h2{font-size:26px}
+.when{font:700 11px/1 "Titillium Web";letter-spacing:1px;text-transform:uppercase;padding:5px 8px;border-radius:6px;border:1px solid var(--line);color:var(--mut)}
+.sw{display:flex;gap:4px}.sw i{width:16px;height:16px;border-radius:4px;display:block;border:1px solid rgba(255,255,255,.15)}
+.row{display:flex;flex-wrap:wrap;gap:18px}
+.cell{display:flex;flex-direction:column;gap:8px;width:236px}
+.cap{font:700 12px/1.3 "Titillium Web";letter-spacing:.6px;text-transform:uppercase;color:var(--mut)}
+.note{font-size:12.5px;line-height:1.5;color:#C9C7C2}
+.note b{color:var(--ink)}
+/* telefono */
+.ph{position:relative;width:236px;height:486px;border-radius:30px;background:var(--pbg);border:6px solid #1E1E22;overflow:hidden;box-shadow:0 18px 40px rgba(0,0,0,.45);color:var(--ink)}
+.ph .sb{height:18px}
+.ph .hd{display:flex;align-items:center;gap:6px;padding:4px 12px 8px}
+.logo{width:34px;height:24px;border-radius:7px;background:var(--acc);display:flex;align-items:center;justify-content:center;font:900 italic 12px "Titillium Web";color:#fff}
+.chip{margin-left:auto;padding:4px 8px;border-radius:999px;border:1px solid var(--gold,#E7B34C);font:700 9px "Titillium Web";color:var(--gold,#E7B34C)}
+.dot{width:22px;height:22px;border-radius:50%;background:rgba(255,255,255,.07)}
+.hero{margin:4px 10px;padding:12px;border-radius:16px;background:var(--hero);border:1px solid var(--line);position:relative;overflow:hidden;min-height:118px}
+.hero .k{font:700 8.5px "Titillium Web";letter-spacing:1px;color:var(--acc2)}
+.hero h3{font-size:17px;margin-top:4px}
+.hero .s{font-size:9.5px;color:var(--mut);margin-top:2px}
+.btn{margin-top:10px;padding:8px 10px;border-radius:10px;background:var(--acc);font:900 italic 10.5px "Titillium Web";color:#fff;display:inline-block}
+.mini{margin:8px 10px 0;display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.mini div{min-height:52px;border-radius:12px;background:var(--card2,#17171B);border:1px solid var(--line);padding:7px;font:700 8.5px "Titillium Web";color:var(--mut)}
+.mini div b{display:block;font:900 italic 13px "Titillium Web";color:var(--ink);margin-top:3px}
+.news{margin:8px 10px 0;display:flex;flex-direction:column;gap:6px}.news div{display:flex;gap:8px;align-items:center;padding:7px;border-radius:12px;background:var(--card2,#17171B);border:1px solid var(--line)}.news i{width:38px;height:30px;border-radius:7px;background:var(--acc);opacity:.35;flex-shrink:0}.news b{font:700 9.5px/1.25 "Titillium Web";color:var(--ink)}.news small{display:block;font-size:8px;color:var(--mut);margin-top:2px}
+.nav{position:absolute;left:0;right:0;bottom:0;height:46px;border-top:1px solid var(--line);background:var(--pbg);display:flex;align-items:center;justify-content:space-around}
+.nav span{font:700 7.5px "Titillium Web";color:var(--mut);display:flex;flex-direction:column;align-items:center;gap:3px}
+.nav span i{width:22px;height:15px;border-radius:5px;background:rgba(255,255,255,.08)}
+.nav span.on{color:var(--ink)}.nav span.on i{background:var(--acc)}
+.center{position:absolute;inset:18px 0 0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;text-align:center;padding:0 16px}
+.center h3{font-size:19px}
+.center p{font-size:10.5px;color:var(--mut);line-height:1.45}
+/* animazioni: solo transform e opacity */
+@keyframes fall{from{transform:translateY(-30px)}to{transform:translateY(520px)}}
+@keyframes drift{0%{transform:translateX(-60px)}100%{transform:translateX(300px)}}
+@keyframes blink{0%,100%{opacity:.25}50%{opacity:1}}
+@keyframes lamp{0%,15%{opacity:.15}20%,85%{opacity:1}90%,100%{opacity:.15}}
+@keyframes wob{0%,100%{transform:rotate(-6deg)}50%{transform:rotate(6deg)}}
+@keyframes up{0%{transform:translateY(8px);opacity:0}100%{transform:translateY(0);opacity:1}}
+@keyframes sweep{0%{transform:translateX(-90px)}100%{transform:translateX(260px)}}
+@keyframes needle{0%{transform:rotate(-120deg)}70%{transform:rotate(95deg)}100%{transform:rotate(88deg)}}
+@keyframes slide{0%{transform:translateX(-100%)}40%,100%{transform:translateX(0)}}
+@keyframes run{0%{transform:translateX(-40px)}100%{transform:translateX(250px)}}
+@keyframes float{0%,100%{transform:translateY(0)}50%{transform:translateY(-6px)}}
+@keyframes pop{0%,60%{transform:scale(.6);opacity:0}75%{transform:scale(1.08);opacity:1}100%{transform:scale(1);opacity:1}}
+.snow{position:absolute;top:0;width:4px;height:4px;border-radius:50%;background:#fff;opacity:.8;animation:fall linear infinite}
+@media (prefers-reduced-motion:reduce){*{animation:none!important}}
+/* idee */
+.ideas{max-width:1180px;margin:0 auto;border-top:1px solid var(--line);padding-top:22px}
+.ideas h2{font-size:26px;margin-bottom:14px}
+.ig{display:grid;grid-template-columns:repeat(auto-fill,minmax(270px,1fr));gap:12px}
+.idea{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:14px}
+.idea .l{font:700 10px "Titillium Web";letter-spacing:1px;text-transform:uppercase;color:#E7B34C}
+.idea h3{font-size:16px;margin:4px 0 6px}
+.idea p{font-size:12.5px;line-height:1.5;color:#C9C7C2}
+.rules{max-width:1180px;margin:30px auto 0;font-size:12.5px;color:var(--mut);line-height:1.6}
+</style>
+</head>
+<body>
+<header class="top">
+  <h1>Temi delle feste B&amp;T</h1>
+  <p>Ogni festa trasforma un pezzo F1 che l'app ha già: il semaforo, il pit stop, i commissari, il tachimetro. Si accendono da soli nelle date giuste, si spengono dal Profilo, e con "Rimuovi animazioni" restano solo i colori. Animazioni solo con movimento e trasparenza (niente consumo di batteria). Nessun logo o personaggio di altri.</p>
+</header>
+
+<!-- ═════════ HALLOWEEN ═════════ -->
+<section class="theme" style="--pbg:#0C0811;--acc:#FF7A1A;--acc2:#B38CFF;--hero:linear-gradient(160deg,#1B1024,#0F0A14);--gold:#FF9E4A">
+  <div class="th-head"><h2>Halloween · La notte del Ghost Lap</h2><span class="when">30 ott – 1 nov</span>
+    <span class="sw"><i style="background:#0C0811"></i><i style="background:#FF7A1A"></i><i style="background:#8B5CF6"></i><i style="background:#F3EBDD"></i></span></div>
+  <div class="row">
+    <div class="cell"><div class="cap">Home</div>
+      <div class="ph">
+        <div class="sb"></div>
+        <div class="hd"><span class="logo">B&amp;T</span><span class="chip">★ PREMIUM</span><span class="dot"></span></div>
+        <!-- pipistrelli -->
+        <svg style="position:absolute;top:50px;left:0;animation:drift 9s linear infinite" width="26" height="12" viewBox="0 0 26 12"><path d="M13 6 C10 1 5 1 1 4 C4 4 6 6 7 9 C9 7 11 7 13 9 C15 7 17 7 19 9 C20 6 22 4 25 4 C21 1 16 1 13 6Z" fill="#3B2350"/></svg>
+        <div class="hero">
+          <div class="k">PROSSIMA GARA · ROUND 20</div>
+          <h3>GP di Città del Messico</h3>
+          <div class="s">Autódromo Hermanos Rodríguez · 1 nov</div>
+          <span class="btn">APRI IL GHOST LAP</span>
+          <!-- auto fantasma con scia -->
+          <svg style="position:absolute;right:-6px;bottom:8px;animation:float 3s ease-in-out infinite" width="96" height="40" viewBox="0 0 96 40">
+            <g opacity=".22"><rect x="0" y="22" width="40" height="3" rx="1.5" fill="#B38CFF"/><rect x="8" y="28" width="30" height="2" rx="1" fill="#B38CFF"/></g>
+            <path d="M30 26 H86 L92 30 H26 Z" fill="#E8E2FF" opacity=".85"/><path d="M46 26 L54 16 H66 L70 26 Z" fill="#E8E2FF" opacity=".7"/>
+            <circle cx="40" cy="31" r="5" fill="#1B1024" stroke="#E8E2FF"/><circle cx="80" cy="31" r="5" fill="#1B1024" stroke="#E8E2FF"/>
+            <circle cx="58" cy="21" r="1.4" fill="#1B1024"/><circle cx="63" cy="21" r="1.4" fill="#1B1024"/>
+          </svg>
+        </div>
+        <div class="mini"><div>FANTA<b>Squadra pronta</b></div><div>CHAT<b>Paddock dei mostri</b></div></div>
+        <div class="news"><div><i></i><span><b>Messico: cosa aspettarsi dalla gara</b><small>2 ore fa</small></span></div><div><i></i><span><b>Le paure dei piloti prima della gara</b><small>5 ore fa</small></span></div></div>
+        <!-- nebbia -->
+        <div style="position:absolute;left:-20px;right:-20px;bottom:40px;height:60px;background:radial-gradient(60% 100% at 50% 100%,rgba(179,140,255,.22),transparent);animation:blink 6s ease-in-out infinite"></div>
+        <div class="nav"><span class="on"><i></i>HOME</span><span><i></i>GARAGE</span><span><i></i>FANTA</span><span><i></i>RACE</span></div>
+      </div>
+      <p class="note">Viola notte e arancio zucca. Pipistrelli che passano ogni tanto, nebbia leggera in basso. La card del Ghost Lap diventa un'<b>auto fantasma</b> con la scia.</p>
+    </div>
+
+    <div class="cell"><div class="cap">Caricamento</div>
+      <div class="ph"><div class="center">
+        <div style="display:flex;gap:6px">
+          <script>
+            document.write([0,1,2,3,4].map(i=>`<svg width="34" height="34" viewBox="0 0 34 34" style="animation:lamp 3s ${i*.35}s infinite"><path d="M17 7 C25 7 31 12 31 20 C31 27 25 31 17 31 C9 31 3 27 3 20 C3 12 9 7 17 7Z" fill="#FF7A1A"/><path d="M16 3 h3 v5 h-3z" fill="#5A3A22"/><path d="M9 17 l4 -3 l2 4z M25 17 l-4 -3 l-2 4z" fill="#3A1A00"/><path d="M9 23 q8 6 16 0 l-2 3 l-2 -2 l-2 2 l-2 -2 l-2 2 l-2 -2 l-2 2z" fill="#3A1A00"/></svg>`).join(''))
+          </script>
+        </div>
+        <h3 style="color:#FF9E4A">LIGHTS OUT…</h3>
+        <p>Le cinque luci del semaforo sono zucche: si accendono una alla volta e allo spegnimento ghignano. Poi parte l'app.</p>
+      </div></div>
+      <p class="note">Stessa durata del caricamento di oggi: nessuna attesa in più.</p>
+    </div>
+
+    <div class="cell"><div class="cap">Sorpresa · Dolcetto o scherzetto</div>
+      <div class="ph">
+        <div class="sb"></div>
+        <div class="hd"><span class="logo">B&amp;T</span><span class="chip">★ PREMIUM</span><span class="dot"></span></div>
+        <div class="center" style="inset:60px 0 46px">
+          <svg width="74" height="74" viewBox="0 0 34 34" style="animation:wob 1.2s ease-in-out infinite"><path d="M17 7 C25 7 31 12 31 20 C31 27 25 31 17 31 C9 31 3 27 3 20 C3 12 9 7 17 7Z" fill="#FF7A1A"/><path d="M16 3 h3 v5 h-3z" fill="#5A3A22"/><path d="M9 17 l4 -3 l2 4z M25 17 l-4 -3 l-2 4z" fill="#3A1A00"/><path d="M9 23 q8 6 16 0" stroke="#3A1A00" stroke-width="2" fill="none"/></svg>
+          <h3>Hai trovato una zucca!</h3>
+          <p>In ogni pagina può nascondersene una (3 al giorno). Toccala:</p>
+          <div style="display:flex;gap:6px">
+            <span class="btn" style="background:#FF7A1A">DOLCETTO</span><span class="btn" style="background:#2A1A38;border:1px solid #B38CFF">SCHERZETTO</span>
+          </div>
+          <p><b style="color:#F3EBDD">Dolcetto:</b> casco "Zucca" sbloccato. <b style="color:#F3EBDD">Scherzetto:</b> 2 secondi di finta bandiera gialla e una risata fantasma.</p>
+        </div>
+        <div class="nav"><span><i></i>HOME</span><span class="on"><i></i>GARAGE</span><span><i></i>FANTA</span><span><i></i>RACE</span></div>
+      </div>
+      <p class="note">Trovate tutte e 3 in un giorno: trofeo segreto <b>"Cacciatore di zucche"</b>.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ═════════ NATALE ═════════ -->
+<section class="theme" style="--pbg:#06130D;--acc:#D7263D;--acc2:#E7B34C;--hero:linear-gradient(160deg,#0E2A1C,#08160F);--card2:#0D1F16">
+  <div class="th-head"><h2>Natale · Parco chiuso di Natale</h2><span class="when">1 – 26 dic</span>
+    <span class="sw"><i style="background:#06130D"></i><i style="background:#D7263D"></i><i style="background:#E7B34C"></i><i style="background:#1F6F4A"></i><i style="background:#FFFFFF"></i></span></div>
+  <div class="row">
+    <div class="cell"><div class="cap">Home</div>
+      <div class="ph">
+        <script>document.write(Array.from({length:14},(_,i)=>`<span class="snow" style="left:${(i*37)%226}px;animation-duration:${6+(i%5)}s;animation-delay:-${i*.7}s;width:${2+(i%3)}px;height:${2+(i%3)}px"></span>`).join(''))</script>
+        <div class="sb"></div>
+        <div class="hd"><span class="logo">B&amp;T</span><span class="chip">★ PREMIUM</span><span class="dot"></span></div>
+        <div class="hero">
+          <!-- nastro dorato -->
+          <div style="position:absolute;top:0;bottom:0;right:34px;width:10px;background:#E7B34C;opacity:.9"></div>
+          <div style="position:absolute;left:0;right:0;top:76px;height:10px;background:#E7B34C;opacity:.9"></div>
+          <svg style="position:absolute;right:20px;top:64px" width="38" height="34" viewBox="0 0 38 34"><path d="M19 17 C10 4 2 8 6 15 C9 19 15 18 19 17Z M19 17 C28 4 36 8 32 15 C29 19 23 18 19 17Z" fill="#F2C766"/><circle cx="19" cy="17" r="4" fill="#C9962E"/></svg>
+          <div class="k">PROSSIMA STAGIONE</div>
+          <h3>Il 2027 è nel pacco</h3>
+          <div class="s">Mancano 85 giorni ai test</div>
+          <span class="btn" style="margin-top:30px">APRI IL CALENDARIO</span>
+        </div>
+        <div class="mini"><div>AVVENTO<b>Oggi: casella 7</b></div><div>FANTA<b>Classifica finale</b></div></div>
+        <div class="news"><div><i></i><span><b>Le pagelle B&amp;T del 2026</b><small>2 ore fa</small></span></div><div><i></i><span><b>Il pacco della stagione: chi ha stupito</b><small>5 ore fa</small></span></div></div>
+        <div class="nav"><span class="on"><i></i>HOME</span><span><i></i>GARAGE</span><span><i></i>FANTA</span><span><i></i>RACE</span></div>
+      </div>
+      <p class="note">Verde abete, rosso e oro. Neve leggera che scende. La card principale è <b>incartata</b> con nastro e fiocco.</p>
+    </div>
+
+    <div class="cell"><div class="cap">Caricamento</div>
+      <div class="ph"><div class="center">
+        <svg width="190" height="90" viewBox="0 0 190 90">
+          <g><path d="M30 60 H160 L170 66 H22 Z" fill="#D7263D"/><path d="M70 60 L84 44 H112 L120 60 Z" fill="#D7263D"/>
+          <circle cx="50" cy="68" r="9" fill="#111" stroke="#444" stroke-width="2"/><circle cx="145" cy="68" r="9" fill="#111" stroke="#444" stroke-width="2"/></g>
+          <rect x="94" y="40" width="8" height="30" fill="#E7B34C" style="animation:up .6s .3s both"/>
+          <rect x="22" y="56" width="148" height="7" fill="#E7B34C" style="animation:up .6s .6s both"/>
+          <path d="M98 42 C88 26 76 30 80 38 C83 43 92 42 98 42Z M98 42 C108 26 120 30 116 38 C113 43 104 42 98 42Z" fill="#F2C766" style="animation:pop 1.6s 1s both"/>
+        </svg>
+        <h3 style="color:#E7B34C">Pit stop di Natale</h3>
+        <p>I meccanici incartano la monoposto: nastro, fiocco, e l'app è pronta.</p>
+      </div></div>
+      <p class="note">Il "pacco" è un'auto generica B&amp;T, non quella di una scuderia vera.</p>
+    </div>
+
+    <div class="cell"><div class="cap">Sorpresa · Griglia dell'Avvento</div>
+      <div class="ph">
+        <div class="sb"></div>
+        <div class="hd"><span class="logo">B&amp;T</span><span class="chip">★ PREMIUM</span><span class="dot"></span></div>
+        <div style="padding:2px 12px"><div class="h" style="font-size:15px">GRIGLIA DELL'AVVENTO</div><div style="font-size:9.5px;color:#9A9AA3">24 caselle come la griglia di partenza: una al giorno</div></div>
+        <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:5px 18px;padding:10px 18px">
+          <script>document.write(Array.from({length:10},(_,i)=>{const n=i+1,open=n<7,today=n===7;return `<div style="height:26px;border-radius:7px;display:flex;align-items:center;justify-content:space-between;padding:0 7px;font:900 italic 10px 'Titillium Web';margin-top:${i%2?10:0}px;background:${today?'#D7263D':open?'#12301F':'#0D1F16'};border:1px solid ${today?'#F2C766':'rgba(255,255,255,.1)'};color:${open?'#9AD1B0':'#fff'}">P${n}<span>${open?'✓':today?'🎁':''}</span></div>`}).join(''))</script>
+        </div>
+        <p class="note" style="padding:0 12px;font-size:10px">Dentro: una curiosità vera della stagione, un adesivo per la chat o un casco natalizio. Il <b>25 dicembre</b>: il pacco sotto l'albero che trema finché non lo apri.</p>
+        <div class="nav"><span><i></i>HOME</span><span class="on"><i></i>GARAGE</span><span><i></i>FANTA</span><span><i></i>RACE</span></div>
+      </div>
+      <p class="note">Aprire tutte le 24 caselle: trofeo <b>"Pole di Natale"</b>.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ═════════ BEFANA ═════════ -->
+<section class="theme" style="--pbg:#0A0E1C;--acc:#F2A541;--acc2:#F2A541;--hero:linear-gradient(160deg,#141B33,#0B1022);--card2:#121830">
+  <div class="th-head"><h2>Befana · La Befana spazza la pista</h2><span class="when">5 – 6 gen</span>
+    <span class="sw"><i style="background:#0A0E1C"></i><i style="background:#F2A541"></i><i style="background:#2A2A30"></i><i style="background:#EDE6D6"></i></span></div>
+  <div class="row">
+    <div class="cell"><div class="cap">Home</div>
+      <div class="ph">
+        <script>document.write(Array.from({length:10},(_,i)=>`<span style="position:absolute;top:${22+(i*13)%90}px;left:${(i*53)%220}px;width:2px;height:2px;border-radius:50%;background:#EDE6D6;animation:blink ${2+i%3}s ${i*.3}s infinite"></span>`).join(''))</script>
+        <div class="sb"></div>
+        <div class="hd"><span class="logo">B&amp;T</span><span class="chip" style="border-color:#F2A541;color:#F2A541">★ PREMIUM</span><span class="dot"></span></div>
+        <div class="hero">
+          <div style="position:absolute;right:16px;top:12px;width:44px;height:44px;border-radius:50%;background:#EDE6D6;opacity:.9"></div>
+          <svg style="position:absolute;top:18px;left:0;animation:drift 7s linear infinite" width="70" height="30" viewBox="0 0 70 30"><path d="M4 22 L60 14" stroke="#7A5A3A" stroke-width="2.5" stroke-linecap="round"/><path d="M2 22 l-2 4 l8 -1z M2 22 l-2 -4 l9 2z" fill="#C9A86A"/><path d="M30 18 C28 10 32 4 37 5 C41 6 42 11 40 17 Z" fill="#20253A"/><circle cx="37" cy="5" r="3.5" fill="#20253A"/><path d="M33 3 l8 -2 l-2 4z" fill="#20253A"/></svg>
+          <div class="k" style="margin-top:44px">STAGIONE 2027</div>
+          <h3>Pista pulita, si riparte</h3>
+          <div class="s">Le feste finiscono: torna la F1</div>
+        </div>
+        <div class="mini"><div>LA TUA CALZA<b>Da aprire</b></div><div>FANTA<b>Iscrizioni 2027</b></div></div>
+        <div class="news"><div><i></i><span><b>Calendario 2027: si parte a marzo</b><small>2 ore fa</small></span></div><div><i></i><span><b>Test invernali: le date</b><small>5 ore fa</small></span></div></div>
+        <div class="nav"><span class="on"><i></i>HOME</span><span><i></i>GARAGE</span><span><i></i>FANTA</span><span><i></i>RACE</span></div>
+      </div>
+      <p class="note">Blu notte, luna e stelle che brillano. La Befana sulla scopa <b>attraversa la card</b> ogni tanto, come un'auto in pista.</p>
+    </div>
+
+    <div class="cell"><div class="cap">Caricamento</div>
+      <div class="ph"><div class="center">
+        <div style="position:relative;width:200px;height:70px;overflow:hidden;border-radius:10px;background:#2A2A30">
+          <div style="position:absolute;inset:30px 0 auto;height:4px;background:repeating-linear-gradient(90deg,#EDE6D6 0 14px,transparent 14px 26px);opacity:.6"></div>
+          <script>document.write(Array.from({length:9},(_,i)=>`<span style="position:absolute;left:${20+i*20}px;top:${12+(i*17)%44}px;width:5px;height:3px;border-radius:2px;background:#8C7A5A;opacity:.8"></span>`).join(''))</script>
+          <div style="position:absolute;inset:0;background:#2E2E35;animation:sweep 2.4s linear infinite;width:200px;left:-200px"></div>
+          <svg style="position:absolute;top:14px;left:0;animation:sweep 2.4s linear infinite" width="60" height="44" viewBox="0 0 60 44"><path d="M50 2 L22 30" stroke="#7A5A3A" stroke-width="3" stroke-linecap="round"/><path d="M22 30 l-14 10 l18 -2z M22 30 l-16 2 l14 8z" fill="#C9A86A"/></svg>
+        </div>
+        <h3 style="color:#F2A541">Pista pulita</h3>
+        <p>Come i commissari dopo un incidente: la scopa della Befana passa e porta via i detriti. Poi l'app parte.</p>
+      </div></div>
+      <p class="note">Il nero dietro la scopa resta asfalto pulito: si capisce che "carica".</p>
+    </div>
+
+    <div class="cell"><div class="cap">Sorpresa · La calza</div>
+      <div class="ph">
+        <div class="sb"></div>
+        <div class="hd"><span class="logo">B&amp;T</span><span class="chip" style="border-color:#F2A541;color:#F2A541">★ PREMIUM</span><span class="dot"></span></div>
+        <div class="center" style="inset:60px 0 46px">
+          <svg width="70" height="86" viewBox="0 0 70 86" style="animation:wob 2s ease-in-out infinite;transform-origin:35px 0"><rect x="16" y="2" width="32" height="12" rx="3" fill="#EDE6D6"/><path d="M18 14 H46 V52 C46 66 40 76 26 78 C14 80 6 72 10 64 C14 58 18 56 18 50 Z" fill="#B3263A"/><path d="M18 30 H46 M18 44 H46" stroke="#F2A541" stroke-width="3"/></svg>
+          <h3>La tua calza</h3>
+          <p>Hai giocato al Fanta e fatto i pronostici? <b style="color:#F2A541">Caramelle</b>: adesivi e un casco "Befana".</p>
+          <p>Stagione tranquilla? <b style="color:#EDE6D6">Carbone</b>… che si trasforma in <b style="color:#EDE6D6">fibra di carbonio</b>: finitura carbonio per il casco.</p>
+        </div>
+        <div class="nav"><span><i></i>HOME</span><span><i></i>GARAGE</span><span><i></i>FANTA</span><span class="on"><i></i>PROFILO</span></div>
+      </div>
+      <p class="note">Nessuno resta a mani vuote: il carbone è uno scherzo che diventa un premio.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ═════════ MONZA ═════════ -->
+<section class="theme" style="--pbg:#0A0A0A;--acc:#CE2B37;--acc2:#2FBF71;--hero:linear-gradient(160deg,#1A0A0B,#0D0D0D)">
+  <div class="th-head"><h2>Esclusiva Monza · Tempio della velocità</h2><span class="when">Weekend del GP d'Italia</span>
+    <span class="sw"><i style="background:#009246"></i><i style="background:#FFFFFF"></i><i style="background:#CE2B37"></i><i style="background:#0A0A0A"></i></span></div>
+  <div class="row">
+    <div class="cell"><div class="cap">Home</div>
+      <div class="ph">
+        <div style="position:absolute;top:0;left:0;right:0;height:4px;display:flex;overflow:hidden"><i style="flex:1;background:#009246;animation:slide 2.4s both"></i><i style="flex:1;background:#fff;animation:slide 2.4s .15s both"></i><i style="flex:1;background:#CE2B37;animation:slide 2.4s .3s both"></i></div>
+        <div class="sb"></div>
+        <div class="hd"><span class="logo">B&amp;T</span><span class="chip">★ PREMIUM</span><span class="dot"></span></div>
+        <div class="hero">
+          <!-- pista di Monza stilizzata (forma del tracciato) -->
+          <svg style="position:absolute;right:6px;bottom:6px;opacity:.9" width="70" height="74" viewBox="0 0 92 96"><path d="M20 84 L70 84 l4 -4 l-3 -3 C84 70 86 50 80 34 l-4 -3 l2 -4 C74 18 70 12 62 12 C56 12 54 16 50 18 L36 34 l-3 4 l3 4 l-4 3 L16 62 C6 72 8 84 20 84 Z" fill="none" stroke="#fff" stroke-width="3" stroke-linejoin="round" opacity=".9"/><circle r="3.5" fill="#CE2B37"><animateMotion dur="5s" repeatCount="indefinite" path="M20 84 L70 84 l4 -4 l-3 -3 C84 70 86 50 80 34 l-4 -3 l2 -4 C74 18 70 12 62 12 C56 12 54 16 50 18 L36 34 l-3 4 l3 4 l-4 3 L16 62 C6 72 8 84 20 84 Z"/></circle></svg>
+          <div class="k" style="color:#2FBF71">ROUND 16 · GP D'ITALIA</div>
+          <h3>Monza</h3>
+          <div class="s" style="max-width:120px">Il tempio della velocità</div>
+          <div style="margin-top:12px;display:flex;gap:8px;align-items:baseline"><span class="h" style="font-size:24px">VMAX</span><span style="font-size:9px;color:#9A9AA3;max-width:70px">dal dato vero dello speed trap</span></div>
+        </div>
+        <div class="mini"><div>PARABOLICA<b>Guida 2D</b></div><div>CHAT<b>Curva dei tifosi</b></div></div>
+        <div class="news"><div><i></i><span><b>Monza: il programma del weekend</b><small>2 ore fa</small></span></div><div><i></i><span><b>La Parabolica curva per curva</b><small>5 ore fa</small></span></div></div>
+        <div class="nav"><span><i></i>HOME</span><span><i></i>GARAGE</span><span><i></i>FANTA</span><span class="on"><i></i>RACE</span></div>
+      </div>
+      <p class="note">Tricolore che entra in alto, il tracciato con un puntino che gira. Al posto del numero inventato, la <b>velocità massima vera</b> dello speed trap appena arriva.</p>
+    </div>
+
+    <div class="cell"><div class="cap">Caricamento</div>
+      <div class="ph"><div class="center">
+        <svg width="170" height="110" viewBox="0 0 170 110">
+          <path d="M20 95 A65 65 0 0 1 150 95" fill="none" stroke="#222" stroke-width="12" stroke-linecap="round"/>
+          <path d="M20 95 A65 65 0 0 1 60 38" fill="none" stroke="#009246" stroke-width="12" stroke-linecap="round"/>
+          <path d="M66 35 A65 65 0 0 1 104 35" fill="none" stroke="#fff" stroke-width="12"/>
+          <path d="M110 38 A65 65 0 0 1 150 95" fill="none" stroke="#CE2B37" stroke-width="12" stroke-linecap="round"/>
+          <g style="transform-origin:85px 95px;animation:needle 2.2s cubic-bezier(.3,.8,.3,1) both"><path d="M85 95 L85 40" stroke="#F3F1EE" stroke-width="3" stroke-linecap="round"/></g>
+          <circle cx="85" cy="95" r="6" fill="#F3F1EE"/>
+        </svg>
+        <div class="h" style="font-size:30px;line-height:1">350 <span style="font-size:13px;color:#9A9AA3">km/h</span></div>
+        <p>Il tachimetro tricolore sale a tutta sul rettilineo dei box. Poi l'app parte.</p>
+      </div></div>
+      <p class="note">Solo nel weekend di Monza: un tema "da circuito", non da calendario.</p>
+    </div>
+
+    <div class="cell"><div class="cap">Sorpresa · Invasione di pista</div>
+      <div class="ph">
+        <div style="position:absolute;inset:0;background:radial-gradient(70% 50% at 50% 100%,rgba(206,43,55,.45),transparent);animation:blink 3s infinite"></div>
+        <div class="center" style="inset:30px 0 46px">
+          <div class="h" style="font-size:12px;letter-spacing:1px;color:#2FBF71">BANDIERA A SCACCHI</div>
+          <h3>Tutti sotto il podio!</h3>
+          <svg width="200" height="70" viewBox="0 0 200 70">
+            <rect x="70" y="8" width="60" height="14" fill="#1E1E22"/><rect x="85" y="0" width="30" height="8" fill="#1E1E22"/>
+            <g style="animation:run 2.2s 0.00s linear infinite"><circle cx="0" cy="44" r="3" fill="#009246"/><rect x="-2.5" y="47" width="5" height="8" rx="2" fill="#009246"/></g><g style="animation:run 2.6s 0.25s linear infinite"><circle cx="0" cy="52" r="3" fill="#fff"/><rect x="-2.5" y="55" width="5" height="8" rx="2" fill="#fff"/></g><g style="animation:run 3.0s 0.50s linear infinite"><circle cx="0" cy="60" r="3" fill="#CE2B37"/><rect x="-2.5" y="63" width="5" height="8" rx="2" fill="#CE2B37"/></g><g style="animation:run 2.2s 0.75s linear infinite"><circle cx="0" cy="44" r="3" fill="#009246"/><rect x="-2.5" y="47" width="5" height="8" rx="2" fill="#009246"/></g><g style="animation:run 2.6s 1.00s linear infinite"><circle cx="0" cy="52" r="3" fill="#fff"/><rect x="-2.5" y="55" width="5" height="8" rx="2" fill="#fff"/></g><g style="animation:run 3.0s 1.25s linear infinite"><circle cx="0" cy="60" r="3" fill="#CE2B37"/><rect x="-2.5" y="63" width="5" height="8" rx="2" fill="#CE2B37"/></g><g style="animation:run 2.2s 1.50s linear infinite"><circle cx="0" cy="44" r="3" fill="#009246"/><rect x="-2.5" y="47" width="5" height="8" rx="2" fill="#009246"/></g><g style="animation:run 2.6s 1.75s linear infinite"><circle cx="0" cy="52" r="3" fill="#fff"/><rect x="-2.5" y="55" width="5" height="8" rx="2" fill="#fff"/></g><g style="animation:run 3.0s 2.00s linear infinite"><circle cx="0" cy="60" r="3" fill="#CE2B37"/><rect x="-2.5" y="63" width="5" height="8" rx="2" fill="#CE2B37"/></g>
+          </svg>
+          <p>Finita la gara di Monza, la schermata si riempie di tifosi che corrono verso il podio, fumogeni e coriandoli tricolori. Tocca per unirti.</p>
+          <span class="btn">CORRI SOTTO IL PODIO</span>
+          <p>Trofeo <b style="color:#F3F1EE">"Ero a Monza"</b> per chi c'era in diretta.</p>
+        </div>
+        <div class="nav"><span><i></i>HOME</span><span><i></i>GARAGE</span><span><i></i>FANTA</span><span class="on"><i></i>RACE</span></div>
+      </div>
+      <p class="note">Solo se la gara la stavi seguendo in diretta (come la bandiera a scacchi di oggi).</p>
+    </div>
+  </div>
+</section>
+
+<section class="ideas">
+  <h2>Idee in più</h2>
+  <div class="ig">
+    <div class="idea"><div class="l">Controcorrente</div><h3>Meno addobbi, più dettagli</h3><p>Invece di riempire lo schermo, la festa sta nei pezzi che usi di più: il bottone B&amp;T, la barra in basso, il caricamento, i suoni (campanellini al posto del tic a Natale, ululato leggero sullo swipe a Halloween). Si nota senza coprire i dati.</p></div>
+    <div class="idea"><div class="l">Storia</div><h3>La stagione come un racconto</h3><p>Ogni festa chiude un capitolo: Halloween = gare d'autunno, Natale = pagelle e classifica finale del Fanta nel pacco, Befana = "pista pulita" e iscrizioni alla stagione nuova. I temi accompagnano il calendario F1.</p></div>
+    <div class="idea"><div class="l">Dati veri</div><h3>Feste che usano i dati della gara</h3><p>A Monza la VMAX vera dello speed trap; a Natale nella griglia dell'Avvento le curiosità vere della stagione; la calza della Befana si riempie in base a quello che hai fatto davvero (Fanta, pronostici, trofei). Niente numeri inventati.</p></div>
+    <div class="idea"><div class="l">Pratico</div><h3>Regole semplici</h3><p>Date fisse in un file (Halloween 30 ott–1 nov, Natale 1–26 dic, Befana 5–6 gen, Monza nel suo weekend); interruttore "Temi delle feste" nel Profilo; con "Rimuovi animazioni" restano i colori; l'admin può accendere o spegnere un tema da Firebase senza un nuovo APK.</p></div>
+    <div class="idea"><div class="l">Quello che sfugge</div><h3>Una cartolina da condividere</h3><p>Ogni sorpresa finisce in una cartolina con casco, squadra del cuore e firma B&amp;T, pronta per le storie di Instagram: le feste portano follower al tuo profilo senza pubblicità a pagamento.</p></div>
+  </div>
+</section>
+<p class="rules">Bozza di design: colori e forme indicativi. Nell'app vera tutte le animazioni usano solo movimento e trasparenza e si fermano con "Rimuovi animazioni". Nessun logo di scuderie, del circuito o di personaggi: zucche, pacchi, scopa e tricolore sono disegni nostri.</p>
+</body>
+</html>
