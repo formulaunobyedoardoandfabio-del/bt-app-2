@@ -315,3 +315,4 @@ Da fare:
   scheda del pilota: pelle, colore e taglio dei capelli, barba/baffi da `DRIVER_LOOKS` (tratti noti, da correggere lì
   se Edoardo vede qualcosa di sbagliato), tuta nel colore della scuderia; piloti non in tabella: 3 figure di riserva.
   run67 (figure di serie, Hamilton e Bottas, almeno 10 diverse).
+- Verificato il 31/10 sera: `JOBS=2 bash test/all.sh` a 31968a3 → TUTTO VERDE (84 file).
