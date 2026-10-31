@@ -4135,14 +4135,20 @@ function PitStopGame({ best, onResult, onBack }) {
   const timers = useRef([]), reported = useRef(false);
   useEffect(() => () => timers.current.forEach(clearTimeout), []);
   useEffect(() => { if (s.phase !== "go") return; const id = setInterval(() => setTick(t => t + 1), 60); return () => clearInterval(id); }, [s.phase]);
-  useEffect(() => { if (s.phase === "done" && !reported.current) { reported.current = true; onResult(s.time); } }, [s.phase]);
+  useEffect(() => { if (s.phase === "done" && !reported.current) { reported.current = true; fx.play("flag"); fx.buzz("flag"); onResult(s.time); } }, [s.phase]);
   const start = () => {
     timers.current.forEach(clearTimeout); timers.current = []; reported.current = false;
     setS(BtLogic.pitLights(BtLogic.pitNew())); setLights(0);
-    [1, 2, 3].forEach(k => timers.current.push(setTimeout(() => setLights(k), k * 450)));
-    timers.current.push(setTimeout(() => { setLights(0); setS(cur => cur.phase === "lights" ? BtLogic.pitGo(cur, performance.now()) : cur); }, 4 * 450));
+    [1, 2, 3].forEach(k => timers.current.push(setTimeout(() => { setLights(k); fx.play("light"); fx.buzz("lights"); }, k * 450)));
+    timers.current.push(setTimeout(() => { setLights(0); fx.play("go"); fx.buzz("go"); setS(cur => cur.phase === "lights" ? BtLogic.pitGo(cur, performance.now()) : cur); }, 4 * 450));
   };
-  const tap = id => setS(cur => BtLogic.pitTap(cur, id, performance.now()));
+  // Suono del tocco: la pistola per svitare e avvitare (passi 1 e 4), lo scatto della gomma negli altri; toccare prima del
+  // via è partenza anticipata.
+  const tap = id => {
+    if (s.phase === "lights") { fx.play("abort"); fx.buzz("error"); }
+    else if (s.phase === "go") { const n = s.steps[id] || 0; if (n === 0 || n === 3) { fx.play("gun"); fx.buzz("gun"); } else if (n < 4) { fx.play("clack"); fx.buzz("light"); } }
+    setS(cur => BtLogic.pitTap(cur, id, performance.now()));
+  };
   const live = s.phase === "go" ? (performance.now() - s.start + s.penaltyMs) / 1000 : s.phase === "done" ? s.time : 0;
   const rating = s.phase === "done" ? PIT_RATING[BtLogic.pitRating(s.time)] : null;
   return (
@@ -9515,7 +9521,7 @@ function App() {
     if (s.on) dragReset(!go);
     if (mouse && (dir || s.on)) swipeClick.current = performance.now();   // il click che segue il trascinamento col mouse non apre niente
     if (!go) return;
-    fx.play("tick"); fx.buzz("select");
+    fx.play("drs"); fx.buzz("drs");
     switchTab(TAB_IDS[j], s.on ? { off: s.off, op: s.op } : null);
   };
   const swipeCancel = () => { const s = tabSwipe.current; tabSwipe.current = null; if (s && s.raf) cancelAnimationFrame(s.raf); if (s && s.on) dragReset(true); };
@@ -9639,6 +9645,7 @@ function App() {
     const temp = { id: "invio-" + Date.now(), from: me.name, text: text.trim() || (link ? link.ti : ""), at: nowMs(), aid: me.aid, mine: true, medal: myMedal || null, link: link || null };
     setChatMsgs(x => ({ ...x, [id]: [...(x[id] || []), temp] }));
     return Chat.send(id, text, me, link).then(m => {
+      fx.play("radio"); fx.buzz("light");
       setChatMsgs(x => ({ ...x, [id]: (x[id] || []).map(y => (y.id === temp.id ? m : y)) }));
       return true;
     }, e => {
@@ -9881,7 +9888,7 @@ function App() {
     const ids = trophyNew.split(","), at = nowMs();
     setTrophies(t => { const x = { ...t }; ids.forEach(id => { if (!x[id]) x[id] = at; }); return x; });
     setTrophyNotice({ key: at + ":" + trophyNew, ids, names: ids.map(id => (trophyList.find(t => t.id === id) || { name: id }).name) });
-    fx.play("shift"); fx.buzz("success");
+    fx.play("flag"); fx.buzz("flag");
     clearTimeout(trophyTimer.current);
     trophyTimer.current = setTimeout(() => setTrophyNotice(null), 3600);
   }, [trophyNew]);

@@ -35,6 +35,41 @@ const fakeHaptics = () => {
 const tick = () => new Promise(r => setTimeout(r, 0));
 
 const tests = {
+  // 31/10 (Edoardo: "più suoni e vibrazioni stile F1"): semaforo, via, pistola delle gomme, DRS, bandiera a scacchi.
+  async 'suoni F1 nuovi: semaforo, via, pistola, DRS e bandiera suonano'() {
+    for (const name of ['light', 'go', 'gun', 'drs', 'flag']) {
+      assert.ok(SOUNDS.includes(name), 'manca il suono ' + name);
+      const a = fakeAudio({ state: 'running' });
+      const fx = createFx({ audioCtx: a.factory, local: fakeLocal() });
+      fx.unlock(); await tick();
+      assert.strictEqual(fx.play(name), true, name);
+      assert.ok(a.log.osc.length + a.log.noise.length >= 2, name + ': troppo poco suono');
+    }
+  },
+  async 'vibrazioni a sequenza nell\'APK: la bandiera dà più colpi nel tempo'() {
+    const h = fakeHaptics(), q = [];
+    const fx = createFx({ haptics: h, local: fakeLocal(), later: (fn, ms) => q.push([ms, fn]) });
+    assert.strictEqual(fx.buzz('flag'), true);
+    const first = h.calls.filter(c => c[0] === 'impact').length;
+    assert.ok(first >= 1, 'il primo colpo parte subito');
+    assert.ok(q.length >= 2, 'gli altri colpi sono programmati');
+    q.sort((x, y) => x[0] - y[0]).forEach(([, fn]) => fn());
+    assert.strictEqual(h.calls.filter(c => c[0] === 'impact').length, first + q.length);
+    for (const k of ['lights', 'go', 'gun', 'drs', 'flag']) assert.ok(k in BUZZ, 'manca la vibrazione ' + k);
+  },
+  async 'vibrazioni a sequenza: spegnendo Vibrazioni i colpi rimasti non partono; nel browser lo schema intero'() {
+    const h = fakeHaptics(), q = [];
+    const fx = createFx({ haptics: h, local: fakeLocal(), later: (fn, ms) => q.push(fn) });
+    fx.buzz('gun');
+    const n = h.calls.length;
+    fx.setHaptics(false);
+    q.forEach(fn => fn());
+    assert.strictEqual(h.calls.length, n);
+    const got = [];
+    const fx2 = createFx({ vibrate: p => got.push(p), local: fakeLocal() });
+    assert.strictEqual(fx2.buzz('flag'), true);
+    assert.deepStrictEqual(got, [BUZZ.flag]);
+  },
   async 'prima di unlock nessun suono e nessun errore'() {
     const a = fakeAudio();
     const fx = createFx({ audioCtx: a.factory, local: fakeLocal() });

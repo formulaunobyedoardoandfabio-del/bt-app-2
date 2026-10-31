@@ -267,3 +267,12 @@ Da fare:
   notizie restano). Pilota = casco geometrico nel colore della scuderia (`driverHelmet`: grafica e visiera diverse per
   pilota) + sigla se c'è spazio (Headshot "disegno"); scuderia = scudo `TeamMark` con banda e sigla; scheda pilota =
   casco grande. run67 riaccende Commons con `window.__btCommons = true`.
+- Suoni e vibrazioni F1 (31/10, `src/services/fx.js`): suoni nuovi creati dal telefono `light` (luce rossa del
+  semaforo), `go` (luci spente e motore), `gun` (pistola delle gomme), `drs` (scatto dell'ala e soffio), `flag` (bandiera
+  a scacchi); vibrazioni nuove `lights`, `go`, `gun`, `drs`, `flag` (nel browser schemi di navigator.vibrate, nell'APK
+  più colpi di Haptics in sequenza con `later`; spegnendo Vibrazioni i colpi rimasti non partono). Dove: Pit Stop
+  Challenge (3 luci, via, pistola su svita/avvita, scatto sugli altri passi, partenza anticipata = abort, bandiera a
+  fine), swipe tra le pagine = DRS, trofeo sbloccato = bandiera, messaggio in chat inviato = bip del Team Radio.
+- Prove delle richieste del 29/10: `test/e2e/run76-richieste-29-10.js` (swipe sulla barra, casco della password, Pro
+  con la pubblicità e spegnimento dello schermo, pubblicità chiusa prima, profilo in chat una voce sola, vibrazioni F1)
+  e `test/unit/fx.test.js` (suoni nuovi, sequenze nell'APK).
