@@ -86,6 +86,22 @@ run({
   },
   // OpenF1 gratis tiene i dati bloccati fino a 30 minuti dopo la fine della sessione (openf1.org: "Data is considered
   // live from 30 minutes before a session starts until 30 minutes after it ends"): il primo caricamento arriva lì.
+  // 31/10 sera (Edoardo): sessione finita ma non seguita in diretta: niente schermata con la bandiera a scacchi.
+  async 'sessione finita non vista in diretta: niente sfondo a scacchi né "BANDIERA A SCACCHI"; il podio resta'(b) {
+    const of1 = of1Route();
+    const { ctx, p, errs } = await open(b, { seed: { addDocs: BAKU_LIVE }, routes: of1.routes }); await login(p);
+    await goTab(p, 'RACE');
+    const ok = await waitReplay(p); await w(p, 600);
+    const finished = ok && await p.evaluate(() => window.__btLive.state().finished);
+    const bg = await p.evaluate(() => { const e = document.querySelector('[data-bg]'); return e ? e.getAttribute('data-bg') : null; });
+    const banner = /BANDIERA A SCACCHI/.test(await text(p)), podium = await has(p, '[data-finish-podium]');
+    await ctx.close();
+    assert(finished, 'la sessione di prova deve essere finita');
+    assert(bg !== 'chequered', 'sfondo a scacchi su una sessione non vista in diretta: ' + bg);
+    assert(!banner, 'c\'è la scritta BANDIERA A SCACCHI su una sessione non vista in diretta');
+    assert(podium, 'il podio della gara finita deve restare');
+    assert(!errs.length, errs.join(' | '));
+  },
   async 'sessione appena finita: OpenF1 la sblocca 30 minuti dopo la fine, poi per mezz\'ora si ricarica ogni 5 minuti (dati a metà), poi basta'(b) {
     const { ctx, p, errs } = await open(b); await w(p, 200);
     const r = await p.evaluate(s => { const f = window.__req('./App').of1NeedsReload, end = Date.parse(s.date_end), m = 60000;

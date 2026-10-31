@@ -61,6 +61,22 @@ run({
   // 31/10: le leghe sono quelle vere (Firebase): una di 7 non ha zone, una di 12 sì.
   // 31/10: le leghe sono quelle vere (Firebase): una di 7 non ha zone, una di 12 sì.
   // 31/10: le leghe sono quelle vere (Firebase): una di 7 non ha zone, una di 12 sì.
+  // 31/10 sera (Edoardo): finita la gara, i sondaggi e le previsioni di quel weekend spariscono da soli dal Fanta;
+  // i punti presi restano (e le domande di storia, che non hanno un weekend, restano sempre).
+  async 'dopo la gara le previsioni di quel weekend spariscono; i punti restano'(b) {
+    const seed = { 'shared/bt-predictions': { __arr: [
+      { id: 's1', kind: 'driver', cat: 'Pilota', q: 'Chi farà la pole della Sprint a Singapore?', about: 'SQ', raceId: 'r17', answer: 'russell' },
+      { id: 'm1', kind: 'driver', cat: 'Pilota', q: 'Chi vince in Messico?', about: 'RACE', raceId: 'r20', answer: null },
+    ] }, 'users/a@b.it': { name: 'Mario', predAnswers: { s1: 'russell' } } };
+    const { ctx, p, errs } = await open(b, { now: '2026-10-14T10:00:00Z', seed: { addDocs: seed } }); await login(p);
+    await goTab(p, 'FANTA'); await w(p, 900);
+    const shown = await p.evaluate(() => [...document.querySelectorAll('[data-prediction]')].map(e => e.getAttribute('data-prediction')));
+    const page = await text(p);
+    await ctx.close();
+    assert(!shown.includes('s1'), 'la previsione di Singapore (gara finita) deve sparire: ' + shown.join(','));
+    assert(shown.includes('m1'), 'quella del Messico (gara da fare) resta: ' + shown.join(','));
+    assert(!errs.length, errs.join(' | '));
+  },
   async 'lega di 12: zone Q1 e Q2 colorate'(b) {
     const zonesOf = p => p.evaluate(() => [...document.querySelectorAll('[data-league-table] [data-zone]')].map(e => e.getAttribute('data-zone')));
     const seven = await open(b, { seed: { addDocs: leagueSeed({ members: ['Anna', 'Bruno', 'Carla', 'Dario', 'Elena', 'Fabio', 'Gina', 'Ivo', 'Luca', 'Mara', 'Nico'].slice(0, 6).map(name => ({ name })) }) } }); await login(seven.p); await goTab(seven.p, 'FANTA'); await w(seven.p, 600);

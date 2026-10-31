@@ -290,3 +290,7 @@ Da fare:
   stanza); senza profilo "non ha ancora condiviso casco e trofei". Eliminando l'account il profilo si svuota.
   Regole di Firestore invariate (fanta/* già aperto a chi ha l'accesso; stesso limite noto delle leghe).
   Prove: test/unit/profiles.test.js, run76 (profilo pubblico), run72 aggiornata.
+- Bandiera a scacchi: sfondo e scritta solo se la sessione si è vista mentre era in corso (`liveSeen`, sul telefono
+  `bt-live-seen`, ultime 30); la sessione di OpenF1 aperta già finita non li mostra più (il podio resta). run40.
+- Previsioni e sondaggi del Fanta: finita la gara (stato CONCLUSA) quelli di quel weekend spariscono da FANTA e dai
+  link della chat (`predictionsOpen`); restano in shared/bt-predictions, così i punti presi non si perdono. run63.

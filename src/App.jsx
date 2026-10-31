@@ -153,6 +153,16 @@ const isBlockedMsg = (blocked, m) => !m.mine && blocked.some(b => (b.aid && m.ai
 /* ── TELEFONO: tasto indietro di Android, barra di stato, avvio ─────── */
 // Plugin di Capacitor dall'APK (@capacitor/app e SystemBars di @capacitor/core), senza import come gli altri;
 // nel browser non ci sono e non succede niente.
+// Sessioni viste mentre erano in corso (per la bandiera a scacchi): sul telefono, le ultime 30.
+function liveSeen(key, mark) {
+  try {
+    const l = local.get("bt-live-seen");
+    const list = Array.isArray(l) ? l : [];
+    if (!mark) return list.includes(key);
+    if (!list.includes(key)) local.set("bt-live-seen", [...list, key].slice(-30));
+    return true;
+  } catch (e) { return !!mark; }
+}
 const capPlugin = name => { try { return (window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins[name]) || null; } catch (e) { return null; } };
 // Barra di stato del telefono (ora, batteria, Wi-Fi) nascosta: all'avvio e ogni volta che si torna nell'app.
 const hideStatusBar = () => { const SB = capPlugin("SystemBars"); if (SB && SB.hide) Promise.resolve().then(() => SB.hide({ bar: "StatusBar" })).catch(() => {}); };
@@ -9986,10 +9996,20 @@ function App() {
   const activeChat = chats.find(c => c.id === chatId);
   const activeArticle = articles.find(a => a.id === articleId);
   const shareArticle = shareId != null ? articles.find(a => a.id === shareId) : null;
-  const liveSt = live ? live.sim.state() : null;
+  // 31/10 sera (Edoardo): sfondo e scritta della bandiera a scacchi solo se la sessione si è vista mentre era in corso
+  // (anche rivista dall'inizio); finita e aperta dopo (la sessione di OpenF1 parte dalla fine) niente scacchi.
+  const liveSt = (st => {
+    if (!st) return null;
+    const key = live.raceId + ":" + live.type;
+    if (!st.finished) { liveSeen(key, true); return st; }
+    return st.bg === "chequered" && !liveSeen(key) ? { ...st, bg: "green" } : st;
+  })(live ? live.sim.state() : null);
   // Quello che si può mandare in chat come link (ChatLinkPicker) e le foto delle miniature.
+  // 31/10 sera (Edoardo): finita la gara (stato CONCLUSA del calendario) i sondaggi e le previsioni di quel weekend
+  // spariscono da soli da FANTA e dai link della chat; restano nei dati, così i punti presi non si perdono.
+  const predictionsOpen = predictions.filter(q => q.kind === "history" || !q.raceId || (races.find(r => r.id === q.raceId) || {}).status !== "CONCLUSA");
   const chatShareCtx = { share: shareToChat, sources: {
-    articles, races, predictions, predAnswers, squad, trophyList, trophies, pitBest, sillyPreds, stratPreds,
+    articles, races, predictions: predictionsOpen, predAnswers, squad, trophyList, trophies, pitBest, sillyPreds, stratPreds,
     me: account ? { name: account.name, team: favTeam, driver: favDriver, fan: aboutMe && aboutMe.fan } : null,
     radios: of1RadiosAt(live, liveSt).slice(0, 20),
   } };
@@ -10044,7 +10064,7 @@ function App() {
       onRefresh={() => refreshShared(["news", "highlights", "ig", "homePoll"]).catch(() => {})} />;
     else if (tab === "race") body = <RaceScreen onStandingsEnd={isPremium ? null : Ads.standingsEnd} favDriver={favDriver} dotdVote={live ? votesNow.dotd[live.raceId] : null} onDotdVote={(k, id) => live && voteDotd(live.raceId, k, id)} ratings={votesNow.ratings} onRate={rateDriver} onOpenChats={() => setView("chats")} onOpenGhost={() => setView("ghost")} races={races} standings={shownStandings} isPremium={isPremium} onPremium={() => setPremiumOpen(true)} onSelectDriver={setSelectedDriver} live={live} liveSt={liveSt} onExpandMap={() => setLiveTrackOpen(true)} onTelemetry={(carId, lapNo, sector) => setTelemetry({ carId, lapNo, sector })} onOpenCircuit={openCircuit} wxGuess={wxGuess} wxResult={wxResult} onGuessWeather={guessWeather} onLapTimes={setLapList} onSecondScreen={() => setSsOpen(true)} lastRace={lastRace} of1={of1} onOf1Refresh={() => of1TickRef.current && of1TickRef.current()} replay={replayCtl} />;
     else if (tab === "garage") body = <GarageScreen races={races} pitBest={pitBest} onPitResult={t => { if (!userDataWait()) setPitBest(b => b == null || t < b ? t : b); }} sillyPreds={sillyPreds} onPredict={predictSeat} sillyOfficial={sillyOfficial} live={live} stratPreds={stratPreds} onStrat={(id, st) => { if (!userDataWait()) setStratPreds(x => ({ ...x, [id]: { stints: st, at: nowMs() } })); }} bluffTags={bluffNow} onBluffRefresh={loadBluffTags} />;
-    else if (tab === "fanta") body = <FantaScreen standings={shownStandings} squad={squad} setSquad={setSquad} base={squadBase} freeTransfers={freeTransfers} budget={FANTA_BUDGET} stats={fantaStats} race={fantaRace} lock={teamLockInfo} weekends={fantaLive} isPremium={isPremium} onPremium={() => setPremiumOpen(true)} onToast={showToast} bonus={bonus} leagues={leagueRows} seasonPts={fantaSeason.total} realWeek={fantaRace ? fantaSeason.rounds.find(r => r.round === fantaRace.round) || null : null} meAid={account ? account.aid : null} onCreateLeague={createLeague} onJoinLeague={joinLeague} onLeaveLeague={leaveLeague} onRenameLeague={renameLeague} needAccount={needAccount} predictions={predictions} predAnswers={predAnswers} predLockOf={predLockOf} onAnswerPrediction={answerPrediction} />;
+    else if (tab === "fanta") body = <FantaScreen standings={shownStandings} squad={squad} setSquad={setSquad} base={squadBase} freeTransfers={freeTransfers} budget={FANTA_BUDGET} stats={fantaStats} race={fantaRace} lock={teamLockInfo} weekends={fantaLive} isPremium={isPremium} onPremium={() => setPremiumOpen(true)} onToast={showToast} bonus={bonus} leagues={leagueRows} seasonPts={fantaSeason.total} realWeek={fantaRace ? fantaSeason.rounds.find(r => r.round === fantaRace.round) || null : null} meAid={account ? account.aid : null} onCreateLeague={createLeague} onJoinLeague={joinLeague} onLeaveLeague={leaveLeague} onRenameLeague={renameLeague} needAccount={needAccount} predictions={predictionsOpen} predAnswers={predAnswers} predLockOf={predLockOf} onAnswerPrediction={answerPrediction} />;
   }
 
   const showTopHeader = view === "tab";
