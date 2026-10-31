@@ -1,5 +1,5 @@
 # Handoff
-Updated: 2026-10-31 by Claude (claude-opus-5-5)   Branch: tappa-3   (vedi "31/10 notte" in fondo per l'ultimo lavoro)
+Updated: 2026-10-31 by Claude (claude-opus-5-5)   Branch: tappa-3   (vedi "31/10 tarda sera" in fondo per l'ultimo lavoro)
 
 ## Goal
 Tappa 3 della 2.0: "fai prima tutti gli easter egg e le nuove grafiche, poi vedo l'apk di prova e poi ci sono altre
@@ -366,3 +366,27 @@ Da fare:
   a@b.it nelle prove non è admin: `seed: { admin: true }` dove serve dall'avvio (revisione-b C1, run34 DEMO, run72).
   La prova DEMO di "Voce del paddock" ora controlla che il voto resti sul telefono (l'admin ha già tutti i trofei).
 - Verificato il 31/10 notte: JOBS=2 bash test/all.sh a 3aa5db3 → 87 file su 89 verdi; run68 (totale dei trofei scritto a mano) ora prende il numero da logic/trophies ed è verde; run33 "caricamento lento" è rossa solo con 2 prove alla volta (da sola 22/22: questione di tempi). APK di prova da 3aa5db3: GitHub run 41232720813 riuscito.
+
+## 31/10 tarda sera: rivedere tutte le sessioni del weekend, mini Pit Board
+- Edoardo: "quando voglio rivedere le prove libere o le qualifiche non fa vedere niente". Causa: l'app mostrava solo
+  l'ultima sessione di OpenF1, e le PL3 del Messico (finite da 2 ore) su OpenF1 avevano la classifica ma 0 giri e una
+  sola posizione a testa: sessione vuota, tutti "–". Ora:
+  - Tasti delle sessioni del weekend già cominciate (PL1, PL2, PL3, Q SPRINT, SPRINT, QUALIFICHE, GARA) sopra la diretta
+    della Race (SessionPicker, data-session-pick); di serie l'ultima; quando comincia una sessione nuova si torna lì.
+    `OF1.weekendSessions(meeting_key, {before})` (1 richiesta quando cambia l'ultima sessione), `replayTarget`,
+    `sessionShort` in src/services/openf1.js. Sessioni finite già caricate in memoria (al massimo 4): tornandoci niente
+    richieste (OpenF1 gratis: 30 al minuto, ~11 a sessione).
+  - Prove e qualifiche senza giri ma con la classifica: `buildReplay` prende posizione e miglior giro da session_result
+    (duration; in qualifica il più veloce di Q1/Q2/Q3), con la scritta "I tempi giro per giro non sono ancora su OpenF1".
+  - Sessione senza giri né classifica: "Dati non ancora disponibili" (prima una sessione vuota), si riprova ogni 5 minuti,
+    i tasti restano per scegliere le altre.
+  - Una sessione passata presa da api/live (OpenF1 gratis bloccato da quella in corso) non si ricarica ogni 15 s
+    (liveMode solo per l'ultima): niente spreco del limite di 60 richieste al minuto.
+  - Prove: test/unit/openf1.test.js (weekendSessions, replayTarget, sessionShort, prove senza giri), test/e2e/run80-sessioni.js.
+- Mini Pit Board (Edoardo: "il tuo pilota, tempo sul giro, posizione… che ti segue per tutta l'app in piccolo e che si
+  possa togliere"): `MiniPitBoard` sopra la barra in basso (e in fondo alle altre pagine) durante una sessione in corso
+  o rivista mentre scorre: sigla col colore della scuderia, posizione, tempo sul giro (l'ultimo in gara, il migliore nelle
+  altre), distacco, giro/tempo. Non nella Race (ha la Pit Board grande), non nella chat aperta né nel Pannello Admin.
+  Toccandola si va alla Race; la X la chiude per quella sessione (torna con la sessione dopo); interruttore "Pit Board in
+  tutta l'app" nel Profilo (sul telefono: bt-minipit-on). Prove: test/e2e/run81-minipit.js.
+- Verificato il 31/10 tarda sera: JOBS=2 bash test/all.sh a 7f9f129 → TUTTO VERDE (91 file).
