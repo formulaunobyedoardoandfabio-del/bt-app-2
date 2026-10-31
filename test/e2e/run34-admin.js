@@ -169,7 +169,7 @@ run({
     assert(!errs.length, errs.join(' | '));
   },
   async 'prova diretta: solo sul telefono dell\'admin, con la scritta DEMO; l\'ultima gara resta quella vera'(b) {
-    const { ctx, p, errs } = await open(b); await login(p); await w(p, 1000);
+    const { ctx, p, errs } = await open(b, { seed: { admin: true } }); await login(p); await w(p, 1000);
     await goTab(p, 'FANTA'); const total0 = await inner(p, '[data-fanta-total]');
     await goTab(p, 'RACE'); await tapSel(p, '[data-race-tab="classifica"]').catch(() => {}); await w(p, 300); const last0 = await podium(p, '[data-last-race="real"]');
     const docs0 = await allDocs(p);

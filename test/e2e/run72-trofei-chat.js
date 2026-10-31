@@ -6,6 +6,7 @@
 // Uso: node test/build-test.js && node test/e2e/run72-trofei-chat.js [filtro]
 const { open, w, tapText, tapSel, goTab, login, openAdmin, assert, run } = require('./helpers');
 const { authorId } = require('../../src/services/compat');
+const Trophies = require('../../src/logic/trophies');
 
 const USER = app2 => ({ 'users/a@b.it': { name: 'Tester', nick: 'Tester', email: 'a@b.it', about: { birth: 1999, follow: 2, fan: 'vivo', years: 5 }, app2 } });
 const doc = (p, path) => p.evaluate(x => window.firebase.__fake.doc(x), path);
@@ -71,7 +72,8 @@ run({
   },
 
   // Prima il voto della prova DEMO non contava e il trofeo non arrivava mai a chi provava l'app con la DEMO.
-  async 'pilota del giorno votato nella prova DEMO: arriva "Voce del paddock"'(b) {
+  // 31/10: la DEMO c'e' solo per l'admin, che ha gia' tutti i trofei: il voto si da', resta sul telefono, il trofeo c'e'.
+  async 'pilota del giorno votato nella prova DEMO: si vota, resta sul telefono, "Voce del paddock" c\'e\''(b) {
     const { ctx, p, errs } = await open(b); await login(p); await w(p, 600);
     const back2 = async () => { await tapSel(p, '[aria-label="Indietro"]'); await w(p); await tapSel(p, '[aria-label="Indietro"]'); await w(p); };
     await openAdmin(p, 'GARA LIVE'); await tapText(p, 'AVVIA GARA', { exact: true }); await w(p, 300); await back2();
@@ -80,10 +82,15 @@ run({
     await tapSel(p, '[data-dotd] [data-vote-kind="driver"] [data-vote-open]'); await w(p, 300);
     const opt = await p.evaluate(() => { const e = document.querySelector('[data-vote-option]'); return e && e.getAttribute('data-vote-option'); });
     await tapSel(p, `[data-vote-option="${opt}"]`); await w(p, 700);
-    const n = await p.evaluate(() => { const e = document.querySelector('[data-trophy-notice]'); return e ? e.getAttribute('data-trophy-notice') : null; });
+    const voted = await p.evaluate(() => { const e = document.querySelector('[data-dotd] [data-vote-kind="driver"]'); return e ? e.innerText.replace(/\s+/g, ' ') : ''; });
+    const u = await doc(p, 'users/a@b.it'), dotd = u && u.app2 && u.app2.dotd;
+    await goTab(p, 'HOME'); await openProfile(p); await openTrophies(p);
+    const r = await row(p, 'paddock');
     await ctx.close();
     assert(opt, 'non si riesce a votare il pilota del giorno nella prova DEMO');
-    assert(n && n.split(',').includes('paddock'), 'votando nella DEMO il trofeo "Voce del paddock" non arriva: ' + n);
+    assert(/Hai votato/.test(voted), 'dopo il voto nella DEMO non si vede "Hai votato": ' + voted);
+    assert(!dotd || !Object.keys(dotd).length, 'il voto della DEMO non deve finire su Firebase: ' + JSON.stringify(dotd));
+    assert(r && r.won === '1', '"Voce del paddock" per l\'admin: ' + JSON.stringify(r));
     assert(!errs.length, errs.join(' | '));
   },
 
@@ -97,7 +104,7 @@ run({
     const r = await row(p, 'pitcrew'), egg = await row(p, 'sgasata');
     const fs = await doc(p, 'shared/bt-trophies');
     await ctx.close();
-    assert(/di 14 trofei/.test(head), 'con un trofeo spento la bacheca deve contarne 14: ' + head);
+    assert(/di 18 trofei/.test(head), 'con un trofeo spento la bacheca deve contarne 18: ' + head);
     assert(r && r.won === '0' && /Pit crew pro/.test(r.text) && /2,10 secondi/.test(r.text), 'Pit crew da Firebase: ' + JSON.stringify(r));
     assert(!egg, 'il trofeo spento si vede ancora: ' + JSON.stringify(egg));
     assert(fs && fs.pitcrew.goal === 2.1 && !fs.casco, 'l\'app non deve riscrivere il documento dei trofei: ' + JSON.stringify(fs));
@@ -105,11 +112,11 @@ run({
   },
 
   async 'admin: shared/bt-trophies si crea coi valori di serie se manca'(b) {
-    const { ctx, p, errs } = await open(b);
+    const { ctx, p, errs } = await open(b, { seed: { admin: true } });
     await login(p); await w(p, 1200);
     const fs = await doc(p, 'shared/bt-trophies');
     await ctx.close();
-    assert(fs && Object.keys(fs).length === 15, 'documento dei trofei: ' + JSON.stringify(fs));
+    assert(fs && Object.keys(fs).length === Trophies.TROPHIES.length, 'documento dei trofei: ' + JSON.stringify(fs));
     assert(fs.pitcrew.goal === 2.35 && fs.pitcrew.attivo === true && Object.values(fs).every(t => t.attivo === true) && /2,35/.test(fs.pitcrew.how), 'Pit crew nel documento: ' + JSON.stringify(fs.pitcrew));
     assert(!errs.length, errs.join(' | '));
   },
@@ -129,7 +136,7 @@ run({
     assert(s, 'toccando il nome non si apre il profilo');
     assert(/Tifa Ferrari/.test(s.text) && /Pilota del cuore: Charles Leclerc/.test(s.text) && /Vivo e respiro F1!/.test(s.text), 'tifo nel profilo: ' + s.text);
     assert(s.helmet === 'flames', 'casco nel profilo: ' + s.helmet);
-    assert(/2 di 15/.test(s.text) && s.trophies.includes('pitcrew') && /Pit crew/.test(s.text), 'trofei nel profilo: ' + s.text);
+    assert(new RegExp('2 di ' + Trophies.TROPHIES.length).test(s.text) && s.trophies.includes('pitcrew') && /Pit crew/.test(s.text), 'trofei nel profilo: ' + s.text);
     assert(/Trofeo segreto/.test(s.text) && !/Sgasata/.test(s.text), 'il trofeo segreto di un altro non deve dire il suo nome: ' + s.text);
     assert(/Segnalazione inviata/.test(msg) && gone, 'Segnala dal profilo: ' + msg);
     assert(reps && reps.__arr.length === 1 && reps.__arr[0].msgId === 'mm2' && reps.__arr[0].aid === MARCO.aid, 'segnalazione salvata: ' + JSON.stringify(reps));

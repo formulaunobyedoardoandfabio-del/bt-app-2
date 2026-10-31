@@ -53,7 +53,7 @@ async function acceptTerms(p) {
 async function enter(p) { await login(p); }   // i Termini li ha già accettati il Firebase finto
 // Dalla versione 22 la chat non è più una scheda in basso: si apre dalla pagina RACE.
 async function openChat(p, name = 'Chat Generale') { await tapText(p, 'RACE', { exact: true }); await w(p); await tapSel(p, '[data-race-chat]'); await w(p); await tapText(p, name); await w(p, 500); }
-async function openAdminChat(p) { await tapSel(p, '[aria-label="Profilo"]'); await w(p); await tapText(p, 'Pannello Admin'); await w(p); for (const d of '080824') { await tapText(p, d, { exact: true }); await w(p, 60); } await w(p, 900); await tapText(p, 'CHAT', { exact: true }); await w(p, 400); }
+async function openAdminChat(p) { await p.evaluate(() => { if (!window.firebase.__fake.doc('admins/a@b.it')) window.firebase.__fake.setDoc('admins/a@b.it', { ruolo: 'admin' }); }); await tapSel(p, '[aria-label="Profilo"]'); await w(p); await tapText(p, 'Pannello Admin'); await w(p); for (const d of '080824') { await tapText(p, d, { exact: true }); await w(p, 60); } await w(p, 900); await tapText(p, 'CHAT', { exact: true }); await w(p, 400); }
 const assert = (c, m) => { if (!c) throw new Error(m); };
 
 const tests = {

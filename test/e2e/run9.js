@@ -30,6 +30,8 @@ const SEED_20 = require('../fixtures/seed-2.0.json');
   await tap('Elimina account'); await p.screenshot({ path: 'n6-conferma.png' }); await tap('Annulla');
   await tap('Passa a Premium'); await p.evaluate(() => document.querySelectorAll('.scrollcol').forEach(s => s.scrollTop = s.scrollHeight)); await w();
   await p.screenshot({ path: 'n7-premium.png' }); await sel('[aria-label="Chiudi"]');
+  await p.evaluate(() => { if (!window.firebase.__fake.doc('admins/a@b.it')) window.firebase.__fake.setDoc('admins/a@b.it', { ruolo: 'admin' }); });
+  await sel('[aria-label="Indietro"]'); await sel('[aria-label="Profilo"]'); await w();
   await tap('Pannello Admin'); for (const d of '080824') { await tap(d, true); } await w(900);
   for (const t of ['FANTA F1', 'CLASSIFICHE', 'GARA LIVE', 'INSTAGRAM', 'NOTIFICHE', 'NEWS', 'CHAT']) await tap(t, true);
   await p.screenshot({ path: 'n8-admin-chat.png' });

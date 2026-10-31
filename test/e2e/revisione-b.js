@@ -99,7 +99,7 @@ run({
   },
   // ── C1: profilo non letto all'avvio (senza rete) ─────────────────────────────────────
   async 'C1: avvio senza rete: nessun nome dall\'email né chat a suo nome; tornata la rete profilo vero, Pannello Admin e chat'(b) {
-    const { ctx, p, errs } = await open(b); await login(p);
+    const { ctx, p, errs } = await open(b, { seed: { admin: true } }); await login(p);
     await reopenOffline(ctx, p);
     await tapSel(p, '[aria-label="Profilo"]'); await w(p, 500);
     const prof1 = norm(await text(p)), waiting = await has(p, '[data-profile-name="waiting"]');
