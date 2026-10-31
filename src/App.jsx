@@ -9522,9 +9522,9 @@ function App() {
     if (!realLiveId) { setOf1({ status: "idle", raceId: null }); return undefined; }
     let alive = true, busy = false, loaded = null, loadedAt = 0, liveMode = false, checkedAt = 0;
     setOf1({ status: "loading", raceId: realLiveId });
-    const tick = async () => {
+    const tick = async (force = false) => {
       if (busy || !alive) return;
-      if (!liveMode && checkedAt && nowMs() - checkedAt < OF1_POLL_MS - 1000) return;   // fuori dalla diretta: ogni 30 s
+      if (force !== true && !liveMode && checkedAt && nowMs() - checkedAt < OF1_POLL_MS - 1000) return;   // fuori dalla diretta: ogni 30 s
       busy = true; checkedAt = nowMs();
       try {
         const race = racesRef.current.find(r => r.id === realLiveId);
@@ -9547,7 +9547,10 @@ function App() {
         const sim = buildReplay(raw, track, { drivers: LIVE_DRIVERS, of1: OF1 });
         loaded = s.session_key; loadedAt = nowMs(); liveMode = liveNow;
         setReplay(r => ({ ...r, playing: false }));
-        setOf1Live({ raceId: race.id, type: sim.type, sim, track, source: "openf1", raw, sessionKey: s.session_key });
+        // ongoing (31/10): dati della diretta (api/live) con la sessione non ancora finita: non è "finita" anche se si
+        // vede l'ultimo momento arrivato.
+        const endAt = Date.parse(s.date_end || "");
+        setOf1Live({ raceId: race.id, type: sim.type, sim, track, source: "openf1", raw, sessionKey: s.session_key, ongoing: liveNow && (!isFinite(endAt) || nowMs() < endAt) });
         setOf1({ status: "ok", raceId: realLiveId });
       } catch (e) {
         if (!alive) return;
@@ -10284,8 +10287,9 @@ function App() {
   const shareArticle = shareId != null ? articles.find(a => a.id === shareId) : null;
   // 31/10 sera (Edoardo): sfondo e scritta della bandiera a scacchi solo se la sessione si è vista mentre era in corso
   // (anche rivista dall'inizio); finita e aperta dopo (la sessione di OpenF1 parte dalla fine) niente scacchi.
-  const liveSt = (st => {
-    if (!st) return null;
+  const liveSt = (st0 => {
+    if (!st0) return null;
+    const st = live.ongoing && st0.finished ? { ...st0, finished: false } : st0;   // diretta in corso (api/live)
     const key = live.raceId + ":" + live.type;
     if (!st.finished) { liveSeen(key, true); return st; }
     return st.bg === "chequered" && !liveSeen(key) ? { ...st, bg: "green" } : st;
@@ -10349,7 +10353,7 @@ function App() {
     if (tab === "home") body = <HomeScreen holidayTop={holiday ? <HolidayCard id={holiday} onOpen={holidayOpen(holiday)} /> : null} ig={ig} highlights={highlights} onOpenIg={() => { setIgFrom("tab"); setView("instagram"); }} articles={articles} tagFilter={tagFilter} onTag={filterByTag} onClearTag={() => setTagFilter(null)} onOpenArticle={openArticle} isPremium={isPremium} onPremium={() => setPremiumOpen(true)} onToast={showToast} onLiveTrack={() => setLiveTrackOpen(true)} onGoFanta={() => goTab("fanta")}  saved={saved} onToggleSave={toggleSave} savedOnly={savedOnly} setSavedOnly={setSavedOnly} onOpenCircuit={openCircuit} homePoll={homePoll} homeVote={votes.home || null} onVote={castVote}
       hidden={hidden} onHide={hideArticle} onUnhideAll={() => { if (!userDataWait()) setHidden([]); }} onSwipeSave={saveFromSwipe}
       onRefresh={() => refreshShared(["news", "highlights", "ig", "homePoll"]).catch(() => {})} />;
-    else if (tab === "race") body = <RaceScreen onStandingsEnd={isPremium ? null : Ads.standingsEnd} favDriver={favDriver} dotdVote={live ? votesNow.dotd[live.raceId] : null} onDotdVote={(k, id) => live && voteDotd(live.raceId, k, id)} ratings={votesNow.ratings} onRate={rateDriver} onOpenChats={() => setView("chats")} onOpenGhost={() => setView("ghost")} races={races} standings={shownStandings} isPremium={isPremium} onPremium={() => setPremiumOpen(true)} onSelectDriver={setSelectedDriver} live={live} liveSt={liveSt} onExpandMap={() => setLiveTrackOpen(true)} onTelemetry={(carId, lapNo, sector) => setTelemetry({ carId, lapNo, sector })} onOpenCircuit={openCircuit} wxGuess={wxGuess} wxResult={wxResult} onGuessWeather={guessWeather} onLapTimes={setLapList} onSecondScreen={() => setSsOpen(true)} lastRace={lastRace} of1={of1} onOf1Refresh={() => of1TickRef.current && of1TickRef.current()} replay={replayCtl} />;
+    else if (tab === "race") body = <RaceScreen onStandingsEnd={isPremium ? null : Ads.standingsEnd} favDriver={favDriver} dotdVote={live ? votesNow.dotd[live.raceId] : null} onDotdVote={(k, id) => live && voteDotd(live.raceId, k, id)} ratings={votesNow.ratings} onRate={rateDriver} onOpenChats={() => setView("chats")} onOpenGhost={() => setView("ghost")} races={races} standings={shownStandings} isPremium={isPremium} onPremium={() => setPremiumOpen(true)} onSelectDriver={setSelectedDriver} live={live} liveSt={liveSt} onExpandMap={() => setLiveTrackOpen(true)} onTelemetry={(carId, lapNo, sector) => setTelemetry({ carId, lapNo, sector })} onOpenCircuit={openCircuit} wxGuess={wxGuess} wxResult={wxResult} onGuessWeather={guessWeather} onLapTimes={setLapList} onSecondScreen={() => setSsOpen(true)} lastRace={lastRace} of1={of1} onOf1Refresh={() => of1TickRef.current && of1TickRef.current(true)} replay={replayCtl} />;
     else if (tab === "garage") body = <GarageScreen races={races} pitBest={pitBest} onPitResult={t => { if (!userDataWait()) setPitBest(b => b == null || t < b ? t : b); }} sillyPreds={sillyPreds} onPredict={predictSeat} sillyOfficial={sillyOfficial} live={live} stratPreds={stratPreds} onStrat={(id, st) => { if (!userDataWait()) setStratPreds(x => ({ ...x, [id]: { stints: st, at: nowMs() } })); }} bluffTags={bluffNow} onBluffRefresh={loadBluffTags} />;
     else if (tab === "fanta") body = <FantaScreen standings={shownStandings} squad={squad} setSquad={setSquad} base={squadBase} freeTransfers={freeTransfers} budget={FANTA_BUDGET} stats={fantaStats} race={fantaRace} lock={teamLockInfo} weekends={fantaLive} isPremium={isPremium} onPremium={() => setPremiumOpen(true)} onToast={showToast} bonus={bonus} leagues={leagueRows} seasonPts={fantaSeason.total} realWeek={fantaRace ? fantaSeason.rounds.find(r => r.round === fantaRace.round) || null : null} meAid={account ? account.aid : null} onCreateLeague={createLeague} onJoinLeague={joinLeague} onLeaveLeague={leaveLeague} onRenameLeague={renameLeague} needAccount={needAccount} predictions={predictionsOpen} predAnswers={predAnswers} predLockOf={predLockOf} onAnswerPrediction={answerPrediction} />;
   }
