@@ -71,8 +71,9 @@ t('registrazione: About you salvato, niente pw, password robusta (8 caratteri, l
   const doc = c.fs('users/f@b.it');
   assert.deepStrictEqual(doc.about, { birth: 2001, follow: 3, fan: 'vivo' });
   assert.strictEqual(doc.pw, undefined);
-  for (const [k, v] of Object.entries({ name: 'Fabio', nick: 'Fabio', email: 'f@b.it', isPremium: false, premium: false, plan: 'free' })) assert.strictEqual(doc[k], v, k);
-  assert.deepStrictEqual(doc.notif, { news: true, live: true, fanta: true });
+  for (const [k, v] of Object.entries({ name: 'Fabio', email: 'f@b.it' })) assert.strictEqual(doc[k], v, k);
+  // 31/10: un campo per cosa: niente nick (= name), isPremium/premium/plan (il Premium sta in app2.premium), notif.
+  for (const k of ['nick', 'isPremium', 'premium', 'plan', 'notif']) assert.strictEqual(doc[k], undefined, k);
   assert.deepStrictEqual(doc.app2, {});
   assert.ok(doc.ts && doc.uid);
   assert.strictEqual(u.name, 'Fabio');
@@ -83,6 +84,32 @@ t('registrazione: About you salvato, niente pw, password robusta (8 caratteri, l
   assert.deepStrictEqual(['', 'abc', 'abcdefgh', 'abcdef12', 'Abcdef12!x'].map(pwStrength), [0, 1, 1, 2, 3]);
   assert.strictEqual(MESSAGES.exists, 'Email già registrata');
   assert.strictEqual(MESSAGES.mismatch, 'Le password non coincidono');
+});
+
+// 31/10: entrando, un profilo coi campi doppi dell'app di prima si sistema: resta un campo per cosa. Un Premium dato a
+// mano (isPremium: true) passa in app2.premium.sub; nick diverso dal nome non si perde (diventa il nome se manca).
+t('profilo coi campi doppi: entrando restano name, email, app2 (Premium in app2.premium); il Premium a mano resta', async () => {
+  const legacy = { email: 'p@b.it', name: 'Paolo', nick: 'Paolo', isPremium: true, premium: true, plan: 'premium', notif: { news: true, live: true, fanta: true }, about: { birth: 1999, follow: 2, fan: 'vivo' }, app2: { favTeam: 'ferrari', premium: { sub: false, trial: null } } };
+  const c = ctx({ docs: { 'users/p@b.it': legacy }, users: { 'p@b.it': { pw: 'abcdef12', uid: 'uid-p' } } });
+  const A = make();
+  const u = await A.login('p@b.it', 'abcdef12');
+  await new Promise(r => setTimeout(r, 30));
+  const doc = c.fs('users/p@b.it');
+  for (const k of ['nick', 'isPremium', 'premium', 'plan', 'notif']) assert.strictEqual(doc[k], undefined, 'campo doppio rimasto: ' + k);
+  assert.strictEqual(doc.name, 'Paolo');
+  assert.strictEqual(doc.app2.favTeam, 'ferrari', 'i dati dell\'app restano');
+  assert.strictEqual(doc.app2.premium.sub, true, 'il Premium dato a mano passa in app2.premium');
+  assert.strictEqual(u.isPremium, true);
+  assert.strictEqual(A.current().nick, 'Paolo');
+  // Un profilo già pulito non si riscrive
+  const c2 = ctx({ docs: { 'users/q@b.it': { email: 'q@b.it', name: 'Qui', about: {}, app2: {} } }, users: { 'q@b.it': { pw: 'abcdef12', uid: 'uid-q' } } });
+  let writes = 0;
+  const B = make({ dbSet: (...a) => { writes++; return F.dbSet(...a); } });
+  await B.login('q@b.it', 'abcdef12');
+  await new Promise(r => setTimeout(r, 30));
+  assert.strictEqual(writes, 0, 'profilo già pulito riscritto');
+  assert.strictEqual(B.current().isPremium, false);
+  void c2;
 });
 
 // 18/10 (Edoardo): creando l'account "Errore di connessione, riprova tra poco" senza codice: era il salvataggio del
@@ -334,7 +361,7 @@ t('profilo: nome e "Su di te" si modificano; account vecchio senza "Su di te" ha
   await A.updateAbout({ birth: 1999, follow: 4, fan: 'vroom' });
   const doc = c.fs('users/v@b.it');
   assert.strictEqual(doc.name, 'Edoardo');
-  assert.strictEqual(doc.nick, 'Edoardo');
+  assert.strictEqual(doc.nick, undefined);   // 31/10: niente nick doppio, basta name
   assert.deepStrictEqual(doc.about, { birth: 1999, follow: 4, fan: 'vroom' });
   assert.strictEqual(A.current().name, 'Edoardo');
   assert.deepStrictEqual(A.current().about, { birth: 1999, follow: 4, fan: 'vroom' });

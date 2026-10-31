@@ -316,3 +316,17 @@ Da fare:
   se Edoardo vede qualcosa di sbagliato), tuta nel colore della scuderia; piloti non in tabella: 3 figure di riserva.
   run67 (figure di serie, Hamilton e Bottas, almeno 10 diverse).
 - Verificato il 31/10 sera: `JOBS=2 bash test/all.sh` a 31968a3 → TUTTO VERDE (84 file).
+
+## 31/10 pomeriggio
+- Admin (admins/<email>): Premium e tutti i trofei gratis (`isAdminNow`; i trofei mancanti si segnano coi dati
+  dell'account arrivati). Nelle prove a@b.it è admin: `__btSeed.noAdmin` lo rende utente normale. run78.
+- Fanta: i nuovi utenti partono senza squadra (5 piloti e 2 scuderie da scegliere, squadBase null = la prima squadra
+  non conta come cambi); chi aveva ancora la vecchia squadra di serie (FANTA_OLD_DEFAULT) la ritrova vuota, senza le
+  voci della storia di quella squadra. Nelle carte dei piloti la figura (DriverFace). run78.
+- Chat: la prova di togliere il profilo dai messaggi e dalle stanze è stata ANNULLATA su richiesta di Edoardo (2ac243c):
+  la chat è com'era.
+- Profili users/<email>, un campo per cosa (Edoardo: "ci sono molte volte l'utente premium"): via nick (= name),
+  isPremium/premium/plan (il Premium sta in app2.premium.sub), notif (mai usati). Entrando il profilo si sistema da
+  solo (account.js tidyProfile); un isPremium: true dato a mano passa in app2.premium.sub; i nuovi account nascono
+  puliti. compat.profileFromStore: isPremium = isPremium vecchio o app2.premium.sub. test/unit/account.test.js.
+  Nota: per dare il Premium a mano da Firebase ora si mette app2 → premium → sub = true.

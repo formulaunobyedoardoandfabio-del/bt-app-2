@@ -99,6 +99,22 @@ function createAccount({
     catch (e) { if (e && e.code === "permission-denied") return { doc: null, protectedDoc: true }; throw mkErr("offline", "firestore/" + ((e && e.code) || "errore")); }
   }
 
+  // 31/10 (Edoardo: "ci sono molte volte l'utente premium, ne serve una per utente"): campi dell'app di prima che
+  // ripetono cose già salvate una volta: nick (= name), isPremium / premium / plan (il Premium sta in app2.premium),
+  // notif (interruttori mai usati). Entrando si tolgono; un Premium dato a mano (isPremium: true) passa in app2.premium.
+  const LEGACY_FIELDS = ["nick", "isPremium", "premium", "plan", "notif"];
+  function tidyProfile(email, doc) {
+    const old = LEGACY_FIELDS.filter(k => doc[k] !== undefined);
+    if (!old.length) return doc;
+    const patch = {}, app2 = doc.app2 && typeof doc.app2 === "object" ? doc.app2 : {};
+    if (!doc.name && typeof doc.nick === "string" && doc.nick.trim()) patch.name = doc.nick.trim();
+    const pr = app2.premium && typeof app2.premium === "object" ? app2.premium : { sub: false, trial: null };
+    if ((doc.isPremium === true || doc.premium === true) && pr.sub !== true) patch.app2 = { premium: { ...pr, sub: true } };
+    dbSet("users", email, patch, { remove: old }).catch(() => {});   // senza rete si riprova al prossimo accesso
+    const out = { ...doc, ...patch, app2: patch.app2 ? { ...app2, ...patch.app2 } : doc.app2 };
+    old.forEach(k => { delete out[k]; });
+    return out;
+  }
   async function readAdmin(email) {
     try { admin = !!(await dbGet("admins", email)); adminKnown = true; } catch (e) { admin = false; adminKnown = false; }
   }
@@ -118,11 +134,12 @@ function createAccount({
     }
     if (doc === null) {
       const nm = "Tifoso " + aid.slice(1, 5).toUpperCase();
-      doc = { name: nm, nick: nm, email, isPremium: false, premium: false, plan: "free", notif: { news: true, live: true, fanta: true }, ts: Date.now(), uid: uid || null, about: cleanAbout(null), app2: {} };
+      doc = { name: nm, email, ts: Date.now(), uid: uid || null, about: cleanAbout(null), app2: {} };   // 31/10: un campo per cosa
       dbSet("users", email, doc).catch(() => {});
     } else if (doc.pw != null) {
       dbSet("users", email, { migrated: Date.now() }, { remove: ["pw"] }).catch(() => {});   // passaggio rimasto a metà
     }
+    if (doc) doc = tidyProfile(email, doc);
     await readAdmin(email);
     current = { ...C.profileFromStore(doc), email, aid, uid: uid || doc.uid || null, loaded: true };
     remember(current);
@@ -202,7 +219,7 @@ function createAccount({
     let res;
     try { res = await auth.createUserWithEmailAndPassword(em, pw); } catch (e) { throw authErr(e); }
     const uid = res && res.user ? res.user.uid : null;
-    const profile = { name: nm, nick: nm, email: em, isPremium: false, premium: false, plan: "free", notif: { news: true, live: true, fanta: true }, ts: Date.now(), uid, about: cleanAbout(about), app2: {} };
+    const profile = { name: nm, email: em, ts: Date.now(), uid, about: cleanAbout(about), app2: {} };   // 31/10: un campo per cosa
     // Il profilo si salva subito dopo Authentication: se non va al primo colpo si riprova una volta (18/10: creando
     // l'account Edoardo vedeva "Errore di connessione" senza codice). Se non va, il messaggio dice il codice vero.
     let saveErr = null;
@@ -305,7 +322,7 @@ function createAccount({
     const nm = String(name || "").trim();
     if (current && current.loaded === false) throw mkErr("not-loaded");
     if (!current || !nm) throw mkErr("empty");
-    await dbSet("users", current.email, { name: nm, nick: nm });
+    await dbSet("users", current.email, { name: nm });
     current = { ...current, name: nm, nick: nm };
     notify();
   }

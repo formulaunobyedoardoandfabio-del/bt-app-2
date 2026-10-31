@@ -477,7 +477,8 @@ function profileFromStore(doc) {
     email: doc.email || "",
     about,
     app2: isObj(doc.app2) ? doc.app2 : {},
-    isPremium: !!doc.isPremium,
+    // 31/10: il Premium sta in app2.premium.sub (isPremium dell'app di prima vale ancora finché il profilo non si sistema).
+    isPremium: !!doc.isPremium || !!(isObj(doc.app2) && isObj(doc.app2.premium) && doc.app2.premium.sub === true),
   };
 }
 
