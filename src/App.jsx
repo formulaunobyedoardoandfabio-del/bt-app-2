@@ -342,6 +342,65 @@ function useCommonsPhoto(kind, id) {
 const GEO_PATTERNS = ["stripes", "bolt", "checks", "stars", "pinstripes", "dots", "flames"];
 const geoHash = id => String(id || "").split("").reduce((h, c) => (h * 31 + c.charCodeAt(0)) >>> 0, 7);
 const driverHelmet = d => ({ base: d.color, c1: "#FFFFFF", c2: "#111114", pattern: GEO_PATTERNS[geoHash(d.id) % GEO_PATTERNS.length], visor: ["smoke", "iridium-blue", "iridium-gold", "mirror-red"][geoHash(d.id + "v") % 4], finish: "gloss", number: null });
+// Ritratti stilizzati (31/10 sera): non foto né caricature, una figura geometrica coi tratti principali di ogni pilota
+// (colore della pelle, colore e taglio dei capelli, barba o baffi) e la tuta nel colore della scuderia.
+// [pelle, capelli, taglio, barba]: pelle chiara|rosea|media|olivastra|scura; capelli nero|castano scuro|castano|castano
+// chiaro|biondo; taglio corto|ciuffo|rasato|ricci|treccine|mullet|mossi; barba no|accenno|piena|baffi.
+const FACE_SKIN = { chiara: "#F2CDAE", rosea: "#E9B994", media: "#CF9A70", olivastra: "#B47D52", scura: "#7C4D30" };
+const FACE_HAIR = { nero: "#17130F", scuro: "#33221A", castano: "#58391F", chiaro: "#8C6239", biondo: "#CDA45C" };
+const DRIVER_LOOKS = {
+  norris: ["chiara", "castano", "ciuffo", "accenno"], piastri: ["chiara", "scuro", "corto", "no"], leclerc: ["chiara", "scuro", "ciuffo", "no"],
+  hamilton: ["scura", "nero", "treccine", "piena"], verstappen: ["chiara", "chiaro", "corto", "accenno"], hadjar: ["rosea", "scuro", "ricci", "no"],
+  russell: ["chiara", "castano", "ciuffo", "no"], antonelli: ["chiara", "scuro", "corto", "no"], alonso: ["olivastra", "nero", "corto", "accenno"],
+  stroll: ["chiara", "scuro", "corto", "accenno"], gasly: ["chiara", "scuro", "ciuffo", "accenno"], colapinto: ["rosea", "scuro", "mossi", "no"],
+  albon: ["media", "nero", "corto", "no"], sainz: ["olivastra", "scuro", "ciuffo", "piena"], lawson: ["chiara", "castano", "corto", "no"],
+  lindblad: ["media", "nero", "corto", "no"], ocon: ["chiara", "castano", "corto", "accenno"], bearman: ["chiara", "chiaro", "ciuffo", "no"],
+  hulkenberg: ["chiara", "biondo", "corto", "accenno"], bortoleto: ["rosea", "scuro", "corto", "no"], perez: ["olivastra", "nero", "corto", "accenno"],
+  bottas: ["chiara", "biondo", "mullet", "baffi"],
+};
+const FACE_FALLBACK = [["chiara", "castano", "corto", "no"], ["rosea", "scuro", "ciuffo", "no"], ["media", "nero", "corto", "accenno"]];
+const looksOf = d => DRIVER_LOOKS[d.id] || FACE_FALLBACK[geoHash(d.id) % FACE_FALLBACK.length];
+const FACE_HAIR_PATH = {
+  corto: "M32.5 44 C31 26 41 19.5 50 19.5 C59 19.5 69 26 67.5 44 C65 34 59 30.5 50 30.5 C41 30.5 35 34 32.5 44 Z",
+  ciuffo: "M32 45 C30 25 41 18 52 18.5 C63 19 70.5 27 68 43 C65 32 58 28.5 47 30.5 C41 31.5 35.5 36 32 45 Z M47 30.5 C52 23 60 22.5 66 27 C59 26 53 27.5 47 30.5 Z",
+  rasato: "M33.5 42 C33 27 41.5 22.5 50 22.5 C58.5 22.5 67 27 66.5 42 C63 34 57.5 31 50 31 C42.5 31 37 34 33.5 42 Z",
+  ricci: "M32 45 C29 25 40 18 50 18 C60 18 71 25 68 45 C65 33 58 30 50 30 C42 30 35 33 32 45 Z",
+  treccine: "M32.5 44 C31 26 41 19.5 50 19.5 C59 19.5 69 26 67.5 44 C65 34 59 30.5 50 30.5 C41 30.5 35 34 32.5 44 Z",
+  mullet: "M32.5 44 C31 26 41 19.5 50 19.5 C59 19.5 69 26 67.5 44 C65 34 59 30.5 50 30.5 C41 30.5 35 34 32.5 44 Z",
+  mossi: "M31 47 C28 24 40 17 51 17.5 C63 18 72 26 69 46 C66 33 59 29 49 30 C42 30.5 35 36 31 47 Z",
+};
+function DriverFace({ d, size = 40 }) {
+  const [skin, hair, cut, beard] = looksOf(d), sk = FACE_SKIN[skin] || FACE_SKIN.chiara, hc = FACE_HAIR[hair] || FACE_HAIR.castano;
+  const shade = "rgba(0,0,0,.14)", ink = "#1D1512";
+  return (
+    <svg data-face={d.id} data-looks={[skin, hair, cut, beard].join(" ")} viewBox="0 0 100 100" width={size} height={size} aria-hidden="true" style={{ display: "block" }}>
+      {/* capelli dietro (mullet, treccine) */}
+      {cut === "mullet" && <path d="M33 44 C31 56 33 64 37 68 L63 68 C67 64 69 56 67 44 Z" fill={hc} />}
+      {cut === "treccine" && <g fill={hc}><circle cx="50" cy="16" r="7" /><path d="M31 44 C29 54 31 62 34 66 L38 66 C35 58 34 51 35 44 Z M69 44 C71 54 69 62 66 66 L62 66 C65 58 66 51 65 44 Z" /></g>}
+      {/* tuta e collo */}
+      <path d="M14 100 C15 82 27 74 42 72 L58 72 C73 74 85 82 86 100 Z" fill={d.color} />
+      <path d="M39 73 L50 84 L61 73" fill="none" stroke="#fff" strokeWidth="3" strokeLinejoin="round" opacity=".9" />
+      <path d="M14 100 C15 82 27 74 42 72 L44 76 C32 78 24 86 23 100 Z" fill="rgba(0,0,0,.18)" />
+      <rect x="43" y="60" width="14" height="15" rx="5" fill={sk} />
+      <rect x="43" y="60" width="14" height="6" fill={shade} />
+      {/* testa */}
+      <circle cx="32.5" cy="48" r="4" fill={sk} /><circle cx="67.5" cy="48" r="4" fill={sk} />
+      <ellipse cx="50" cy="45" rx="17.5" ry="21" fill={sk} />
+      {beard === "piena" && <path d="M32.6 47 C33 61 41 67.5 50 67.5 C59 67.5 67 61 67.4 47 C64 55 58 58.5 50 58.5 C42 58.5 36 55 32.6 47 Z" fill={hc} />}
+      {beard === "accenno" && <path d="M32.6 47 C33 61 41 67.5 50 67.5 C59 67.5 67 61 67.4 47 C64 55 58 58.5 50 58.5 C42 58.5 36 55 32.6 47 Z" fill={hc} opacity=".28" />}
+      {(beard === "baffi" || beard === "piena") && <path d="M42.5 55.5 C46 53.6 54 53.6 57.5 55.5 C54 57.3 46 57.3 42.5 55.5 Z" fill={hc} />}
+      <path d={FACE_HAIR_PATH[cut] || FACE_HAIR_PATH.corto} fill={hc} />
+      {cut === "ricci" && <g fill={hc}>{[[36, 28], [43, 22], [50, 20], [57, 22], [64, 28], [39, 24], [61, 24]].map(([x, y], k) => <circle key={k} cx={x} cy={y} r="4.6" />)}</g>}
+      {cut === "treccine" && <g stroke="rgba(255,255,255,.12)" strokeWidth=".9">{[40, 45, 50, 55, 60].map(x => <line key={x} x1={x} y1="22" x2={x + (x - 50) * .25} y2="31" />)}</g>}
+      {/* sopracciglia, occhi, naso, bocca */}
+      <path d="M38.5 39.5 L45.5 38.6 M54.5 38.6 L61.5 39.5" stroke={hair === "biondo" ? "#8C6239" : hc} strokeWidth="2.2" strokeLinecap="round" />
+      <ellipse cx="42.5" cy="44.5" rx="2.1" ry="2.4" fill={ink} /><ellipse cx="57.5" cy="44.5" rx="2.1" ry="2.4" fill={ink} />
+      <circle cx="43.2" cy="43.7" r=".7" fill="#fff" /><circle cx="58.2" cy="43.7" r=".7" fill="#fff" />
+      <path d="M50 46 L48.3 51.5 L51.2 51.8" fill="none" stroke={shade} strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M45.5 58.6 C48 60.3 52 60.3 54.5 58.6" fill="none" stroke="#7A3E2E" strokeWidth="1.8" strokeLinecap="round" />
+    </svg>
+  );
+}
 
 /* ── DIRETTA: tracciati, numeri di gara e simulatore ─────────────────── */
 // Tracciati dei circuiti: "f1-circuits" di Tomislav Bacinger (licenza MIT), lisciati e ruotati per la mappa.
@@ -975,9 +1034,9 @@ function Headshot({ driver, size = 32 }) {
   return (
     <span aria-hidden="true" style={{ width: size, height: size, borderRadius: "50%", flexShrink: 0, padding: ring, background: driver.color, display: "inline-block", boxSizing: "border-box" }}>
       <span data-img={kind} style={{ display: "flex", alignItems: "center", justifyContent: "center", width: "100%", height: "100%", borderRadius: "50%", background: bg, overflow: "hidden" }}>
-        {kind === "disegno" && <span data-geo-driver={driver.id} style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 1 }}>
-          <HelmetArt spec={driverHelmet(driver)} size={Math.round(size * (size >= 50 ? .56 : .7))} />
-          {size >= 50 && <span style={{ fontFamily: F_HEAD, fontWeight: 900, fontStyle: "italic", fontSize: Math.round(size * .17), letterSpacing: .5, color: "#fff", lineHeight: 1 }}>{driverCode(driver)}</span>}
+        {kind === "disegno" && <span data-geo-driver={driver.id} style={{ position: "relative", display: "flex", alignItems: "flex-end", justifyContent: "center", width: "100%", height: "100%" }}>
+          <DriverFace d={driver} size={Math.round(size * 1.02)} />
+          {size >= 64 && <span style={{ position: "absolute", bottom: Math.round(size * .06), padding: "1px 5px", borderRadius: 5, background: "rgba(0,0,0,.55)", fontFamily: F_HEAD, fontWeight: 900, fontStyle: "italic", fontSize: Math.round(size * .13), letterSpacing: .5, color: "#fff", lineHeight: 1.2 }}>{driverCode(driver)}</span>}
         </span>}
       </span>
     </span>
@@ -8690,7 +8749,7 @@ function DriverDetailModal({ driver, lastRace = null, races = [], onClose }) {
             </>
           ) : (
             <span data-geo-driver-big={driver.id} aria-hidden="true" style={{ position: "absolute", right: 14, bottom: 22, filter: "drop-shadow(0 10px 18px rgba(0,0,0,.45))" }}>
-              <HelmetArt spec={driverHelmet(driver)} size={170} />
+              <DriverFace d={driver} size={190} />
             </span>
           )}
           <button className="press" aria-label="Chiudi" onClick={onClose} style={{ position: "absolute", top: 14, right: 14, width: 32, height: 32, borderRadius: "50%", background: "rgba(0,0,0,.45)", display: "flex", alignItems: "center", justifyContent: "center" }}>

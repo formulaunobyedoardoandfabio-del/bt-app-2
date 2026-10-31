@@ -311,3 +311,7 @@ Da fare:
     calcola senza confronto col gruppo (giri non allineati) e contando dal primo giro.
   - test/unit/f1data.test.js ora legge le attese da index.json (prima scritte a mano: si rompeva a ogni weekend).
   Prove: test/unit/weekend.test.js (Messico FP2), run76 (Degrado nel weekend del Messico), run70 ok.
+- Figure dei piloti: `DriverFace` (SVG) al posto del casco negli avatar dei piloti (Headshot "disegno") e nella
+  scheda del pilota: pelle, colore e taglio dei capelli, barba/baffi da `DRIVER_LOOKS` (tratti noti, da correggere lì
+  se Edoardo vede qualcosa di sbagliato), tuta nel colore della scuderia; piloti non in tabella: 3 figure di riserva.
+  run67 (figure di serie, Hamilton e Bottas, almeno 10 diverse).

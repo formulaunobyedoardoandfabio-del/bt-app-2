@@ -138,4 +138,19 @@ run({
     assert(!off, 'senza SHOW_TEAM_LOGOS i loghi si vedono');
     assert(!errs.length, errs.join(' | '));
   },
+  // 31/10 sera (Edoardo): di serie (senza Commons) ogni pilota è una figura stilizzata coi suoi tratti.
+  async 'di serie: figure stilizzate dei piloti, diverse tra loro, con la tuta della scuderia'(b) {
+    const { ctx, p, errs } = await H.open(b); await login(p);
+    await goTab(p, 'RACE'); await w(p, 600);
+    await tapSel(p, '[data-race-tab="mondiale"]').catch(() => {}); await w(p, 700);
+    const faces = await p.evaluate(() => Object.fromEntries([...document.querySelectorAll('svg[data-face]')].map(s => [s.getAttribute('data-face'), s.getAttribute('data-looks')])));
+    const photos = await p.evaluate(() => document.querySelectorAll('[data-img="commons"]').length);
+    await ctx.close();
+    const ids = Object.keys(faces);
+    assert(ids.length >= 20, 'figure dei piloti in classifica: ' + ids.length);
+    assert(faces.hamilton === 'scura nero treccine piena' && faces.bottas === 'chiara biondo mullet baffi', 'tratti: ' + JSON.stringify({ h: faces.hamilton, b: faces.bottas }));
+    assert(new Set(Object.values(faces)).size >= 10, 'troppe figure uguali: ' + new Set(Object.values(faces)).size);
+    assert(photos === 0, 'nessuna foto di Commons di serie: ' + photos);
+    assert(!errs.length, errs.join(' | '));
+  },
 });
