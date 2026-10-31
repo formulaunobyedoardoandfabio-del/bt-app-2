@@ -114,18 +114,25 @@ run({
     assert(!errs.length, errs.join(' | '));
   },
 
-  async 'chat: entrando nella stanza parte il mio profilo (una voce sola, anche rientrando)'(b) {
-    const { ctx, p, errs } = await open(b); await login(p);
+  // 31/10: le voci del profilo nelle stanze (dal 29/10) erano copie: entrando si tolgono le proprie, non se ne aggiungono.
+  async 'chat: entrando nella stanza la mia voce vecchia del profilo va via (quella degli altri resta), niente copie nuove'(b) {
+    const ME = authorId('a@b.it'), MARCO = authorId('marco@b.it');
+    const seed = { 'shared/bt-chat-generale': { __arr: [
+      { id: 'pe1', user: 'Mario', aid: ME, pe: 1, p: { t: 'ferrari' }, t: Date.parse('2026-10-29T10:00:00Z') },
+      { id: 'pe2', user: 'Marco', aid: MARCO, pe: 1, p: { t: 'mclaren' }, t: Date.parse('2026-10-29T11:00:00Z') },
+      { id: 'm1', user: 'Marco', aid: MARCO, txt: 'Ciao', t: Date.parse('2026-10-29T12:00:00Z') },
+    ] } };
+    const { ctx, p, errs } = await open(b, { seed: { addDocs: seed } }); await login(p);
     const enter = async () => { await tapSel(p, '[data-nav-tab="race"]'); await w(p, 400); await tapSel(p, '[data-race-chat]'); await w(p, 500); await tapText(p, 'Chat Generale'); await w(p, 900); };
     await enter();
     await tapSel(p, '[aria-label="Indietro"]'); await w(p, 400);
     await enter();
     const room = await p.evaluate(() => window.firebase.__fake.doc('shared/bt-chat-generale'));
     await ctx.close();
-    const list = (room && (room.__arr || room.items || room.list)) || (Array.isArray(room) ? room : []);
-    const mine = list.filter(x => x && x.pe === 1 && x.aid === authorId('a@b.it'));
-    assert(mine.length === 1, 'nella stanza deve esserci una sola voce del mio profilo: ' + JSON.stringify(list).slice(0, 300));
-    assert(mine[0].p && typeof mine[0].p === 'object', 'la voce porta il profilo: ' + JSON.stringify(mine[0]));
+    const list = (room && room.__arr) || [];
+    assert(!list.some(x => x.pe === 1 && x.aid === ME), 'la mia voce del profilo doveva andare via: ' + JSON.stringify(list).slice(0, 300));
+    assert(list.some(x => x.id === 'pe2') && list.some(x => x.id === 'm1'), 'le voci degli altri restano: ' + JSON.stringify(list).slice(0, 300));
+    assert(list.length === 2, 'nessuna copia nuova: ' + list.length);
     assert(!errs.length, errs.join(' | '));
   },
 

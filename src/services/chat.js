@@ -77,9 +77,22 @@ function createChat({ sg = FB.sg, sgStrict = FB.sgStrict, ss = FB.ss, sharedAppe
     } catch (e) { throw mkErr("offline"); }
   }
 
-  // 29/10: entrando in una stanza il proprio profilo (tifo, casco, trofei) ci va come voce nascosta, così chi tocca il
-  // nome lo vede anche se non si è scritto niente dopo l'aggiornamento. Solo quando cambia (o dopo una settimana); la
-  // voce vecchia va via. true = mandato.
+  // 31/10: entrando in una stanza si tolgono le proprie voci del profilo (pe) messe dal 29/10: ora il profilo sta una
+  // volta sola in fanta/profilo-<aid> (src/services/profiles.js) e nelle stanze erano copie ripetute. Una volta per
+  // stanza sul telefono. true = tolte.
+  async function tidyProfile(roomId, me) {
+    const key = keyOf(roomId), flag = "bt-pe-clean-" + key;
+    if (!me || !me.name || local.get(flag)) return false;
+    const who = { aid: me.aid || "", name: me.name };
+    try {
+      const list = await read(key);
+      const mine = list.filter(x => !!x && x.pe === 1 && sameWho(who, { aid: x.aid || "", name: x.user }));
+      if (mine.length) await sharedRemoveWhere(key, x => !!x && x.pe === 1 && sameWho(who, { aid: x.aid || "", name: x.user }));
+      local.set(flag, Date.now());
+      return mine.length > 0;
+    } catch (err) { return false; }
+  }
+  // 29/10 (non più usata dall'app, resta per le prove vecchie): la voce nascosta del profilo nella stanza.
   async function announce(roomId, me) {
     const key = keyOf(roomId), e = C.profileEntryToStore(me, now());
     if (!e) return false;
@@ -159,7 +172,7 @@ function createChat({ sg = FB.sg, sgStrict = FB.sgStrict, ss = FB.ss, sharedAppe
     await sharedRemoveWhere(REPORTS_KEY, r => !!r && (r.byAid === aid || r.aid === aid || (!r.aid && !!user.name && r.author === user.name)));
   }
 
-  return { loadRoom, send, announce, react, report, loadReports, loadBanned, deleteMessage, suspend, unsuspend, ignoreReport, block, unblock, blocked, unread, markSeen, migrateLegacy, cleanupFor };
+  return { loadRoom, send, announce, tidyProfile, react, report, loadReports, loadBanned, deleteMessage, suspend, unsuspend, ignoreReport, block, unblock, blocked, unread, markSeen, migrateLegacy, cleanupFor };
 }
 
 module.exports = { CHAT_MSG, ROOM_IDS, createChat };

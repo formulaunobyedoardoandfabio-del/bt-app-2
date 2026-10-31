@@ -553,7 +553,12 @@ const FANTASY_SOURCE = "Prezzi e punti del gioco ufficiale F1 Fantasy dopo il GP
 const TEAM_OF = Object.fromEntries(DRIVERS.map(d => [d.id, d.teamId]));
 // La tua squadra (demo): 5 piloti, 2 scuderie e il 2X. Budget = 100 M$ di partenza più il valore guadagnato in stagione.
 const FANTA_BUDGET = 108.1;
-const FANTA_SQUAD_INIT = { name: "Scuderia B&T", drivers: ["hamilton", "russell", "hulkenberg", "perez", "antonelli"], teams: ["audi", "haas"], boost: "russell" };
+// 31/10: i nuovi utenti partono senza squadra e la compongono loro (prima ne avevano una già fatta, FANTA_OLD_DEFAULT:
+// chi ce l'ha ancora uguale la ritrova vuota, senza le voci della storia di quella squadra mai scelta).
+const FANTA_SQUAD_INIT = { name: "La mia scuderia", drivers: [null, null, null, null, null], teams: [null, null], boost: null };
+const FANTA_OLD_DEFAULT = { name: "Scuderia B&T", drivers: ["hamilton", "russell", "hulkenberg", "perez", "antonelli"], teams: ["audi", "haas"], boost: "russell" };
+const sameIds = (a, b) => Array.isArray(a) && Array.isArray(b) && a.length === b.length && [...a].sort().join() === [...b].sort().join();
+const isOldDefaultSquad = q => !!q && q.name === FANTA_OLD_DEFAULT.name && sameIds(q.drivers, FANTA_OLD_DEFAULT.drivers) && sameIds(q.teams, FANTA_OLD_DEFAULT.teams);
 // Punti e cambi del FantaF1 dalle sessioni vere (OpenF1): spenti. Nell'anteprima i punti del weekend non si salvano
 // nell'account e la sessione rivista si chiude a ogni avvio: i cambi della squadra si rifarebbero ogni volta. Il FantaF1
 // apre a fine stagione, come nell'app di oggi.
@@ -6584,7 +6589,7 @@ function FantaSlot({ kind, index, id, stats, boost, locked, standings, onOpen, o
         <div data-card-front="" style={{ ...face, position: "relative", background: "#0B0B0E", pointerEvents: flip ? "none" : "auto" }}>
           <button className="press" onClick={() => setFlip(true)} aria-label={`Gira la carta di ${label}`} style={{ display: "block", width: "100%", textAlign: "left" }}>
             {isD
-              ? <div data-card-photo={ph ? "commons" : d.photo ? "foto" : "colore"} style={{ height: 70, background: d.photo ? `${t.color} url(${d.photo}) 50% 0 / 100% auto no-repeat` : ph ? `${t.color} url("${ph.thumb}") 50% 20% / cover no-repeat` : t.color }} />
+              ? <div data-card-photo={ph ? "commons" : d.photo ? "foto" : "disegno"} style={{ height: 70, overflow: "hidden", display: "flex", alignItems: "flex-end", justifyContent: "center", background: d.photo ? `${t.color} url(${d.photo}) 50% 0 / 100% auto no-repeat` : ph ? `${t.color} url("${ph.thumb}") 50% 20% / cover no-repeat` : `radial-gradient(circle at 50% 35%, ${alpha("#FFFFFF", .28)}, ${t.color} 70%)` }}>{!d.photo && !ph && <DriverFace d={d} size={78} />}</div>
               : ph ? <div data-card-photo="commons" style={{ height: 62, background: `${t.color} url("${ph.thumb}") center / cover no-repeat` }} />
               : <div style={{ height: 62, background: t.color, display: "flex", alignItems: "flex-end", justifyContent: "center", paddingBottom: 2 }}><CarSilhouette color="#F4F2EF" width={118} /></div>}
             <div style={{ padding: "6px 8px 8px" }}>
@@ -8878,7 +8883,7 @@ const CHAT_LIST_MS = 6000, CHAT_ROOM_MS = 4000;   // come l'app di oggi: elenco 
 // Dati personali di chi entra con un account (users/<email>.app2, src/services/appdata.js): valori di partenza.
 const USER_INIT = {
   saved: [], favTeam: null, favDriver: null, notifPrefs: { team: true, driver: true }, votes: {},
-  squad: FANTA_SQUAD_INIT, squadBase: { drivers: FANTA_SQUAD_INIT.drivers.slice(), teams: FANTA_SQUAD_INIT.teams.slice() }, freeTransfers: 3,
+  squad: FANTA_SQUAD_INIT, squadBase: null, freeTransfers: 3,   // squadBase null: la prima squadra non conta come cambi
   predAnswers: {}, sillyPreds: {}, stratPreds: {}, pitBest: null, wxGuess: {}, ratings: {}, dotd: {}, notifSeenAt: 0,
   theme: { mode: "team", color: null }, sounds: true, haptics: true, helmet: null, hidden: [], trophies: {},
   premium: { sub: false, trial: null }, squadLog: [], leagues: [],
@@ -8985,7 +8990,8 @@ function App() {
     document.addEventListener("visibilitychange", h);
     return () => document.removeEventListener("visibilitychange", h);
   }, []);
-  const isPremium = !!(account && account.isPremium) || premium.sub || (!!trial && nowMs() < trial.end) || adPro;
+  const isAdminNow = !!account && Account.isAdmin();   // 31/10: gli admin hanno Premium e tutti i trofei, gratis
+  const isPremium = !!(account && account.isPremium) || premium.sub || (!!trial && nowMs() < trial.end) || adPro || isAdminNow;
   const [plan, setPlan] = useState("annual");
   const [subscribing, setSubscribing] = useState(false);
   const [subscribed, setSubscribed] = useState(false);
@@ -9236,6 +9242,11 @@ function App() {
     AppData.USER_KEYS.forEach(k => { if (data[k] !== undefined) userSet[k](data[k]); });
     // Un dato del telefono (il colore scelto da ospite) che l'account non ha ancora si salva anche nell'account.
     userSnap.current = Object.fromEntries(AppData.USER_KEYS.map(k => [k, JSON.stringify(data[k] !== undefined ? data[k] : PHONE_KEYS.includes(k) ? USER_INIT[k] : cur[k])]));
+    // 31/10: la vecchia squadra di serie (mai scelta dall'utente) torna vuota; si salva nell'account (diversa dalla foto).
+    if (isOldDefaultSquad(data.squad)) {
+      setSquad(FANTA_SQUAD_INIT); setSquadBase(null);
+      if (Array.isArray(data.squadLog)) setSquadLog(data.squadLog.filter(e => !(e && sameIds(e.d, FANTA_OLD_DEFAULT.drivers) && sameIds(e.c, FANTA_OLD_DEFAULT.teams))));
+    }
     userReady.current = true;
     setUserLoaded(em);
   }, () => {});   // senza rete i dati restano in memoria: si riprova alla prossima rilettura
@@ -9764,15 +9775,16 @@ function App() {
     h: helmet ? { ...helmet, base: helmet.base || C.accent } : undefined,
     w: trophyList.filter(t => trophies[t.id]).map(t => t.id),
   });
-  // 29/10: entrando in una stanza ci va il proprio profilo (voce nascosta, solo quando cambia): così chi tocca il nome
-  // vede tifo, casco e trofei anche se non si è ancora scritto niente.
+  // 31/10: entrando in una stanza si tolgono le proprie voci vecchie del profilo (dal 29/10 al 31/10 ce n'era una per
+  // stanza): ora il profilo sta una volta sola nel profilo pubblico (Profiles), una pulizia per stanza.
   useEffect(() => {
     if (view !== "chatThread" || !chatId || !account || account.loaded === false) return;
-    Chat.announce(chatId, { name: account.name, aid: account.aid, p: myProf() }).then(sent => { if (sent) loadRoomMsgs(chatId); }, () => {});
-  }, [view, chatId, account && account.aid, account && account.loaded, favTeam, favDriver, JSON.stringify(helmet || null), Object.keys(trophies || {}).length]);
+    Chat.tidyProfile(chatId, { name: account.name, aid: account.aid }).then(done => { if (done) loadRoomMsgs(chatId); }, () => {});
+  }, [view, chatId, account && account.aid, account && account.loaded]);
   const postChat = (id, text, link = null) => {
     const u = Account.current(), who = u ? { name: u.name, aid: u.aid } : chatMe();
-    const me = { ...(myMedal ? { ...who, medal: myMedal } : who), p: myProf() };   // la medaglia dei trofei viaggia con il messaggio (G31)
+    // La medaglia dei trofei viaggia col messaggio (G31); il profilo no (31/10): sta una volta sola nel profilo pubblico.
+    const me = myMedal ? { ...who, medal: myMedal } : who;
     const temp = { id: "invio-" + Date.now(), from: me.name, text: text.trim() || (link ? link.ti : ""), at: nowMs(), aid: me.aid, mine: true, medal: myMedal || null, link: link || null };
     setChatMsgs(x => ({ ...x, [id]: [...(x[id] || []), temp] }));
     return Chat.send(id, text, me, link).then(m => {
@@ -9999,7 +10011,7 @@ function App() {
   // suoi dati letti (si salvano lì); un trofeo nuovo si segna con la data, con l'avviso, il suono della Shift Light e
   // la vibrazione. La squadra del FantaF1 conta solo se non è più quella di partenza.
   const sameSet = (a, b) => Array.isArray(a) && Array.isArray(b) && a.length === b.length && [...a].sort().join() === [...b].sort().join();
-  const squadOwn = !!squad && !(sameSet(squad.drivers, FANTA_SQUAD_INIT.drivers) && sameSet(squad.teams, FANTA_SQUAD_INIT.teams));
+  const squadOwn = !!squad && squad.drivers.every(Boolean) && squad.teams.every(Boolean) && !isOldDefaultSquad(squad);   // 31/10: squadra completa scelta da lui
   // Primo messaggio in chat: uno di questo account (aid) arrivato su Firebase, scritto ora o prima.
   const myAid = account && account.aid;
   const chatMine = !!myAid && Object.values(chatMsgs).some(l => Array.isArray(l) && l.some(m => m && m.aid === myAid && !String(m.id).startsWith("invio-")));
@@ -10025,6 +10037,12 @@ function App() {
   }, [trophyNew]);
   useEffect(() => () => clearTimeout(trophyTimer.current), []);
   const myMedal = medalOf(trophyList.filter(t => trophies[t.id]).length);
+  const adminMissing = isAdminNow && userLoaded ? trophyList.filter(t => !trophies[t.id]).map(t => t.id).join(",") : "";
+  useEffect(() => {
+    if (!adminMissing) return;
+    const at = nowMs();
+    setTrophies(t => { const x = { ...t }; adminMissing.split(",").forEach(id => { if (!x[id]) x[id] = at; }); return x; });
+  }, [adminMissing]);
   // Profilo pubblico (31/10 sera): coi dati dell'account arrivati si salva (solo se cambia, o una volta al giorno).
   const pubProfJ = account && account.aid && userLoaded ? JSON.stringify([account.name, myProf(), myMedal]) : "";
   useEffect(() => {
