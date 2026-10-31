@@ -9,8 +9,10 @@ const doc = (p, k) => p.evaluate(x => window.firebase.__fake.doc(x), k);
 
 run({
   async 'Halloween (31 ottobre): caricamento con le zucche, zucca sul bottone B&T, tasti arancio'(b) {
-    const { ctx, p, errs } = await open(b, { now: '2026-10-31T18:00:00Z' });
+    // Avvio dopo il primo (niente video): il caricamento; la prova guarda lo splash senza aspettare che sparisca.
+    const { ctx, p, errs } = await open(b, { now: '2026-10-31T18:00:00Z', waitSplash: false, init: () => localStorage.setItem('bt_bt-intro-seen', 'true') });
     const loader = await p.waitForSelector('[data-holiday-loader="halloween"]', { timeout: 4000 }).then(() => true, () => false);
+    await p.waitForFunction(() => !document.querySelector('[data-splash]'), null, { timeout: 8000 }).catch(() => {});
     await login(p); await w(p, 600);
     const m = await mark(p), bg = await logoBg(p);
     await ctx.close();
