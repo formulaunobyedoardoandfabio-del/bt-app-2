@@ -9973,6 +9973,38 @@ function App() {
     else if (was === "article") Ads.articleClosed();
   }, [view]);
 
+  // 31/10 sera (Edoardo): uscendo da una pagina con una lista lunga e rientrando si riparte dal punto dove si era.
+  // Si ricorda lo scroll della colonna che scorre (.scrollcol) per pagina: scheda o pagina aperta + il titolo della
+  // pagina interna (così nel Garage la lista e ogni gioco hanno il loro). La chat no: lei va sempre in fondo.
+  const scrollMem = useRef({});
+  const scrollBase = view === "tab" ? "tab:" + tab : view === "chatThread" ? null : view + ":" + (articleId || "");
+  useEffect(() => {
+    const box = swipeBoxRef.current;
+    if (!scrollBase || !box || typeof MutationObserver === "undefined") return;
+    const mem = scrollMem.current;
+    let cur = null, key = null, raf = 0;
+    const scope = () => (view === "tab" ? box.querySelector("[data-tab-page]:not([data-tab-leave])") : box);
+    // Pagina interna di una scheda (un gioco del Garage): ha il tasto Indietro col titolo accanto, subito disegnato.
+    const sig = el => { const back = el.querySelector('[aria-label="Indietro"]'); return el.getAttribute("data-scroll-key") || (back && back.parentElement ? back.parentElement.textContent.trim().slice(0, 40) : ""); };
+    const restore = (el, want) => {
+      let n = 0;
+      const go = () => { if (cur !== el) return; el.scrollTop = want; if (Math.abs(el.scrollTop - want) > 2 && n++ < 60) raf = requestAnimationFrame(go); };
+      go();
+    };
+    const check = () => {
+      const sc = scope(), el = sc && sc.querySelector(".scrollcol");
+      if (!el || el === cur) return;
+      cur = el; key = scrollBase + "|" + sig(el);
+      cancelAnimationFrame(raf);
+      if (mem[key] > 0) restore(el, mem[key]);
+    };
+    const onScroll = e => { if (cur && e.target === cur) mem[key] = cur.scrollTop; };
+    box.addEventListener("scroll", onScroll, true);
+    const mo = new MutationObserver(check);
+    mo.observe(box, { childList: true, subtree: true });
+    check();
+    return () => { box.removeEventListener("scroll", onScroll, true); mo.disconnect(); cancelAnimationFrame(raf); };
+  }, [scrollBase, appShown]);   // appShown: dopo l'accesso la pagina c'è davvero
   if (account === undefined && !guest) {   // si aspetta Authentication: forse c'è già una sessione
     return shell(
       <div data-auth-wait="" style={{ height: "100%", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 12, fontFamily: F_BODY, fontSize: 13, color: C.muted }}><LedGrid mode="seq" size={7} />Caricamento…</div>

@@ -294,3 +294,7 @@ Da fare:
   `bt-live-seen`, ultime 30); la sessione di OpenF1 aperta già finita non li mostra più (il podio resta). run40.
 - Previsioni e sondaggi del Fanta: finita la gara (stato CONCLUSA) quelli di quel weekend spariscono da FANTA e dai
   link della chat (`predictionsOpen`); restano in shared/bt-predictions, così i punti presi non si perdono. run63.
+- Scroll ricordato: nell'App (prima dei return anticipati) la colonna che scorre (.scrollcol) della pagina visibile
+  ricorda la sua posizione per scheda/pagina + titolo della pagina interna (tasto Indietro: i giochi del Garage hanno
+  la loro); tornando si rimette lì. La chat no (va in fondo). Si riaggancia anche dopo l'accesso (deps: appShown).
+  Prove: test/e2e/run77-scroll.js.
