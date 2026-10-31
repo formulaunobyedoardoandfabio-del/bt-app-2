@@ -15,6 +15,7 @@ import BtInsights from "./logic/bt-insights";
 import DnfArtData from "./logic/dnf-art";
 import BtGhost from "./logic/bt-ghost";
 import BtWk from "./logic/bt-weekend";
+import BtHolidays from "./logic/holidays";
 import Colors from "./logic/colors";
 import { filterNews, TYRES, LANES } from "./logic/newsfilter";
 import { classifySwipe, SWIPE, dragFollow, dragProgress, leaveTo } from "./logic/gesture";
@@ -638,7 +639,7 @@ function SubHeader({ title, onBack, right }) {
 // precedente) e i LED lampeggiano tre volte, con la sgasata e la vibrazione. onTrack: c'è una sessione in pista, il
 // badge "IN PISTA" con i LED che pulsano.
 const EGG_GAP_MS = 450, EGG_SHOW_MS = 1100;
-function TopHeader({ isPremium, unread, onPremium, onBell, onProfile, trialDays = 0, helmet = null, onTrack = false, onLogoEgg }) {
+function TopHeader({ isPremium, unread, onPremium, onBell, onProfile, trialDays = 0, helmet = null, onTrack = false, onLogoEgg, holiday = null }) {
   const [egg, setEgg] = useState(false);
   const taps = useRef({ n: 0, at: 0 }), eggT = useRef(null);
   useEffect(() => () => clearTimeout(eggT.current), []);
@@ -652,7 +653,8 @@ function TopHeader({ isPremium, unread, onPremium, onBell, onProfile, trialDays 
   };
   return (
     <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "18px 16px 14px", flexShrink: 0 }}>
-      <button className="press" data-logo="" aria-label={"B&T"} onClick={tapLogo} style={{ height: 38, padding: "0 12px", borderRadius: 11, background: C.accent, display: "flex", alignItems: "center", flexShrink: 0 }}>
+      <button className="press" data-logo="" aria-label={"B&T"} onClick={tapLogo} style={{ position: "relative", height: 38, padding: "0 12px", borderRadius: 11, background: C.accent, display: "flex", alignItems: "center", flexShrink: 0 }}>
+        {holiday && <span data-holiday-mark={holiday} style={{ position: "absolute", right: -6, top: -6, filter: "drop-shadow(0 2px 3px rgba(0,0,0,.5))" }}><HolidayMark id={holiday} size={18} /></span>}
         <img data-logo-img="" data-mode={egg ? "flash3" : "idle"} className={egg ? "logo-flash3" : undefined} src={BT_LOGO} alt="" style={{ width: 28, height: 28, objectFit: "contain", display: "block" }} />
       </button>
       {onTrack && (
@@ -1905,7 +1907,7 @@ function TyreFilter({ value, onChange }) {
   );
 }
 
-function HomeScreen({ ig, onOpenIg, highlights = [], articles, tagFilter, onTag, onClearTag, onOpenArticle, isPremium, onPremium, onToast, onLiveTrack, onGoFanta, saved = [], onToggleSave, savedOnly = false, setSavedOnly, onOpenCircuit, homePoll = null, homeVote = null, onVote, hidden = [], onHide, onUnhideAll, onSwipeSave, onRefresh }) {
+function HomeScreen({ holidayTop = null, ig, onOpenIg, highlights = [], articles, tagFilter, onTag, onClearTag, onOpenArticle, isPremium, onPremium, onToast, onLiveTrack, onGoFanta, saved = [], onToggleSave, savedOnly = false, setSavedOnly, onOpenCircuit, homePoll = null, homeVote = null, onVote, hidden = [], onHide, onUnhideAll, onSwipeSave, onRefresh }) {
   const [q, setQ] = useState("");
   const homeRef = useRef(null);
   const pullRev = usePullRefresh(homeRef, onRefresh);
@@ -1943,6 +1945,7 @@ function HomeScreen({ ig, onOpenIg, highlights = [], articles, tagFilter, onTag,
     <div ref={homeRef} data-home="" className="scrollcol" {...pullRev.handlers} style={{ height: "100%", position: "relative", overscrollBehaviorY: "contain", userSelect: pullRev.dragging ? "none" : undefined, WebkitUserSelect: pullRev.dragging ? "none" : undefined }}>
       {(pullRev.pull > 0 || pullRev.busy) && <PullGauge rev={pullRev.rev} busy={pullRev.busy} pull={pullRev.pull} />}
       <div style={{ transform: pullRev.pull ? `translateY(${pullRev.pull}px)` : undefined, transition: pullRev.dragging ? "none" : "transform .25s ease" }}>
+      {holidayTop}
 
       {/* 24/10: tolto il riquadro finto "ADV · Spazio pubblicitario": nell'APK c'è il banner vero di AdMob in fondo
           (src/services/ads.js), nel sito niente pubblicità. */}
@@ -7224,7 +7227,7 @@ function TrophyCase({ trophies = {}, progress = {}, helmet = null, defs = TROPHI
   );
 }
 
-function ProfiloScreen({ ig, onOpenIg, trial = null, trialUsed = false, onBack, onNotifiche, onPremium, onAdmin, onLogout, isPremium, onAbout, onHelp, onFeedback, aboutMe, onSaveAboutMe, favTeam, favDriver, onPickTeam, onPickDriver, guest, onLogin, onTerms, blocked = [], onUnblock, onDeleteAccount, savedCount = 0, onOpenSaved, account = null, onSaveName, isAdmin = false, onTheme, sounds = true, haptics = true, onSounds, onHaptics, helmet = null, onHelmet, trophies = {}, trophyProg = {}, trophyList = TROPHIES, onAdPrivacy = null }) {
+function ProfiloScreen({ holidays = true, onHolidays = null, ig, onOpenIg, trial = null, trialUsed = false, onBack, onNotifiche, onPremium, onAdmin, onLogout, isPremium, onAbout, onHelp, onFeedback, aboutMe, onSaveAboutMe, favTeam, favDriver, onPickTeam, onPickDriver, guest, onLogin, onTerms, blocked = [], onUnblock, onDeleteAccount, savedCount = 0, onOpenSaved, account = null, onSaveName, isAdmin = false, onTheme, sounds = true, haptics = true, onSounds, onHaptics, helmet = null, onHelmet, trophies = {}, trophyProg = {}, trophyList = TROPHIES, onAdPrivacy = null }) {
   const ft = favTeam ? teamById(favTeam) : null;
   const fd = favDriver ? driverById(favDriver) : null;
   const favRows = [
@@ -7264,6 +7267,7 @@ function ProfiloScreen({ ig, onOpenIg, trial = null, trialUsed = false, onBack, 
     { icon: "palette", label: "Colori dell'app", onClick: onTheme, chevron: true },
     { icon: "sound", label: "Suoni", toggle: { on: sounds, onChange: onSounds } },
     { icon: "vibrate", label: "Vibrazioni", toggle: { on: haptics, onChange: onHaptics } },
+    ...(onHolidays ? [{ icon: "sparkle", label: "Temi delle feste", toggle: { on: holidays !== false, onChange: onHolidays } }] : []),
     ...(isAdmin ? [{ icon: "gear", label: "Pannello Admin · Pubblica notizia", onClick: onAdmin, badge: "ADMIN" }] : []),
     { icon: "help", label: "Assistenza", onClick: onHelp, chevron: true },
     { icon: "chat", label: "Invia feedback", onClick: onFeedback, chevron: true },   // come oggi, ma dal Profilo (niente pulsante fluttuante)
@@ -7536,7 +7540,28 @@ function AdminKeypad({ onOk, onCancel }) {
 }
 
 /* ── PANNELLO ADMIN (stesse sezioni della versione vecchia) ─────────── */
-const ADMIN_TABS = ["NEWS", "SONDAGGI", "FANTA F1", "PREVISIONI", "CLASSIFICHE", "GARA LIVE", "MERCATO", "INSTAGRAM", "VIDEO", "FOTO", "NOTIFICHE", "CHAT"];
+const ADMIN_TABS = ["NEWS", "SONDAGGI", "FANTA F1", "PREVISIONI", "CLASSIFICHE", "GARA LIVE", "MERCATO", "INSTAGRAM", "VIDEO", "FOTO", "NOTIFICHE", "CHAT", "TEMI"];
+// 31/10: temi delle feste dal Pannello Admin (shared/bt-holidays): di serie seguono le date; si può accenderne uno
+// sempre (per provarlo o per un evento) o spegnerne uno.
+function AdminHolidaysTab({ cfg, onSave, active }) {
+  const c = BtHolidays.cleanConfig(cfg);
+  const set = next => onSave(BtHolidays.cleanConfig(next));
+  const chip = (on, label, attrs, onClick) => <button className="press" {...attrs} aria-pressed={on ? "true" : "false"} onClick={onClick} style={{ padding: "7px 10px", borderRadius: 10, background: on ? C.accent : "rgba(255,255,255,.05)", border: `1px solid ${on ? C.accent : C.border}`, fontFamily: F_HEAD, fontWeight: 800, fontSize: 11.5, color: "#fff" }}>{label}</button>;
+  return (
+    <div data-admin-holidays="" style={{ padding: "0 16px 20px" }}>
+      <p style={{ fontFamily: F_BODY, fontSize: 12.5, color: C.muted, lineHeight: 1.5, margin: "0 0 12px" }}>Adesso: <b style={{ color: C.text }}>{active ? HOL[active].name : "nessun tema"}</b>. Di serie i temi seguono le date (Halloween 30 ott – 1 nov, Natale 1 – 26 dic, Befana 5 – 6 gen, Monza nel weekend del GP d'Italia). Gli utenti possono spegnerli dal Profilo.</p>
+      {BtHolidays.IDS.map(id => (
+        <div key={id} data-admin-holiday={id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "10px 0", borderTop: `1px solid ${C.divider}` }}>
+          <HolidayMark id={id} size={20} />
+          <span style={{ flex: 1, fontFamily: F_HEAD, fontWeight: 800, fontSize: 13.5, color: C.text }}>{HOL[id].name}</span>
+          {chip(!c.off.includes(id) && c.force !== id, "Date", { "data-hol-mode": "auto" }, () => set({ force: c.force === id ? null : c.force, off: c.off.filter(x => x !== id) }))}
+          {chip(c.force === id, "Sempre", { "data-hol-mode": "force" }, () => set({ force: id, off: c.off.filter(x => x !== id) }))}
+          {chip(c.off.includes(id), "Spento", { "data-hol-mode": "off" }, () => set({ force: c.force === id ? null : c.force, off: [...c.off.filter(x => x !== id), id] }))}
+        </div>
+      ))}
+    </div>
+  );
+}
 const aInput = { width: "100%", padding: "10px 12px", borderRadius: 10, background: "#101013", border: `1px solid ${C.border}`, fontFamily: F_BODY, fontSize: 13, color: C.text, boxSizing: "border-box" };
 const aNum = { ...aInput, padding: "8px 6px", textAlign: "center", fontSize: 12.5 };
 const aLabel = { display: "block", fontFamily: F_BODY, fontWeight: 700, fontSize: 10.5, letterSpacing: .8, color: C.dim, margin: "0 0 6px" };
@@ -8334,7 +8359,7 @@ function AdminChatTab({ chats, reports, banned, onDeleteMsg, onSuspend, onUnsusp
 // Impronta di un valore: le schede con la bozza (classifiche, prezzi FantaF1, Instagram) si rifanno da capo quando i
 // dati sotto cambiano (riletti da Firebase o appena salvati), così SALVA non riscrive valori vecchi (revisione Fase B, C2).
 const versionOf = v => { const s = JSON.stringify(v) || ""; let h = 5381; for (let i = 0; i < s.length; i++) h = (Math.imul(h, 33) + s.charCodeAt(i)) | 0; return (h >>> 0).toString(36) + "." + s.length; };
-function AdminScreen({ photos, setPhotos, silly = {}, onSilly, highlights = [], setHighlights, onBack, onPublish, articles, setArticles, fantaStats, setFantaStats, standings, setStandings, races, setRaces, extraRaces = [], setExtraRaces, ig, setIg, sentNotifs, onSendNotif, onDeleteNotif, onToast, tab, setTab, chats, reports, banned, onDeleteMsg, onSuspend, onUnsuspend, onIgnoreReport, liveProps = {}, polls = [], votes = {}, onPollAnswer, predictions = [], setPredictions, predAnswers = {} }) {
+function AdminScreen({ photos, setPhotos, silly = {}, onSilly, highlights = [], setHighlights, onBack, onPublish, articles, setArticles, fantaStats, setFantaStats, standings, setStandings, races, setRaces, extraRaces = [], setExtraRaces, ig, setIg, sentNotifs, onSendNotif, onDeleteNotif, onToast, tab, setTab, chats, reports, banned, onDeleteMsg, onSuspend, onUnsuspend, onIgnoreReport, liveProps = {}, polls = [], votes = {}, onPollAnswer, predictions = [], setPredictions, predAnswers = {}, holidayCfg = null, onHolidays = null, holiday = null }) {
   return (
     <div className="scrollcol" style={{ height: "100%" }}>
       <SubHeader title="PANNELLO ADMIN" onBack={onBack} />
@@ -8345,6 +8370,7 @@ function AdminScreen({ photos, setPhotos, silly = {}, onSilly, highlights = [], 
         {tab === "NEWS" && <AdminNewsTab articles={articles} setArticles={setArticles} onPublish={onPublish} onToast={onToast} />}
         {tab === "SONDAGGI" && <AdminPollsTab polls={polls} votes={votes} onAnswer={onPollAnswer} />}
         {tab === "FANTA F1" && <AdminFantaTab key={"fs:" + versionOf(fantaStats)} fantaStats={fantaStats} setFantaStats={setFantaStats} onToast={onToast} />}
+        {tab === "TEMI" && <AdminHolidaysTab cfg={holidayCfg} active={holiday} onSave={v => onHolidays && onHolidays(v)} />}
         {tab === "PREVISIONI" && <AdminPredictionsTab predictions={predictions} setPredictions={setPredictions} answers={predAnswers} races={races} onToast={onToast} />}
         {tab === "CLASSIFICHE" && <AdminStandingsTab key={"st:" + versionOf(standings)} standings={standings} setStandings={setStandings} onToast={onToast} />}
         {tab === "GARA LIVE" && <AdminRacesTab races={races} setRaces={setRaces} extra={extraRaces} setExtra={setExtraRaces} onToast={onToast} {...liveProps} />}
@@ -8515,10 +8541,10 @@ function TermsSheet({ review, onAccept, onClose }) {
 // noto (o LOAD_MAX_MS passati). Lo splash sta sopra l'app, che intanto si carica sotto.
 const INTRO_KEY = "bt-intro-seen";
 const prefersReduced = () => { try { return !!(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches); } catch (e) { return false; } };
-function SplashScreen({ ready, onDone }) {
+function SplashScreen({ ready, onDone, holiday = null }) {
   const [mode, setMode] = useState(() => (!prefersReduced() && !local.get(INTRO_KEY) ? "video" : "loading"));
   if (mode === "video") return <VideoSplash ready={ready} onFail={() => setMode("loading")} onDone={() => { local.set(INTRO_KEY, true); onDone(); }} />;
-  return <LoadingScreen ready={ready} onDone={onDone} />;
+  return <LoadingScreen ready={ready} onDone={onDone} holiday={holiday} />;
 }
 
 // I video di Edoardo: il primo si vede tutto; se a quel punto i dati non ci sono ancora parte quello d'attesa, che si
@@ -8610,7 +8636,99 @@ function LedGrid({ mode = "idle", size = 10 }) {
 // Resta almeno LOAD_MIN_MS (un giro dei LED), così coi dati già pronti non lampeggia. Con "Rimuovi animazioni": LED
 // accesi fermi. Prima, coi dati pronti, c'era il Pit Exit Launch (15 LED del volante, "PIT EXIT OPEN" e lo zoom).
 const LOAD_MIN_MS = 840, LOAD_FADE_MS = 200;
-function LoadingScreen({ ready, onDone }) {
+// 31/10: temi delle feste (src/logic/holidays.js, design in docs/design/temi-feste.html). Disegni nostri: zucca, fiocco,
+// scopa, tricolore. HolidayMark: il segno piccolo sul bottone B&T; HolidayLoader: il caricamento a tema.
+const HOL = BtHolidays.HOLIDAYS;
+const Pumpkin = ({ size = 30, cls, delay }) => (
+  <svg className={cls} viewBox="0 0 34 34" width={size} height={size} aria-hidden="true" style={delay != null ? { animationDelay: delay + "s" } : undefined}>
+    <path d="M17 7 C25 7 31 12 31 20 C31 27 25 31 17 31 C9 31 3 27 3 20 C3 12 9 7 17 7Z" fill="#FF7A1A" /><path d="M16 3 h3 v5 h-3z" fill="#5A3A22" />
+    <path d="M9 17 l4 -3 l2 4z M25 17 l-4 -3 l-2 4z" fill="#3A1A00" /><path d="M9 23 q8 6 16 0 l-2 3 l-2 -2 l-2 2 l-2 -2 l-2 2 l-2 -2 l-2 2z" fill="#3A1A00" />
+  </svg>
+);
+function HolidayMark({ id, size = 16 }) {
+  const box = { viewBox: "0 0 20 20", width: size, height: size, "aria-hidden": "true", style: { display: "block" } };
+  if (id === "halloween") return <Pumpkin size={size} />;
+  if (id === "natale") return <svg {...box}><path d="M10 10 C5 3 1 5 3 8.5 C4.5 11 8 10.5 10 10Z M10 10 C15 3 19 5 17 8.5 C15.5 11 12 10.5 10 10Z" fill="#F2C766" /><path d="M10 10 L7 18 M10 10 L13 18" stroke="#E7B34C" strokeWidth="2" strokeLinecap="round" /><circle cx="10" cy="10" r="2.2" fill="#C9962E" /></svg>;
+  if (id === "befana") return <svg {...box}><path d="M17 2 L6 13" stroke="#7A5A3A" strokeWidth="2.2" strokeLinecap="round" /><path d="M6 13 l-5 4 l7 -1z M6 13 l-6 1 l5 4z" fill="#C9A86A" /><circle cx="15" cy="15" r="1.4" fill="#F2A541" /></svg>;
+  if (id === "monza") return <svg {...box}><rect x="1" y="5" width="6" height="10" fill="#009246" /><rect x="7" y="5" width="6" height="10" fill="#fff" /><rect x="13" y="5" width="6" height="10" fill="#CE2B37" /></svg>;
+  return null;
+}
+function HolidayLoader({ id }) {
+  if (id === "halloween") return <div data-holiday-loader={id} style={{ display: "flex", gap: 8 }}>{[0, 1, 2, 3, 4].map(i => <Pumpkin key={i} size={36} cls="hol-lamp" delay={i * 0.35} />)}</div>;
+  if (id === "natale") return (
+    <svg data-holiday-loader={id} viewBox="0 0 190 90" width="190" height="90" aria-hidden="true">
+      <path d="M30 60 H160 L170 66 H22 Z" fill="#D7263D" /><path d="M70 60 L84 44 H112 L120 60 Z" fill="#D7263D" />
+      <circle cx="50" cy="68" r="9" fill="#111" stroke="#444" strokeWidth="2" /><circle cx="145" cy="68" r="9" fill="#111" stroke="#444" strokeWidth="2" />
+      <rect className="hol-pop" x="94" y="40" width="8" height="30" fill="#E7B34C" style={{ animationDelay: ".2s", transformBox: "fill-box", transformOrigin: "center" }} />
+      <rect className="hol-pop" x="22" y="56" width="148" height="7" fill="#E7B34C" style={{ animationDelay: ".45s", transformBox: "fill-box", transformOrigin: "center" }} />
+      <path className="hol-pop" d="M98 42 C88 26 76 30 80 38 C83 43 92 42 98 42Z M98 42 C108 26 120 30 116 38 C113 43 104 42 98 42Z" fill="#F2C766" style={{ animationDelay: ".8s", transformBox: "fill-box", transformOrigin: "center" }} />
+    </svg>
+  );
+  if (id === "befana") return (
+    <div data-holiday-loader={id} style={{ position: "relative", width: 200, height: 64, overflow: "hidden", borderRadius: 10, background: "#2A2A30" }}>
+      <div style={{ position: "absolute", left: 0, right: 0, top: 30, height: 4, background: "repeating-linear-gradient(90deg,#EDE6D6 0 14px,transparent 14px 26px)", opacity: .6 }} />
+      <svg className="hol-sweep" viewBox="0 0 60 44" width="60" height="44" aria-hidden="true" style={{ position: "absolute", top: 10, left: 0 }}><path d="M50 2 L22 30" stroke="#7A5A3A" strokeWidth="3" strokeLinecap="round" /><path d="M22 30 l-14 10 l18 -2z M22 30 l-16 2 l14 8z" fill="#C9A86A" /></svg>
+    </div>
+  );
+  if (id === "monza") return (
+    <svg data-holiday-loader={id} viewBox="0 0 170 110" width="170" height="110" aria-hidden="true">
+      <path d="M20 95 A65 65 0 0 1 60 38" fill="none" stroke="#009246" strokeWidth="12" strokeLinecap="round" />
+      <path d="M66 35 A65 65 0 0 1 104 35" fill="none" stroke="#fff" strokeWidth="12" />
+      <path d="M110 38 A65 65 0 0 1 150 95" fill="none" stroke="#CE2B37" strokeWidth="12" strokeLinecap="round" />
+      <rect className="hol-needle" x="83.5" y="40" width="3" height="55" rx="1.5" fill="#F3F1EE" />
+      <circle cx="85" cy="95" r="6" fill="#F3F1EE" />
+    </svg>
+  );
+  return null;
+}
+// Halloween (31/10): la zucca trovata. Dolcetto: il casco Zucca (arancio e nero con le fiamme) da mettere col tocco;
+// scherzetto: due secondi di finta bandiera gialla con l'ululato.
+const PUMPKIN_HELMET = { base: "#FF7A1A", c1: "#111114", c2: "#3A1A00", pattern: "flames", visor: "iridium-gold", finish: "gloss" };
+const PUMPKIN_SPOTS = [{ top: 96, right: 18 }, { bottom: 92, left: 18 }, { top: 230, left: 14 }, { bottom: 150, right: 16 }];
+// La card della festa in cima alla Home: ogni festa è un capitolo della stagione, con un tasto verso la sua sorpresa.
+const HOLIDAY_STORY = {
+  halloween: { kicker: "HALLOWEEN", line: "Le zucche si nascondono nelle pagine: tre al giorno, dolcetto o scherzetto. E stanotte il Ghost Lap fa più paura.", cta: "APRI IL GHOST LAP" },
+  natale: { kicker: "NATALE", line: "La stagione finisce nel pacco: una casella al giorno della griglia dell'Avvento, con i fatti veri del 2026.", cta: "APRI LA GRIGLIA DELL'AVVENTO" },
+  befana: { kicker: "BEFANA", line: "La Befana ha spazzato la pista: si riparte. Nella tua calza c'è quello che hai fatto davvero in stagione.", cta: "APRI LA CALZA" },
+  monza: { kicker: "GP D'ITALIA", line: "Il tempio della velocità: rettilinei, Parabolica e tifosi sotto il podio. Se la segui in diretta, a fine gara si corre in pista.", cta: "GUIDA DEL CIRCUITO" },
+};
+function HolidayCard({ id, onOpen }) {
+  const h = HOL[id], st = HOLIDAY_STORY[id];
+  if (!h || !st) return null;
+  return (
+    <div data-holiday-card={id} style={{ margin: "0 16px 14px", padding: "14px 14px 13px", borderRadius: 18, background: `linear-gradient(150deg, ${alpha(h.color, .22)}, ${C.card} 70%)`, border: `1px solid ${alpha(h.color, .45)}`, display: "flex", gap: 12, alignItems: "flex-start" }}>
+      <span style={{ flexShrink: 0, marginTop: 2 }}><HolidayMark id={id} size={30} /></span>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ fontFamily: F_HEAD, fontWeight: 900, fontSize: 10, letterSpacing: 1, color: h.color }}>{st.kicker}</div>
+        <div style={{ fontFamily: F_HEAD, fontWeight: 900, fontStyle: "italic", fontSize: 17, color: C.text, marginTop: 2 }}>{h.title}</div>
+        <p style={{ margin: "4px 0 10px", fontFamily: F_BODY, fontSize: 12, color: C.muted, lineHeight: 1.45 }}>{st.line}</p>
+        {onOpen && <button className="press" data-holiday-open={id} onClick={onOpen} style={{ padding: "8px 12px", borderRadius: 10, background: h.color, fontFamily: F_HEAD, fontWeight: 900, fontStyle: "italic", fontSize: 11.5, color: "#fff" }}>{st.cta}</button>}
+      </div>
+    </div>
+  );
+}
+function PumpkinModal({ step, found, onTreat, onTrick, onWear, onClose }) {
+  const btn = (label, attrs, onClick, gold) => <button className="press" {...attrs} onClick={onClick} style={{ flex: 1, padding: "13px 0", borderRadius: 14, background: gold ? "#FF7A1A" : "#2A1A38", border: gold ? "none" : "1.5px solid #B38CFF", fontFamily: F_HEAD, fontWeight: 900, fontStyle: "italic", fontSize: 14, color: "#fff" }}>{label}</button>;
+  return (
+    <div data-pumpkin-modal={step} role="dialog" aria-modal="true" aria-label="Dolcetto o scherzetto" onClick={e => { if (e.target === e.currentTarget) onClose(); }}
+      style={{ position: "absolute", inset: 0, background: "rgba(8,4,12,.78)", zIndex: 760, display: "flex", alignItems: "flex-end" }}>
+      <div style={{ width: "100%", background: "#140C1C", borderTop: "1px solid rgba(179,140,255,.35)", borderRadius: "24px 24px 0 0", padding: "18px 20px 24px", display: "flex", flexDirection: "column", alignItems: "center", gap: 12, textAlign: "center" }}>
+        {step === "treat" ? <>
+          <HelmetArt spec={PUMPKIN_HELMET} size={110} />
+          <h2 style={{ margin: 0, fontFamily: F_HEAD, fontWeight: 900, fontStyle: "italic", fontSize: 21, color: "#F3EBDD" }}>Dolcetto: il casco Zucca!</h2>
+          <p style={{ margin: 0, fontFamily: F_BODY, fontSize: 13, color: "#B9AFC4", lineHeight: 1.45 }}>Arancio e nero con le fiamme. Lo metti adesso? Si cambia quando vuoi dal Profilo.</p>
+          <div style={{ display: "flex", gap: 10, width: "100%" }}>{btn("NO GRAZIE", { "data-pumpkin-skip": "" }, onClose)}{btn("METTILO", { "data-pumpkin-wear": "" }, onWear, true)}</div>
+        </> : <>
+          <span className="hol-wob" style={{ display: "inline-flex" }}><Pumpkin size={78} /></span>
+          <h2 style={{ margin: 0, fontFamily: F_HEAD, fontWeight: 900, fontStyle: "italic", fontSize: 22, color: "#F3EBDD" }}>Hai trovato una zucca!</h2>
+          <p style={{ margin: 0, fontFamily: F_BODY, fontSize: 13, color: "#B9AFC4", lineHeight: 1.45 }}>{found >= 3 ? "Era l'ultima di oggi: le hai trovate tutte e 3." : `Zucca ${found} di 3 di oggi: le altre sono nascoste nelle pagine.`} Dolcetto o scherzetto?</p>
+          <div style={{ display: "flex", gap: 10, width: "100%" }}>{btn("DOLCETTO", { "data-pumpkin-treat": "" }, onTreat, true)}{btn("SCHERZETTO", { "data-pumpkin-trick": "" }, onTrick)}</div>
+        </>}
+      </div>
+    </div>
+  );
+}
+function LoadingScreen({ ready, onDone, holiday = null }) {
   const reduce = useRef(prefersReduced()).current;
   const [minDone, setMinDone] = useState(false);
   const [maxDone, setMaxDone] = useState(false);
@@ -8625,8 +8743,8 @@ function LoadingScreen({ ready, onDone }) {
     <div data-splash="" data-splash-phase="loading" data-reduced={reduce ? "1" : undefined}
       style={{ position: "fixed", inset: 0, background: "#000", zIndex: 9999, display: "flex", alignItems: "center", justifyContent: "center", opacity: out ? 0 : 1, transition: reduce ? "none" : `opacity ${LOAD_FADE_MS}ms ease`, pointerEvents: out ? "none" : "auto" }}>
       <div role="status" style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 18 }}>
-        <LedGrid mode={reduce ? "idle" : "seq"} size={14} />
-        <p style={{ fontFamily: F_BODY, fontSize: 13, color: C.dim, margin: 0 }}>Caricamento…</p>
+        {holiday && HOL[holiday] ? <HolidayLoader id={holiday} /> : <LedGrid mode={reduce ? "idle" : "seq"} size={14} />}
+        <p style={{ fontFamily: holiday ? F_HEAD : F_BODY, fontWeight: holiday ? 900 : 400, fontStyle: holiday ? "italic" : "normal", fontSize: holiday ? 15 : 13, color: holiday ? HOL[holiday].color : C.dim, margin: 0 }}>{holiday && HOL[holiday] ? HOL[holiday].title : "Caricamento…"}</p>
       </div>
     </div>
   );
@@ -8886,7 +9004,7 @@ const USER_INIT = {
   squad: FANTA_SQUAD_INIT, squadBase: null, freeTransfers: 3,   // squadBase null: la prima squadra non conta come cambi
   predAnswers: {}, sillyPreds: {}, stratPreds: {}, pitBest: null, wxGuess: {}, ratings: {}, dotd: {}, notifSeenAt: 0,
   theme: { mode: "team", color: null }, sounds: true, haptics: true, helmet: null, hidden: [], trophies: {},
-  premium: { sub: false, trial: null }, squadLog: [], leagues: [],
+  premium: { sub: false, trial: null }, squadLog: [], leagues: [], holidays: true,
 };
 // Premium dell'anteprima salvato nell'account (24/10): sub = abbonamento di prova, trial = prova per un GP { start, end }.
 const cleanPremium = v => {
@@ -8973,6 +9091,9 @@ function App() {
   const [leagues, setLeagues] = useState([]);
   const [fantaRounds, setFantaRounds] = useState([]);
   const [homePoll, setHomePoll] = useState(shared0.homePoll);    // sondaggio della Home (Premium); null = nessuno
+  // 31/10: temi delle feste: comando dell'admin (shared/bt-holidays) e scelta dell'utente (Profilo; sul telefono per l'avvio).
+  const [holidayCfg, setHolidayCfg] = useState(() => shared0.holidays || local.get("bt-holidays-cfg") || { force: null, off: [] });
+  const [holidaysOn, setHolidaysOn] = useState(() => local.get("bt-holidays-on") !== false);
   const [votes, setVotes] = useState(USER_INIT.votes);           // { idSondaggio: idRisposta }
   const [notifsRaw, setNotifsRaw] = useState(shared0.notifs);    // shared/bt-notifs come sono salvate
   const [localNotifs, setLocalNotifs] = useState([]);            // avvisi di questo telefono (notizia sul tuo preferito)
@@ -9015,6 +9136,9 @@ function App() {
   const [sounds, setSounds] = useState(() => fx.sounds());     // suoni e vibrazioni: la scelta del telefono (fx)
   const [haptics, setHaptics] = useState(() => fx.haptics());
   const [helmet, setHelmet] = useState(USER_INIT.helmet);
+  // 31/10: Halloween: zucche trovate oggi (sul telefono), dove sta quella da trovare, la finestra e lo scherzetto.
+  const [pumpkins, setPumpkins] = useState(() => { const v = local.get("bt-pumpkins"); return v && typeof v === "object" && typeof v.day === "string" ? v : { day: "", n: 0, visits: 0 }; });
+  const [pumpkinAt, setPumpkinAt] = useState(null), [pumpkinStep, setPumpkinStep] = useState(null), [trickOn, setTrickOn] = useState(false);
   const [trophies, setTrophies] = useState(USER_INIT.trophies);   // trofei vinti (G31): { id: data in ms }
   const [eggFound, setEggFound] = useState(false);                 // tre tocchi sul logo (trofeo segreto)
   const [trophyNotice, setTrophyNotice] = useState(null);         // avviso "Trofeo sbloccato"
@@ -9187,7 +9311,7 @@ function App() {
     standings: v => { addStandingsGuests(v.guests); keep(setStandings)(v); },
     highlights: keep(setHighlights), silly: keep(setSillyOfficial), predictions: keep(setPredictions),
     homePoll: keep(setHomePoll), fantaStats: keep(setFantaStats), driverPhotos: keep(setDriverPhotos), commonsPhotos: keep(setCommonsPhotos),
-    trophies: keep(setTrophyCfg),
+    trophies: keep(setTrophyCfg), holidays: v => { keep(setHolidayCfg)(v); local.set("bt-holidays-cfg", v); },
   };
   // Rilegge i contenuti indicati (tutti, all'avvio) e mette nello stato quelli letti davvero.
   const refreshShared = kinds => AppData.loadShared(nowMs(), kinds ? { kinds } : undefined).then(r => {
@@ -9224,13 +9348,14 @@ function App() {
   const userReady = useRef(false);   // dati dell'account letti: da qui in poi le modifiche si salvano
   const userSnap = useRef({});       // ultimo valore letto o salvato di ogni dato (JSON): si manda solo quello che cambia
   const userVals = { saved, favTeam, favDriver, notifPrefs, votes, squad, squadBase, freeTransfers, predAnswers, sillyPreds, stratPreds, pitBest, wxGuess, ratings, dotd, notifSeenAt,
-    theme, sounds, haptics, helmet, hidden, trophies, premium, squadLog, leagues: leagueCodes };
+    theme, sounds, haptics, helmet, hidden, trophies, premium, squadLog, leagues: leagueCodes, holidays: holidaysOn };
   const userValsRef = useRef(userVals);
   userValsRef.current = userVals;
   const userSet = { saved: setSaved, favTeam: setFavTeam, favDriver: setFavDriver, notifPrefs: setNotifPrefs, votes: setVotes, squad: setSquad, squadBase: setSquadBase,
     freeTransfers: setFreeTransfers, predAnswers: setPredAnswers, sillyPreds: setSillyPreds, stratPreds: setStratPreds, pitBest: setPitBest, wxGuess: setWxGuess,
     ratings: setRatings, dotd: setDotd, notifSeenAt: setNotifSeenAt,
     theme: v => setTheme(cleanTheme(v) || USER_INIT.theme), sounds: v => setSounds(v !== false), haptics: v => setHaptics(v !== false),
+    holidays: v => { setHolidaysOn(v !== false); local.set("bt-holidays-on", v !== false); },
     helmet: v => setHelmet(v == null ? null : cleanHelmet(v)), hidden: v => setHidden(Array.isArray(v) ? v : []),
     trophies: v => setTrophies(cleanTrophies(v)), premium: v => setPremium(cleanPremium(v)),
     squadLog: v => setSquadLog(FantaSeason.cleanLog(v).slice(-80)), leagues: v => setLeagueCodes(Array.isArray(v) ? v.filter(c => /^BT-[A-Z0-9]{4,6}$/.test(c)).slice(0, 10) : []) };
@@ -9270,7 +9395,10 @@ function App() {
   // Colori dell'app (G01-G02): si applicano qui, prima di disegnare le pagine. Finché Authentication non ha risposto o
   // i dati dell'account non sono arrivati vale il colore usato l'ultima volta su questo telefono.
   const themePending = account === undefined || (!!userEmail && userLoaded !== userEmail);
-  const tones = applyTheme(theme, favTeam, themePending ? bootColor : null);
+  // 31/10: festa attiva (date di Roma, weekend di Monza dal calendario, comando dell'admin); spenta dal Profilo.
+  const holiday = holidaysOn ? BtHolidays.activeHoliday({ now: nowMs(), races, config: holidayCfg }) : null;
+  const tones = applyTheme(holiday ? { mode: "custom", color: HOL[holiday].color } : theme, favTeam, themePending ? bootColor : null);
+  useEffect(() => { fx.setHoliday(holiday ? HOL[holiday].sounds : null); }, [holiday]);   // suoni della festa (tic → campanellino…)
   useEffect(() => {
     const st = document.documentElement.style;
     st.setProperty("--accent", tones.accent); st.setProperty("--accent-ink", tones.ink);
@@ -9984,7 +10112,7 @@ function App() {
         {content}
         {!termsAccepted && <TermsSheet onAccept={acceptTerms} />}
       </div>
-      {splash && <SplashScreen ready={sharedReady && account !== undefined} onDone={() => setSplash(false)} />}
+      {splash && <SplashScreen holiday={holiday} ready={sharedReady && account !== undefined} onDone={() => setSplash(false)} />}
     </div>
   );
 
@@ -10021,7 +10149,7 @@ function App() {
     about: aboutMe, helmet, squad: squadOwn ? squad : null, saved, pitBest, sillyPreds,
     ratings: { ...demoVotes.ratings, ...ratings }, dotd: { ...demoVotes.dotd, ...dotd },
     correctPreds: bonus.filter(x => x.kind === "previsione").length, correctWx: bonus.filter(x => x.kind === "meteo").length,
-    correctPolls: bonus.filter(x => x.kind === "sondaggio").length, events: { chat: chatMine, egg: eggFound },
+    correctPolls: bonus.filter(x => x.kind === "sondaggio").length, events: { chat: chatMine, egg: eggFound, pumpkins: holiday === "halloween" && pumpkins.day === BtHolidays.romeDay(nowMs()) ? pumpkins.n : 0 },
   }, trophyList);
   const trophyReady = !!userEmail && userLoaded === userEmail;
   const trophyNew = trophyReady ? trophyList.filter(t => trophyProg[t.id] && trophyProg[t.id].done && !trophies[t.id]).map(t => t.id).join(",") : "";
@@ -10106,6 +10234,14 @@ function App() {
     check();
     return () => { box.removeEventListener("scroll", onScroll, true); mo.disconnect(); cancelAnimationFrame(raf); };
   }, [scrollBase, appShown]);   // appShown: dopo l'accesso la pagina c'è davvero
+  // 31/10: Halloween: ogni due schede aperte (al massimo 3 zucche al giorno, giorno di Roma) una zucca in un angolo.
+  useEffect(() => {
+    if (holiday !== "halloween" || view !== "tab" || !appShown) { setPumpkinAt(null); return; }
+    const day = BtHolidays.romeDay(nowMs()), cur = pumpkins.day === day ? pumpkins : { day, n: 0, visits: 0 };
+    const next = { ...cur, visits: cur.visits + 1 };
+    setPumpkins(next); local.set("bt-pumpkins", next);
+    setPumpkinAt(next.n < 3 && next.visits % 2 === 0 ? { tab, spot: (next.visits / 2) % PUMPKIN_SPOTS.length } : null);
+  }, [tab, view, holiday, appShown]);
   // 31/10: aprendo il Profilo (anche da un'altra pagina, non solo dal tasto in alto) si rilegge chi è admin.
   useEffect(() => { if (view === "profilo" && account && Account.refreshAdmin) Account.refreshAdmin().catch(() => {}); }, [view]);
   if (account === undefined && !guest) {   // si aspetta Authentication: forse c'è già una sessione
@@ -10128,6 +10264,10 @@ function App() {
     );
   }
 
+  // 31/10: dove porta la card della festa nella Home.
+  const holidayOpen = id => id === "halloween" ? () => { setGhostInit(null); setView("ghost"); }
+    : id === "monza" ? () => { setCircuitId("it-1922"); setView("circuit"); }
+    : null;
   const activeChat = chats.find(c => c.id === chatId);
   const activeArticle = articles.find(a => a.id === articleId);
   const shareArticle = shareId != null ? articles.find(a => a.id === shareId) : null;
@@ -10184,17 +10324,18 @@ function App() {
   if (view === "article" && activeArticle) body = <ArticleScreen article={activeArticle} onBack={viewBack.article} isPremium={isPremium} onPremium={() => setPremiumOpen(true)} onTag={filterByTag} saved={saved.includes(activeArticle.id)} onToggleSave={() => toggleSave(activeArticle.id)} onShare={() => setShareId(activeArticle.id)} vote={votes["art-" + activeArticle.id] || null} onVote={castVote} />;
   else if (view === "circuit" && circuitId) body = <CircuitScreen circuitId={circuitId} races={races} articles={articles} onBack={viewBack.circuit} onTag={filterByTag} onOpenArticle={openArticle} />;
   else if (view === "adminLock") body = <AdminKeypad onOk={() => { setAdminUnlocked(true); setView("admin"); }} onCancel={viewBack.adminLock} />;
-  else if (view === "admin" && adminUnlocked && Account.isAdmin()) body = <AdminScreen photos={commonsPhotos} setPhotos={adminSet.commonsPhotos} silly={sillyOfficial} onSilly={officialSeat} highlights={highlights} setHighlights={adminSet.highlights} onBack={viewBack.admin} onPublish={publishArticle} articles={articles} setArticles={adminSet.articles} fantaStats={fantaStats} setFantaStats={adminSet.fantaStats} standings={standings} setStandings={adminSet.standings} races={races} setRaces={adminSet.races} extraRaces={racesDoc.extra} setExtraRaces={adminSet.extraRaces} ig={ig} setIg={adminSet.ig} sentNotifs={sentNotifs} onSendNotif={sendNotif} onDeleteNotif={deleteNotif} onToast={showToast} tab={adminTab} setTab={setAdminTab} chats={chats} reports={reports} banned={banned} onDeleteMsg={deleteChatMsg} onSuspend={suspendUser} onUnsuspend={unsuspendUser} onIgnoreReport={ignoreReport} liveProps={liveProps} polls={allPolls} votes={votes} onPollAnswer={setPollAnswer} predictions={predictions} setPredictions={adminSet.predictions} predAnswers={predAnswers} />;
+  else if (view === "admin" && adminUnlocked && Account.isAdmin()) body = <AdminScreen holidayCfg={holidayCfg} holiday={holiday} onHolidays={v => commitShared("holidays", () => v).then(ok => { if (ok) showToast("Temi delle feste salvati"); })} photos={commonsPhotos} setPhotos={adminSet.commonsPhotos} silly={sillyOfficial} onSilly={officialSeat} highlights={highlights} setHighlights={adminSet.highlights} onBack={viewBack.admin} onPublish={publishArticle} articles={articles} setArticles={adminSet.articles} fantaStats={fantaStats} setFantaStats={adminSet.fantaStats} standings={standings} setStandings={adminSet.standings} races={races} setRaces={adminSet.races} extraRaces={racesDoc.extra} setExtraRaces={adminSet.extraRaces} ig={ig} setIg={adminSet.ig} sentNotifs={sentNotifs} onSendNotif={sendNotif} onDeleteNotif={deleteNotif} onToast={showToast} tab={adminTab} setTab={setAdminTab} chats={chats} reports={reports} banned={banned} onDeleteMsg={deleteChatMsg} onSuspend={suspendUser} onUnsuspend={unsuspendUser} onIgnoreReport={ignoreReport} liveProps={liveProps} polls={allPolls} votes={votes} onPollAnswer={setPollAnswer} predictions={predictions} setPredictions={adminSet.predictions} predAnswers={predAnswers} />;
   else if (view === "chatThread" && activeChat) body = <ChatThreadScreen chat={activeChat} onBack={viewBack.chatThread} onSend={guest ? () => needLogin("Per scrivere in chat serve un account.") : sendMessage} isPremium={isPremium} blocked={blocked} onReport={guest ? () => needLogin("Per segnalare un messaggio serve un account.") : reportMessage} onBlock={blockUser} onReact={guest ? () => needLogin("Per reagire ai messaggi serve un account.") : reactMessage} trophyList={trophyList} myWon={trophies} pendingLink={pendingLink} onPendingUsed={() => setPendingLink(null)} onOpenLink={openLink} liveRace={races.find(r => r.status === "LIVE") || null} />;
   else if (view === "instagram") body = <InstagramView ig={ig} onToast={showToast} onBack={viewBack.instagram} />;
   else if (view === "ghost") body = <GhostLap key={ghostInit ? JSON.stringify(ghostInit) : "ghost"} init={ghostInit} onBack={viewBack.ghost} />;
   else if (view === "chats") body = <ChatsView chats={chats} onOpen={openChat} blocked={blocked} onBack={viewBack.chats} unreadOf={(id, ms) => Chat.unread(id, ms)} />;
   else if (view === "profilo") body = <ProfiloScreen ig={ig} onOpenIg={() => { setIgFrom("profilo"); setView("instagram"); }} aboutMe={aboutMe} onSaveAboutMe={a => Account.updateAbout(a).catch(e => showToast(e && (e.code === "too-young" || e.code === "not-loaded") ? messageOf(e) : NOT_SAVED))} account={account} onSaveName={n => Account.updateName(n)} isAdmin={Account.isAdmin()} trial={trialActive ? trial : null} trialUsed={!!trial} onBack={viewBack.profilo} onNotifiche={() => setView("notifiche")} onPremium={() => setPremiumOpen(true)} onAdmin={() => guest ? needLogin("Accedi per usare il pannello admin.") : setView(adminUnlocked ? "admin" : "adminLock")} onLogout={logout} isPremium={isPremium} onAbout={() => setInfoModal({ title: "Info su B&T", body: ABOUT_TEXT, credits: true })} onFeedback={() => setFeedbackOpen(true)} onHelp={() => setInfoModal({ title: "Assistenza", body: HELP_TEXT })} favTeam={favTeam} favDriver={favDriver} onPickTeam={() => guest ? needLogin("Per scegliere scuderia e pilota del cuore serve un account.") : setPicker("team")} onPickDriver={() => guest ? needLogin("Per scegliere scuderia e pilota del cuore serve un account.") : setPicker("driver")} guest={guest} onLogin={() => needLogin(null)} onTerms={() => setTermsOpen(true)} blocked={blocked} onUnblock={unblockUser} onDeleteAccount={deleteAccount} savedCount={saved.length} onOpenSaved={openSaved} onTheme={() => setThemeOpen(true)} helmet={helmet} onHelmet={() => setHelmetOpen(true)} trophies={trophies} trophyProg={trophyProg} trophyList={trophyList}
     onAdPrivacy={Ads.privacyRequired() ? () => Ads.openPrivacy().catch(() => showToast("Le preferenze sulla privacy degli annunci non sono disponibili in questo momento.")) : null}
-    sounds={sounds} haptics={haptics} onSounds={v => { if (userDataWait()) return; setSounds(v); fx.setSounds(v); if (v) fx.play("tick"); }} onHaptics={v => { if (userDataWait()) return; setHaptics(v); fx.setHaptics(v); if (v) fx.buzz("light"); }} />;
+    sounds={sounds} haptics={haptics} onSounds={v => { if (userDataWait()) return; setSounds(v); fx.setSounds(v); if (v) fx.play("tick"); }} onHaptics={v => { if (userDataWait()) return; setHaptics(v); fx.setHaptics(v); if (v) fx.buzz("light"); }}
+    holidays={holidaysOn} onHolidays={v => { if (userDataWait()) return; setHolidaysOn(v); local.set("bt-holidays-on", v); fx.play("tick"); }} />;
   else if (view === "notifiche") body = <NotificheScreen offline={offline} onBack={viewBack.notifiche} onAction={a => { if (a === "feedback") { if (feedbackAsk && !feedbackAsk.read) saveAsk({ ...feedbackAsk, read: true }); setFeedbackOpen(true); } }} notifs={notifs} onReadAll={readAll} isPremium={isPremium} onPremium={() => setPremiumOpen(true)} favTeam={favTeam} favDriver={favDriver} prefs={notifPrefs} onPrefs={v => { if (!userDataWait()) setNotifPrefs(v); }} onGoProfilo={() => setView("profilo")} />;
   else {
-    if (tab === "home") body = <HomeScreen ig={ig} highlights={highlights} onOpenIg={() => { setIgFrom("tab"); setView("instagram"); }} articles={articles} tagFilter={tagFilter} onTag={filterByTag} onClearTag={() => setTagFilter(null)} onOpenArticle={openArticle} isPremium={isPremium} onPremium={() => setPremiumOpen(true)} onToast={showToast} onLiveTrack={() => setLiveTrackOpen(true)} onGoFanta={() => goTab("fanta")}  saved={saved} onToggleSave={toggleSave} savedOnly={savedOnly} setSavedOnly={setSavedOnly} onOpenCircuit={openCircuit} homePoll={homePoll} homeVote={votes.home || null} onVote={castVote}
+    if (tab === "home") body = <HomeScreen holidayTop={holiday ? <HolidayCard id={holiday} onOpen={holidayOpen(holiday)} /> : null} ig={ig} highlights={highlights} onOpenIg={() => { setIgFrom("tab"); setView("instagram"); }} articles={articles} tagFilter={tagFilter} onTag={filterByTag} onClearTag={() => setTagFilter(null)} onOpenArticle={openArticle} isPremium={isPremium} onPremium={() => setPremiumOpen(true)} onToast={showToast} onLiveTrack={() => setLiveTrackOpen(true)} onGoFanta={() => goTab("fanta")}  saved={saved} onToggleSave={toggleSave} savedOnly={savedOnly} setSavedOnly={setSavedOnly} onOpenCircuit={openCircuit} homePoll={homePoll} homeVote={votes.home || null} onVote={castVote}
       hidden={hidden} onHide={hideArticle} onUnhideAll={() => { if (!userDataWait()) setHidden([]); }} onSwipeSave={saveFromSwipe}
       onRefresh={() => refreshShared(["news", "highlights", "ig", "homePoll"]).catch(() => {})} />;
     else if (tab === "race") body = <RaceScreen onStandingsEnd={isPremium ? null : Ads.standingsEnd} favDriver={favDriver} dotdVote={live ? votesNow.dotd[live.raceId] : null} onDotdVote={(k, id) => live && voteDotd(live.raceId, k, id)} ratings={votesNow.ratings} onRate={rateDriver} onOpenChats={() => setView("chats")} onOpenGhost={() => setView("ghost")} races={races} standings={shownStandings} isPremium={isPremium} onPremium={() => setPremiumOpen(true)} onSelectDriver={setSelectedDriver} live={live} liveSt={liveSt} onExpandMap={() => setLiveTrackOpen(true)} onTelemetry={(carId, lapNo, sector) => setTelemetry({ carId, lapNo, sector })} onOpenCircuit={openCircuit} wxGuess={wxGuess} wxResult={wxResult} onGuessWeather={guessWeather} onLapTimes={setLapList} onSecondScreen={() => setSsOpen(true)} lastRace={lastRace} of1={of1} onOf1Refresh={() => of1TickRef.current && of1TickRef.current()} replay={replayCtl} />;
@@ -10218,7 +10359,7 @@ function App() {
 
   return shell(
       <div data-bg={pageBg || undefined} style={{ height: "100%", display: "flex", flexDirection: "column", position: "relative", background: pageBg && PAGE_BG[pageBg] ? PAGE_BG[pageBg] : undefined, transition: "background .3s" }}>
-        {showTopHeader && <TopHeader trialDays={trialActive ? trialDaysLeft(trial) : 0} isPremium={isPremium} unread={unreadCount} onPremium={() => setPremiumOpen(true)} onBell={() => setView("notifiche")} onProfile={() => { setView("profilo"); if (account && Account.refreshAdmin) Account.refreshAdmin().catch(() => {}); }} helmet={helmet} onTrack={isDemoLive(live) || !!sessionNow(realLiveRace, nowMs())} onLogoEgg={() => setEggFound(true)} />}
+        {showTopHeader && <TopHeader trialDays={trialActive ? trialDaysLeft(trial) : 0} isPremium={isPremium} unread={unreadCount} onPremium={() => setPremiumOpen(true)} onBell={() => setView("notifiche")} onProfile={() => { setView("profilo"); if (account && Account.refreshAdmin) Account.refreshAdmin().catch(() => {}); }} helmet={helmet} onTrack={isDemoLive(live) || !!sessionNow(realLiveRace, nowMs())} onLogoEgg={() => setEggFound(true)} holiday={holiday} />}
         {showTopHeader && offline && <div role="status" data-offline="" style={{ margin: "-6px 16px 10px", padding: "8px 12px", borderRadius: 10, background: "rgba(231,179,76,.12)", border: "1px solid rgba(231,179,76,.35)", fontFamily: F_BODY, fontSize: 12, color: C.text, lineHeight: 1.4, flexShrink: 0 }}>{OFFLINE_LINE}</div>}
         <div ref={swipeBoxRef} data-tab-swipe={showBottomNav ? "" : undefined} style={{ flex: 1, minHeight: 0, overflow: "hidden", position: "relative" }}
           onTouchStart={showBottomNav ? e => { const k = e.touches[0]; if (e.touches.length === 1) swipeStart(k.clientX, k.clientY, e.timeStamp, e.target, e.currentTarget); else swipeCancel(); } : undefined}
@@ -10246,6 +10387,17 @@ function App() {
           onClickCapture={e => { if (performance.now() - swipeClick.current < 400) { e.stopPropagation(); e.preventDefault(); } }}>
           <BottomNav active={tab} pillRef={navPillRef} onChange={t => switchTab(t)} /></div>}
         {showBottomNav && adH > 0 && <div data-ad-space="" aria-hidden="true" style={{ height: adH + AD_GAP, flexShrink: 0 }} />}
+        {pumpkinAt && holiday === "halloween" && view === "tab" && pumpkinAt.tab === tab && (
+          <button className="press hol-wob" data-pumpkin={pumpkinAt.spot} aria-label="Una zucca!" onClick={() => {
+            const next = { ...pumpkins, n: pumpkins.n + 1 };
+            setPumpkins(next); local.set("bt-pumpkins", next); setPumpkinAt(null); setPumpkinStep("ask"); fx.play("done"); fx.buzz("success");
+          }} style={{ position: "absolute", zIndex: 45, padding: 4, filter: "drop-shadow(0 4px 10px rgba(255,122,26,.55))", ...PUMPKIN_SPOTS[pumpkinAt.spot] }}><Pumpkin size={38} /></button>
+        )}
+        {pumpkinStep && <PumpkinModal step={pumpkinStep} found={pumpkins.n} onClose={() => setPumpkinStep(null)}
+          onTreat={() => { setPumpkinStep("treat"); fx.play("done"); }}
+          onTrick={() => { setPumpkinStep(null); setTrickOn(true); fx.play("howl"); fx.buzz("error"); setTimeout(() => setTrickOn(false), 2200); }}
+          onWear={() => { if (userDataWait()) return; setHelmet({ ...PUMPKIN_HELMET, number: helmet && helmet.number != null ? helmet.number : null }); setPumpkinStep(null); showToast("Casco Zucca messo"); fx.play("clack"); }} />}
+        {trickOn && <div data-trick="" role="status" className="hol-trick" style={{ position: "absolute", left: 0, right: 0, top: 0, zIndex: 770, padding: "16px 16px 14px", background: FLAG_UI.yellow.color, color: FLAG_UI.yellow.ink, textAlign: "center", fontFamily: F_HEAD, fontWeight: 900, fontStyle: "italic", fontSize: 17, letterSpacing: .6, boxShadow: "0 8px 24px rgba(0,0,0,.5)" }}>BANDIERA GIALLA… SCHERZETTO!</div>}
         {premiumOpen && <PremiumModal onClose={closePremium} isPremium={isPremium} plan={plan} setPlan={setPlan} onSubscribe={doSubscribe} subscribing={subscribing} subscribed={subscribed} trialUsed={!!trial} onTrial={doTrial} trial={trial} onAdPro={Ads.canReward() ? watchAdPro : null} adBusy={adBusy} />}
         {selectedDriver && <DriverDetailModal driver={selectedDriver} lastRace={lastRace} races={races} onClose={() => setSelectedDriver(null)} />}
         {liveTrackOpen && <LiveMapView race={live ? races.find(r => r.id === live.raceId) : weekendRace(races)} live={live} st={liveSt} onClose={() => setLiveTrackOpen(false)} />}

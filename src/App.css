@@ -82,6 +82,20 @@
   .led-flash3 > span{ animation:ledflash3 .32s steps(1, end) 3; }
   /* 25/10: nel tasto in alto c'è solo il logo B&T; i tre tocchi lo fanno lampeggiare tre volte. */
   .logo-flash3{ animation:logoflash3 .32s steps(1, end) 3; }
+  /* 31/10: temi delle feste (caricamento): zucche come luci del semaforo, fiocco, scopa, tachimetro */
+  @keyframes hollamp{ 0%,15%{ opacity:.15 } 20%,85%{ opacity:1 } 90%,100%{ opacity:.15 } }
+  @keyframes holpop{ 0%,40%{ transform:scale(.4); opacity:0 } 70%{ transform:scale(1.1); opacity:1 } 100%{ transform:scale(1); opacity:1 } }
+  @keyframes holsweep{ from{ transform:translateX(-80px) } to{ transform:translateX(240px) } }
+  @keyframes holneedle{ 0%{ transform:rotate(-120deg) } 70%{ transform:rotate(95deg) } 100%{ transform:rotate(88deg) } }
+  .hol-lamp{ animation:hollamp 2.8s infinite; }
+  .hol-pop{ animation:holpop 1.4s both; }
+  .hol-sweep{ animation:holsweep 2.2s linear infinite; }
+  .hol-needle{ animation:holneedle 2s cubic-bezier(.3,.8,.3,1) both; transform-box:fill-box; transform-origin:50% 100%; }
+  @keyframes holwob{ 0%,100%{ transform:rotate(-8deg) } 50%{ transform:rotate(8deg) } }
+  @keyframes holtrick{ 0%{ transform:translateY(-100%) } 12%,85%{ transform:translateY(0) } 100%{ transform:translateY(-100%) } }
+  .hol-wob{ animation:holwob 1.3s ease-in-out infinite; }
+  .hol-trick{ animation:holtrick 2.2s ease-in-out both; }
+  @media (prefers-reduced-motion:reduce){ .hol-lamp, .hol-pop, .hol-sweep, .hol-needle, .hol-wob, .hol-trick{ animation:none; } }
   @keyframes logoflash3{ 0%{ opacity:1; } 50%{ opacity:.15; } 100%{ opacity:1; } }
   @keyframes ledflash3{ 0%{ opacity:1; } 50%{ opacity:.12; } 100%{ opacity:1; } }
   /* Tappa 3 (G24): Shift Light. "run": verdi e rossi in sequenza; "done": i blu lampeggiano. */

@@ -69,6 +69,21 @@ const tests = {
     assert.strictEqual(fx2.buzz('flag'), true);
     assert.deepStrictEqual(got, [BUZZ.flag]);
   },
+  // 31/10: temi delle feste: a Natale il tic è un campanellino, a Halloween lo swipe (drs) un ululato, ecc.
+  async 'temi delle feste: setHoliday cambia i suoni (tic → campanellino); senza tema tornano quelli di sempre'() {
+    for (const name of ['bell', 'howl', 'swoosh']) assert.ok(SOUNDS.includes(name), 'manca il suono ' + name);
+    const a = fakeAudio({ state: 'running' });
+    const fx = createFx({ audioCtx: a.factory, local: fakeLocal() });
+    fx.unlock(); await tick();
+    fx.setHoliday({ tick: 'bell' });
+    assert.strictEqual(fx.soundOf('tick'), 'bell');
+    assert.strictEqual(fx.play('tick'), true);
+    assert.strictEqual(fx.soundOf('shift'), 'shift', 'gli altri restano');
+    fx.setHoliday(null);
+    assert.strictEqual(fx.soundOf('tick'), 'tick');
+    fx.setHoliday({ tick: 'nessuno' });
+    assert.strictEqual(fx.soundOf('tick'), 'tick', 'suono che non esiste: quello di sempre');
+  },
   async 'prima di unlock nessun suono e nessun errore'() {
     const a = fakeAudio();
     const fx = createFx({ audioCtx: a.factory, local: fakeLocal() });

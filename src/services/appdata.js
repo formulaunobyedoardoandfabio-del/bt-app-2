@@ -11,6 +11,7 @@
 // - i dati personali si salvano 800 ms dopo l'ultima modifica, tutti insieme, nel campo app2 dell'account.
 const FB = require("./firebase");
 const C = require("./compat");
+const H = require("../logic/holidays");
 const F1 = require("../data/f1-2026");
 const T = require("../logic/trophies");
 
@@ -63,6 +64,7 @@ const SHARED_DOCS = {
   "bt-driver-photos": {},
   "bt-commons-photos": { drivers: {}, cars: {}, logos: {} },   // Tappa 3 (G30): foto di Commons scelte dall'admin
   "bt-trophies": null,                    // 25/10: trofei cambiati da Firebase (niente documento: quelli di serie)
+  "bt-holidays": { force: null, off: [] }, // 31/10: temi delle feste: force = tema acceso sempre, off = temi spenti
 };
 
 // Ogni contenuto dell'app (nome dello stato della 2.0) → i suoi documenti e le conversioni.
@@ -90,13 +92,15 @@ const KINDS = {
   // 25/10: { <id trofeo>: { name, how, goal, attivo } } in Firebase, { name, how, goal, off } qui solo con i campi validi (src/logic/trophies.js, cleanTrophyConfig).
   // Si cambia dalla console di Firebase (shared/bt-trophies); l'app non lo riscrive (ensureTrophyDoc lo crea se manca).
   trophies: { docs: ["bt-trophies"], from: d => T.cleanTrophyConfig(d["bt-trophies"]) },
+  // 31/10: temi delle feste comandati dall'admin (src/logic/holidays.js).
+  holidays: { docs: ["bt-holidays"], from: d => H.cleanConfig(d["bt-holidays"]), to: v => ({ "bt-holidays": H.cleanConfig(v) }) },
 };
 
 // Dati personali dell'account (users/<email>.app2): ognuno vede e modifica solo i suoi.
 // Tappa 3: colori dell'app (theme), suoni e vibrazioni (sounds, haptics), casco (helmet), notizie nascoste (hidden).
 // 24/10: Premium dell'anteprima (premium = { sub, trial }): prima restava solo in memoria e chiudendo l'app spariva.
 const USER_KEYS = ["saved", "favTeam", "favDriver", "notifPrefs", "votes", "squad", "squadBase", "freeTransfers", "predAnswers", "sillyPreds", "stratPreds", "pitBest", "wxGuess", "ratings", "dotd", "notifSeenAt",
-  "theme", "sounds", "haptics", "helmet", "hidden", "trophies", "premium", "squadLog", "leagues"];   // 31/10: FantaF1 vero
+  "theme", "sounds", "haptics", "helmet", "hidden", "trophies", "premium", "squadLog", "leagues", "holidays"];   // 31/10: temi delle feste   // 31/10: FantaF1 vero
 const USER_SAVE_MS = 800;
 const pickUser = v => { const out = {}; if (isObj(v)) USER_KEYS.forEach(k => { if (v[k] !== undefined) out[k] = v[k]; }); return out; };
 

@@ -1,4 +1,4 @@
-// Prove dei trofei (Tappa 3, G31; src/logic/trophies.js): 15 trofei che si vincono con quello che si fa davvero
+// Prove dei trofei (Tappa 3, G31; src/logic/trophies.js): 19 trofei (31/10: +4 segreti delle feste) che si vincono con quello che si fa davvero
 // nell'app, letto dai dati che l'app ha già; medaglia di bronzo da 1 trofeo, d'argento da 5, d'oro da 10. Gira in Node.
 // Uso: node test/unit/trophies.test.js [filtro]
 const assert = require('assert');
@@ -30,7 +30,7 @@ const tests = {
     assert.strictEqual(by('oracolo').goal, 5, 'obiettivo non valido: quello di serie');
     assert.strictEqual(by('indovino').name, 'Indovino', 'nome vuoto: quello di serie');
     assert.strictEqual(by('radar').goal, 1);
-    assert.strictEqual(defs.length, 14);
+    assert.strictEqual(defs.length, 18);
     assert.deepStrictEqual(done(trophyProgress({ pitBest: 2.2 }, defs)), [], '2,2 s non basta con 2,1');
     assert.deepStrictEqual(done(trophyProgress({ saved: ['a', 'b', 'c'] }, defs)), ['archivio']);
     assert.strictEqual(trophyProgress({ events: { egg: true } }, defs).sgasata, undefined, 'spento: non si vince');
@@ -58,10 +58,10 @@ const tests = {
     assert.strictEqual(medalOf(undefined), null);
   },
 
-  'elenco: 15 trofei, uno segreto, nomi del progetto'() {
-    assert.strictEqual(TROPHIES.length, 15);
-    assert.strictEqual(new Set(TROPHIES.map(t => t.id)).size, 15, 'id ripetuti');
-    assert.strictEqual(TROPHIES.filter(t => t.secret).length, 1);
+  'elenco: 19 trofei, 5 segreti (Sgasata e i 4 delle feste), nomi del progetto'() {
+    assert.strictEqual(TROPHIES.length, 19);
+    assert.strictEqual(new Set(TROPHIES.map(t => t.id)).size, 19, 'id ripetuti');
+    assert.deepStrictEqual(TROPHIES.filter(t => t.secret).map(t => t.id), ['sgasata', 'zucche', 'avvento', 'calza', 'monza']);
     const names = TROPHIES.map(t => t.name);
     ['Superlicenza', 'Il mio casco', 'Griglia completa', 'Indovino', 'Oracolo', 'Uomo radar', 'Sondaggista', 'Pit crew', 'Pit stop perfetto',
       'Mercato piloti', 'Pagellone', 'Voce del paddock', 'Archivio', 'Radio aperta'].forEach(n => assert.ok(names.includes(n), 'manca ' + n));
@@ -82,7 +82,7 @@ const tests = {
       ratings: { 'r16:RACE': { leclerc: { pace: 8 } } },
       dotd: { r16: { driver: 'leclerc' } },
       correctPreds: 5, correctWx: 1, correctPolls: 1,
-      events: { chat: true, egg: true },
+      events: { chat: true, egg: true, pumpkins: 3, advent: true, stocking: true, monza: true },
     });
     assert.deepStrictEqual(done(all), TROPHIES.map(t => t.id).sort(), 'tutti i trofei con tutti i dati');
     // Uno alla volta.

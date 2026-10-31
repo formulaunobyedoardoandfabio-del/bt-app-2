@@ -20,6 +20,11 @@ const TROPHIES = [
   { id: "archivio", name: "Archivio", how: "Salva 5 notizie", goal: 5 },
   { id: "radio", name: "Radio aperta", how: "Scrivi il tuo primo messaggio in chat" },
   { id: "sgasata", name: "Sgasata", how: "Tre tocchi veloci sul logo B&T", secret: true },
+  // 31/10: temi delle feste (src/logic/holidays.js): si vincono solo nei giorni della festa.
+  { id: "zucche", name: "Cacciatore di zucche", how: "A Halloween trova 3 zucche nascoste in un giorno", secret: true },
+  { id: "avvento", name: "Pole di Natale", how: "Apri tutte le caselle della griglia dell'Avvento", secret: true },
+  { id: "calza", name: "La calza", how: "Apri la calza della Befana", secret: true },
+  { id: "monza", name: "Ero a Monza", how: "Corri sotto il podio a fine gara a Monza, in diretta", secret: true },
 ];
 const SECRET_NAME = "Trofeo segreto", SECRET_HOW = "Si trova da qualche parte nell'app";
 
@@ -61,7 +66,7 @@ function trophyConfigDefaults() {
 }
 
 // input = { about, helmet, squad, saved, pitBest, sillyPreds, ratings, dotd, correctPreds, correctWx, correctPolls,
-// events: { chat, egg } } → { [id]: { done, value?, goal? } }, solo per i trofei di defs (di serie: tutti). squad: la
+// events: { chat, egg, pumpkins, advent, stocking, monza } } → { [id]: { done, value?, goal? } }, solo per i trofei di defs (di serie: tutti). squad: la
 // squadra fatta da chi usa l'app (null se è ancora quella di partenza); pitBest in secondi.
 function trophyProgress(input, defs = TROPHIES) {
   const x = isObj(input) ? input : {};
@@ -89,6 +94,10 @@ function trophyProgress(input, defs = TROPHIES) {
     archivio: g => count(Array.isArray(x.saved) ? x.saved.length : 0, g),
     radio: () => ({ done: !!ev.chat }),
     sgasata: () => ({ done: !!ev.egg }),
+    zucche: () => ({ done: num(ev.pumpkins) >= 3, value: num(ev.pumpkins), goal: 3 }),
+    avvento: () => ({ done: !!ev.advent }),
+    calza: () => ({ done: !!ev.stocking }),
+    monza: () => ({ done: !!ev.monza }),
   };
   const out = {};
   Object.keys(goals).forEach(id => { if (all[id]) out[id] = all[id](goals[id]); });

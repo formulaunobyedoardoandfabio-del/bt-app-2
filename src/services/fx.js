@@ -117,6 +117,17 @@ const SYNTH = {
     [523, 659, 784, 1046].forEach((f, i) => tone(ctx, out, { t: t + i * 0.1, dur: i === 3 ? 0.32 : 0.11, f0: f, type: "triangle", vol: 0.14 }));
     noise(ctx, out, { t: t + 0.05, dur: 0.9, vol: 0.05, type: "lowpass", freq: 1400, q: 0.5, attack: 0.25 });
   },
+  // ── 31/10, temi delle feste (src/logic/holidays.js) ──
+  // Natale: campanellino al posto del tic.
+  bell: (ctx, out, t) => { tone(ctx, out, { t, dur: 0.35, f0: 1568, vol: 0.09 }); tone(ctx, out, { t, dur: 0.25, f0: 2349, vol: 0.05 }); tone(ctx, out, { t: t + 0.06, dur: 0.3, f0: 3136, vol: 0.03 }); },
+  // Halloween: ululato leggero sullo swipe.
+  howl: (ctx, out, t) => {
+    tone(ctx, out, { t, dur: 0.55, f0: 420, f1: 760, type: "triangle", vol: 0.07 });
+    tone(ctx, out, { t: t + 0.3, dur: 0.45, f0: 760, f1: 380, type: "triangle", vol: 0.06 });
+    noise(ctx, out, { t, dur: 0.5, vol: 0.03, type: "lowpass", freq: 800, q: 0.5, attack: 0.15 });
+  },
+  // Befana: la scopa che spazza.
+  swoosh: (ctx, out, t) => { noise(ctx, out, { t, dur: 0.28, vol: 0.12, type: "bandpass", freq: 1800, freq1: 4200, q: 1.2, attack: 0.06 }); noise(ctx, out, { t: t + 0.12, dur: 0.2, vol: 0.06, freq: 2600, q: 1 }); },
   // Conferma (Shift Light finita): due note che salgono.
   done: (ctx, out, t) => {
     tone(ctx, out, { t, dur: 0.09, f0: 880, vol: 0.13 });
@@ -132,6 +143,7 @@ function createFx({ audioCtx = null, haptics = null, vibrate = null, local = nul
   const read = (k, def) => { try { const v = local && local.get(k); return typeof v === "boolean" ? v : def; } catch (e) { return def; } };
   const save = (k, v) => { try { if (local) local.set(k, v); } catch (e) {} };
   let soundsOn = read("bt-sounds", true), hapticsOn = read("bt-haptics", true);
+  let variant = {};   // 31/10: suoni della festa ({ tick: "bell" }), da setHoliday
   let ctx = null, master = null;
   const quiet = p => { if (p && typeof p.catch === "function") p.catch(() => {}); };
   const isHidden = () => { try { return !!hidden(); } catch (e) { return false; } };
@@ -150,9 +162,11 @@ function createFx({ audioCtx = null, haptics = null, vibrate = null, local = nul
     } catch (e) { ctx = null; master = null; return false; }
   }
   const ready = () => !!ctx && ctx.state === "running";
+  const soundOf = name => (variant[name] && SYNTH[variant[name]] ? variant[name] : name);
   function play(name) {
-    if (!soundsOn || !SYNTH[name] || isHidden() || !ready()) return false;
-    try { SYNTH[name](ctx, master, ctx.currentTime + 0.005); return true; } catch (e) { return false; }
+    const s = soundOf(name);
+    if (!soundsOn || !SYNTH[s] || isHidden() || !ready()) return false;
+    try { SYNTH[s](ctx, master, ctx.currentTime + 0.005); return true; } catch (e) { return false; }
   }
   // App in secondo piano: l'audio si ferma (niente consumo); tornando si riprende se era già partito.
   function sleep(off) {
@@ -182,7 +196,8 @@ function createFx({ audioCtx = null, haptics = null, vibrate = null, local = nul
     return false;
   }
   return {
-    play, buzz, unlock, ready, sleep,
+    play, buzz, unlock, ready, sleep, soundOf,
+    setHoliday(map) { variant = map && typeof map === "object" ? { ...map } : {}; },
     setSounds(on) { soundsOn = !!on; save("bt-sounds", soundsOn); },
     setHaptics(on) { hapticsOn = !!on; save("bt-haptics", hapticsOn); },
     sounds: () => soundsOn,
