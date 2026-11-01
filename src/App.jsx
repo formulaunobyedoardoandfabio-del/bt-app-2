@@ -646,7 +646,20 @@ function SubHeader({ title, onBack, right }) {
 // precedente) e i LED lampeggiano tre volte, con la sgasata e la vibrazione. onTrack: c'è una sessione in pista, il
 // badge "IN PISTA" con i LED che pulsano.
 const EGG_GAP_MS = 450, EGG_SHOW_MS = 1100;
-function TopHeader({ isPremium, unread, onPremium, onBell, onProfile, trialDays = 0, helmet = null, onTrack = false, onLogoEgg, holiday = null }) {
+function TopHeader({ isPremium, unread, onPremium, onBell, onProfile, trialDays = 0, helmet = null, onTrack = false, onLogoEgg, onLaunch, holiday = null }) {
+  // Launch control (1/11, easter egg): tenendo premuto il logo i LED si accendono e il motore sale; dopo 3 secondi,
+  // lasciando il dito, la pagina parte. Lasciato troppo presto (dopo quasi un secondo): "Anti-stallo".
+  const hold = useRef({ t0: 0, timer: null, long: false });
+  const [held, setHeld] = useState(0);   // 0 niente, 1 in carica, 2 pronto
+  const holdDown = () => { const h = hold.current; h.t0 = performance.now(); h.long = false; clearTimeout(h.timer); h.timer = setTimeout(() => { setHeld(1); fx.play("rev"); h.timer = setTimeout(() => { setHeld(2); fx.buzz("heavy"); }, 2600); }, 400); };
+  const holdUp = () => {
+    const h = hold.current, dt = performance.now() - h.t0;
+    clearTimeout(h.timer);
+    if (!h.t0) return;
+    h.t0 = 0; setHeld(0);
+    if (dt >= 3000) { h.long = true; fx.play("go"); fx.buzz("go"); if (onLaunch) onLaunch(true); }
+    else if (dt >= 800) { h.long = true; fx.play("abort"); if (onLaunch) onLaunch(false); }
+  };
   const [egg, setEgg] = useState(false);
   const taps = useRef({ n: 0, at: 0 }), eggT = useRef(null);
   useEffect(() => () => clearTimeout(eggT.current), []);
@@ -660,9 +673,14 @@ function TopHeader({ isPremium, unread, onPremium, onBell, onProfile, trialDays 
   };
   return (
     <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "18px 16px 14px", flexShrink: 0 }}>
-      <button className="press" data-logo="" aria-label={"B&T"} onClick={tapLogo} style={{ position: "relative", height: 38, padding: "0 12px", borderRadius: 11, background: C.accent, display: "flex", alignItems: "center", flexShrink: 0 }}>
+      <button className="press" data-logo="" aria-label={"B&T"} onClick={() => { if (hold.current.long) { hold.current.long = false; return; } tapLogo(); }}
+        onPointerDown={holdDown} onPointerUp={holdUp} onPointerLeave={holdUp} onPointerCancel={holdUp} onContextMenu={e => e.preventDefault()} style={{ position: "relative", height: 38, padding: "0 12px", borderRadius: 11, background: C.accent, display: "flex", alignItems: "center", flexShrink: 0 }}>
         {holiday && <span data-holiday-mark={holiday} style={{ position: "absolute", right: -6, top: -6, filter: "drop-shadow(0 2px 3px rgba(0,0,0,.5))" }}><HolidayMark id={holiday} size={18} /></span>}
         <img data-logo-img="" data-mode={egg ? "flash3" : "idle"} className={egg ? "logo-flash3" : undefined} src={BT_LOGO} alt="" style={{ width: 28, height: 28, objectFit: "contain", display: "block" }} />
+        {held > 0 && <span data-launch={held === 2 ? "ready" : "charging"} aria-hidden="true" style={{ position: "absolute", left: "50%", top: "100%", marginTop: 5, transform: "translateX(-50%)", display: "flex", alignItems: "center", gap: 3, padding: "4px 6px", borderRadius: 7, background: "#000", border: "1px solid #2C2C33", zIndex: 60, whiteSpace: "nowrap" }}>
+          {[0, 1, 2, 3, 4].map(k => <i key={k} className={held === 1 ? "ps-led" : undefined} style={{ width: 7, height: 7, borderRadius: "50%", background: k < 2 ? "#2FD36B" : k < 4 ? "#FF1801" : "#4C8DFF", animationDelay: (k * .5) + "s", opacity: held === 2 ? 1 : undefined }} />)}
+          {held === 2 && <b style={{ marginLeft: 4, fontFamily: F_HEAD, fontWeight: 900, fontStyle: "italic", fontSize: 9.5, color: "#fff" }}>LASCIA!</b>}
+        </span>}
       </button>
       {onTrack && (
         <span data-on-track="" role="status" style={{ display: "flex", alignItems: "center", gap: 6, padding: "6px 9px", borderRadius: 999, background: alpha(C.red, .12), border: `1px solid ${alpha(C.red, .45)}`, flexShrink: 0 }}>
@@ -2686,16 +2704,28 @@ function PitBoard({ st, driverId, visible }) {
 // Mini Pit Board (31/10 sera, Edoardo): la Pit Board in piccolo in fondo a ogni pagina durante una sessione in corso
 // (o rivista mentre scorre): pilota del cuore (o il primo), posizione, tempo sul giro (l'ultimo in gara, il migliore nelle
 // altre sessioni), distacco e giro. Toccandola si va alla Race; la X la toglie per questa sessione.
-function MiniPitBoard({ st, driverId, onOpen, onClose }) {
+function MiniPitBoard({ st, driverId, onOpen, onClose, onEgg }) {
   const i0 = st.cars.findIndex(c => c.id === driverId), i = i0 >= 0 ? i0 : 0, c = st.cars[i];
+  // Tocco singolo: alla Race (dopo un attimo, per contare i tocchi); 5 tocchi veloci: il muretto risponde (easter egg).
+  const taps = useRef({ n: 0, at: 0, t: null });
+  const [flip, setFlip] = useState(null);
+  useEffect(() => () => clearTimeout(taps.current.t), []);
   if (!c) return null;
+  const tap = () => {
+    const k = taps.current, now = performance.now();
+    k.n = now - k.at < 450 ? k.n + 1 : 1; k.at = now;
+    clearTimeout(k.t);
+    if (k.n >= 5) { k.n = 0; setFlip(c.pit ? "BOX" : "PUSH PUSH"); fx.play("radio"); fx.buzz("success"); if (onEgg) onEgg("muretto"); k.t = setTimeout(() => setFlip(null), 2600); return; }
+    k.t = setTimeout(() => { k.n = 0; onOpen(); }, 380);
+  };
   const d = driverById(c.id);
   const main = isRaceType(st.type) ? c.last : c.best;
   const lapCol = main && main.st === "purple" ? TIMING.purple : main && main.st === "green" ? TIMING.green : "#FFFFFF";
   const gap = timingGap(st, c, i);
   return (
     <div data-mini-pit={c.id} style={{ flexShrink: 0, margin: "0 12px 6px", display: "flex", alignItems: "stretch", borderRadius: 12, background: "linear-gradient(180deg, #121215, #070708)", border: "1px solid #2C2C33", boxShadow: "0 6px 16px rgba(0,0,0,.5)", overflow: "hidden" }}>
-      <button className="press" data-mini-pit-open="" onClick={onOpen} aria-label={`Mini Pit Board: ${c.code}, posizione ${c.pos}, ${gap}, ${liveCounter(st)}. Apri la Race`}
+      {flip ? <div data-mini-pit-flip="" className="ps-flip" role="status" style={{ flex: 1, minHeight: 44, display: "flex", alignItems: "center", justifyContent: "center", background: "#FFD23F", color: "#15120A", fontFamily: F_HEAD, fontWeight: 900, fontStyle: "italic", fontSize: 18, letterSpacing: 1 }} onClick={tap}>{flip}</div> :
+      <button className="press" data-mini-pit-open="" onClick={tap} aria-label={`Mini Pit Board: ${c.code}, posizione ${c.pos}, ${gap}, ${liveCounter(st)}. Apri la Race`}
         style={{ flex: 1, minWidth: 0, minHeight: 44, display: "flex", alignItems: "center", gap: 9, padding: "6px 10px 6px 0", textAlign: "left" }}>
         <span style={{ alignSelf: "stretch", width: 4, flexShrink: 0, background: d ? d.color : c.color }} />
         <span style={{ fontFamily: F_HEAD, fontWeight: 900, fontStyle: "italic", fontSize: 15, color: "#FFFFFF" }}>{c.code}</span>
@@ -2703,7 +2733,7 @@ function MiniPitBoard({ st, driverId, onOpen, onClose }) {
         <span style={{ fontFamily: F_HEAD, fontWeight: 800, fontSize: 13, color: main ? lapCol : C.dim, fontVariantNumeric: "tabular-nums" }}>{main ? LiveSim.fmtLap(main.time) : "–"}</span>
         <span style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontFamily: F_BODY, fontWeight: 600, fontSize: 11, color: C.muted, fontVariantNumeric: "tabular-nums" }}>{gap}</span>
         <span style={{ marginLeft: "auto", flexShrink: 0, fontFamily: F_BODY, fontWeight: 700, fontSize: 10, letterSpacing: .6, color: "#8D8C93", whiteSpace: "nowrap" }}>{liveCounter(st)}</span>
-      </button>
+      </button>}
       <button className="press" aria-label="Chiudi la mini Pit Board" onClick={onClose} style={{ width: 44, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", borderLeft: "1px solid #2C2C33" }}><Icon name="close" size={14} color="#9A99A0" /></button>
     </div>
   );
@@ -6349,7 +6379,8 @@ function ChatThreadScreen({ chat, onBack, onSend, isPremium, blocked = [], onRep
               onContextMenu={e => { e.preventDefault(); if (canReact(m)) openMenu(m); }}
               style={{ maxWidth: "78%", width: m.link ? "78%" : undefined, boxSizing: "border-box", padding: m.link ? 6 : "9px 13px", borderRadius: m.mine ? "14px 14px 4px 14px" : "14px 14px 14px 4px", background: m.mine ? C.accent : C.card, border: m.mine ? "none" : `1px solid ${C.border}`, userSelect: "none", WebkitUserSelect: "none", WebkitTouchCallout: "none" }}>
               {m.link && <ChatLinkCard k={m.link} prof={m.link.t === "profile" ? authorProf(m) : null} onOpen={String(m.id).startsWith("invio-") ? null : () => openLinkOf(m)} />}
-              {(!m.link || (m.text && m.text !== m.link.ti)) && <span style={{ display: "block", padding: m.link ? "7px 7px 3px" : 0, fontFamily: F_BODY, fontSize: 13.5, color: "#fff", lineHeight: 1.4 }}>{m.text}</span>}
+              {!m.link && isBoxBox(m.text) ? <span data-radio-msg="" style={{ display: "block" }}><span style={{ display: "block", fontFamily: F_HEAD, fontWeight: 900, fontStyle: "italic", fontSize: 9.5, letterSpacing: .8, color: m.mine ? "rgba(255,255,255,.8)" : "#9CC2FF", marginBottom: 3 }}>TEAM RADIO</span><span style={{ display: "flex", alignItems: "center", gap: 8 }}><span className="ps-wave" aria-hidden="true">{[0, .1, .2, .3, .15, .25].map((d, k) => <i key={k} style={{ animationDelay: d + "s", background: m.mine ? "#fff" : "#4C8DFF" }} />)}</span><span style={{ fontFamily: F_HEAD, fontWeight: 900, fontStyle: "italic", fontSize: 15, color: "#fff" }}>Box box!</span></span></span>
+              : (!m.link || (m.text && m.text !== m.link.ti)) && <span style={{ display: "block", padding: m.link ? "7px 7px 3px" : 0, fontFamily: F_BODY, fontSize: 13.5, color: "#fff", lineHeight: 1.4 }}>{m.text}</span>}
             </div>
             {m.reactions && m.reactions.length > 0 && (
               <button className="press" data-reactions={m.id} aria-label={"Reazioni: " + m.reactions.map(r => `${REACTION_NAMES[r.e] || r.e} ${r.n}`).join(", ")} onClick={() => { if (canReact(m)) openMenu(m); }}
@@ -9187,7 +9218,9 @@ function PsFace({ card, result }) {
   );
 }
 
-const PS_SWIPE = 90, PS_FAST_PX_MS = 2.6;   // soglia del gesto; oltre questa velocità la carta "taglia la pista"
+const PS_SWIPE = 90, PS_FAST_PX_MS = 2.6;
+// Easter egg "Radio in chat": il messaggio "box box" (solo quelle due parole) esce come una radio del box.
+const isBoxBox = t => /^\s*box[\s,.!-]*box[\s.!]*$/i.test(String(t || ""));   // soglia del gesto; oltre questa velocità la carta "taglia la pista"
 function PitSwipeScreen({ cards, deck, results, onAct, onUndo, onBack, onOpenArticle, whyOf, onLess, mode, onMode, rain, onEgg, streak, endInfo, onSaved, onShare }) {
   const i = deck ? deck.i : 0, n = cards.length;
   const card = cards[i] || null, done = !!(deck && deck.done) || (n > 0 && i >= n);
@@ -9442,6 +9475,7 @@ function App() {
   const [psVotes, setPsVotes] = useState([]);
   const [psRes, setPsRes] = useState(null);       // risultato dell'ultima opinione o vero o falso
   const [psRain, setPsRain] = useState(false);    // easter egg: pioggia vera sul circuito del weekend
+  const [launchFx, setLaunchFx] = useState(0);    // easter egg: launch control (la pagina "parte")
   // Mini Pit Board in tutta l'app (31/10 sera): interruttore nel Profilo (sul telefono) e sessione chiusa con la X.
   const [miniPitOn, setMiniPitOn] = useState(() => local.get("bt-minipit-on") !== false);
   const [miniPitHidden, setMiniPitHidden] = useState(null);
@@ -10306,6 +10340,7 @@ function App() {
   // Il messaggio si vede subito; se l'invio non riesce si toglie e la stanza rimette il testo nel campo (risponde false).
   const sendMessage = (id, text, link = null) => {
     if (!chatMe()) { needLogin("Per scrivere in chat serve un account."); return Promise.resolve(false); }
+    if (!link && isBoxBox(text)) { fx.play("radio"); fx.buzz("select"); psEgg("radio"); }
     return Promise.resolve(withProfile(() => postChat(id, text, link)));
   };
   // Profilo veloce (25/10): tifo, casco (col colore dei tasti se non ne ha uno suo) e trofei vinti viaggiano col
@@ -10938,9 +10973,9 @@ function App() {
 
   return shell(
       <div data-bg={pageBg || undefined} style={{ height: "100%", display: "flex", flexDirection: "column", position: "relative", background: pageBg && PAGE_BG[pageBg] ? PAGE_BG[pageBg] : undefined, transition: "background .3s" }}>
-        {showTopHeader && <TopHeader trialDays={trialActive ? trialDaysLeft(trial) : 0} isPremium={isPremium} unread={unreadCount} onPremium={() => setPremiumOpen(true)} onBell={() => setView("notifiche")} onProfile={() => { setView("profilo"); if (account && Account.refreshAdmin) Account.refreshAdmin().catch(() => {}); }} helmet={helmet} onTrack={isDemoLive(live) || !!sessionNow(realLiveRace, nowMs())} onLogoEgg={() => setEggFound(true)} holiday={holiday} />}
+        {showTopHeader && <TopHeader onLaunch={ok => { if (ok) { setLaunchFx(nowMs()); setTimeout(() => setLaunchFx(0), 800); psEgg("launch"); } else showToast("Anti-stallo: tieni premuto il logo per 3 secondi"); }} trialDays={trialActive ? trialDaysLeft(trial) : 0} isPremium={isPremium} unread={unreadCount} onPremium={() => setPremiumOpen(true)} onBell={() => setView("notifiche")} onProfile={() => { setView("profilo"); if (account && Account.refreshAdmin) Account.refreshAdmin().catch(() => {}); }} helmet={helmet} onTrack={isDemoLive(live) || !!sessionNow(realLiveRace, nowMs())} onLogoEgg={() => setEggFound(true)} holiday={holiday} />}
         {showTopHeader && offline && <div role="status" data-offline="" style={{ margin: "-6px 16px 10px", padding: "8px 12px", borderRadius: 10, background: "rgba(231,179,76,.12)", border: "1px solid rgba(231,179,76,.35)", fontFamily: F_BODY, fontSize: 12, color: C.text, lineHeight: 1.4, flexShrink: 0 }}>{OFFLINE_LINE}</div>}
-        <div ref={swipeBoxRef} data-tab-swipe={showBottomNav ? "" : undefined} style={{ flex: 1, minHeight: 0, overflow: "hidden", position: "relative" }}
+        <div ref={swipeBoxRef} data-tab-swipe={showBottomNav ? "" : undefined} className={launchFx ? "ps-launch-zoom" : undefined} style={{ flex: 1, minHeight: 0, overflow: "hidden", position: "relative" }}
           onTouchStart={showBottomNav ? e => { const k = e.touches[0]; if (e.touches.length === 1) swipeStart(k.clientX, k.clientY, e.timeStamp, e.target, e.currentTarget); else swipeCancel(); } : undefined}
           onTouchMove={showBottomNav ? e => { const k = e.touches[0]; if (k && e.touches.length === 1) swipeMove(k.clientX, k.clientY); } : undefined}
           onTouchEnd={showBottomNav ? e => { const k = e.changedTouches[0]; if (k) swipeEnd(k.clientX, k.clientY, e.timeStamp, e.currentTarget.clientWidth, false); } : undefined}
@@ -10954,7 +10989,7 @@ function App() {
           {showBottomNav && <TabPeek key={"peek-left-" + tab} side="left" tab={TABS[TAB_IDS.indexOf(tab) - 1]} peekRef={el => { peekRef.current.left = el; }} />}
           {showBottomNav && <TabPeek key={"peek-right-" + tab} side="right" tab={TABS[TAB_IDS.indexOf(tab) + 1]} peekRef={el => { peekRef.current.right = el; }} />}
         </div>
-        {miniPitShow && <MiniPitBoard st={liveSt} driverId={favDriver} onOpen={() => { setView("tab"); if (tab !== "race") switchTab("race"); }} onClose={() => { setMiniPitHidden(miniPitKey); fx.play("tick"); }} />}
+        {miniPitShow && <MiniPitBoard st={liveSt} driverId={favDriver} onOpen={() => { setView("tab"); if (tab !== "race") switchTab("race"); }} onClose={() => { setMiniPitHidden(miniPitKey); fx.play("tick"); }} onEgg={psEgg} />}
         {/* 29/10: lo swipe cambia scheda anche partendo dalla barra in basso. */}
         {showBottomNav && <div data-nav-swipe="" style={{ flexShrink: 0 }}
           onTouchStart={showBottomNav ? e => { const k = e.touches[0]; if (e.touches.length === 1) swipeStart(k.clientX, k.clientY, e.timeStamp, e.target, e.currentTarget); else swipeCancel(); } : undefined}

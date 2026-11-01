@@ -226,3 +226,6 @@
   .ps-wave i{ display:inline-block; width:3px; height:16px; margin-right:2px; border-radius:2px; background:#4C8DFF; animation:pswave .7s ease-in-out infinite; }
   @keyframes pswave{ 0%,100%{ transform:scaleY(.3); } 50%{ transform:scaleY(1); } }
   @media (prefers-reduced-motion:reduce){ .ps-donut, .ps-smoke, .ps-drop, .ps-wiper, .ps-launch-zoom, .ps-flip, .ps-wave i{ animation:none; } .ps-smoke, .ps-drop, .ps-wiper{ display:none; } }
+  .ps-led{ opacity:.2; animation:psled .3s ease-out both; }
+  @keyframes psled{ from{ opacity:.2; } to{ opacity:1; } }
+  @media (prefers-reduced-motion:reduce){ .ps-led{ animation:none; opacity:1; } }
