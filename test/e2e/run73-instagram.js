@@ -21,7 +21,7 @@ const NO_SHARE = () => {
   Object.defineProperty(Navigator.prototype, 'clipboard', { configurable: true, get() { return { writeText: async t => { window.__copied.push(String(t)); } }; } });
   delete Navigator.prototype.share; delete Navigator.prototype.canShare;
 };
-const openIg = async p => { await tapSel(p, '[data-ig-big]'); await w(p, 500); };
+const openIg = async p => { await tapSel(p, '[aria-label="Profilo"]'); await w(p, 400); await tapSel(p, '[data-ig-big]'); await w(p, 500); };   // 1/11: dal Profilo (in Home c'è Pit Swipe)
 const screen = p => p.evaluate(() => {
   const q = s => document.querySelector(s), t = s => (q(s) ? q(s).innerText.replace(/\s+/g, ' ').trim() : null);
   const logo = q('[data-ig-avatar] img');

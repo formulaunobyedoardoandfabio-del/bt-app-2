@@ -104,7 +104,7 @@ run({
     const r = await row(p, 'pitcrew'), egg = await row(p, 'sgasata');
     const fs = await doc(p, 'shared/bt-trophies');
     await ctx.close();
-    assert(/di 18 trofei/.test(head), 'con un trofeo spento la bacheca deve contarne 18: ' + head);
+    assert(new RegExp('di ' + (Trophies.TROPHIES.length - 1) + ' trofei').test(head), 'con un trofeo spento la bacheca deve contarne uno in meno: ' + head);
     assert(r && r.won === '0' && /Pit crew pro/.test(r.text) && /2,10 secondi/.test(r.text), 'Pit crew da Firebase: ' + JSON.stringify(r));
     assert(!egg, 'il trofeo spento si vede ancora: ' + JSON.stringify(egg));
     assert(fs && fs.pitcrew.goal === 2.1 && !fs.casco, 'l\'app non deve riscrivere il documento dei trofei: ' + JSON.stringify(fs));

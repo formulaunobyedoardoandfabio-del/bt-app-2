@@ -197,7 +197,7 @@ run({
   // ── Instagram ────────────────────────────────────────────────────────
   async 'Instagram: SEGUI apre il profilo, il video apre il suo link'(b) {
     const { ctx, p, errs } = await open(b, { seed: { addDocs: IG } }); await login(p);
-    await tapSel(p, '[data-ig-big]'); await w(p, 500);
+    await tapSel(p, '[aria-label="Profilo"]'); await w(p, 400); await tapSel(p, '[data-ig-big]'); await w(p, 500);
     await tapText(p, 'SEGUI SU INSTAGRAM'); await w(p, 300);
     const t1 = await toast(p);
     await tapSel(p, '[data-ig-video="v1"]'); await w(p, 300);
@@ -218,7 +218,7 @@ run({
     await loaded(p, 'img[alt="Copertina video 1"]').catch(() => {});
     await tapText(p, 'SALVA TUTTO', { exact: true }); await w(p, 800);
     const d2 = await doc(p, 'shared/bt-ig-config');
-    await backHome(p); await tapSel(p, '[data-ig-big]'); await w(p, 400);
+    await backHome(p); await tapSel(p, '[aria-label="Profilo"]'); await w(p, 400); await tapSel(p, '[data-ig-big]'); await w(p, 400);
     const vid = d2 && d2.videos && d2.videos[0];
     await p.waitForFunction(id => { const e = document.querySelector(`[data-ig-video="${id}"] [data-ig-thumb]`); return !!(e && /data:image\/jpeg/.test(getComputedStyle(e).backgroundImage)); }, vid ? vid.id : '', { timeout: 6000 }).catch(() => {});
     const bg = vid ? await p.evaluate(id => { const e = document.querySelector(`[data-ig-video="${id}"] [data-ig-thumb]`); return e ? getComputedStyle(e).backgroundImage.slice(0, 30) : null; }, vid.id) : null;

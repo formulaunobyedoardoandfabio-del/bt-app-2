@@ -75,17 +75,18 @@ const tests = {
     assert(JSON.stringify(labels) === JSON.stringify(['home', 'garage', 'fanta', 'race']), 'schede in basso: ' + labels.join(','));
     assert(!errs.length, errs.join(' | '));
   },
-  async 'instagram: grande bottone in Home e nel Profilo, apre la pagina Instagram'(b) {
+  // 1/11: in Home al posto del bottone di Instagram c'è Pit Swipe; Instagram resta nel Profilo.
+  async 'instagram: grande bottone nel Profilo (in Home c\'è Pit Swipe), apre la pagina Instagram'(b) {
     const { ctx, p, errs } = await open(b); await login(p);
-    const home = await has(p, '[data-ig-big]');
+    const home = await has(p, '[data-ig-big]'), ps = await has(p, '[data-pitswipe-card]');
+    await tapSel(p, '[aria-label="Profilo"]'); await w(p, 300);
+    const prof = await has(p, '[data-ig-big]');
     await tapSel(p, '[data-ig-big]'); await w(p, 300);
     const ig = await inner(p, '[data-ig-screen]');
     await tapSel(p, '[data-ig-screen] [aria-label="Indietro"]'); await w(p, 300);
-    const back = await has(p, '[data-nav-tab="home"]');
-    await tapSel(p, '[aria-label="Profilo"]'); await w(p, 300);
-    const prof = await has(p, '[data-ig-big]');
+    const back = await has(p, '[data-ig-big]');
     await ctx.close();
-    assert(home && prof, `bottone Instagram: home ${home}, profilo ${prof}`);
+    assert(!home && ps && prof, `bottone Instagram: home ${home}, Pit Swipe ${ps}, profilo ${prof}`);
     assert(ig && /@bt_formula1/.test(ig) && /SEGUI SU INSTAGRAM/i.test(ig), 'pagina Instagram: ' + (ig && ig.slice(0, 120)));
     assert(back, 'Indietro non torna all\'app');
     assert(!errs.length, errs.join(' | '));

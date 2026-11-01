@@ -1,5 +1,5 @@
 # Handoff
-Updated: 2026-11-01 by Claude (claude-opus-5-5)   Branch: tappa-3   (vedi "1/11 notte" in fondo per l'ultimo lavoro)
+Updated: 2026-11-01 by Claude (claude-opus-5-5)   Branch: tappa-3   (vedi "1/11 mattina" in fondo per l'ultimo lavoro)
 
 ## Goal
 Tappa 3 della 2.0: "fai prima tutti gli easter egg e le nuove grafiche, poi vedo l'apk di prova e poi ci sono altre
@@ -406,3 +406,37 @@ Da fare:
   (ghostForNow). Dati rigenerati da TracingInsights 2b8da62: Ghost Lap Messico Q + Austin Q. Il Degrado gomme dalle
   prove libere resta (run76 ora legge le sessioni attese da weekend.json).
 - Verificato il 1/11 notte: JOBS=2 bash test/all.sh a 54396d4 → TUTTO VERDE (92 file). APK di prova da 54396d4 (GitHub, 00:30).
+
+## 1/11 mattina: Pit Swipe, easter egg, stile Duolingo (niente leghe a livelli: Edoardo "non fare le robe della F3-2")
+- Pit Swipe (design docs/design/pit-swipe.html; logica src/logic/pitswipe.js, test/unit/pitswipe.test.js): riquadro in
+  Home AL POSTO di quello di Instagram (Instagram resta nel Profilo), vista "pitswipe". Mazzo del giorno (chiave: giorno
+  dalle 8:00 di Roma + sessioni del weekend finite): 6 notizie (gusti o per data), 2 opinioni accese non votate, 1 vero o
+  falso (makeFacts: titoli e città di nascita dei piloti, lunghezza/curve/giri/primo GP/record dei circuiti), 1 carta del
+  pilota del cuore (ultima gara e mondiale veri). Gesti: destra BOX BOX (salva), sinistra STAY OUT, su RADIO (in chat,
+  solo notizie), GIRO VELOCE (1 per giro, vota "f"), BANDIERA ROSSA (indietro). Tutto nei dati dell'account app2.swipe:
+  { w gusti, mode, deck { key, cards [{k,id}], i, acts, hist, seen, fast, done, ok }, tot { decks, box, votes, tfOk, radio,
+  fast, pit, pred, missions }, week { key, c }, streak { n, last, pits, decks }, tf { run, best }, eggs [], onb }.
+- Voti veri: fanta/pitswipe-voti (__arr con arrayUnion, firebase.docAppend; src/services/swipevotes.js); conta l'ultimo
+  voto per account; percentuale solo da 20 voti ("Sei tra i primi a votare"). Opinioni: shared/bt-takes, scheda OPINIONI
+  del Pannello Admin (KINDS.takes in appdata.js).
+- Serie per GP (roundOf: dal martedì dopo un GP al lunedì dopo il successivo), pit stop salva-serie ogni 5 giri (max 2);
+  missioni della settimana (3 su 8, settimana ISO di Roma; anche Pit Stop e pronostici le fanno avanzare); livello del
+  tifoso (Kart, Rookie, Pilota titolare, Caposquadra, Leggenda del paddock, Campione del mondo) da giri, risposte, voti,
+  box, missioni e trofei: in Home, a fine giro e nel Profilo (FanLevelCard).
+- Easter egg (swipe.eggs; toast "Easter egg trovato: X (k/6)"): Donuts (carta girata in tondo), Limiti della pista (carta
+  lanciata troppo veloce; 3 volte = 5 s di penalità), Pioggia vera (meteo vero MET Norway del circuito nel weekend,
+  rainingNow), Launch control (logo premuto 3 s; prima "Anti-stallo"), Radio in chat ("box box"), Il muretto risponde
+  (5 tocchi sulla mini Pit Board: PUSH PUSH o BOX se il pilota è ai box). Trofei nuovi: boxbox (100), opinionista (50),
+  giroperfetto (10 di fila), ingegnere (segreto, tutti e sei): 23 trofei.
+- Stile Duolingo: primi passi in Home (pilota del cuore, squadra Fanta, primo giro; "Nascondi" = swipe.onb "off");
+  Bentornato dopo 7 giorni (bt-last-seen sul telefono); promemoria sul telefono con @capacitor/local-notifications
+  (src/services/reminders.js: giro di domani alle 8:30, qualifiche/sprint/gara un'ora prima, serie in pericolo la domenica
+  alle 18; mai 22-8; permesso chiesto solo dopo il primo giro; interruttore "Promemoria sul telefono" = notifPrefs.reminders;
+  scripts/prepare_android.py aggiunge POST_NOTIFICATIONS); "Stessa strategia" a fine giro con l'amico della lega (almeno 3
+  opinioni in comune, 60% uguali) e sfida 1 contro 1 al Pit Stop col proprio miglior tempo (src/services/duels.js,
+  fanta/pitswipe-sfide: un tentativo, conta il primo; scade in 7 giorni; riquadro "Sfide al Pit Stop" in Home).
+- Non fatto: leghe a livelli (Edoardo no); notifiche mandate dal server (servono Firebase Cloud Messaging e il file
+  google-services.json dalla console di Firebase: lo deve scaricare Edoardo).
+- Prove: test/unit/pitswipe.test.js, test/unit/swipe-services.test.js, trophies (23), appdata (27 chiavi);
+  e2e run83-pitswipe, run84-easter, run85-duolingo.
+- Verificato 1/11: suite completa, 4 file rotti dal riquadro Instagram spostato e dal numero dei trofei (run20, run34-admin, run72, run73) sistemati e rilanciati verdi.
