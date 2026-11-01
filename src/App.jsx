@@ -19,6 +19,7 @@ import BtHolidays from "./logic/holidays";
 import BtSwipe from "./logic/pitswipe";
 import { createSwipeVotes } from "./services/swipevotes";
 import Reminders from "./services/reminders";
+import { createDuels, duelState } from "./services/duels";
 import Colors from "./logic/colors";
 import { filterNews, TYRES, LANES } from "./logic/newsfilter";
 import { classifySwipe, SWIPE, dragFollow, dragProgress, leaveTo } from "./logic/gesture";
@@ -445,7 +446,8 @@ const OF1 = createOpenF1({ liveBase: OF1_LIVE_BASE });
 const JOLPICA_ON = true;
 const Jolpica = createJolpica({ store: local, now: nowMs });
 const FantaL = createFantaLeague({ store: local, now: nowMs });
-const SwipeVotes = createSwipeVotes({ now: nowMs });   // 1/11: voti veri di Pit Swipe (fanta/pitswipe-voti)   // 31/10: leghe FantaF1 vere e risultati veri
+const SwipeVotes = createSwipeVotes({ now: nowMs });
+const Duels = createDuels({ now: nowMs });   // 1/11: sfide 1 contro 1 al Pit Stop (fanta/pitswipe-sfide)   // 1/11: voti veri di Pit Swipe (fanta/pitswipe-voti)   // 31/10: leghe FantaF1 vere e risultati veri
 // Previsioni meteo del weekend (24/10): MET Norway tramite la funzione su Vercel api/meteo.js (src/services/meteo.js).
 const Meteo = createMeteo({ store: local, now: nowMs });
 // Dati F1 che si aggiornano da soli (25/10, src/services/f1data.js): Ghost Lap delle ultime qualifiche, gare, qualifiche e
@@ -5295,8 +5297,9 @@ const GARAGE_SOON = [
   ["stint", "Stint Analyzer & Fuel Calculator", "Durata della gara e consumi: calo delle gomme e benzina da imbarcare."],
 ];
 
-function GarageScreen({ races, pitBest, onPitResult, sillyPreds, onPredict, sillyOfficial, live, stratPreds = {}, onStrat, bluffTags = [], onBluffRefresh }) {
+function GarageScreen({ openGame = null, onGameOpened = null, races, pitBest, onPitResult, sillyPreds, onPredict, sillyOfficial, live, stratPreds = {}, onStrat, bluffTags = [], onBluffRefresh }) {
   const [game, setGame] = useState(null);
+  useEffect(() => { if (openGame) { setGame(openGame); if (onGameOpened) onGameOpened(); } }, [openGame]);   // 1/11: sfida al Pit Stop dalla Home
   const back = () => setGame(null);
   useBack(!!game, back);   // tasto indietro: dallo strumento si torna al Garage
   if (game === "pitstop") return <PitStopGame best={pitBest} onResult={onPitResult} onBack={back} />;
@@ -7307,7 +7310,7 @@ function TrophyCase({ trophies = {}, progress = {}, helmet = null, defs = TROPHI
   );
 }
 
-function ProfiloScreen({ holidays = true, onHolidays = null, miniPit = true, onMiniPit = null, ig, onOpenIg, trial = null, trialUsed = false, onBack, onNotifiche, onPremium, onAdmin, onLogout, isPremium, onAbout, onHelp, onFeedback, aboutMe, onSaveAboutMe, favTeam, favDriver, onPickTeam, onPickDriver, guest, onLogin, onTerms, blocked = [], onUnblock, onDeleteAccount, savedCount = 0, onOpenSaved, account = null, onSaveName, isAdmin = false, onTheme, sounds = true, haptics = true, onSounds, onHaptics, helmet = null, onHelmet, trophies = {}, trophyProg = {}, trophyList = TROPHIES, onAdPrivacy = null }) {
+function ProfiloScreen({ fanLevel = null, reminders = true, onReminders = null, holidays = true, onHolidays = null, miniPit = true, onMiniPit = null, ig, onOpenIg, trial = null, trialUsed = false, onBack, onNotifiche, onPremium, onAdmin, onLogout, isPremium, onAbout, onHelp, onFeedback, aboutMe, onSaveAboutMe, favTeam, favDriver, onPickTeam, onPickDriver, guest, onLogin, onTerms, blocked = [], onUnblock, onDeleteAccount, savedCount = 0, onOpenSaved, account = null, onSaveName, isAdmin = false, onTheme, sounds = true, haptics = true, onSounds, onHaptics, helmet = null, onHelmet, trophies = {}, trophyProg = {}, trophyList = TROPHIES, onAdPrivacy = null }) {
   const ft = favTeam ? teamById(favTeam) : null;
   const fd = favDriver ? driverById(favDriver) : null;
   const favRows = [
@@ -7349,6 +7352,7 @@ function ProfiloScreen({ holidays = true, onHolidays = null, miniPit = true, onM
     { icon: "vibrate", label: "Vibrazioni", toggle: { on: haptics, onChange: onHaptics } },
     ...(onHolidays ? [{ icon: "sparkle", label: "Temi delle feste", toggle: { on: holidays !== false, onChange: onHolidays } }] : []),
     ...(onMiniPit ? [{ icon: "stopwatch", label: "Pit Board in tutta l'app", toggle: { on: miniPit !== false, onChange: onMiniPit } }] : []),
+    ...(onReminders ? [{ icon: "bell", label: "Promemoria sul telefono", toggle: { on: reminders !== false, onChange: onReminders } }] : []),
     ...(isAdmin ? [{ icon: "gear", label: "Pannello Admin · Pubblica notizia", onClick: onAdmin, badge: "ADMIN" }] : []),
     { icon: "help", label: "Assistenza", onClick: onHelp, chevron: true },
     { icon: "chat", label: "Invia feedback", onClick: onFeedback, chevron: true },   // come oggi, ma dal Profilo (niente pulsante fluttuante)
@@ -7404,6 +7408,7 @@ function ProfiloScreen({ holidays = true, onHolidays = null, miniPit = true, onM
       {!guest && noAbout && <p data-about-missing="" style={{ margin: "0 20px 10px", padding: "10px 14px", borderRadius: 12, background: "rgba(231,179,76,.1)", border: "1px solid rgba(231,179,76,.3)", fontFamily: F_BODY, fontSize: 12.5, color: C.text, lineHeight: 1.45 }}>Completa il tuo profilo: che tifoso sei e da quanti anni segui la F1</p>}
       {!guest && waiting && <p data-profile-waiting="" role="status" style={{ margin: "0 20px 14px", padding: "10px 14px", borderRadius: 12, background: "rgba(255,255,255,.04)", border: `1px solid ${C.border}`, fontFamily: F_BODY, fontSize: 12.5, color: C.muted, lineHeight: 1.45 }}>{ACCOUNT_MSG["not-loaded"]}</p>}
       {!guest && !waiting && <AboutCard about={aboutMe} onSave={onSaveAboutMe} />}
+      {!guest && !waiting && fanLevel && <FanLevelCard info={fanLevel} />}
       {!guest && !waiting && <TrophyCase trophies={trophies} progress={trophyProg} helmet={helmet} defs={trophyList} />}
 
       <button className="press" onClick={onPremium} style={{ display: "block", textAlign: "left", width: "calc(100% - 40px)", margin: "0 20px 22px", padding: 16, borderRadius: 18, background: "rgba(231,179,76,.1)", border: "1px solid rgba(231,179,76,.3)" }}>
@@ -9169,12 +9174,12 @@ function PsFace({ card, result }) {
     const tags = articleTags(card), col = (tags[0] && tags[0].color) || C.accent;
     return (
       <div style={{ height: "100%", display: "flex", flexDirection: "column" }}>
-        <div style={{ height: 150, flexShrink: 0, position: "relative", overflow: "hidden", background: `linear-gradient(135deg, ${col} 0%, #0B0B0D 115%)` }}>
+        <div style={{ flex: 1, minHeight: 140, position: "relative", overflow: "hidden", background: `linear-gradient(135deg, ${col} 0%, #0B0B0D 115%)` }}>
           <div style={{ position: "absolute", inset: 0, background: "repeating-linear-gradient(115deg,rgba(255,255,255,.05) 0 2px,transparent 2px 18px)" }} />
           <span style={{ position: "absolute", left: 12, top: 12, padding: "3px 8px", borderRadius: 6, background: "rgba(0,0,0,.45)", border: "1px solid rgba(255,255,255,.2)", fontFamily: F_HEAD, fontWeight: 900, fontStyle: "italic", fontSize: 10, letterSpacing: .8, color: "#fff" }}>{String(card.cat || "NOTIZIA").toUpperCase()}</span>
-          <span style={{ position: "absolute", right: 12, bottom: 4, fontFamily: F_HEAD, fontWeight: 900, fontStyle: "italic", fontSize: 40, color: "rgba(255,255,255,.14)" }}>B&T</span>
+          <span style={{ position: "absolute", right: 12, bottom: 4, fontFamily: F_HEAD, fontWeight: 900, fontStyle: "italic", fontSize: 56, color: "rgba(255,255,255,.14)" }}>B&T</span>
         </div>
-        <div style={{ padding: "14px 15px", flex: 1, minHeight: 0, overflow: "hidden" }}>
+        <div style={{ padding: "14px 15px 52px", flexShrink: 0 }}>
           <h3 style={{ margin: 0, fontFamily: F_HEAD, fontWeight: 800, fontSize: 19, lineHeight: 1.2, color: C.text }}>{card.title}</h3>
           {card.excerpt && <p style={{ margin: "8px 0 0", fontFamily: F_BODY, fontSize: 13, lineHeight: 1.45, color: C.muted, display: "-webkit-box", WebkitLineClamp: 4, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{card.excerpt}</p>}
           {card.time && <span style={{ display: "block", marginTop: 8, fontFamily: F_BODY, fontSize: 11, color: C.dim }}>{card.time}</span>}
@@ -9184,16 +9189,16 @@ function PsFace({ card, result }) {
   }
   const tag = (label, col) => <span style={{ alignSelf: "flex-start", padding: "3px 8px", borderRadius: 6, background: col + "2E", border: `1px solid ${col}80`, fontFamily: F_HEAD, fontWeight: 900, fontStyle: "italic", fontSize: 10, letterSpacing: .8, color: "#fff" }}>{label}</span>;
   if (card.kind === "take") return (
-    <div style={{ height: "100%", padding: 18, display: "flex", flexDirection: "column", gap: 14, background: "linear-gradient(180deg,#151A28,#0E0F14)" }}>
+    <div style={{ height: "100%", padding: 22, display: "flex", flexDirection: "column", justifyContent: "center", gap: 16, background: "linear-gradient(180deg,#151A28,#0E0F14)" }}>
       {tag("OPINIONE", PS.radio)}
-      <h3 style={{ margin: 0, fontFamily: F_HEAD, fontWeight: 900, fontStyle: "italic", fontSize: 24, lineHeight: 1.15, color: C.text }}>"{card.text}"</h3>
+      <h3 style={{ margin: 0, fontFamily: F_HEAD, fontWeight: 900, fontStyle: "italic", fontSize: 28, lineHeight: 1.15, color: C.text }}>"{card.text}"</h3>
       <p style={{ margin: 0, fontFamily: F_BODY, fontSize: 12.5, color: C.muted, lineHeight: 1.45 }}>A destra se sei d'accordo, a sinistra se no. Il risultato lo vedi dopo aver votato.</p>
     </div>
   );
   if (card.kind === "tf") return (
-    <div style={{ height: "100%", padding: 18, display: "flex", flexDirection: "column", gap: 14, background: "linear-gradient(180deg,#1C1712,#0F0D0B)" }}>
+    <div style={{ height: "100%", padding: 22, display: "flex", flexDirection: "column", justifyContent: "center", gap: 16, background: "linear-gradient(180deg,#1C1712,#0F0D0B)" }}>
       {tag("VERO O FALSO", C.gold)}
-      <h3 style={{ margin: 0, fontFamily: F_HEAD, fontWeight: 900, fontStyle: "italic", fontSize: 22, lineHeight: 1.2, color: C.text }}>{card.text}</h3>
+      <h3 style={{ margin: 0, fontFamily: F_HEAD, fontWeight: 900, fontStyle: "italic", fontSize: 26, lineHeight: 1.2, color: C.text }}>{card.text}</h3>
       <p style={{ margin: 0, fontFamily: F_BODY, fontSize: 12.5, color: C.muted, lineHeight: 1.45 }}>A destra vero, a sinistra falso. Dati presi dall'app (circuiti e piloti).</p>
     </div>
   );
@@ -9221,7 +9226,7 @@ function PsFace({ card, result }) {
 const PS_SWIPE = 90, PS_FAST_PX_MS = 2.6;
 // Easter egg "Radio in chat": il messaggio "box box" (solo quelle due parole) esce come una radio del box.
 const isBoxBox = t => /^\s*box[\s,.!-]*box[\s.!]*$/i.test(String(t || ""));   // soglia del gesto; oltre questa velocità la carta "taglia la pista"
-function PitSwipeScreen({ cards, deck, results, onAct, onUndo, onBack, onOpenArticle, whyOf, onLess, mode, onMode, rain, onEgg, streak, endInfo, onSaved, onShare }) {
+function PitSwipeScreen({ cards, deck, results, onAct, onUndo, onBack, onOpenArticle, whyOf, onLess, mode, onMode, rain, onEgg, streak, endInfo, onSaved, onShare, onDuel }) {
   const i = deck ? deck.i : 0, n = cards.length;
   const card = cards[i] || null, done = !!(deck && deck.done) || (n > 0 && i >= n);
   const marks = cards.map(c => (deck && deck.acts ? deck.acts[c.kind + ":" + c.id] : null));
@@ -9285,7 +9290,7 @@ function PitSwipeScreen({ cards, deck, results, onAct, onUndo, onBack, onOpenArt
       {!done && n > 0 && <div style={{ padding: "4px 18px 8px" }}><div style={{ display: "flex", justifyContent: "flex-end", fontFamily: F_BODY, fontWeight: 700, fontSize: 9.5, letterSpacing: .6, color: C.muted, marginBottom: 2 }}>CURVA {Math.min(i + 1, n)} / {n}</div><PsDots marks={marks} i={i} n={n} /></div>}
       {res && !done && <div data-ps-result="" role="status" style={{ margin: "0 16px 8px", padding: "9px 12px", borderRadius: 12, background: res.kind === "tf" ? (res.ok ? "rgba(47,211,107,.12)" : "rgba(242,194,48,.12)") : "rgba(76,141,255,.12)", border: `1px solid ${res.kind === "tf" ? (res.ok ? "rgba(47,211,107,.45)" : "rgba(242,194,48,.45)") : "rgba(76,141,255,.45)"}`, fontFamily: F_BODY, fontSize: 12, color: C.text, lineHeight: 1.4 }}>
         {res.kind === "take" && res.pct && <div style={{ display: "flex", height: 7, borderRadius: 4, overflow: "hidden", marginBottom: 6 }}><span style={{ width: res.pct.agree + "%", background: PS.box }} /><span style={{ flex: 1, background: PS.out }} /></div>}
-        {res.text}
+        <b style={{ fontFamily: F_HEAD, fontWeight: 900, fontStyle: "italic", fontSize: 10.5, letterSpacing: .6, color: C.muted, marginRight: 6 }}>{res.kind === "tf" ? "VERO O FALSO" : "OPINIONE"}</b>{res.text}
       </div>}
       {!done && n > 0 && (
         <div ref={box} style={{ flex: 1, minHeight: 0, position: "relative", margin: "0 16px" }}>
@@ -9316,7 +9321,7 @@ function PitSwipeScreen({ cards, deck, results, onAct, onUndo, onBack, onOpenArt
         </div>
       )}
       {n === 0 && <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", padding: 24, textAlign: "center", fontFamily: F_BODY, fontSize: 13.5, color: C.muted }}>Nessuna notizia nuova per il giro di oggi: torna più tardi.</div>}
-      {done && endInfo && <PsEnd info={endInfo} onSaved={onSaved} onShare={onShare} />}
+      {done && endInfo && <PsEnd info={endInfo} onSaved={onSaved} onShare={onShare} onDuel={onDuel} />}
       {why && card && kind === "news" && (
         <div onClick={() => setWhy(false)} style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,.55)", display: "flex", alignItems: "flex-end", zIndex: 5 }}>
           <div data-ps-why-sheet="" onClick={e => e.stopPropagation()} style={{ width: "100%", borderRadius: "20px 20px 0 0", background: "#16161A", borderTop: "1px solid rgba(255,255,255,.12)", padding: "16px 16px 22px" }}>
@@ -9334,7 +9339,7 @@ function PitSwipeScreen({ cards, deck, results, onAct, onUndo, onBack, onOpenArt
 }
 
 // Bandiera a scacchi: riepilogo del giro, serie, missioni della settimana, livello, stessa strategia.
-function PsEnd({ info, onSaved, onShare }) {
+function PsEnd({ info, onSaved, onShare, onDuel }) {
   const { box, votes, tfOk, tfTot, fast, streak, missions, level, nextText, strategy } = info;
   const cell = (label, v) => <div style={{ borderRadius: 12, background: "#141418", border: `1px solid ${C.border}`, padding: "9px 10px" }}><div style={{ fontFamily: F_BODY, fontWeight: 700, fontSize: 9.5, letterSpacing: .6, color: C.muted }}>{label}</div><div style={{ fontFamily: F_HEAD, fontWeight: 900, fontStyle: "italic", fontSize: 20, color: C.text, marginTop: 2 }}>{v}</div></div>;
   return (
@@ -9364,6 +9369,7 @@ function PsEnd({ info, onSaved, onShare }) {
         <div data-ps-strategy="" style={{ marginTop: 12, padding: "11px 12px", borderRadius: 14, background: "rgba(76,141,255,.1)", border: "1px solid rgba(76,141,255,.35)" }}>
           <div style={{ fontFamily: F_HEAD, fontWeight: 900, fontStyle: "italic", fontSize: 15, color: C.text }}>Stessa strategia!</div>
           <div style={{ fontFamily: F_BODY, fontSize: 12.5, color: C.text, marginTop: 3 }}>Tu e {strategy.name} (lega "{strategy.league}") avete votato uguale su {strategy.same} opinioni su {strategy.both}.</div>
+          {onDuel && <button className="press" data-duel-send="" onClick={() => onDuel(strategy)} style={{ marginTop: 9, padding: "8px 12px", borderRadius: 10, background: PS.radio, fontFamily: F_HEAD, fontWeight: 900, fontStyle: "italic", fontSize: 12.5, color: "#fff" }}>Sfida {strategy.name} al Pit Stop</button>}
         </div>
       )}
       <div style={{ display: "flex", gap: 8, marginTop: 14 }}>
@@ -9390,6 +9396,82 @@ function AdminTakesTab({ takes = [], onSave }) {
           <span style={{ flex: 1, fontFamily: F_BODY, fontSize: 13, color: t.on ? C.text : C.dim }}>{t.text}</span>
           <button className="press" onClick={() => save(takes.map(x => (x.id === t.id ? { ...x, on: !x.on } : x)))} style={{ padding: "6px 9px", borderRadius: 8, border: `1px solid ${C.border}`, fontFamily: F_HEAD, fontWeight: 800, fontSize: 11, color: t.on ? PS.box : C.muted }}>{t.on ? "ACCESA" : "SPENTA"}</button>
           <button className="press" aria-label={"Elimina " + t.text} onClick={() => save(takes.filter(x => x.id !== t.id))} style={{ padding: 6 }}><Icon name="trash" size={16} color={C.muted} /></button>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// Livello del tifoso (1/11, nel Profilo): punti dai giri di Pit Swipe, risposte, voti, missioni e trofei.
+function FanLevelCard({ info }) {
+  const { level, xp, missions } = info;
+  return (
+    <div data-fan-level="" style={{ margin: "0 20px 22px", padding: 14, borderRadius: 18, background: C.card, border: `1px solid ${C.border}` }}>
+      <div style={{ fontFamily: F_BODY, fontWeight: 700, fontSize: 11, color: C.dim, letterSpacing: 1 }}>LIVELLO DEL TIFOSO</div>
+      <div style={{ display: "flex", alignItems: "baseline", gap: 8, margin: "6px 0 8px" }}>
+        <span style={{ fontFamily: F_HEAD, fontWeight: 900, fontStyle: "italic", fontSize: 20, color: C.text }}>{level.name}</span>
+        <span style={{ fontFamily: F_BODY, fontSize: 12, color: C.muted }}>{xp} punti{level.nextName ? ` · ${level.toNext} a ${level.nextName}` : ""}</span>
+      </div>
+      <div style={{ height: 6, borderRadius: 3, background: "rgba(255,255,255,.1)", overflow: "hidden" }}><div style={{ height: "100%", width: `${Math.round(level.frac * 100)}%`, background: C.accent }} /></div>
+      <div style={{ marginTop: 12, fontFamily: F_BODY, fontWeight: 700, fontSize: 10.5, color: C.dim, letterSpacing: 1 }}>MISSIONI DELLA SETTIMANA</div>
+      {missions.map(m => <div key={m.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "7px 0", fontFamily: F_BODY, fontSize: 12.5, color: m.done ? C.text : C.muted }}><span style={{ width: 16, height: 16, borderRadius: 5, background: m.done ? PS.box : "rgba(255,255,255,.08)", display: "flex", alignItems: "center", justifyContent: "center" }}>{m.done && <Icon name="check" size={11} color="#000" sw={3} />}</span><span style={{ flex: 1 }}>{m.text}</span><span>{m.value}/{m.goal}</span></div>)}
+    </div>
+  );
+}
+
+// Primi passi (1/11) per chi è nuovo: pilota del cuore, squadra del FantaF1, primo giro di Pit Swipe.
+function OnboardCard({ steps, onHide }) {
+  const n = steps.filter(x => x.done).length;
+  return (
+    <div data-onboard="" style={{ margin: "0 16px 14px", padding: 14, borderRadius: 18, background: C.card, border: `1px solid ${C.border}` }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+        <span style={{ fontFamily: F_HEAD, fontWeight: 900, fontStyle: "italic", fontSize: 16, color: C.text }}>Primi passi</span>
+        <span style={{ fontFamily: F_BODY, fontSize: 12, color: C.muted }}>{n} di {steps.length}</span>
+        <span style={{ flex: 1 }} />
+        <button className="press" data-onboard-hide="" onClick={onHide} style={{ padding: "4px 8px", fontFamily: F_BODY, fontWeight: 700, fontSize: 11.5, color: C.dim }}>Nascondi</button>
+      </div>
+      {steps.map(x => (
+        <button key={x.id} className="press" data-onboard-step={x.id} data-done={x.done ? "1" : "0"} onClick={x.done ? undefined : x.go} style={{ display: "flex", alignItems: "center", gap: 10, width: "100%", padding: "10px 0 2px", textAlign: "left" }}>
+          <span style={{ width: 22, height: 22, borderRadius: 7, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", background: x.done ? PS.box : "rgba(255,255,255,.08)", border: x.done ? "none" : `1px solid ${C.border}` }}>{x.done && <Icon name="check" size={13} color="#000" sw={3} />}</span>
+          <span style={{ flex: 1, fontFamily: F_BODY, fontSize: 13.5, color: x.done ? C.muted : C.text, textDecoration: x.done ? "line-through" : "none" }}>{x.text}</span>
+          {!x.done && <Icon name="chevron" size={14} color={C.dim} />}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+// Bentornato (1/11): via da più di 7 giorni, le novità e il giro di oggi.
+function WelcomeBack({ info, onGo, onClose }) {
+  return (
+    <div onClick={onClose} style={{ position: "absolute", inset: 0, zIndex: 700, background: "rgba(0,0,0,.6)", display: "flex", alignItems: "flex-end" }}>
+      <div data-welcome-back="" onClick={e => e.stopPropagation()} style={{ width: "100%", borderRadius: "22px 22px 0 0", background: "#16161A", borderTop: "1px solid rgba(255,255,255,.12)", padding: "20px 18px 26px" }}>
+        <div style={{ display: "flex", gap: 6, marginBottom: 10 }}>{[0, 1, 2, 3, 4].map(k => <span key={k} style={{ width: 16, height: 16, borderRadius: "50%", background: C.accent, boxShadow: "0 0 10px rgba(255,24,1,.6)" }} />)}</div>
+        <h2 style={{ margin: "0 0 6px", fontFamily: F_HEAD, fontWeight: 900, fontStyle: "italic", fontSize: 24, color: C.text }}>Bentornato!</h2>
+        <p style={{ margin: 0, fontFamily: F_BODY, fontSize: 13.5, color: C.muted, lineHeight: 1.5 }}>Sei stato via {info.days} giorni: {info.news === 1 ? "1 notizia nuova" : `${info.news} notizie nuove`}{info.races ? `, ${info.races === 1 ? "1 GP corso" : `${info.races} GP corsi`}` : ""}. Il giro di oggi ti aspetta.</p>
+        <button className="press" onClick={onGo} style={{ display: "block", width: "100%", marginTop: 16, padding: "13px 0", borderRadius: 13, background: C.accent, fontFamily: F_HEAD, fontWeight: 900, fontStyle: "italic", fontSize: 15, color: "#fff" }}>Fai il giro di oggi</button>
+        <button className="press" onClick={onClose} style={{ display: "block", width: "100%", marginTop: 8, padding: "11px 0", fontFamily: F_BODY, fontWeight: 700, fontSize: 13, color: C.muted }}>Chiudi</button>
+      </div>
+    </div>
+  );
+}
+
+// Sfide 1 contro 1 al Pit Stop (1/11): da giocare, in attesa, vinte o perse.
+function DuelsCard({ duels, onPlay }) {
+  const t = v => (v != null ? v.toFixed(2).replace(".", ",") + " s" : "–");
+  return (
+    <div data-duels="" style={{ margin: "0 16px 14px", borderRadius: 18, background: C.card, border: `1px solid ${C.border}`, overflow: "hidden" }}>
+      <div style={{ padding: "12px 14px 4px", fontFamily: F_BODY, fontWeight: 700, fontSize: 10.5, letterSpacing: 1.2, color: C.muted }}>SFIDE AL PIT STOP</div>
+      {duels.map(d => (
+        <div key={d.id} data-duel={d.id} data-status={d.status} style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 14px", borderTop: `1px solid ${C.divider}` }}>
+          <span style={{ flex: 1, minWidth: 0, fontFamily: F_BODY, fontSize: 13, color: C.text, lineHeight: 1.4 }}>
+            {d.status === "todo" ? `${d.other} ti sfida al Pit Stop: batti ${t(d.theirTime)}`
+              : d.status === "waiting" ? `Aspetti ${d.other}: il tuo tempo è ${t(d.myTime)}`
+              : d.status === "won" ? `Hai vinto contro ${d.other}: ${t(d.myTime)} contro ${t(d.theirTime)}`
+              : d.status === "lost" ? `Hai perso contro ${d.other}: ${t(d.myTime)} contro ${t(d.theirTime)}`
+              : `Pari con ${d.other}: ${t(d.myTime)}`}
+          </span>
+          {d.status === "todo" && <button className="press" data-duel-play="" onClick={() => onPlay(d.id)} style={{ flexShrink: 0, padding: "8px 12px", borderRadius: 10, background: C.accent, fontFamily: F_HEAD, fontWeight: 900, fontStyle: "italic", fontSize: 12.5, color: "#fff" }}>Rispondi</button>}
         </div>
       ))}
     </div>
@@ -9476,6 +9558,10 @@ function App() {
   const [psRes, setPsRes] = useState(null);       // risultato dell'ultima opinione o vero o falso
   const [psRain, setPsRain] = useState(false);    // easter egg: pioggia vera sul circuito del weekend
   const [launchFx, setLaunchFx] = useState(0);    // easter egg: launch control (la pagina "parte")
+  const [duelsArr, setDuelsArr] = useState([]);   // sfide 1 contro 1 (fanta/pitswipe-sfide)
+  const [activeDuel, setActiveDuel] = useState(null);
+  const [garageGame, setGarageGame] = useState(null);
+  const [welcome, setWelcome] = useState(null);   // Bentornato
   // Mini Pit Board in tutta l'app (31/10 sera): interruttore nel Profilo (sul telefono) e sessione chiusa con la X.
   const [miniPitOn, setMiniPitOn] = useState(() => local.get("bt-minipit-on") !== false);
   const [miniPitHidden, setMiniPitHidden] = useState(null);
@@ -10706,10 +10792,12 @@ function App() {
   const psDriverCard = (() => {
     const d = favDriver ? driverById(favDriver) : null;
     if (!d) return null;
-    const rows = (lastRace && lastRace.rows) || [], ri = rows.findIndex(r => r[0] === favDriver);
-    const sd = (standings && standings.drivers) || [], si = sd.findIndex(r => r[0] === favDriver);
-    return { id: favDriver, name: d.full, race: lastRace ? lastRace.name : null, racePos: ri >= 0 ? ri + 1 : null, raceGap: ri > 0 ? String(rows[ri][1] || "") : ri === 0 ? "vincitore" : null,
-      champPos: si >= 0 ? si + 1 : null, pts: si >= 0 ? sd[si][1] : null };
+    // ultima gara: righe { id, pos, time, dnf }; mondiale: { id, position, points } (dati veri dell'app)
+    const rr = ((lastRace && lastRace.rows) || []).find(r => r && r.id === favDriver);
+    const sr = ((standings && standings.drivers) || []).find(r => r && r.id === favDriver);
+    return { id: favDriver, name: d.full, race: lastRace ? lastRace.name : null, racePos: rr && rr.pos ? rr.pos : null,
+      raceGap: rr ? (rr.pos === 1 ? "vincitore" : rr.dnf ? "ritirato" : String(rr.time || "")) : null,
+      champPos: sr ? sr.position : null, pts: sr ? sr.points : null };
   })();
   const myVotesT = myAid ? Object.fromEntries(Object.entries(psTally).filter(([k, t]) => k.startsWith("t:") && t.byAid[myAid] != null).map(([k, t]) => [k.slice(2), t.byAid[myAid]])) : {};
   const psFresh = BtSwipe.buildDeck({ news: psNews, takes, voted: myVotesT, facts: psFacts, driverCard: psDriverCard, weights: swipe.w || {}, fav: { driver: favDriver, team: favTeam }, mode: swipe.mode || "taste", key: psKey });
@@ -10734,6 +10822,7 @@ function App() {
     if (!(view === "pitswipe" || (view === "tab" && tab === "home"))) return;
     if (nowMs() - psVotedAt.current < 60000) return;
     psVotedAt.current = nowMs(); psVotesLoad();
+    Duels.load().then(v => setDuelsArr(v), () => {});
   }, [view, tab]);
   const psEgg = id => setSwipe(s => {
     const eggs = Array.isArray(s.eggs) ? s.eggs : [];
@@ -10826,11 +10915,48 @@ function App() {
     leagues.forEach(l => (l.members || []).forEach(m => {
       if (!m || m.aid === myAid) return;
       const r = BtSwipe.sameStrategy(psTally, myAid, m.aid);
-      if (r.both >= 3 && (!best || r.same / r.both > best.same / best.both)) best = { ...r, name: m.name, league: l.name };
+      if (r.both >= 3 && (!best || r.same / r.both > best.same / best.both)) best = { ...r, name: m.name, league: l.name, aid: m.aid };
     }));
     return best && best.same / best.both >= 0.6 ? best : null;
   })();
   const psDoneDeck = psDeck && psDeck.done ? psDeck : null;
+  const duelList = myAid ? duelState(duelsArr, myAid, nowMs()).filter(d => d.status === "todo" || d.status === "waiting" || nowMs() - d.at < 3 * 86400000).slice(0, 3) : [];
+  const sendDuel = st => {
+    if (!myAid || guest) return;
+    if (!(pitBest > 0)) { showToast("Prima fai un Pit Stop nel Garage: la sfida parte dal tuo miglior tempo"); return; }
+    Duels.challenge({ from: myAid, fromName: (account && account.name) || "Tifoso", to: st.aid, toName: st.name, time: pitBest })
+      .then(item => { setDuelsArr(a => [...a, item]); showToast(`Sfida mandata a ${st.name}`); fx.play("radio"); }, () => showToast("Sfida non inviata: controlla la connessione"));
+  };
+  const playDuel = id => { setActiveDuel(id); setGarageGame("pitstop"); setView("tab"); goTab("garage"); };
+  // Primi passi per chi è nuovo.
+  const onboardSteps = [
+    { id: "pilota", text: "Scegli il tuo pilota del cuore", done: !!favDriver, go: () => setPicker("driver") },
+    { id: "squadra", text: "Fai la tua squadra del FantaF1", done: !!(trophyProg.griglia && trophyProg.griglia.done), go: () => goTab("fanta") },
+    { id: "giro", text: "Fai il primo giro di Pit Swipe", done: ((swipe.tot || {}).decks || 0) > 0, go: () => openPitSwipe() },
+  ];
+  const onboardShow = !guest && userLoaded === userEmail && swipe.onb !== "off" && onboardSteps.some(x => !x.done);
+  // Bentornato: via da più di 7 giorni (ultima apertura sul telefono, bt-last-seen).
+  const welcomeDone = useRef(false);
+  useEffect(() => {
+    if (welcomeDone.current || guest || !userEmail || userLoaded !== userEmail) return;
+    welcomeDone.current = true;
+    const last = Number(local.get("bt-last-seen")) || 0, now = nowMs();
+    local.set("bt-last-seen", now);
+    if (!last || now - last < 7 * 86400000) return;
+    const news = articles.filter(a => { const t = Date.parse(a.date || ""); return isFinite(t) && t > last; }).length;
+    const gp = races.filter(r => { const t = Date.parse(String(r.date).slice(0, 10) + "T12:00:00Z"); return t > last && t < now; }).length;
+    setWelcome({ days: Math.floor((now - last) / 86400000), news, races: gp });
+  }, [userLoaded, userEmail]);
+  // Promemoria sul telefono: si rifanno quando cambiano mazzo, serie o preferenza; il permesso solo dopo il primo giro.
+  const remSig = [psKey, !!(psDoneDeck), psStreak.n, psStreak.danger, notifPrefs.reminders !== false, ((swipe.tot || {}).decks || 0) > 0, psRace ? psRace.id : ""].join("|");
+  useEffect(() => {
+    const plugin = capPlugin("LocalNotifications");
+    if (!plugin || guest || userLoaded !== userEmail) return;
+    const list = Reminders.plan({ now: nowMs(), race: psRace, sessions: psSessions, deckDone: !!psDoneDeck, streak: psStreak, prefs: { reminders: notifPrefs.reminders } });
+    const ask = ((swipe.tot || {}).decks || 0) > 0 && !local.get("bt-rem-asked");
+    if (!ask && !((swipe.tot || {}).decks || 0)) return;   // prima del primo giro niente (nemmeno il permesso)
+    Reminders.apply(plugin, list, { ask }).then(() => { if (ask) local.set("bt-rem-asked", true); });
+  }, [remSig, userLoaded]);
   const psEndInfo = psDoneDeck ? {
     box: Object.values(psDoneDeck.acts || {}).filter(a => a === "box" || a === "fast").length - psCards.filter(c => c.kind !== "news" && (psDoneDeck.acts || {})[c.kind + ":" + c.id] === "box").length,
     votes: psCards.filter(c => c.kind === "take" && (psDoneDeck.acts || {})["take:" + c.id]).length,
@@ -10937,23 +11063,31 @@ function App() {
     onOpenArticle={openArticle} whyOf={c => BtSwipe.whyReasons(c, { fav: { driver: favDriver, team: favTeam }, weights: swipe.w || {}, hot: ((psTally["f:" + c.id] || {}).total || 0) >= 3, labelOf: psLabelOf })}
     onLess={c => { if (!guest && !userDataWait()) setSwipe(s => ({ ...s, w: BtSwipe.applySwipe(BtSwipe.applySwipe(s.w, c.topics, "out"), c.topics, "out") })); showToast("Meno carte così"); }}
     mode={swipe.mode || "taste"} onMode={m => { if (!guest && !userDataWait()) setSwipe(s => ({ ...s, mode: m })); }} rain={psRain} onEgg={psEgg} streak={{ n: (swipe.streak || {}).n || 0 }}
-    endInfo={psEndInfo} onSaved={() => { setSavedOnly(true); setView("tab"); goTab("home"); }} onShare={psShare} />;
+    endInfo={psEndInfo} onSaved={() => { setSavedOnly(true); setView("tab"); goTab("home"); }} onShare={psShare} onDuel={!guest ? sendDuel : null} />;
   else if (view === "chats") body = <ChatsView chats={chats} onOpen={openChat} blocked={blocked} onBack={viewBack.chats} unreadOf={(id, ms) => Chat.unread(id, ms)} />;
   else if (view === "profilo") body = <ProfiloScreen ig={ig} onOpenIg={() => { setIgFrom("profilo"); setView("instagram"); }} aboutMe={aboutMe} onSaveAboutMe={a => Account.updateAbout(a).catch(e => showToast(e && (e.code === "too-young" || e.code === "not-loaded") ? messageOf(e) : NOT_SAVED))} account={account} onSaveName={n => Account.updateName(n)} isAdmin={Account.isAdmin()} trial={trialActive ? trial : null} trialUsed={!!trial} onBack={viewBack.profilo} onNotifiche={() => setView("notifiche")} onPremium={() => setPremiumOpen(true)} onAdmin={() => guest ? needLogin("Accedi per usare il pannello admin.") : setView(adminUnlocked ? "admin" : "adminLock")} onLogout={logout} isPremium={isPremium} onAbout={() => setInfoModal({ title: "Info su B&T", body: ABOUT_TEXT, credits: true })} onFeedback={() => setFeedbackOpen(true)} onHelp={() => setInfoModal({ title: "Assistenza", body: HELP_TEXT })} favTeam={favTeam} favDriver={favDriver} onPickTeam={() => guest ? needLogin("Per scegliere scuderia e pilota del cuore serve un account.") : setPicker("team")} onPickDriver={() => guest ? needLogin("Per scegliere scuderia e pilota del cuore serve un account.") : setPicker("driver")} guest={guest} onLogin={() => needLogin(null)} onTerms={() => setTermsOpen(true)} blocked={blocked} onUnblock={unblockUser} onDeleteAccount={deleteAccount} savedCount={saved.length} onOpenSaved={openSaved} onTheme={() => setThemeOpen(true)} helmet={helmet} onHelmet={() => setHelmetOpen(true)} trophies={trophies} trophyProg={trophyProg} trophyList={trophyList}
     onAdPrivacy={Ads.privacyRequired() ? () => Ads.openPrivacy().catch(() => showToast("Le preferenze sulla privacy degli annunci non sono disponibili in questo momento.")) : null}
     sounds={sounds} haptics={haptics} onSounds={v => { if (userDataWait()) return; setSounds(v); fx.setSounds(v); if (v) fx.play("tick"); }} onHaptics={v => { if (userDataWait()) return; setHaptics(v); fx.setHaptics(v); if (v) fx.buzz("light"); }}
     holidays={holidaysOn} onHolidays={v => { if (userDataWait()) return; setHolidaysOn(v); local.set("bt-holidays-on", v); fx.play("tick"); }}
-    miniPit={miniPitOn} onMiniPit={v => { setMiniPitOn(v); local.set("bt-minipit-on", v); fx.play("tick"); }} />;
+    miniPit={miniPitOn} onMiniPit={v => { setMiniPitOn(v); local.set("bt-minipit-on", v); fx.play("tick"); }}
+    fanLevel={guest ? null : { level: psLevel, xp: BtSwipe.xpOf(swipe.tot || {}, psTrophies), missions: psMissions }}
+    reminders={notifPrefs.reminders !== false} onReminders={guest ? null : v => { if (userDataWait()) return; setNotifPrefs(x => ({ ...x, reminders: v })); fx.play("tick"); }} />;
   else if (view === "notifiche") body = <NotificheScreen offline={offline} onBack={viewBack.notifiche} onAction={a => { if (a === "feedback") { if (feedbackAsk && !feedbackAsk.read) saveAsk({ ...feedbackAsk, read: true }); setFeedbackOpen(true); } }} notifs={notifs} onReadAll={readAll} isPremium={isPremium} onPremium={() => setPremiumOpen(true)} favTeam={favTeam} favDriver={favDriver} prefs={notifPrefs} onPrefs={v => { if (!userDataWait()) setNotifPrefs(v); }} onGoProfilo={() => setView("profilo")} />;
   else {
     if (tab === "home") body = <HomeScreen holidayTop={holiday ? <HolidayCard id={holiday} onOpen={holidayOpen(holiday)} /> : null}
-      pitSwipe={<PitSwipeCard info={{ total: psCards.length, i: psDeck ? psDeck.i : 0, done: !!(psDeck && psDeck.done), streak: psStreak, level: psLevel, missions: psMissions, nextText: psNextText }} onOpen={openPitSwipe} />} ig={ig} highlights={highlights} onOpenIg={() => { setIgFrom("tab"); setView("instagram"); }} articles={articles} tagFilter={tagFilter} onTag={filterByTag} onClearTag={() => setTagFilter(null)} onOpenArticle={openArticle} isPremium={isPremium} onPremium={() => setPremiumOpen(true)} onToast={showToast} onLiveTrack={() => setLiveTrackOpen(true)} onGoFanta={() => goTab("fanta")}  saved={saved} onToggleSave={toggleSave} savedOnly={savedOnly} setSavedOnly={setSavedOnly} onOpenCircuit={openCircuit} homePoll={homePoll} homeVote={votes.home || null} onVote={castVote}
+      pitSwipe={<>
+        {onboardShow && <OnboardCard steps={onboardSteps} onHide={() => setSwipe(s => ({ ...s, onb: "off" }))} />}
+        <PitSwipeCard info={{ total: psCards.length, i: psDeck ? psDeck.i : 0, done: !!(psDeck && psDeck.done), streak: psStreak, level: psLevel, missions: psMissions, nextText: psNextText }} onOpen={openPitSwipe} />
+        {duelList.length > 0 && <DuelsCard duels={duelList} onPlay={playDuel} />}
+      </>} ig={ig} highlights={highlights} onOpenIg={() => { setIgFrom("tab"); setView("instagram"); }} articles={articles} tagFilter={tagFilter} onTag={filterByTag} onClearTag={() => setTagFilter(null)} onOpenArticle={openArticle} isPremium={isPremium} onPremium={() => setPremiumOpen(true)} onToast={showToast} onLiveTrack={() => setLiveTrackOpen(true)} onGoFanta={() => goTab("fanta")}  saved={saved} onToggleSave={toggleSave} savedOnly={savedOnly} setSavedOnly={setSavedOnly} onOpenCircuit={openCircuit} homePoll={homePoll} homeVote={votes.home || null} onVote={castVote}
       hidden={hidden} onHide={hideArticle} onUnhideAll={() => { if (!userDataWait()) setHidden([]); }} onSwipeSave={saveFromSwipe}
       onRefresh={() => refreshShared(["news", "highlights", "ig", "homePoll"]).catch(() => {})} />;
     else if (tab === "race") body = <RaceScreen onStandingsEnd={isPremium ? null : Ads.standingsEnd} favDriver={favDriver} dotdVote={live ? votesNow.dotd[live.raceId] : null} onDotdVote={(k, id) => live && voteDotd(live.raceId, k, id)} ratings={votesNow.ratings} onRate={rateDriver} onOpenChats={() => setView("chats")} onOpenGhost={() => setView("ghost")} races={races} standings={shownStandings} isPremium={isPremium} onPremium={() => setPremiumOpen(true)} onSelectDriver={setSelectedDriver} live={live} liveSt={liveSt} onExpandMap={() => setLiveTrackOpen(true)} onTelemetry={(carId, lapNo, sector) => setTelemetry({ carId, lapNo, sector })} onOpenCircuit={openCircuit} wxGuess={wxGuess} wxResult={wxResult} onGuessWeather={guessWeather} onLapTimes={setLapList} onSecondScreen={() => setSsOpen(true)} lastRace={lastRace} of1={of1} onOf1Refresh={() => of1TickRef.current && of1TickRef.current(true)} of1Sessions={of1Sessions}
       onOf1Pick={key => { of1PickRef.current = key === of1Sessions.latest ? null : key; setOf1Sessions(x => ({ ...x, shown: key })); if (of1TickRef.current) of1TickRef.current(true); }}
       sessionNote={of1Live && of1Live.raw && !of1Live.raw.laps.length && of1Live.raw.session_result.length ? "I tempi giro per giro non sono ancora su OpenF1 (arrivano qualche ora dopo la fine): intanto la classifica con il miglior giro di ognuno." : null} replay={replayCtl} />;
-    else if (tab === "garage") body = <GarageScreen races={races} pitBest={pitBest} onPitResult={t => { if (!userDataWait()) { setPitBest(b => b == null || t < b ? t : b); psBump("pit"); } }} sillyPreds={sillyPreds} onPredict={predictSeat} sillyOfficial={sillyOfficial} live={live} stratPreds={stratPreds} onStrat={(id, st) => { if (!userDataWait()) setStratPreds(x => ({ ...x, [id]: { stints: st, at: nowMs() } })); }} bluffTags={bluffNow} onBluffRefresh={loadBluffTags} />;
+    else if (tab === "garage") body = <GarageScreen openGame={garageGame} onGameOpened={() => setGarageGame(null)} races={races} pitBest={pitBest} onPitResult={t => {
+      if (activeDuel && myAid) { const id = activeDuel; setActiveDuel(null); Duels.reply({ id, aid: myAid, time: t }).then(item => { setDuelsArr(a => [...a, item]); showToast("Sfida giocata: risultato in Home"); }, () => showToast("Risposta alla sfida non inviata")); }
+      if (!userDataWait()) { setPitBest(b => b == null || t < b ? t : b); psBump("pit"); } }} sillyPreds={sillyPreds} onPredict={predictSeat} sillyOfficial={sillyOfficial} live={live} stratPreds={stratPreds} onStrat={(id, st) => { if (!userDataWait()) setStratPreds(x => ({ ...x, [id]: { stints: st, at: nowMs() } })); }} bluffTags={bluffNow} onBluffRefresh={loadBluffTags} />;
     else if (tab === "fanta") body = <FantaScreen standings={shownStandings} squad={squad} setSquad={setSquad} base={squadBase} freeTransfers={freeTransfers} budget={FANTA_BUDGET} stats={fantaStats} race={fantaRace} lock={teamLockInfo} weekends={fantaLive} isPremium={isPremium} onPremium={() => setPremiumOpen(true)} onToast={showToast} bonus={bonus} leagues={leagueRows} seasonPts={fantaSeason.total} realWeek={fantaRace ? fantaSeason.rounds.find(r => r.round === fantaRace.round) || null : null} meAid={account ? account.aid : null} onCreateLeague={createLeague} onJoinLeague={joinLeague} onLeaveLeague={leaveLeague} onRenameLeague={renameLeague} needAccount={needAccount} predictions={predictionsOpen} predAnswers={predAnswers} predLockOf={predLockOf} onAnswerPrediction={answerPrediction} />;
   }
 
@@ -11033,6 +11167,7 @@ function App() {
         {toast && <div className="toast" style={showBottomNav && adH > 0 ? { bottom: 104 + adH + AD_GAP } : undefined}>{toast}</div>}
         {notice && !ssOpen && <LiveNotice n={notice} onClose={nextNotice} />}
         {trophyNotice && <TrophyNotice n={trophyNotice} />}
+        {welcome && <WelcomeBack info={welcome} onClose={() => setWelcome(null)} onGo={() => { setWelcome(null); openPitSwipe(); }} />}
       </div>
   );
 }

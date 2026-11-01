@@ -66,6 +66,41 @@ t('promemoria: si programmano col plugin, prima si cancellano i vecchi; senza pl
   assert.strictEqual(await R.apply(denied, list, { ask: false }), false, 'senza permesso e senza chiederlo: niente');
 });
 
+t('sfide: da giocare, in attesa, vinte, perse, pari; conta il primo tentativo; scadono dopo 7 giorni', () => {
+  const { duelState } = require('../../src/services/duels');
+  const now = at('2026-11-01T12:00:00Z'), d = 86400000;
+  const arr = [
+    { t: 'c', id: 's1', from: 'marco', fromName: 'Marco', to: 'me', toName: 'Io', time: 2.41, at: now - d },
+    { t: 'c', id: 's2', from: 'me', fromName: 'Io', to: 'giulia', toName: 'Giulia', time: 2.3, at: now - 2 * d },
+    { t: 'c', id: 's3', from: 'me', fromName: 'Io', to: 'luca', toName: 'Luca', time: 2.5, at: now - 3 * d },
+    { t: 'r', id: 's3', aid: 'luca', time: 2.2, at: now - d },
+    { t: 'r', id: 's3', aid: 'luca', time: 3.9, at: now },
+    { t: 'c', id: 's4', from: 'anna', fromName: 'Anna', to: 'me', toName: 'Io', time: 2.6, at: now - 4 * d },
+    { t: 'r', id: 's4', aid: 'me', time: 2.45, at: now - 3 * d },
+    { t: 'c', id: 's5', from: 'piero', fromName: 'Piero', to: 'me', toName: 'Io', time: 2.6, at: now - 9 * d },
+    { t: 'c', id: 's6', from: 'x', fromName: 'X', to: 'y', toName: 'Y', time: 2.6, at: now },
+    { t: 'r', id: 's2', aid: 'intruso', time: 1.1, at: now },
+  ];
+  const st = duelState(arr, 'me', now);
+  assert.deepStrictEqual(st.map(x => [x.id, x.status]), [['s1', 'todo'], ['s2', 'waiting'], ['s3', 'lost'], ['s4', 'won']]);
+  assert.deepStrictEqual([st[2].myTime, st[2].theirTime, st[2].other], [2.5, 2.2, 'Luca'], 'il primo tentativo di Luca');
+  assert.deepStrictEqual([st[3].myTime, st[3].theirTime], [2.45, 2.6]);
+});
+
+t('sfide: si mandano e si risponde con arrayUnion; tempi validi', async () => {
+  const { createDuels } = require('../../src/services/duels');
+  const docs = {};
+  const D = createDuels({ now: () => 1000, rand: () => 0.5, dbGet: async (c, id) => docs[c + '/' + id] || null,
+    docAppend: async (c, id, item) => { const k = c + '/' + id; docs[k] = { __arr: [...((docs[k] || {}).__arr || []), item] }; } });
+  const c = await D.challenge({ from: 'me', fromName: 'Io', to: 'm', toName: 'Marco', time: 2.4134 });
+  assert.strictEqual(c.time, 2.413);
+  await D.reply({ id: c.id, aid: 'm', time: 2.39 });
+  await assert.rejects(D.challenge({ from: 'me', to: 'me', time: 2 }));
+  await assert.rejects(D.reply({ id: c.id, aid: 'm', time: 0 }));
+  assert.strictEqual((await D.load()).length, 2);
+  assert.ok(Object.keys(docs).includes('fanta/pitswipe-sfide'));
+});
+
 (async () => {
   const filter = process.argv[2] ? new RegExp(process.argv[2], 'i') : null;
   for (const [name, fn] of tests) {
