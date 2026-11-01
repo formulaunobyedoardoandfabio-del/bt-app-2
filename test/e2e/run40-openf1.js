@@ -129,7 +129,9 @@ run({
     const { ctx, p, errs } = await open(b, { seed: { addDocs: BAKU_LIVE, pro: true }, routes: of1.routes }); await login(p);   // 1/11: funzioni Pro
     await goTab(p, 'RACE'); await waitReplay(p); await w(p, 300);
     await raceTab(p, 'radio');
-    const rows = await p.evaluate(() => [...document.querySelectorAll('[data-radio-row]')].map(r => ({ t: r.innerText.replace(/\s+/g, ' '), src: (r.querySelector('audio[controls]') || {}).src || null })));
+    // 1/11 notte: tasto grande Ascolta (data-radio-play) con l'audio nascosto accanto, al posto dei comandi del browser
+    const rows = await p.evaluate(() => [...document.querySelectorAll('[data-radio-row]')].map(r => ({ t: r.innerText.replace(/\s+/g, ' '), src: (r.querySelector('audio') || {}).src || null, play: !!r.querySelector('[data-radio-play]') })));
+    assert(rows.every(r => r.play), 'manca il tasto Ascolta');
     await ctx.close();
     assert(rows.length === 3, 'radio: ' + rows.length);
     assert(rows.every(r => r.src && /^https:\/\/livetiming\.formula1\.com\/.+\.mp3$/.test(r.src)), 'audio delle radio: ' + JSON.stringify(rows.map(r => r.src)));
