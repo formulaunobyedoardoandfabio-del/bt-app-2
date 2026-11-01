@@ -443,6 +443,7 @@ const OF1_LIVE_BASE = "https://bt-app-2.vercel.app/api/live", OF1_LIVE_MS = 1500
 // dei piloti non si vedono"): tolto (0). Con i giri di OpenF1 dietro l'ultimo giro chiuso le auto finivano tutte sulla
 // linea del traguardo, una sopra l'altra. La mappa fluida va fatta con le coordinate vere (location di OpenF1).
 const LIVE_LAG_S = 0;
+let lastOf1Sim = null;   // ultima sessione di OpenF1 mostrata (per ripartire da lì quando arrivano dati nuovi)
 const OF1 = createOpenF1({ liveBase: OF1_LIVE_BASE });
 // Classifiche del mondiale in automatico (24/10): Jolpica F1, gratis e senza chiave (src/services/jolpica.js), lette al
 // massimo ogni 30 minuti. È pensato per uso non commerciale: prima dell'uscita pubblica con la pubblicità serve il
@@ -10008,8 +10009,8 @@ function App() {
       if (isOf1Live(live)) {
         const r = replayRef.current;
         if (!r.playing) {
-          if (!(live.ongoing && live.sim.t < live.sim.duration)) return;   // diretta in corso: scorre in tempo reale
-          live.sim.advance(Math.min(0.25, live.sim.duration - live.sim.t));
+          if (!live.ongoing) return;   // diretta in corso: il tempo scorre da solo (fino a 90 s oltre gli ultimi dati)
+          live.sim.advance(0.25);
           if (liveShown.current) setLiveTick(n => n + 1);
           return;
         }
@@ -10344,6 +10345,10 @@ function App() {
         // dietro gli ultimi dati e il tempo scorre da solo (vedi l'intervallo da 250 ms): così fra un aggiornamento e
         // l'altro (15 s) le auto si muovono di continuo invece di stare ferme e poi saltare.
         if (LIVE_LAG_S > 0 && ongoing && sim.jumpTo && isFinite(sim.duration)) sim.jumpTo(Math.max(0, sim.duration - LIVE_LAG_S));
+        // 1/11 notte: dati nuovi della stessa sessione: si riparte da dove si era (le auto non saltano indietro), salvo
+        // essere rimasti più di 10 s dietro gli ultimi dati.
+        if (ongoing && sim.jumpTo && lastOf1Sim && lastOf1Sim.sessionKey === sim.sessionKey && isFinite(lastOf1Sim.t)) sim.jumpTo(Math.max(lastOf1Sim.t, sim.duration - 10));
+        lastOf1Sim = sim;
         loaded = shownKey = target.session_key; loadedAt = nowMs(); empty = false; liveMode = ongoing;
         setReplay(r => ({ ...r, playing: false }));
         setOf1Live({ raceId: race.id, type: sim.type, sim, track, source: "openf1", raw, sessionKey: target.session_key, ongoing });

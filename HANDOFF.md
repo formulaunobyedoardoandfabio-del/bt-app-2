@@ -518,3 +518,8 @@ Da fare:
 - 1/11 23:40: grafico del degrado delle gomme (TyreDegChart, data-deg-chart) aprendo "N PIT" nella scheda Gomme: tempi
   veri per stint (senza giri di uscita, bandiere, neutralizzazioni e oltre il 107% della mediana), retta e s/giro.
   Verificato con la gara vera di Baku a metà gara: grafico visibile; 20 punti distinti sulla mappa.
+- 1/11 23:50, punti dei piloti (causa trovata): in diretta OpenF1 scrive il giro solo quando è chiuso, così dopo l'ultimo
+  giro chiuso tutte le auto finivano sulla linea del traguardo, una sopra l'altra. openf1.js carAt: giro in corso
+  stimato dalla fine dell'ultimo (ghost, giro tipico, max 2 giri; mai ai box, ritirata o a gara finita); in diretta il
+  tempo scorre da solo fino a 90 s oltre gli ultimi dati (LIVE_AHEAD_S) e coi dati nuovi si riparte da dove si era
+  (lastOf1Sim). Prova: test/unit/openf1.test.js "diretta senza il giro in corso".

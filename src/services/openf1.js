@@ -132,6 +132,7 @@ function replayTarget({ latest, list, pick }) {
 // Sigla corta della sessione, per i tasti della scelta.
 const SHORT = { FP1: "PL1", FP2: "PL2", FP3: "PL3", SQ: "Q SPRINT", SPRINT: "SPRINT", QUALI: "QUALIFICHE", RACE: "GARA" };
 const sessionShort = s => SHORT[sessionType(s)];
+const LIVE_AHEAD_S = 90;   // 1/11 notte: in diretta il tempo scorre fino a 90 s oltre gli ultimi dati arrivati
 const COMPOUND = { SOFT: "S", MEDIUM: "M", HARD: "H", INTERMEDIATE: "I", WET: "W" };
 const SEGMENT = { 2051: "purple", 2049: "green", 2048: "yellow", 2064: "pit" };
 const STATUS_BG = { yellow: "yellow", sc: "yellow", vsc: "yellow", red: "red" };
@@ -363,6 +364,13 @@ function buildReplay(raw = {}, track = null, { drivers = [], of1 = null, live = 
     const inPit = pits.some(p => p.t <= at && at < p.t + p.dur);
     const typical = M.typical || refLap || 100;
     const frac = inLap ? clamp((at - cur.start) / (cur.dur || typical), 0, 0.9999) : 0;
+    // 1/11 notte (Edoardo: "i punti dei piloti non si vedono"): in diretta OpenF1 scrive il giro solo quando è chiuso,
+    // quindi dopo l'ultimo giro chiuso ogni auto finiva sulla linea del traguardo, tutte una sopra l'altra. Ora si stima
+    // il giro in corso dalla fine dell'ultimo (giro tipico), finché non arriva quello vero; mai ai box, ritirata o a
+    // gara finita.
+    const lastG = !inLap && nDone ? M[nDone - 1] : null, lastEnd = lastG ? (lastG.done != null ? lastG.done : lastG.start + (lastG.dur || typical)) : null;
+    const ghost = isRace && lastEnd != null && !dnf && !inPit && at >= lastEnd && at - lastEnd < 2 * typical && !raceFinished(at);
+    const gfrac = ghost ? clamp((at - lastEnd) / typical, 0, 0.98) : 0;
     let best = null;
     for (let i = 0; i < nDone; i++) { const r = R[i]; if (r.time != null && (!isRace || r.lapNo > 1) && (!best || r.time < best.time)) best = { lapNo: r.lapNo, time: r.time }; }
     if (!best) best = resultBest(num);
@@ -387,14 +395,14 @@ function buildReplay(raw = {}, track = null, { drivers = [], of1 = null, live = 
     const garage = !isRace && !inLap;
     return {
       id: d.id, code: d.code, number: d.number, color: d.color, pos: 0, grid: P.length ? P[0].position : null, x: 0, y: 0,
-      speed: inLap && !inPit && !dnf ? L / (cur.dur || typical) : 0, dist: dnf ? nDone * L : inLap ? (nStarted - 1 + frac) * L : nDone * L,
+      speed: inLap && !inPit && !dnf ? L / (cur.dur || typical) : ghost ? L / typical : 0, dist: dnf ? nDone * L : inLap ? (nStarted - 1 + frac) * L : ghost ? (nDone + gfrac) * L : nDone * L,
       gap: null, interval: null, lapsDown: 0, lap: isRace ? Math.max(1, nStarted) : nDone + 1,
       last: nDone ? R[nDone - 1] : null, best, sectors, minis,
       pit: !dnf && (inPit || garage), out: false, outIn: null, tyre: tyreRec ? tyreRec.tyre : null,
       tyreAge: tyreRec && tyreRec.age != null ? tyreRec.age + (inLap || !nDone ? 0 : 1) : null, finished,   // fuori dal giro: compreso l'ultimo fatto
       tyreLife: null, wear: null, stops: pits.filter(p => p.t <= at).length, dnf,
       _pos: fromResult ? resultPos(num) : pi >= 0 ? P[pi].position : null, _first: P.length ? P[0].position : null, _iv: ii >= 0 ? IV[ii] : null,
-      _s: inLap && !inPit && !dnf ? frac * L : 0, _pre: isRace && nStarted === 0, _done: nDone, _dnfT: D ? D.t : 0,
+      _s: inLap && !inPit && !dnf ? frac * L : ghost ? gfrac * L : 0, _pre: isRace && nStarted === 0, _done: nDone, _dnfT: D ? D.t : 0,
     };
   }
 
@@ -471,8 +479,8 @@ function buildReplay(raw = {}, track = null, { drivers = [], of1 = null, live = 
   return {
     source: "openf1", type, totalLaps, duration, sessionKey,
     get t() { return x; },
-    advance(sec) { x = clamp(x + (isNum(sec) ? sec : 0), 0, duration); },
-    jumpTo(v) { x = clamp(isNum(v) ? v : 0, 0, duration); },
+    advance(sec) { x = clamp(x + (isNum(sec) ? sec : 0), 0, duration + (live ? LIVE_AHEAD_S : 0)); },
+    jumpTo(v) { x = clamp(isNum(v) ? v : 0, 0, duration + (live ? LIVE_AHEAD_S : 0)); },
     // All'inizio dell'ultimo giro del vincitore (in prove e qualifiche: all'ultimo minuto).
     jumpToLastLap() {
       if (isRace && totalLaps) {

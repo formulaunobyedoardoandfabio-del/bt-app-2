@@ -111,6 +111,25 @@ t('tipo della sessione dal nome: prove, Sprint, qualifiche e gara', () => {
   pairs.forEach(([name, type]) => assert.strictEqual(sessionType({ session_name: name }), type, name));
 });
 
+// 1/11 notte (Edoardo, GP del Messico in diretta: "i punti dei piloti non si vedono"): in diretta OpenF1 ha solo i giri
+// chiusi; prima tutte le auto finivano sulla linea del traguardo. Ora il giro in corso si stima e le auto si muovono.
+t('diretta senza il giro in corso: le auto restano sparse sulla pista e si muovono col tempo; giri totali del circuito', () => {
+  const ms = x => Date.parse(x);
+  const cut = ms(FX.session.date_start) + 50 * 60000;
+  const laps = FX.laps.filter(l => l.date_start && l.lap_duration && ms(l.date_start) + l.lap_duration * 1000 <= cut);
+  const upTo = list => (list || []).filter(x => !x.date || ms(x.date) <= cut);   // come in diretta: solo i dati fino a "adesso"
+  const raw = { ...FX, laps, session_result: [], position: upTo(FX.position), intervals: upTo(FX.intervals), race_control: upTo(FX.race_control), pit: upTo(FX.pit), team_radio: upTo(FX.team_radio), weather: upTo(FX.weather), session: { ...FX.session, date_end: '2099-01-01T00:00:00+00:00' } };
+  const r = buildReplay(raw, track, { ...ctx, live: true, laps: 51 });
+  r.jumpTo(r.duration);
+  const xs = () => r.state().cars.filter(c => !c.dnf && !c.pit).map(c => Math.round(c.x) + ',' + Math.round(c.y));
+  const a = xs();
+  assert.ok(new Set(a).size >= 12, 'auto una sopra l\'altra: ' + new Set(a).size + ' posizioni diverse su ' + a.length);
+  r.advance(4);
+  const b = xs();
+  assert.ok(b.filter((v, i) => v !== a[i]).length >= 12, 'dopo 4 s le auto devono muoversi');
+  assert.strictEqual(r.totalLaps, 51, 'giri totali previsti');
+});
+
 t('Baku: alla fine vince Russell, 51 giri', () => {
   const r = buildReplay(FX, track, ctx);
   r.jumpTo(r.duration);
