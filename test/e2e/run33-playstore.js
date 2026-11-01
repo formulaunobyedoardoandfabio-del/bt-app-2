@@ -111,11 +111,14 @@ run({
     assert(!errs.length, errs.join(' | '));
   },
 
-  async '§4 dei termini: il Premium non è ancora disponibile (pagamenti spenti come oggi)'(b) {
+  // 1/11: pagamenti accesi (Google Play nell'app, Stripe sul sito): la §4 dice prezzo, come si paga e come si disdice.
+  async '§4 dei termini: prezzo, Google Play nell\'app e Stripe sul sito, disdetta (pagamenti accesi dal 1/11)'(b) {
     const { ctx, p, errs } = await open(b, { seed: FRESH });
     const t = await terms(p); await ctx.close();
     const s4 = t.slice(t.indexOf('4. Abbonamento Premium'), t.indexOf('5. Contenuti e Proprietà Intellettuale'));
-    assert(/L'abbonamento Premium non è ancora disponibile\. Quando verrà attivato, prezzi, rinnovo e modalità di disdetta saranno indicati in questa sezione e nella schermata di acquisto\./.test(s4), '§4: ' + s4);
+    assert(/6 € a stagione/.test(s4) && /Nell'app si paga con Google Play, sul sito con Stripe/.test(s4), '§4: ' + s4);
+    assert(/si può disdire in qualsiasi momento/.test(s4) && /Google Play → Pagamenti e abbonamenti/.test(s4), '§4 senza la disdetta: ' + s4);
+    assert(!/non è ancora disponibile/.test(s4), '§4 dice ancora che il Premium non c\'è');
     assert(!/2,99/.test(s4), '§4 con i prezzi di un abbonamento che non c\'è');
     assert(!errs.length, errs.join(' | '));
   },

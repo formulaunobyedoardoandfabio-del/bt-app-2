@@ -81,8 +81,21 @@ run({
     assert(!errs.length, errs.join(' | '));
   },
 
-  async 'Premium: l\'abbonamento di prova resta dopo aver chiuso e riaperto l\'app'(b) {
-    const { ctx, p, errs } = await open(b); await login(p);
+  // 1/11: l'abbonamento è vero: nell'APK con Google Play (finto, l'acquisto resta sul "telefono"), non più quello di prova.
+  async 'Premium: l\'abbonamento di Google Play resta dopo aver chiuso e riaperto l\'app'(b) {
+    const PLAY = `(() => {
+      const owned = () => localStorage.getItem('fake-play-owned') === '1';
+      window.Capacitor = { isNativePlatform: () => true, getPlatform: () => 'android', Plugins: {
+        App: { addListener: () => Promise.resolve({ remove() {} }), exitApp: () => Promise.resolve(), minimizeApp: () => Promise.resolve() },
+        SystemBars: { hide: () => Promise.resolve() },
+        NativePurchases: {
+          isBillingSupported: () => Promise.resolve({ isBillingSupported: true }),
+          getProducts: o => Promise.resolve({ products: o.productType === 'subs' ? [{ identifier: 'premium_stagione', planIdentifier: 'stagione', offerToken: 't', priceString: '6,00 €' }] : [] }),
+          purchaseProduct: o => { localStorage.setItem('fake-play-owned', '1'); return Promise.resolve({ purchaseToken: 'p', productIdentifier: o.productIdentifier, purchaseState: 'PURCHASED' }); },
+          getPurchases: () => Promise.resolve({ purchases: owned() ? [{ productIdentifier: 'premium_stagione', purchaseState: 'PURCHASED' }] : [] }),
+        } } };
+    })();`;
+    const { ctx, p, errs } = await open(b, { init: PLAY }); await login(p);
     await tapSel(p, '[data-premium-chip="off"]'); await w(p, 400);
     await tapText(p, 'Oppure abbonati subito'); await w(p, 1600);
     await tapText(p, 'INIZIA'); await w(p, 1500);

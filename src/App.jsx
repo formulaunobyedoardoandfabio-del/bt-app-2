@@ -9642,7 +9642,12 @@ function App() {
   const isAdminNow = !!account && Account.isAdmin();   // 31/10: gli admin hanno Premium e tutti i trofei, gratis
   // 1/11: isPaid = Premium vero (abbonamento, prova, admin): niente pubblicità e notizie Premium. isPremium = funzioni Pro,
   // anche col video con premio (adPro): un video le sblocca tutte, ma i banner restano e le notizie si sbloccano una per video.
-  const isPaid = !!(account && (account.paidPremium !== undefined ? account.paidPremium : account.isPremium)) || premium.sub || (!!trial && nowMs() < trial.end) || isAdminNow;
+  // Finché i dati dell'account non sono arrivati (premLoaded) vale il Premium letto col profilo, così chi è Premium non vede
+  // per un attimo i lucchetti; poi vale premium (app2.premium, aggiornato anche quando un abbonamento di Google Play finisce).
+  const [premLoaded, setPremLoaded] = useState(null);
+  const accPaid = !!account && (account.paidPremium !== undefined ? account.paidPremium : !!account.isPremium);
+  const accEcho = !!account && premLoaded !== account.email && !!account.isPremium;
+  const isPaid = accPaid || accEcho || premium.sub || (!!trial && nowMs() < trial.end) || isAdminNow;
   const isPremium = isPaid || adPro;
   adsTestForAdmin = isAdminNow;
   const [proAsk, setProAsk] = useState(null);   // foglio "Funzione Pro": { what, then }
@@ -9914,7 +9919,7 @@ function App() {
       if (Array.isArray(data.squadLog)) setSquadLog(data.squadLog.filter(e => !(e && sameIds(e.d, FANTA_OLD_DEFAULT.drivers) && sameIds(e.c, FANTA_OLD_DEFAULT.teams))));
     }
     userReady.current = true;
-    setUserLoaded(em);
+    setUserLoaded(em); setPremLoaded(em);
   }, () => {});   // senza rete i dati restano in memoria: si riprova alla prossima rilettura
   // FantaF1 vero (31/10): a ogni cambio della squadra (completa, coi dati dell'account arrivati) una voce nella storia,
   // salvata nell'account e mandata alle mie leghe; leghe e risultati veri si rileggono aprendo FANTA.
