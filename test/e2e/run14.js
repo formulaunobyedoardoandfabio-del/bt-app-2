@@ -16,7 +16,7 @@ async function open(b, { width = 390, height = 844, now = NOW, seed = null } = {
   const ctx = await b.newContext({ viewport: { width, height }, hasTouch: true, isMobile: true });
   await ctx.route('https://api.jolpi.ca/**', r => r.abort());               // 24/10: classifiche di Jolpica e previsioni
   await ctx.route('https://bt-app-2.vercel.app/**', r => r.abort());   // meteo di serie non rispondono (come helpers.js)
-  await ctx.addInitScript(seed => { window.__btSeed = seed; }, seed ? { ...SEED_20, addDocs: { ...(SEED_20.addDocs || {}), ...(seed.addDocs || {}) } } : SEED_20);
+  await ctx.addInitScript(seed => { window.__btSeed = seed; }, seed ? { ...SEED_20, ...(seed.pro ? { pro: true } : {}), addDocs: { ...(SEED_20.addDocs || {}), ...(seed.addDocs || {}) } } : SEED_20);   // 1/11: pro = tester Premium
   await ctx.addInitScript(now => { window.open = () => null; window.__btNow = Date.parse(now); }, now);
   const p = await ctx.newPage(); const errs = []; p.on('pageerror', e => errs.push(e.message));
   await p.goto('file://' + __dirname + '/' + (process.env.PAGE || 'test.html')); await p.waitForTimeout(400);
@@ -404,7 +404,7 @@ const tests = {
     const r = await stageInfo(p); const t2 = norm(await text(p)); await ctx.close();
     assert(gate.gate === 'ss' && !gate.ss, 'senza Premium il Second Screen deve chiedere Premium: ' + JSON.stringify(gate));
     assert(!gate.video, 'sul sito non ci sono video con premio');
-    assert(r && r.map && /Nessuna sessione in corso/.test(t2), 'senza diretta non si vede la mappa della prossima gara');
+    assert(r && r.map && /Nessuna sessione in corso/.test(t2), 'senza diretta non si vede la mappa della prossima gara: ' + JSON.stringify(r) + ' ' + t2.slice(0, 400));
   },
   // ── Premium: prova gratuita di 2 settimane ────────────────────────────
   // 18/10 (Edoardo): la prova gratuita dura un GP (fino alla fine del prossimo GP), non più 2 settimane.
