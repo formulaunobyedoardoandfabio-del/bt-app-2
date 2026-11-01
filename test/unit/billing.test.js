@@ -96,6 +96,20 @@ t('sito: Stripe con la nostra funzione, poi la pagina di pagamento; errori spieg
   assert.strictEqual(PRODUCTS.premium.id, 'premium_stagione');
 });
 
+t('sconto della festa: offerta di Google Play con lo stesso nome (prezzo e acquisto), senza offerta il prezzo pieno', async () => {
+  const P = fakePlay();
+  const getP = P.getProducts;
+  P.getProducts = async o => { const r = await getP(o); if (o.productType === 'subs') r.products.push({ identifier: 'premium_stagione', planIdentifier: 'stagione', offerId: 'blackfriday', offerToken: 'tok-bf', priceString: '3,00 €' }); return r; };
+  const B = createBilling({ plugin: () => P });
+  assert.deepStrictEqual((await B.prices('blackfriday')).sale, { id: 'blackfriday', price: '3,00 €' });
+  assert.strictEqual((await B.prices('natale')).sale, undefined, 'senza offerta di Natale niente sconto');
+  await B.buy('premium', { sale: 'blackfriday' });
+  assert.strictEqual(P.calls.filter(c => c[0] === 'purchaseProduct').pop()[1].offerToken, 'tok-bf');
+  const api = fakeApi();
+  await createBilling({ fetchImpl: api.fetchImpl, go: () => {} }).buy('premium', { email: 'a@b.it', sale: 'natale' });
+  assert.strictEqual(api.calls[0].body.sale, 'natale', 'sul sito lo sconto va alla funzione di Stripe');
+});
+
 (async () => {
   const filter = process.argv[2] ? new RegExp(process.argv[2], 'i') : null;
   for (const [name, fn] of tests) {

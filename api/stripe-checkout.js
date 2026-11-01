@@ -22,6 +22,9 @@ function createCheckout({ fetchImpl = (...a) => fetch(...a), env = process.env }
     if (kind === "premium" && !okEmail) return send(res, 400, { ok: false, reason: "email" });
     const key = env.STRIPE_SECRET_KEY, price = kind === "premium" ? env.STRIPE_PRICE_PREMIUM : env.STRIPE_PRICE_COFFEE;
     if (!key || !price) return send(res, 503, { ok: false, reason: "config" });
+    // 1/11 sera: sconto della festa, solo se Edoardo ha creato il coupon in Stripe (STRIPE_COUPON_BLACKFRIDAY, …).
+    const sale = kind === "premium" && /^(blackfriday|natale|befana|monza)$/.test(String(b.sale || "")) ? String(b.sale) : null;
+    const coupon = sale ? env["STRIPE_COUPON_" + sale.toUpperCase()] : null;
     const params = {
       mode: kind === "premium" ? "subscription" : "payment",
       line_items: [{ price, quantity: 1 }],
@@ -31,6 +34,7 @@ function createCheckout({ fetchImpl = (...a) => fetch(...a), env = process.env }
       ...(okEmail ? { customer_email: email, client_reference_id: email } : {}),
       metadata: { kind, ...(okEmail ? { email } : {}) },
       ...(kind === "premium" ? { subscription_data: { metadata: { email } } } : { submit_type: "donate" }),
+      ...(coupon ? { discounts: [{ coupon }] } : {}),
     };
     let r, j = null;
     try {

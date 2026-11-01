@@ -40,6 +40,18 @@ t('ogni tema ha nome, colore e suoni', () => {
     assert.ok(h.sounds && typeof h.sounds === 'object', id + ' suoni');
   }
 });
+// 1/11 sera (Edoardo: "aggiungi sconti del Black Friday, Befana, Monza, Natale con le loro cose personalizzate").
+t('Black Friday: dal venerdì dopo il quarto giovedì di novembre al lunedì; sconti di Black Friday, Natale, Befana e Monza', () => {
+  assert.strictEqual(H.activeHoliday({ now: at('2026-11-26T12:00:00Z') }), null, 'il giovedì prima no');
+  assert.strictEqual(H.activeHoliday({ now: at('2026-11-27T09:00:00Z') }), 'blackfriday');
+  assert.strictEqual(H.activeHoliday({ now: at('2026-11-30T20:00:00Z') }), 'blackfriday', 'Cyber Monday');
+  assert.strictEqual(H.activeHoliday({ now: at('2026-12-01T10:00:00Z') }), 'natale');
+  assert.strictEqual(H.activeHoliday({ now: at('2027-11-26T10:00:00Z') }), 'blackfriday', '2027: 26 novembre');
+  assert.deepStrictEqual(H.saleOf('blackfriday'), { id: 'blackfriday', name: 'Black Friday', pct: 50 });
+  for (const id of ['natale', 'befana', 'monza']) assert.ok(H.saleOf(id) && H.saleOf(id).pct > 0, id);
+  assert.strictEqual(H.saleOf('halloween'), null);
+  assert.strictEqual(H.saleOf(null), null);
+});
 t('giorno di Roma per le sorprese (una al giorno): chiave AAAA-MM-GG', () => {
   assert.strictEqual(H.romeDay(at('2026-10-31T23:30:00Z')), '2026-11-01');
   assert.strictEqual(H.romeDay(at('2026-12-07T10:00:00Z')), '2026-12-07');

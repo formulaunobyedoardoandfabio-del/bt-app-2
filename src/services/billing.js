@@ -34,11 +34,14 @@ function createBilling({ plugin = () => null, native = () => false, fetchImpl = 
   }
   // Il piano base dell'abbonamento (senza offerte), altrimenti il primo con quel piano.
   const basePlan = list => list.find(x => x.planIdentifier === PRODUCTS.premium.plan && !x.offerId) || list.find(x => x.planIdentifier === PRODUCTS.premium.plan) || list[0] || null;
+  // 1/11 sera: offerta della festa (Black Friday, Natale, Befana, Monza) creata nella Play Console con lo stesso nome.
+  const saleOffer = (list, sale) => (sale ? list.find(x => x.planIdentifier === PRODUCTS.premium.plan && x.offerId === sale) || null : null);
   // Prezzi veri di Google Play (con la valuta del telefono); sul sito {}.
-  async function prices() {
+  async function prices(sale = null) {
     const out = {};
-    const pr = basePlan(await products("premium")), co = (await products("coffee"))[0];
+    const list = await products("premium"), pr = basePlan(list), so = saleOffer(list, sale), co = (await products("coffee"))[0];
     if (pr && pr.priceString) out.premium = pr.priceString;
+    if (so && so.priceString) out.sale = { id: sale, price: so.priceString };
     if (co && co.priceString) out.coffee = co.priceString;
     return out;
   }
@@ -51,7 +54,7 @@ function createBilling({ plugin = () => null, native = () => false, fetchImpl = 
       if (!(await supported())) return { ok: false, reason: "unsupported" };
       let extra = { isConsumable: true };
       if (kind === "premium") {
-        const p = basePlan(await products("premium"));
+        const list = await products("premium"), p = saleOffer(list, who.sale) || basePlan(list);
         if (!p) return { ok: false, reason: "product" };
         extra = { planIdentifier: k.plan, ...(p.offerToken ? { offerToken: p.offerToken } : {}) };
       }
@@ -68,7 +71,7 @@ function createBilling({ plugin = () => null, native = () => false, fetchImpl = 
     }
     if (isNative()) return { ok: false, reason: "unsupported" };   // APK senza Google Play: mai Stripe nell'app
     try {
-      const r = await fetchImpl(api + "stripe-checkout", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ kind, email: who.email || null }) });
+      const r = await fetchImpl(api + "stripe-checkout", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ kind, email: who.email || null, ...(who.sale ? { sale: who.sale } : {}) }) });
       let j = null;
       try { j = await r.json(); } catch (e) { j = null; }
       if (!r.ok || !j || !j.url) return { ok: false, reason: (j && j.reason) || "failed" };

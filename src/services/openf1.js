@@ -107,8 +107,10 @@ function createOpenF1({ fetchImpl, now = Date.now, sleep = ms => new Promise(r =
   }
   const weatherOf = sessionKey => get("weather", keyQ(sessionKey));
   // Telemetria di un pezzo di sessione (date ISO in UTC, senza fuso: come negli esempi di OpenF1).
-  const carData = (sessionKey, driverNumber, fromIso, toIso) =>
-    get("car_data", `${keyQ(sessionKey)}&driver_number=${encodeURIComponent(driverNumber)}&date>=${fromIso}&date<=${toIso}`);
+  // 1/11 sera: durante la diretta (live) passa dalla nostra funzione di Vercel: l'API gratuita in gara è bloccata e la
+  // telemetria "ci metteva un po' e poi diceva che non può" (Edoardo).
+  const carData = (sessionKey, driverNumber, fromIso, toIso, { live = false } = {}) =>
+    get("car_data", `${keyQ(sessionKey)}&driver_number=${encodeURIComponent(driverNumber)}&date>=${fromIso}&date<=${toIso}`, { live });
   return { get, latestSession, weekendSessions, loadSession, weatherOf, carData };
 }
 
@@ -158,7 +160,7 @@ function resample(seg) {
   return Array.from({ length: PER }, (_, i) => SEGMENT[a[Math.min(a.length - 1, Math.floor(i * a.length / PER))]] || "none");
 }
 
-function buildReplay(raw = {}, track = null, { drivers = [], of1 = null } = {}) {
+function buildReplay(raw = {}, track = null, { drivers = [], of1 = null, live = false } = {}) {
   raw = raw || {};
   const session = raw.session || {};
   const type = sessionType(session);
@@ -309,6 +311,21 @@ function buildReplay(raw = {}, track = null, { drivers = [], of1 = null } = {}) 
     const t = last ? (last.end != null ? last.end : last.start + (M.typical || 100)) : 0;
     dnfOf.set(num, { t, lap: last ? last.lapNo : 0, cause: "altro" });
   });
+  // 1/11 sera (Edoardo: "nella classifica della gara metti i DNF che si vedano"): in diretta session_result di solito
+  // non ha ancora i ritiri. Un'auto che non chiude il giro iniziato da più di 3 giri tipici, mentre le altre ne chiudono,
+  // si è fermata: ritirata in quel giro. Non vale ai box (pit in quel giro) né con la bandiera rossa.
+  if (isRace) {
+    let seen = 0;
+    metaBy.forEach(M => M.forEach(m => { const v = m.end != null ? m.end : m.start; if (v > seen) seen = v; }));
+    metaBy.forEach((M, num) => {
+      if (dnfOf.has(num) || !M.length) return;
+      const last = M[M.length - 1], typ = M.typical || 100;
+      if (last.end != null || last.start + 3 * typ > seen) return;
+      if ((pitBy.get(num) || []).some(p => p.lap === last.lapNo)) return;
+      if (flagAt(seen).flag === "red" || flagAt(last.start + typ).flag === "red") return;
+      dnfOf.set(num, { t: last.start + typ, lap: last.lapNo, cause: "altro", live: true });
+    });
+  }
   const winnerRes = arr(raw.session_result).find(r => r && r.position === 1);
   let maxLap = 0;
   metaBy.forEach(M => M.forEach(g => { maxLap = Math.max(maxLap, g.lapNo); }));
@@ -425,7 +442,7 @@ function buildReplay(raw = {}, track = null, { drivers = [], of1 = null } = {}) 
     const g = M.find(m => m.lapNo === lapNo), rec = g ? recsBy.get(num)[M.indexOf(g)] : null;
     if (!g || g.end == null || !of1 || !of1.carData) return null;
     let data;
-    try { data = await of1.carData(sessionKey, num, isoAt(g.start), isoAt(g.end)); } catch (e) { return null; }
+    try { data = await of1.carData(sessionKey, num, isoAt(g.start), isoAt(g.end), { live }); } catch (e) { return null; }
     const S = arr(data).map(c => ({ t: tOf(c.date), c })).filter(s => s.t != null).sort((a, b) => a.t - b.t);
     if (S.length < 2) return null;
     const out = { id, code: info.get(num).code, lapNo, time: g.dur, sectors: rec.sectors, dist: [], speed: [], throttle: [], brake: [], gear: [], rpm: [], sectorDist: [] };

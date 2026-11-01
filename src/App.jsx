@@ -439,6 +439,7 @@ const LIVE_DRIVERS = DRIVERS.map(d => ({ id: d.id, code: driverCode(d), number: 
 // 31/10: con l'abbonamento Sponsor di OpenF1 la diretta passa dalla nostra funzione su Vercel (api/live.js, credenziali
 // solo nelle variabili di Vercel); durante la sessione si ricarica ogni 15 secondi.
 const OF1_LIVE_BASE = "https://bt-app-2.vercel.app/api/live", OF1_LIVE_MS = 15000;
+const LIVE_LAG_S = 20;   // 1/11 sera: in diretta si guarda 20 s dietro gli ultimi dati (più di un aggiornamento da 15 s)
 const OF1 = createOpenF1({ liveBase: OF1_LIVE_BASE });
 // Classifiche del mondiale in automatico (24/10): Jolpica F1, gratis e senza chiave (src/services/jolpica.js), lette al
 // massimo ogni 30 minuti. È pensato per uso non commerciale: prima dell'uscita pubblica con la pubblicità serve il
@@ -2514,6 +2515,50 @@ function LiveMap({ track, st, big, svgStyle }) {
   );
 }
 
+// 1/11 sera (Edoardo): con la bandiera rossa la pagina Race diventa rossa e in cima c'è la nuova griglia vista dall'alto:
+// le auto in fila due a due (sfalsate) nell'ordine del momento, con le posizioni guadagnate o perse dalla partenza.
+const RED_SCREEN_BG = "radial-gradient(120% 70% at 50% 0%, rgba(255,24,1,.5), rgba(255,24,1,.12) 60%), #050506";
+function GridCar({ color }) {
+  return (
+    <svg width="22" height="44" viewBox="0 0 22 44" aria-hidden="true" style={{ flexShrink: 0 }}>
+      <rect x="1" y="2" width="20" height="4" rx="1.5" fill={color} />
+      <rect x="0" y="9" width="5" height="8" rx="1.5" fill="#1B1B1F" /><rect x="17" y="9" width="5" height="8" rx="1.5" fill="#1B1B1F" />
+      <path d="M8 4 L14 4 L16 18 L16 34 L6 34 L6 18 Z" fill={color} />
+      <circle cx="11" cy="21" r="2.6" fill="#0A0A0C" />
+      <rect x="0" y="27" width="5" height="9" rx="1.5" fill="#1B1B1F" /><rect x="17" y="27" width="5" height="9" rx="1.5" fill="#1B1B1F" />
+      <rect x="2" y="38" width="18" height="4" rx="1.5" fill={color} />
+    </svg>
+  );
+}
+function RedFlagGrid({ st }) {
+  const cars = st.cars.filter(c => !c.dnf);
+  const rows = [];
+  for (let i = 0; i < cars.length; i += 2) rows.push(cars.slice(i, i + 2));
+  const delta = c => (c.grid != null && c.pos != null ? c.grid - c.pos : null);
+  const slot = c => { const d = delta(c); return (
+    <div key={c.id} data-grid-slot={c.code} data-grid-delta={d == null ? "" : String(d)} style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 8px", borderRadius: 10, background: "rgba(0,0,0,.45)", border: "1px solid rgba(255,255,255,.12)" }}>
+      <span style={{ width: 22, fontFamily: F_HEAD, fontWeight: 900, fontSize: 14, color: "#fff", textAlign: "right" }}>{c.pos}</span>
+      <GridCar color={c.color} />
+      <span style={{ flex: 1, minWidth: 0 }}>
+        <b style={{ display: "block", fontFamily: F_HEAD, fontWeight: 800, fontSize: 13, color: "#fff" }}>{c.code}</b>
+        <span style={{ fontFamily: F_BODY, fontWeight: 700, fontSize: 11, color: d > 0 ? C.green : d < 0 ? "#FF5A5F" : C.muted }}>{d == null ? "–" : d > 0 ? "▲ " + d : d < 0 ? "▼ " + -d : "= 0"}</span>
+      </span>
+    </div>
+  ); };
+  return (
+    <div data-red-grid="" style={{ margin: "0 16px 14px", padding: 12, borderRadius: 16, background: "rgba(0,0,0,.35)", border: "1px solid rgba(255,90,95,.45)" }}>
+      <div style={{ fontFamily: F_HEAD, fontWeight: 900, fontStyle: "italic", fontSize: 13, letterSpacing: .6, color: "#fff", marginBottom: 4 }}>NUOVA GRIGLIA</div>
+      <div style={{ fontFamily: F_BODY, fontSize: 11, color: C.muted, marginBottom: 10 }}>Ordine alla bandiera rossa · ▲▼ posizioni rispetto alla partenza</div>
+      {rows.map((r, i) => (
+        <div key={i} style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 8 }}>
+          {r[0] && slot(r[0])}
+          {r[1] && <div style={{ marginTop: 22 }}>{slot(r[1])}</div>}
+        </div>
+      ))}
+    </div>
+  );
+}
+
 // Avviso della bandiera in corso (o del giro a scacchi).
 function FlagBanner({ st, style }) {
   if (!st) return null;
@@ -3459,20 +3504,60 @@ const RADIO_EMPTY = "I team radio arrivano a fine sessione.", RADIO_NONE = "Per 
 const of1RadiosAt = (live, st) => (isOf1Live(live) && st ? live.sim.radios().filter(r => r.t <= st.t + 0.001).reverse() : []);
 const TYRES_EMPTY = "Le gomme compaiono quando arrivano i dati della sessione.";
 // Team radio veri con l'audio: pilota, giro e lettore (D12).
+// 1/11 sera (Edoardo: "rendi i team radio più facili da ascoltare, ci mettono un po' a caricare"): un tasto grande per
+// radio, un solo audio alla volta; le 3 più recenti si caricano in anticipo (preload auto), le altre al tocco; con
+// "Ascolta i team radio" acceso ogni radio nuova parte da sola (scelta sul telefono, bt-radio-auto).
+let radioNow = null;   // l'audio che sta suonando (uno alla volta in tutta l'app)
+function RadioPlay({ url, label, preload = "none", auto = false }) {
+  const ref = useRef(null);
+  const [st, setSt] = useState("idle");   // idle, loading, playing
+  const play = () => {
+    const a = ref.current;
+    if (!a) return;
+    if (st === "playing") { a.pause(); return; }
+    if (radioNow && radioNow !== a) { try { radioNow.pause(); } catch (e) {} }
+    radioNow = a; setSt("loading");
+    const pr = a.play();
+    if (pr && typeof pr.catch === "function") pr.catch(() => setSt("idle"));
+  };
+  useEffect(() => { if (auto) play(); }, []);   // radio nuova con l'ascolto automatico acceso
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 6 }}>
+      <button className="press" data-radio-play={st} onClick={play} aria-label={(st === "playing" ? "Pausa: " : "Ascolta: ") + label}
+        style={{ width: 44, height: 44, borderRadius: "50%", flexShrink: 0, background: st === "playing" ? C.accent : alpha(C.accentInk, .16), border: `1.5px solid ${C.accentInk}`, display: "flex", alignItems: "center", justifyContent: "center" }}>
+        {st === "loading" ? <ShiftLight size={3} label="Carico la radio" /> : st === "playing"
+          ? <svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true"><rect x="2" y="1" width="3.5" height="12" rx="1" fill="#fff" /><rect x="8.5" y="1" width="3.5" height="12" rx="1" fill="#fff" /></svg>
+          : <svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true"><path d="M3 1.5v11l9.5-5.5z" fill={C.text} /></svg>}
+      </button>
+      <span style={{ fontFamily: F_BODY, fontSize: 11.5, color: C.muted }}>{st === "loading" ? "Carico…" : st === "playing" ? "In ascolto" : "Tocca per ascoltare"}</span>
+      <audio ref={ref} preload={preload} src={url} onPlaying={() => setSt("playing")} onPause={() => setSt("idle")} onEnded={() => setSt("idle")} onError={() => setSt("idle")} style={{ display: "none" }} />
+    </div>
+  );
+}
 function RadioList({ live, st }) {
   const rs = of1RadiosAt(live, st);
+  const [auto, setAuto] = useState(() => local.get("bt-radio-auto") === true);
+  const seen = useRef(null);   // radio già in elenco all'apertura: quelle partono solo al tocco
+  if (seen.current === null) seen.current = new Set(rs.map(r => r.url));
   const note = (k, t) => <p data-radio-empty={k} style={{ margin: 0, padding: 16, fontFamily: F_BODY, fontSize: 12.5, color: C.dim, lineHeight: 1.5 }}>{t}</p>;
   if (!live.sim.radios().length) return note("none", RADIO_NONE);
   if (!rs.length) return note("later", "Ancora nessuna radio a questo punto della sessione.");
-  return rs.map((r, i) => { const d = driverById(r.id); return (
+  const newest = rs[0] && rs[rs.length - 1] && rs[0].t < rs[rs.length - 1].t ? rs.slice(-3) : rs.slice(0, 3);   // le 3 più recenti
+  return <>
+    <div data-radio-auto={auto ? "on" : "off"} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, padding: "10px 14px", borderBottom: `1px solid ${C.divider}` }}>
+      <span style={{ fontFamily: F_BODY, fontWeight: 700, fontSize: 12.5, color: C.text }}>Ascolta i team radio <span style={{ fontWeight: 400, color: C.dim }}>(partono da soli appena arrivano)</span></span>
+      <Toggle on={auto} onChange={v => { setAuto(v); local.set("bt-radio-auto", v); }} label="Ascolta i team radio" />
+    </div>
+    {rs.map((r, i) => { const d = driverById(r.id), fresh = !seen.current.has(r.url); if (fresh) seen.current.add(r.url); return (
     <div key={r.url} data-radio-row={r.id} style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 14px", borderBottom: i < rs.length - 1 ? `1px solid ${C.divider}` : "none" }}>
       {d && <Headshot driver={d} size={36} />}
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ fontFamily: F_BODY, fontWeight: 600, fontSize: 12.5, color: C.text }}>{d ? d.full : r.code}{r.lap ? <span style={{ color: C.dim, fontWeight: 400 }}> · Giro {r.lap}</span> : null}</div>
-        <audio controls preload="none" src={r.url} aria-label={`Team radio di ${d ? d.full : r.code}${r.lap ? ", giro " + r.lap : ""}`} style={{ display: "block", width: "100%", height: 34, marginTop: 6 }} />
+        <RadioPlay url={r.url} preload={newest.includes(r) ? "auto" : "none"} auto={auto && fresh} label={`team radio di ${d ? d.full : r.code}${r.lap ? ", giro " + r.lap : ""}`} />
       </div>
     </div>
-  ); });
+  ); })}
+  </>;
 }
 // Piloti scelti per gomme o settori (al massimo n, nell'ordine della gara); senza scelta i primi n in pista.
 const ssChosen = (st, ids, n = SS_DRIVERS[2]) => (ids && ids.length ? st.cars.filter(c => ids.includes(c.id)) : st.cars.filter(c => !c.dnf)).slice(0, n);
@@ -5338,6 +5423,7 @@ const GARAGE_SOON = [
   ["engineer", "Pilota & Ingegnere", "In due: uno guida, l'altro dal muretto decide gomme e soste."],
   ["stewards", "Tribunale dei Commissari", "Un incidente, due difese: decide la community."],
   ["radar", "Setup Radar", "Distribuisci i punti dell'assetto e avvicinati al setup ideale della pista."],
+  ["telecronaca", "Telecronaca AI", "La gara raccontata in diretta da una voce B&T, giro dopo giro."],   // 1/11 sera (Edoardo)
   ["attack", "B&T Time Attack", "La sfida della settimana su F1 24 o GT7, con la classifica stile tabellone F1."],
   ["stint", "Stint Analyzer & Fuel Calculator", "Durata della gara e consumi: calo delle gomme e benzina da imbarcare."],
 ];
@@ -5794,7 +5880,8 @@ function RaceScreen({ proOk = true, onProAd = null, proBusy = false, onStandings
   const card = { margin: "0 16px 16px", borderRadius: 18, background: C.card, border: `1px solid ${C.border}`, overflow: "hidden" };
   useEffect(checkBoard, [curTab, !!st]);
   return (
-    <div className="scrollcol" ref={scRef} onScroll={checkBoard} style={{ height: "100%" }}>
+    <div className="scrollcol" ref={scRef} onScroll={checkBoard} data-red-screen={st && st.flag === "red" ? "on" : undefined} style={{ height: "100%", ...(st && st.flag === "red" ? { background: RED_SCREEN_BG } : {}) }}>
+      {st && st.flag === "red" && <div role="status" data-red-banner="" style={{ position: "sticky", top: 0, zIndex: 6, margin: "0 0 10px", padding: "10px 12px", background: FLAG_UI.red.color, fontFamily: F_HEAD, fontWeight: 900, fontStyle: "italic", fontSize: 15, letterSpacing: .8, color: "#fff", textAlign: "center" }}>BANDIERA ROSSA · SESSIONE SOSPESA</div>}
       {st && curTab === "classifica" && <PitBoard st={st} driverId={favDriver} visible={board} />}
       {st && liveRace && st.finished && isRaceType(st.type) && <FinishPodium st={st} race={liveRace} onSelectDriver={onSelectDriver} />}
       {realLive && (!live || live.source === "openf1") && <SessionPicker sessions={of1Sessions} onPick={onOf1Pick} note={st ? sessionNote : null} />}
@@ -5852,6 +5939,7 @@ function RaceScreen({ proOk = true, onProAd = null, proBusy = false, onStandings
       </div>
 
       <div key={curTab} data-race-pane={curTab} data-sub-enter={subDir || undefined} className={subDir ? "sub-enter-" + subDir : undefined}>
+      {curTab === "classifica" && st && st.flag === "red" && isRaceType(st.type) && <RedFlagGrid st={st} />}
       {curTab === "classifica" && st && <div ref={tblRef}><TimingTable st={st} onTelemetry={onTelemetry} onSelectDriver={onSelectDriver} onLapTimes={onLapTimes} /></div>}
       {curTab === "messaggi" && st && <RaceControlList messages={st.messages} />}
       {curTab === "meteo" && <WeatherPanel race={shown} st={st} live={live} guesses={wxGuess} results={wxResult} onGuess={onGuessWeather} />}
@@ -6369,7 +6457,7 @@ function ChatProfileSheet({ msg, messages, trophyList = TROPHIES, myWon = {}, lo
 // messaggio) si apre la barra delle emoji; toccando di nuovo la propria la si toglie. Una per persona.
 const REACTION_NAMES = { "👍": "Mi piace", "❤️": "Cuore", "😂": "Risata", "😮": "Stupore", "😢": "Tristezza", "🙏": "Grazie" };
 const LONG_PRESS_MS = 450;
-function ChatThreadScreen({ chat, onBack, onSend, isPremium, blocked = [], onReport, onBlock, onReact, trophyList = TROPHIES, myWon = {}, liveRace = null, pendingLink = null, onPendingUsed, onOpenLink }) {
+function ChatThreadScreen({ since = 0, chat, onBack, onSend, isPremium, blocked = [], onReport, onBlock, onReact, trophyList = TROPHIES, myWon = {}, liveRace = null, pendingLink = null, onPendingUsed, onOpenLink }) {
   const [draft, setDraft] = useState("");
   const [menu, setMenu] = useState(null); // messaggio su cui ho aperto le opzioni e le reazioni
   const [peek, setPeek] = useState(null); // messaggio di cui guardo l'autore (profilo veloce)
@@ -6385,7 +6473,9 @@ function ChatThreadScreen({ chat, onBack, onSend, isPremium, blocked = [], onRep
   const press = useRef({ t: 0, x: 0, y: 0 }), menuAt = useRef(0);
   useEffect(() => () => clearTimeout(press.current.t), []);
   useEffect(() => { endRef.current?.scrollIntoView({ block: "end" }); }, [chat.messages.length]);
-  const shown = chat.messages.filter(m => !isBlockedMsg(blocked, m));
+  // 1/11 notte (Edoardo): le stanze diverse da Chat Generale e FantaF1 Talk ripartono vuote dopo ogni GP (since = fine
+  // dell'ultima gara): i messaggi vecchi non si cancellano, non si vedono più.
+  const shown = chat.messages.filter(m => !isBlockedMsg(blocked, m) && !(since && isFinite(m.at) && m.at < since));
   const canReact = m => !!onReact && !String(m.id).startsWith("invio-");
   const openMenu = m => { if (!m.mine || canReact(m)) { menuAt.current = performance.now(); setMenu(m); } };
   // Tenere premuto: dopo LONG_PRESS_MS senza spostare il dito si apre la barra delle reazioni.
@@ -7684,7 +7774,7 @@ function AdminHolidaysTab({ cfg, onSave, active }) {
   const chip = (on, label, attrs, onClick) => <button className="press" {...attrs} aria-pressed={on ? "true" : "false"} onClick={onClick} style={{ padding: "7px 10px", borderRadius: 10, background: on ? C.accent : "rgba(255,255,255,.05)", border: `1px solid ${on ? C.accent : C.border}`, fontFamily: F_HEAD, fontWeight: 800, fontSize: 11.5, color: "#fff" }}>{label}</button>;
   return (
     <div data-admin-holidays="" style={{ padding: "0 16px 20px" }}>
-      <p style={{ fontFamily: F_BODY, fontSize: 12.5, color: C.muted, lineHeight: 1.5, margin: "0 0 12px" }}>Adesso: <b style={{ color: C.text }}>{active ? HOL[active].name : "nessun tema"}</b>. Di serie i temi seguono le date (Halloween 30 ott – 1 nov, Natale 1 – 26 dic, Befana 5 – 6 gen, Monza nel weekend del GP d'Italia). Gli utenti possono spegnerli dal Profilo.</p>
+      <p style={{ fontFamily: F_BODY, fontSize: 12.5, color: C.muted, lineHeight: 1.5, margin: "0 0 12px" }}>Adesso: <b style={{ color: C.text }}>{active ? HOL[active].name : "nessun tema"}</b>. Di serie i temi seguono le date (Halloween 30 ott – 1 nov, Black Friday dal venerdì al lunedì dopo il quarto giovedì di novembre, Natale 1 – 26 dic, Befana 5 – 6 gen, Monza nel weekend del GP d'Italia). Con Black Friday, Natale, Befana e Monza c'è lo sconto del Premium se nel negozio c'è l'offerta con lo stesso nome. Gli utenti possono spegnerli dal Profilo.</p>
       {BtHolidays.IDS.map(id => (
         <div key={id} data-admin-holiday={id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "10px 0", borderTop: `1px solid ${C.divider}` }}>
           <HolidayMark id={id} size={20} />
@@ -8527,7 +8617,7 @@ function AdminScreen({ takes = [], onTakes = null, photos, setPhotos, silly = {}
   );
 }
 
-function PremiumModal({ onClose, isPremium, plan, setPlan, onSubscribe, subscribing, subscribed, trialUsed, onTrial, trial, onAdPro = null, adBusy = false, playPrice = null }) {
+function PremiumModal({ onClose, isPremium, plan, setPlan, onSubscribe, subscribing, subscribed, trialUsed, onTrial, trial, onAdPro = null, adBusy = false, playPrice = null, sale = null }) {
   const offer = premiumOffer({ trialUsed, isPremium });
   const price = (playPrice || SEASON_PRICE + " €") + " a stagione";   // 1/11: nell'APK il prezzo vero di Google Play
   const heroGradient = `linear-gradient(135deg, ${shade(C.accent, .11)}, ${alpha(C.accentInk, .27)}, ${shade(C.accent, .11)})`;
@@ -8572,6 +8662,11 @@ function PremiumModal({ onClose, isPremium, plan, setPlan, onSubscribe, subscrib
                 </React.Fragment>
               ))}
 
+              {/* 1/11 sera: sconto della festa, mostrato solo col prezzo vero dell'offerta di Google Play */}
+              {sale && <div data-sale={sale.id} style={{ margin: "18px 0 0", padding: "12px 14px", borderRadius: 14, background: alpha(sale.color, .16), border: `1.5px solid ${sale.color}`, textAlign: "center" }}>
+                <span style={{ display: "block", fontFamily: F_HEAD, fontWeight: 900, fontStyle: "italic", fontSize: 14, letterSpacing: .6, color: sale.color }}>SCONTO {sale.name.toUpperCase()} −{sale.pct}%</span>
+                <span style={{ display: "block", fontFamily: F_BODY, fontSize: 12, color: C.text, marginTop: 4 }}>La prima stagione a {sale.price}</span>
+              </div>}
               <div data-season-plan="" style={{ margin: "18px 0 0", padding: "14px 16px", borderRadius: 14, background: "rgba(231,179,76,.12)", border: `1.5px solid ${C.gold}`, textAlign: "center" }}>
                 <span style={{ display: "block", fontFamily: F_BODY, fontWeight: 700, fontSize: 10, color: C.muted, letterSpacing: .6, marginBottom: 6 }}>STAGIONE</span>
                 <span style={{ display: "block", fontFamily: F_HEAD, fontWeight: 900, fontSize: 22, color: C.text }}>{SEASON_PRICE} €</span>
@@ -9833,7 +9928,12 @@ function App() {
     const iv = setInterval(() => {
       if (isOf1Live(live)) {
         const r = replayRef.current;
-        if (!r.playing) return;
+        if (!r.playing) {
+          if (!(live.ongoing && live.sim.t < live.sim.duration)) return;   // diretta in corso: scorre in tempo reale
+          live.sim.advance(Math.min(0.25, live.sim.duration - live.sim.t));
+          if (liveShown.current) setLiveTick(n => n + 1);
+          return;
+        }
         live.sim.advance(0.25 * r.speed);
         if (live.sim.t >= live.sim.duration) setReplay(x => ({ ...x, playing: false }));
       } else live.sim.advance(0.25 * liveSpeed);
@@ -9929,7 +10029,6 @@ function App() {
   // toglie, ma solo quello preso con Google Play.
   const [playPrices, setPlayPrices] = useState({});
   const [payMsg, setPayMsg] = useState(null);   // avviso del ritorno da Stripe, mostrato appena si è dentro l'app
-  useEffect(() => { if (Billing.where() === "play") Billing.prices().then(p => setPlayPrices(p || {}), () => {}); }, []);
   useEffect(() => {
     if (!fantaUserReady || Billing.where() !== "play") return;
     const em = userEmailRef.current;   // se intanto si esce o entra un altro account, la risposta non vale
@@ -9969,6 +10068,9 @@ function App() {
   const themePending = account === undefined || (!!userEmail && userLoaded !== userEmail);
   // 31/10: festa attiva (date di Roma, weekend di Monza dal calendario, comando dell'admin); spenta dal Profilo.
   const holiday = holidaysOn ? BtHolidays.activeHoliday({ now: nowMs(), races, config: holidayCfg }) : null;
+  // Sconto della festa (Black Friday, Natale, Befana, Monza): il prezzo dell'offerta di Google Play con lo stesso nome.
+  const holidaySale = holidaysOn ? BtHolidays.saleOf(holiday) : null;
+  useEffect(() => { if (Billing.where() === "play") Billing.prices(holidaySale ? holidaySale.id : null).then(p => setPlayPrices(p || {}), () => {}); }, [holidaySale ? holidaySale.id : ""]);
   const tones = applyTheme(holiday ? { mode: "custom", color: HOL[holiday].color } : theme, favTeam, themePending ? bootColor : null);
   useEffect(() => { fx.setHoliday(holiday ? HOL[holiday].sounds : null); }, [holiday]);   // suoni della festa (tic → campanellino…)
   useEffect(() => {
@@ -10154,11 +10256,15 @@ function App() {
           setOf1Live(null); setOf1({ status: "empty", raceId: realLiveId });
           return;
         }
-        const sim = buildReplay(raw, track, { drivers: LIVE_DRIVERS, of1: OF1 });
+        const sim = buildReplay(raw, track, { drivers: LIVE_DRIVERS, of1: OF1, live: liveNow });
         // ongoing (31/10): dati della diretta (api/live) con la sessione non ancora finita: non è "finita" anche se si
         // vede l'ultimo momento arrivato. Solo allora si ricarica ogni 15 s (una sessione passata presa da api/live no).
         const endAt = endOf(target);
         const ongoing = liveNow && isLatest && (!isFinite(endAt) || nowMs() < endAt);
+        // 1/11 sera (Edoardo: "la mappa va a scatti, i punti si teletrasportano"): in diretta si guarda LIVE_LAG_S secondi
+        // dietro gli ultimi dati e il tempo scorre da solo (vedi l'intervallo da 250 ms): così fra un aggiornamento e
+        // l'altro (15 s) le auto si muovono di continuo invece di stare ferme e poi saltare.
+        if (ongoing && sim.jumpTo && isFinite(sim.duration)) sim.jumpTo(Math.max(0, sim.duration - LIVE_LAG_S));
         loaded = shownKey = target.session_key; loadedAt = nowMs(); empty = false; liveMode = ongoing;
         setReplay(r => ({ ...r, playing: false }));
         setOf1Live({ raceId: race.id, type: sim.type, sim, track, source: "openf1", raw, sessionKey: target.session_key, ongoing });
@@ -10654,7 +10760,7 @@ function App() {
     if (userDataWait()) { setPremiumOpen(false); return; }
     if (subscribing) return;
     setSubscribing(true);
-    Billing.buy("premium", { email: account && account.email, token: account && account.aid }).then(r => {
+    Billing.buy("premium", { email: account && account.email, token: account && account.aid, sale: holidaySale ? holidaySale.id : null }).then(r => {
       if (r.ok && r.via === "play") {
         setSubscribing(false); setSubscribed(true); fx.play("done"); fx.buzz("success");
         setPremium(p => ({ ...p, sub: true, src: "play", at: nowMs(), trial: p.trial ? { ...p.trial, converted: true } : null }));
@@ -11120,6 +11226,9 @@ function App() {
     : id === "monza" ? () => { setCircuitId("it-1922"); setView("circuit"); }
     : null;
   const activeChat = chats.find(c => c.id === chatId);
+  // Fine dell'ultimo GP già corso (partenza della gara + 4 ore): da lì ripartono le stanze della gara.
+  const lastGpEnd = (races || []).map(r => raceStartMs(r) + 4 * 3600e3).filter(t => isFinite(t) && t < nowMs()).sort((a, b) => b - a)[0] || 0;
+  const chatSince = id => (!id || id === "generale" || id === "fanta" ? 0 : lastGpEnd);
   const activeArticle = articles.find(a => a.id === articleId);
   const shareArticle = shareId != null ? articles.find(a => a.id === shareId) : null;
   // 31/10 sera (Edoardo): sfondo e scritta della bandiera a scacchi solo se la sessione si è vista mentre era in corso
@@ -11182,7 +11291,7 @@ function App() {
   else if (view === "circuit" && circuitId) body = <CircuitScreen circuitId={circuitId} races={races} articles={articles} onBack={viewBack.circuit} onTag={filterByTag} onOpenArticle={openArticle} />;
   else if (view === "adminLock") body = <AdminKeypad onOk={() => { setAdminUnlocked(true); setView("admin"); }} onCancel={viewBack.adminLock} />;
   else if (view === "admin" && adminUnlocked && Account.isAdmin()) body = <AdminScreen takes={takes} onTakes={v => commitShared("takes", () => v).then(ok => { if (ok) showToast("Opinioni salvate"); })} holidayCfg={holidayCfg} holiday={holiday} onHolidays={v => commitShared("holidays", () => v).then(ok => { if (ok) showToast("Temi delle feste salvati"); })} photos={commonsPhotos} setPhotos={adminSet.commonsPhotos} silly={sillyOfficial} onSilly={officialSeat} highlights={highlights} setHighlights={adminSet.highlights} onBack={viewBack.admin} onPublish={publishArticle} articles={articles} setArticles={adminSet.articles} fantaStats={fantaStats} setFantaStats={adminSet.fantaStats} standings={standings} setStandings={adminSet.standings} races={races} setRaces={adminSet.races} extraRaces={racesDoc.extra} setExtraRaces={adminSet.extraRaces} ig={ig} setIg={adminSet.ig} sentNotifs={sentNotifs} onSendNotif={sendNotif} onDeleteNotif={deleteNotif} onToast={showToast} tab={adminTab} setTab={setAdminTab} chats={chats} reports={reports} banned={banned} onDeleteMsg={deleteChatMsg} onSuspend={suspendUser} onUnsuspend={unsuspendUser} onIgnoreReport={ignoreReport} liveProps={liveProps} polls={allPolls} votes={votes} onPollAnswer={setPollAnswer} predictions={predictions} setPredictions={adminSet.predictions} predAnswers={predAnswers} />;
-  else if (view === "chatThread" && activeChat) body = <ChatThreadScreen chat={activeChat} onBack={viewBack.chatThread} onSend={guest ? () => needLogin("Per scrivere in chat serve un account.") : sendMessage} isPremium={isPremium} blocked={blocked} onReport={guest ? () => needLogin("Per segnalare un messaggio serve un account.") : reportMessage} onBlock={blockUser} onReact={guest ? () => needLogin("Per reagire ai messaggi serve un account.") : reactMessage} trophyList={trophyList} myWon={trophies} pendingLink={pendingLink} onPendingUsed={() => setPendingLink(null)} onOpenLink={openLink} liveRace={races.find(r => r.status === "LIVE") || null} />;
+  else if (view === "chatThread" && activeChat) body = <ChatThreadScreen since={chatSince(activeChat && activeChat.id)} chat={activeChat} onBack={viewBack.chatThread} onSend={guest ? () => needLogin("Per scrivere in chat serve un account.") : sendMessage} isPremium={isPremium} blocked={blocked} onReport={guest ? () => needLogin("Per segnalare un messaggio serve un account.") : reportMessage} onBlock={blockUser} onReact={guest ? () => needLogin("Per reagire ai messaggi serve un account.") : reactMessage} trophyList={trophyList} myWon={trophies} pendingLink={pendingLink} onPendingUsed={() => setPendingLink(null)} onOpenLink={openLink} liveRace={races.find(r => r.status === "LIVE") || null} />;
   else if (view === "instagram") body = <InstagramView ig={ig} onToast={showToast} onBack={viewBack.instagram} />;
   else if (view === "ghost") body = <GhostLap key={ghostInit ? JSON.stringify(ghostInit) : "ghost"} init={ghostInit} onBack={viewBack.ghost} />;
   else if (view === "pitswipe") body = <PitSwipeScreen cards={psCards} deck={psDeck || { i: 0, acts: {}, hist: [] }} results={psRes} onAct={psAct} onUndo={psUndo} onBack={() => setView("tab")}
@@ -11273,7 +11382,7 @@ function App() {
           onTrick={() => { setPumpkinStep(null); setTrickOn(true); fx.play("howl"); fx.buzz("error"); setTimeout(() => setTrickOn(false), 2200); }}
           onWear={() => { if (userDataWait()) return; setHelmet({ ...PUMPKIN_HELMET, number: helmet && helmet.number != null ? helmet.number : null }); setPumpkinStep(null); showToast("Casco Zucca messo"); fx.play("clack"); }} />}
         {trickOn && <div data-trick="" role="status" className="hol-trick" style={{ position: "absolute", left: 0, right: 0, top: 0, zIndex: 770, padding: "16px 16px 14px", background: FLAG_UI.yellow.color, color: FLAG_UI.yellow.ink, textAlign: "center", fontFamily: F_HEAD, fontWeight: 900, fontStyle: "italic", fontSize: 17, letterSpacing: .6, boxShadow: "0 8px 24px rgba(0,0,0,.5)" }}>BANDIERA GIALLA… SCHERZETTO!</div>}
-        {premiumOpen && <PremiumModal playPrice={playPrices.premium || null} onClose={closePremium} isPremium={isPremium} plan={plan} setPlan={setPlan} onSubscribe={doSubscribe} subscribing={subscribing} subscribed={subscribed} trialUsed={!!trial} onTrial={doTrial} trial={trial} onAdPro={Ads.canReward() ? () => watchAdPro() : null} adBusy={adBusy} />}
+        {premiumOpen && <PremiumModal sale={playPrices.sale && holidaySale && playPrices.sale.id === holidaySale.id ? { ...holidaySale, price: playPrices.sale.price, color: HOL[holidaySale.id].color } : null} playPrice={playPrices.premium || null} onClose={closePremium} isPremium={isPremium} plan={plan} setPlan={setPlan} onSubscribe={doSubscribe} subscribing={subscribing} subscribed={subscribed} trialUsed={!!trial} onTrial={doTrial} trial={trial} onAdPro={Ads.canReward() ? () => watchAdPro() : null} adBusy={adBusy} />}
         {selectedDriver && <DriverDetailModal driver={selectedDriver} lastRace={lastRace} races={races} onClose={() => setSelectedDriver(null)} />}
         {liveTrackOpen && <LiveMapView race={live ? races.find(r => r.id === live.raceId) : weekendRace(races)} live={live} st={liveSt} onClose={() => setLiveTrackOpen(false)} />}
         {ssOpen && <SecondScreen chat={chats.find(c => c.id === "generale")} blocked={blocked} onChatSend={guest ? () => needLogin("Per scrivere in chat serve un account.") : t => sendMessage("generale", t)} race={live ? races.find(r => r.id === live.raceId) : weekendRace(races)} live={live} st={liveSt} standings={shownStandings} layout={ssLayout} setLayout={setSsLayout} prefs={ssPrefs} setPrefs={setSsPrefs} vote={live ? votesNow.dotd[live.raceId] || {} : {}} onVote={(k, id) => live && voteDotd(live.raceId, k, id)} notice={notice} onCloseNotice={nextNotice} onClose={() => setSsOpen(false)} />}

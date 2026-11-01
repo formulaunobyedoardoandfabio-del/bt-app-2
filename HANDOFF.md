@@ -480,3 +480,29 @@ Da fare:
 - Edoardo: "no, perché li hai tolti, ci sono tante altre possibilità, fai tornare tutto come prima". Annullato il commit
   9126781 (pagamenti spenti): tornano Google Play Billing nell'app (@capgo/native-purchases), Stripe sul sito, i prezzi e
   "Abbonati" nel foglio Premium, la §4 dei Termini coi pagamenti. Vale la sezione "1/11 pomeriggio".
+
+## 1/11 notte: gara in diretta (piano nel progetto: claude/piano-gara-live.md) e sconti delle feste
+- Edoardo: "fai il più possibile anche se lascia il codice a metà" (token settimanali all'85%).
+- Telemetria del giro in diretta: openf1.carData(…, { live }) passa da api/live (l'API gratuita in gara è bloccata);
+  buildReplay riceve live.
+- Mappa fluida in diretta: con la sessione in corso (of1Live.ongoing) si guarda LIVE_LAG_S = 20 s dietro gli ultimi
+  dati e il tempo scorre da solo nell'intervallo da 250 ms (prima restava fermo 15 s e poi saltava). Non ancora fatto:
+  coordinate vere (location di OpenF1) nella mappa.
+- Ritiri in diretta (openf1.js): un'auto che non chiude il giro da più di 3 giri tipici, non ai box e non con la rossa,
+  è ritirata in quel giro (RIT in classifica).
+- Bandiera rossa: pagina Race rossa (data-red-screen, RED_SCREEN_BG) con la scritta "BANDIERA ROSSA · SESSIONE
+  SOSPESA" e, nella Classifica di gara, la nuova griglia vista dall'alto (RedFlagGrid, data-red-grid: auto due a due
+  sfalsate, posizioni guadagnate o perse rispetto a c.grid).
+- Team radio (RadioPlay): tasto grande Ascolta/Pausa, un audio alla volta, le 3 più recenti caricate in anticipo;
+  interruttore "Ascolta i team radio" (bt-radio-auto) fa partire da sole quelle nuove. Solo in RadioList (pagina Race).
+- Garage "In arrivo": Telecronaca AI.
+- Feste: Black Friday (src/logic/holidays.js: dal venerdì dopo il quarto giovedì di novembre al lunedì; oro, suono
+  "gun"); sconti sale: Black Friday 50, Natale 30, Befana 20, Monza 25 (saleOf). Lo sconto si vede nel foglio Premium
+  (data-sale) solo col prezzo vero dell'offerta di Google Play con lo stesso nome (blackfriday, natale, befana, monza:
+  da creare nella Play Console) e l'acquisto usa quell'offerta; sul sito api/stripe-checkout mette il coupon
+  STRIPE_COUPON_<NOME> se c'è su Vercel.
+- Chat: le stanze diverse da Generale e FantaF1 Talk mostrano solo i messaggi dopo la fine dell'ultimo GP (chatSince,
+  partenza della gara + 4 ore): i vecchi non si cancellano. Da fare: anche anteprima e non letti della lista delle chat.
+- Da fare (piano): mappa con location vera, B&T Highlights (pit più
+  veloce, rientro dopo il pit), telecronaca scritta, avvisi ogni 20 giri / SC / rossa / penalità, notifiche push.
+- Prove: holidays (Black Friday e sconti), billing (offerta della festa), payments-api (coupon).

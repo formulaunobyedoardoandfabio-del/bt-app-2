@@ -91,6 +91,19 @@ t('checkout: caffè anche senza email (offerta), Premium senza email no, chiavi 
   assert.strictEqual(calls.length, 1, 'Stripe chiamato solo per la richiesta giusta');
 });
 
+t('checkout: sconto della festa solo col coupon di Stripe di quella festa', async () => {
+  const bodies = [];
+  const fetchImpl = async (url, opt) => { bodies.push(new URLSearchParams(opt.body)); return { ok: true, status: 200, json: async () => ({ url: 'https://checkout.stripe.com/c/pay/cs_3' }) }; };
+  const env = { STRIPE_SECRET_KEY: 'sk_test_x', STRIPE_PRICE_PREMIUM: 'price_premium', STRIPE_PRICE_COFFEE: 'price_caffe', STRIPE_COUPON_BLACKFRIDAY: 'BF50' };
+  const h = createCheckout({ fetchImpl, env });
+  await h({ method: 'POST', body: { kind: 'premium', email: 'a@b.it', sale: 'blackfriday' } }, fakeRes());
+  await h({ method: 'POST', body: { kind: 'premium', email: 'a@b.it', sale: 'natale' } }, fakeRes());
+  await h({ method: 'POST', body: { kind: 'premium', email: 'a@b.it', sale: 'inventato' } }, fakeRes());
+  assert.strictEqual(bodies[0].get('discounts[0][coupon]'), 'BF50');
+  assert.strictEqual(bodies[1].get('discounts[0][coupon]'), null, 'senza coupon di Natale niente sconto');
+  assert.strictEqual(bodies[2].get('discounts[0][coupon]'), null);
+});
+
 t('webhook: abbonamento pagato → Premium nell\'account (solo i campi del server, solo se l\'account c\'è)', async () => {
   const g = fakeGoogle();
   const h = createWebhook({ fetchImpl: g.fetchImpl, env: { STRIPE_WEBHOOK_SECRET: SECRET, FIREBASE_SERVICE_ACCOUNT: SA }, now: () => NOW });
