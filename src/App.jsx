@@ -16,6 +16,9 @@ import DnfArtData from "./logic/dnf-art";
 import BtGhost from "./logic/bt-ghost";
 import BtWk from "./logic/bt-weekend";
 import BtHolidays from "./logic/holidays";
+import BtSwipe from "./logic/pitswipe";
+import { createSwipeVotes } from "./services/swipevotes";
+import Reminders from "./services/reminders";
 import Colors from "./logic/colors";
 import { filterNews, TYRES, LANES } from "./logic/newsfilter";
 import { classifySwipe, SWIPE, dragFollow, dragProgress, leaveTo } from "./logic/gesture";
@@ -441,7 +444,8 @@ const OF1 = createOpenF1({ liveBase: OF1_LIVE_BASE });
 // permesso di Jolpica (HANDOFF.md). false = solo le classifiche dell'admin.
 const JOLPICA_ON = true;
 const Jolpica = createJolpica({ store: local, now: nowMs });
-const FantaL = createFantaLeague({ store: local, now: nowMs });   // 31/10: leghe FantaF1 vere e risultati veri
+const FantaL = createFantaLeague({ store: local, now: nowMs });
+const SwipeVotes = createSwipeVotes({ now: nowMs });   // 1/11: voti veri di Pit Swipe (fanta/pitswipe-voti)   // 31/10: leghe FantaF1 vere e risultati veri
 // Previsioni meteo del weekend (24/10): MET Norway tramite la funzione su Vercel api/meteo.js (src/services/meteo.js).
 const Meteo = createMeteo({ store: local, now: nowMs });
 // Dati F1 che si aggiornano da soli (25/10, src/services/f1data.js): Ghost Lap delle ultime qualifiche, gare, qualifiche e
@@ -1910,7 +1914,7 @@ function TyreFilter({ value, onChange }) {
   );
 }
 
-function HomeScreen({ holidayTop = null, ig, onOpenIg, highlights = [], articles, tagFilter, onTag, onClearTag, onOpenArticle, isPremium, onPremium, onToast, onLiveTrack, onGoFanta, saved = [], onToggleSave, savedOnly = false, setSavedOnly, onOpenCircuit, homePoll = null, homeVote = null, onVote, hidden = [], onHide, onUnhideAll, onSwipeSave, onRefresh }) {
+function HomeScreen({ holidayTop = null, pitSwipe = null, ig, onOpenIg, highlights = [], articles, tagFilter, onTag, onClearTag, onOpenArticle, isPremium, onPremium, onToast, onLiveTrack, onGoFanta, saved = [], onToggleSave, savedOnly = false, setSavedOnly, onOpenCircuit, homePoll = null, homeVote = null, onVote, hidden = [], onHide, onUnhideAll, onSwipeSave, onRefresh }) {
   const [q, setQ] = useState("");
   const homeRef = useRef(null);
   const pullRev = usePullRefresh(homeRef, onRefresh);
@@ -2024,7 +2028,7 @@ function HomeScreen({ holidayTop = null, ig, onOpenIg, highlights = [], articles
         </button>
         </div>
       )}
-      {ig && onOpenIg && <IgBigButton ig={ig} onOpen={onOpenIg} />}
+      {pitSwipe /* 1/11: al posto del riquadro di Instagram (che resta nel Profilo) */}
 
       {rest.map(a => (
         <SwipeRow key={a.id} id={a.id} onSave={onSwipeSave} onHide={onHide}>
@@ -7586,7 +7590,7 @@ function AdminKeypad({ onOk, onCancel }) {
 }
 
 /* ── PANNELLO ADMIN (stesse sezioni della versione vecchia) ─────────── */
-const ADMIN_TABS = ["NEWS", "SONDAGGI", "FANTA F1", "PREVISIONI", "CLASSIFICHE", "GARA LIVE", "MERCATO", "INSTAGRAM", "VIDEO", "FOTO", "NOTIFICHE", "CHAT", "TEMI"];
+const ADMIN_TABS = ["NEWS", "SONDAGGI", "OPINIONI", "FANTA F1", "PREVISIONI", "CLASSIFICHE", "GARA LIVE", "MERCATO", "INSTAGRAM", "VIDEO", "FOTO", "NOTIFICHE", "CHAT", "TEMI"];
 // 31/10: temi delle feste dal Pannello Admin (shared/bt-holidays): di serie seguono le date; si può accenderne uno
 // sempre (per provarlo o per un evento) o spegnerne uno.
 function AdminHolidaysTab({ cfg, onSave, active }) {
@@ -8405,7 +8409,7 @@ function AdminChatTab({ chats, reports, banned, onDeleteMsg, onSuspend, onUnsusp
 // Impronta di un valore: le schede con la bozza (classifiche, prezzi FantaF1, Instagram) si rifanno da capo quando i
 // dati sotto cambiano (riletti da Firebase o appena salvati), così SALVA non riscrive valori vecchi (revisione Fase B, C2).
 const versionOf = v => { const s = JSON.stringify(v) || ""; let h = 5381; for (let i = 0; i < s.length; i++) h = (Math.imul(h, 33) + s.charCodeAt(i)) | 0; return (h >>> 0).toString(36) + "." + s.length; };
-function AdminScreen({ photos, setPhotos, silly = {}, onSilly, highlights = [], setHighlights, onBack, onPublish, articles, setArticles, fantaStats, setFantaStats, standings, setStandings, races, setRaces, extraRaces = [], setExtraRaces, ig, setIg, sentNotifs, onSendNotif, onDeleteNotif, onToast, tab, setTab, chats, reports, banned, onDeleteMsg, onSuspend, onUnsuspend, onIgnoreReport, liveProps = {}, polls = [], votes = {}, onPollAnswer, predictions = [], setPredictions, predAnswers = {}, holidayCfg = null, onHolidays = null, holiday = null }) {
+function AdminScreen({ takes = [], onTakes = null, photos, setPhotos, silly = {}, onSilly, highlights = [], setHighlights, onBack, onPublish, articles, setArticles, fantaStats, setFantaStats, standings, setStandings, races, setRaces, extraRaces = [], setExtraRaces, ig, setIg, sentNotifs, onSendNotif, onDeleteNotif, onToast, tab, setTab, chats, reports, banned, onDeleteMsg, onSuspend, onUnsuspend, onIgnoreReport, liveProps = {}, polls = [], votes = {}, onPollAnswer, predictions = [], setPredictions, predAnswers = {}, holidayCfg = null, onHolidays = null, holiday = null }) {
   return (
     <div className="scrollcol" style={{ height: "100%" }}>
       <SubHeader title="PANNELLO ADMIN" onBack={onBack} />
@@ -8417,6 +8421,7 @@ function AdminScreen({ photos, setPhotos, silly = {}, onSilly, highlights = [], 
         {tab === "SONDAGGI" && <AdminPollsTab polls={polls} votes={votes} onAnswer={onPollAnswer} />}
         {tab === "FANTA F1" && <AdminFantaTab key={"fs:" + versionOf(fantaStats)} fantaStats={fantaStats} setFantaStats={setFantaStats} onToast={onToast} />}
         {tab === "TEMI" && <AdminHolidaysTab cfg={holidayCfg} active={holiday} onSave={v => onHolidays && onHolidays(v)} />}
+        {tab === "OPINIONI" && <AdminTakesTab takes={takes} onSave={v => onTakes && onTakes(v)} />}
         {tab === "PREVISIONI" && <AdminPredictionsTab predictions={predictions} setPredictions={setPredictions} answers={predAnswers} races={races} onToast={onToast} />}
         {tab === "CLASSIFICHE" && <AdminStandingsTab key={"st:" + versionOf(standings)} standings={standings} setStandings={setStandings} onToast={onToast} />}
         {tab === "GARA LIVE" && <AdminRacesTab races={races} setRaces={setRaces} extra={extraRaces} setExtra={setExtraRaces} onToast={onToast} {...liveProps} />}
@@ -9050,7 +9055,7 @@ const USER_INIT = {
   squad: FANTA_SQUAD_INIT, squadBase: null, freeTransfers: 3,   // squadBase null: la prima squadra non conta come cambi
   predAnswers: {}, sillyPreds: {}, stratPreds: {}, pitBest: null, wxGuess: {}, ratings: {}, dotd: {}, notifSeenAt: 0,
   theme: { mode: "team", color: null }, sounds: true, haptics: true, helmet: null, hidden: [], trophies: {},
-  premium: { sub: false, trial: null }, squadLog: [], leagues: [], holidays: true,
+  premium: { sub: false, trial: null }, squadLog: [], leagues: [], holidays: true, swipe: {},
 };
 // Premium dell'anteprima salvato nell'account (24/10): sub = abbonamento di prova, trial = prova per un GP { start, end }.
 const cleanPremium = v => {
@@ -9066,6 +9071,297 @@ const OFFLINE_LINE = "Sei offline: alcuni contenuti potrebbero non essere aggior
 const SHARED_REFRESH_MS = 60000;   // ogni minuto si rilegge bt-races: una gara messa LIVE arriva senza riavviare
 const sameJson = (a, b) => JSON.stringify(a) === JSON.stringify(b);
 const fmtSent = iso => { const t = Compat.parseDate(iso); return isNaN(t) ? "" : new Date(t).toLocaleString("it-IT", { timeZone: "Europe/Rome", day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" }); };
+
+/* ── PIT SWIPE (1/11) ─────────────────────────────────────────────────── */
+// Le notizie del giorno come mazzo di carte da scorrere (src/logic/pitswipe.js; design docs/design/pit-swipe.html):
+// a destra BOX BOX (salva), a sinistra STAY OUT, in su RADIO (in chat), GIRO VELOCE una volta per giro, BANDIERA ROSSA
+// per tornare indietro. Opinioni con voti veri, vero o falso dai dati veri, carta del pilota del cuore.
+const PS = { box: "#2FD36B", out: "#FF453A", radio: "#4C8DFF", fast: "#B26BFF" };
+const PS_STAMP = { box: "BOX BOX", out: "STAY OUT", radio: "RADIO", fast: "GIRO VELOCE" };
+const PS_STAMP_OF = { take: { box: "D'ACCORDO", out: "NO" }, tf: { box: "VERO", out: "FALSO" } };
+const PS_EGG_NAME = { donuts: "Donuts", limiti: "Limiti della pista", pioggia: "Pioggia vera", launch: "Launch control", radio: "Radio in chat", muretto: "Il muretto risponde" };
+const psLabelOf = k => {
+  const kind = String(k).slice(0, 1), id = String(k).slice(2);
+  if (kind === "t") { const x = teamById(id); return x ? x.name : id; }
+  if (kind === "d") { const x = driverById(id); return x ? x.name : id; }
+  return id.toUpperCase();
+};
+
+// I 10 pallini del giro: fatto (col colore del gesto), adesso, da fare.
+function PsDots({ marks, i, n }) {
+  return (
+    <div aria-label={`Curva ${Math.min(i + 1, n)} di ${n}`} style={{ position: "relative", height: 14, margin: "0 6px" }}>
+      <div style={{ position: "absolute", left: 0, right: 0, top: 6, height: 2, borderRadius: 2, background: "rgba(255,255,255,.12)" }} />
+      <div style={{ position: "absolute", left: 0, top: 6, height: 2, borderRadius: 2, background: C.accent, width: n > 1 ? `${Math.min(1, i / (n - 1)) * 100}%` : 0, transition: "width .25s" }} />
+      {Array.from({ length: n }, (_, k) => {
+        const act = marks[k], st = k < i ? (act || "out") : k === i ? "now" : "todo";
+        const bg = st === "now" ? "#fff" : st === "todo" ? "#2A2A30" : st === "fast" ? PS.fast : C.accent;
+        return <span key={k} data-ps-dot={k} data-state={st} style={{ position: "absolute", top: 2, left: n > 1 ? `${k / (n - 1) * 100}%` : 0, width: st === "now" ? 10 : 8, height: st === "now" ? 10 : 8, marginTop: st === "now" ? -1 : 0, borderRadius: "50%", transform: "translateX(-50%)", background: bg, border: `1px solid ${st === "todo" ? "rgba(255,255,255,.2)" : bg}` }} />;
+      })}
+    </div>
+  );
+}
+
+// Riquadro della Home (al posto di quello di Instagram, che resta nel Profilo).
+function PitSwipeCard({ info, onOpen }) {
+  const { total, i, done, streak, level, missions } = info;
+  const sub = done ? `Giro completato · nuovo mazzo ${info.nextText}` : i > 0 ? `Curva ${i + 1} di ${total}: riprendi da qui` : total ? `${total} carte: notizie, opinioni, un vero o falso. Circa 2 minuti.` : "Nessuna notizia nuova: torna più tardi.";
+  const mDone = missions.filter(m => m.done).length;
+  return (
+    <button className="press" data-pitswipe-card="" onClick={onOpen} style={{ display: "block", width: "calc(100% - 32px)", margin: "0 16px 14px", padding: 0, textAlign: "left", borderRadius: 18, overflow: "hidden", border: `1px solid ${C.border}`, background: "linear-gradient(120deg,#3A0905 0%,#140403 55%,#0B0B0D 100%)", position: "relative" }}>
+      <span aria-hidden="true" style={{ position: "absolute", right: -18, top: -10, fontFamily: F_HEAD, fontWeight: 900, fontStyle: "italic", fontSize: 92, color: "rgba(255,255,255,.04)", lineHeight: 1 }}>B&T</span>
+      <span style={{ display: "block", padding: "14px 14px 12px", position: "relative" }}>
+        <span style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <span style={{ fontFamily: F_BODY, fontWeight: 700, fontSize: 10.5, letterSpacing: 1.3, color: C.accentInk }}>PIT SWIPE</span>
+          <span style={{ flex: 1 }} />
+          {streak.n > 0 && <span data-ps-streak={streak.n} style={{ padding: "3px 8px", borderRadius: 999, background: streak.danger ? "rgba(255,69,58,.16)" : "rgba(231,179,76,.14)", border: `1px solid ${streak.danger ? "rgba(255,69,58,.5)" : "rgba(231,179,76,.4)"}`, fontFamily: F_HEAD, fontWeight: 900, fontStyle: "italic", fontSize: 10.5, color: streak.danger ? "#FF6A5E" : C.gold }}>{streak.n} GP DI FILA{streak.danger ? " · IN PERICOLO" : ""}</span>}
+        </span>
+        <span style={{ display: "block", fontFamily: F_HEAD, fontWeight: 900, fontStyle: "italic", fontSize: 20, color: "#fff", margin: "6px 0 3px" }}>{done ? "Giro completato" : "Il giro di oggi"}</span>
+        <span style={{ display: "block", fontFamily: F_BODY, fontSize: 12.5, color: "rgba(255,255,255,.75)", lineHeight: 1.4 }}>{sub}</span>
+        <span style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 12 }}>
+          <span style={{ flex: 1, minWidth: 0 }}>
+            <span style={{ display: "flex", justifyContent: "space-between", fontFamily: F_BODY, fontWeight: 700, fontSize: 9.5, letterSpacing: .6, color: "rgba(255,255,255,.6)", marginBottom: 4 }}><span>LIVELLO: {level.name.toUpperCase()}</span><span>{level.nextName ? `${level.toNext} punti a ${level.nextName}` : "livello massimo"}</span></span>
+            <span style={{ display: "block", height: 5, borderRadius: 3, background: "rgba(255,255,255,.1)", overflow: "hidden" }}><span style={{ display: "block", height: "100%", width: `${Math.round(level.frac * 100)}%`, background: C.accent }} /></span>
+          </span>
+          <span data-ps-missions={mDone} style={{ flexShrink: 0, display: "flex", gap: 4 }} aria-label={`Missioni della settimana: ${mDone} di ${missions.length}`}>
+            {missions.map(m => <span key={m.id} style={{ width: 10, height: 10, borderRadius: 3, background: m.done ? PS.box : "rgba(255,255,255,.14)" }} />)}
+          </span>
+        </span>
+      </span>
+    </button>
+  );
+}
+
+// Il contenuto di una carta, per tipo (senza il trascinamento).
+function PsFace({ card, result }) {
+  if (card.kind === "news") {
+    const tags = articleTags(card), col = (tags[0] && tags[0].color) || C.accent;
+    return (
+      <div style={{ height: "100%", display: "flex", flexDirection: "column" }}>
+        <div style={{ height: 150, flexShrink: 0, position: "relative", overflow: "hidden", background: `linear-gradient(135deg, ${col} 0%, #0B0B0D 115%)` }}>
+          <div style={{ position: "absolute", inset: 0, background: "repeating-linear-gradient(115deg,rgba(255,255,255,.05) 0 2px,transparent 2px 18px)" }} />
+          <span style={{ position: "absolute", left: 12, top: 12, padding: "3px 8px", borderRadius: 6, background: "rgba(0,0,0,.45)", border: "1px solid rgba(255,255,255,.2)", fontFamily: F_HEAD, fontWeight: 900, fontStyle: "italic", fontSize: 10, letterSpacing: .8, color: "#fff" }}>{String(card.cat || "NOTIZIA").toUpperCase()}</span>
+          <span style={{ position: "absolute", right: 12, bottom: 4, fontFamily: F_HEAD, fontWeight: 900, fontStyle: "italic", fontSize: 40, color: "rgba(255,255,255,.14)" }}>B&T</span>
+        </div>
+        <div style={{ padding: "14px 15px", flex: 1, minHeight: 0, overflow: "hidden" }}>
+          <h3 style={{ margin: 0, fontFamily: F_HEAD, fontWeight: 800, fontSize: 19, lineHeight: 1.2, color: C.text }}>{card.title}</h3>
+          {card.excerpt && <p style={{ margin: "8px 0 0", fontFamily: F_BODY, fontSize: 13, lineHeight: 1.45, color: C.muted, display: "-webkit-box", WebkitLineClamp: 4, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{card.excerpt}</p>}
+          {card.time && <span style={{ display: "block", marginTop: 8, fontFamily: F_BODY, fontSize: 11, color: C.dim }}>{card.time}</span>}
+        </div>
+      </div>
+    );
+  }
+  const tag = (label, col) => <span style={{ alignSelf: "flex-start", padding: "3px 8px", borderRadius: 6, background: col + "2E", border: `1px solid ${col}80`, fontFamily: F_HEAD, fontWeight: 900, fontStyle: "italic", fontSize: 10, letterSpacing: .8, color: "#fff" }}>{label}</span>;
+  if (card.kind === "take") return (
+    <div style={{ height: "100%", padding: 18, display: "flex", flexDirection: "column", gap: 14, background: "linear-gradient(180deg,#151A28,#0E0F14)" }}>
+      {tag("OPINIONE", PS.radio)}
+      <h3 style={{ margin: 0, fontFamily: F_HEAD, fontWeight: 900, fontStyle: "italic", fontSize: 24, lineHeight: 1.15, color: C.text }}>"{card.text}"</h3>
+      <p style={{ margin: 0, fontFamily: F_BODY, fontSize: 12.5, color: C.muted, lineHeight: 1.45 }}>A destra se sei d'accordo, a sinistra se no. Il risultato lo vedi dopo aver votato.</p>
+    </div>
+  );
+  if (card.kind === "tf") return (
+    <div style={{ height: "100%", padding: 18, display: "flex", flexDirection: "column", gap: 14, background: "linear-gradient(180deg,#1C1712,#0F0D0B)" }}>
+      {tag("VERO O FALSO", C.gold)}
+      <h3 style={{ margin: 0, fontFamily: F_HEAD, fontWeight: 900, fontStyle: "italic", fontSize: 22, lineHeight: 1.2, color: C.text }}>{card.text}</h3>
+      <p style={{ margin: 0, fontFamily: F_BODY, fontSize: 12.5, color: C.muted, lineHeight: 1.45 }}>A destra vero, a sinistra falso. Dati presi dall'app (circuiti e piloti).</p>
+    </div>
+  );
+  // Il tuo pilota: numeri veri dell'ultima gara e del mondiale.
+  const d = driverById(card.id);
+  const cell = (label, value) => <div style={{ borderRadius: 12, background: "rgba(0,0,0,.35)", border: `1px solid ${C.border}`, padding: "9px 10px" }}><div style={{ fontFamily: F_BODY, fontWeight: 700, fontSize: 9.5, letterSpacing: .6, color: C.muted }}>{label}</div><div style={{ fontFamily: F_HEAD, fontWeight: 900, fontStyle: "italic", fontSize: 20, color: C.text, marginTop: 2 }}>{value}</div></div>;
+  return (
+    <div style={{ height: "100%", padding: 18, display: "flex", flexDirection: "column", gap: 14, background: `linear-gradient(160deg, ${(d && d.color) || C.accent}55 0%, #0B0B0D 70%)` }}>
+      {tag("IL TUO PILOTA", (d && d.color) || C.accent)}
+      <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+        {d && <Headshot driver={d} size={58} />}
+        <div><div style={{ fontFamily: F_HEAD, fontWeight: 900, fontStyle: "italic", fontSize: 21, color: C.text }}>{card.name}</div><div style={{ fontFamily: F_BODY, fontSize: 11.5, color: C.muted }}>{d ? d.team : ""}</div></div>
+      </div>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+        {cell("ULTIMA GARA", card.racePos ? "P" + card.racePos : "–")}
+        {cell("DISTACCO", card.raceGap || "–")}
+        {cell("MONDIALE", card.champPos ? card.champPos + "°" : "–")}
+        {cell("PUNTI", card.pts != null ? String(card.pts) : "–")}
+      </div>
+      {card.race && <p style={{ margin: 0, fontFamily: F_BODY, fontSize: 11, color: C.dim }}>{card.race} · classifica mondiale aggiornata</p>}
+    </div>
+  );
+}
+
+const PS_SWIPE = 90, PS_FAST_PX_MS = 2.6;   // soglia del gesto; oltre questa velocità la carta "taglia la pista"
+function PitSwipeScreen({ cards, deck, results, onAct, onUndo, onBack, onOpenArticle, whyOf, onLess, mode, onMode, rain, onEgg, streak, endInfo, onSaved, onShare }) {
+  const i = deck ? deck.i : 0, n = cards.length;
+  const card = cards[i] || null, done = !!(deck && deck.done) || (n > 0 && i >= n);
+  const marks = cards.map(c => (deck && deck.acts ? deck.acts[c.kind + ":" + c.id] : null));
+  const [drag, setDrag] = useState(null);          // { x0, y0, t0, dx, dy, ang, acc }
+  const [leave, setLeave] = useState(null);        // gesto in uscita (animazione), poi onAct
+  const [why, setWhy] = useState(false);
+  const [spin, setSpin] = useState(false);          // easter egg: donuts
+  const [warn, setWarn] = useState(null);           // easter egg: limiti della pista / penalità
+  const strikes = useRef({ n: 0, at: 0 });
+  const box = useRef(null);
+  useBack(why, () => setWhy(false));
+  const kind = card ? card.kind : null;
+  const can = act => !!card && !warn && (act === "box" || act === "out" || (act === "radio" && kind === "news") || (act === "fast" && kind === "news" && !deck.fast));
+  const go = act => { if (!can(act) || leave) return; setLeave(act); setTimeout(() => { setLeave(null); onAct(act); }, 220); };
+  const center = () => { const r = box.current && box.current.getBoundingClientRect(); return r ? [r.left + r.width / 2, r.top + r.height / 2] : [0, 0]; };
+  const down = e => { if (!card || leave || warn || spin) return; try { e.currentTarget.setPointerCapture(e.pointerId); } catch (err) {} const [cx, cy] = center(); setDrag({ x0: e.clientX, y0: e.clientY, t0: performance.now(), dx: 0, dy: 0, ang: Math.atan2(e.clientY - cy, e.clientX - cx), acc: 0 }); };
+  const move = e => {
+    if (!drag) return;
+    const [cx, cy] = center(), a = Math.atan2(e.clientY - cy, e.clientX - cx);
+    let d = a - drag.ang; if (d > Math.PI) d -= 2 * Math.PI; if (d < -Math.PI) d += 2 * Math.PI;
+    const acc = drag.acc + d;
+    if (Math.abs(acc) > 3 * Math.PI) {   // una carta girata in tondo col dito: donuts
+      setDrag(null); setSpin(true); fx.play("gun"); fx.buzz("drs"); onEgg("donuts"); setTimeout(() => setSpin(false), 1500); return;
+    }
+    setDrag({ ...drag, dx: e.clientX - drag.x0, dy: e.clientY - drag.y0, ang: a, acc });
+  };
+  const up = () => {
+    if (!drag) return;
+    const { dx, dy, t0 } = drag, dt = Math.max(1, performance.now() - t0), dist = Math.hypot(dx, dy);
+    setDrag(null);
+    if (dist < 6 && dt < 350) { if (kind === "news") onOpenArticle(card.id); return; }
+    const act = dy < -PS_SWIPE && Math.abs(dy) > Math.abs(dx) ? "radio" : dx > PS_SWIPE ? "box" : dx < -PS_SWIPE ? "out" : null;
+    if (!act) return;
+    if (dist / dt > PS_FAST_PX_MS) {   // troppo veloce: limiti della pista (la terza volta di fila, 5 secondi di penalità)
+      const s = strikes.current, now = performance.now();
+      s.n = now - s.at < 8000 ? s.n + 1 : 1; s.at = now;
+      onEgg("limiti"); fx.play("abort"); fx.buzz("error");
+      if (s.n >= 3) { s.n = 0; setWarn("Penalità di 5 secondi"); setTimeout(() => setWarn(null), 5000); }
+      else { setWarn("Limiti della pista: carta riportata in pista"); setTimeout(() => setWarn(null), 1400); }
+      return;
+    }
+    if (can(act)) onAct(act);
+  };
+  const stampAct = leave || (drag ? (drag.dy < -40 && Math.abs(drag.dy) > Math.abs(drag.dx) ? "radio" : drag.dx > 40 ? "box" : drag.dx < -40 ? "out" : null) : null);
+  const stampText = stampAct ? ((PS_STAMP_OF[kind] || {})[stampAct] || PS_STAMP[stampAct]) : null;
+  const tx = leave ? (leave === "box" || leave === "fast" ? 420 : leave === "out" ? -420 : 0) : drag ? drag.dx : 0;
+  const ty = leave ? (leave === "radio" ? -560 : 0) : drag ? drag.dy : 0;
+  const res = results;
+  const btn = (act, label, col, small, sym) => (
+    <button className="press" data-ps-act={act} aria-label={label} disabled={act === "undo" ? !(deck && deck.hist && deck.hist.length) || done : !can(act)} onClick={() => (act === "undo" ? onUndo() : go(act))}
+      style={{ width: small ? 42 : 54, height: small ? 42 : 54, borderRadius: "50%", border: `2px solid ${col}`, background: "#0E0E11", color: col, display: "flex", alignItems: "center", justifyContent: "center", fontFamily: F_HEAD, fontWeight: 900, fontSize: small ? 15 : 20, opacity: (act === "undo" ? (deck && deck.hist && deck.hist.length && !done) : can(act)) ? 1 : .3 }}>{sym}</button>
+  );
+  return (
+    <div data-pitswipe="" style={{ height: "100%", display: "flex", flexDirection: "column", background: "#000", position: "relative", overflow: "hidden" }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 14px 6px" }}>
+        <button className="press" aria-label="Indietro" onClick={onBack} style={{ width: 38, height: 38, borderRadius: 12, background: C.card, border: `1px solid ${C.border}`, display: "flex", alignItems: "center", justifyContent: "center" }}><Icon name="back" size={18} /></button>
+        <span style={{ fontFamily: F_HEAD, fontWeight: 900, fontStyle: "italic", fontSize: 18, color: C.text }}>PIT SWIPE</span>
+        <span style={{ flex: 1 }} />
+        {streak.n > 0 && <span style={{ padding: "3px 8px", borderRadius: 999, background: "rgba(231,179,76,.14)", border: "1px solid rgba(231,179,76,.4)", fontFamily: F_HEAD, fontWeight: 900, fontStyle: "italic", fontSize: 10.5, color: C.gold }}>{streak.n} GP DI FILA</span>}
+      </div>
+      {!done && n > 0 && <div style={{ padding: "4px 18px 8px" }}><div style={{ display: "flex", justifyContent: "flex-end", fontFamily: F_BODY, fontWeight: 700, fontSize: 9.5, letterSpacing: .6, color: C.muted, marginBottom: 2 }}>CURVA {Math.min(i + 1, n)} / {n}</div><PsDots marks={marks} i={i} n={n} /></div>}
+      {res && !done && <div data-ps-result="" role="status" style={{ margin: "0 16px 8px", padding: "9px 12px", borderRadius: 12, background: res.kind === "tf" ? (res.ok ? "rgba(47,211,107,.12)" : "rgba(242,194,48,.12)") : "rgba(76,141,255,.12)", border: `1px solid ${res.kind === "tf" ? (res.ok ? "rgba(47,211,107,.45)" : "rgba(242,194,48,.45)") : "rgba(76,141,255,.45)"}`, fontFamily: F_BODY, fontSize: 12, color: C.text, lineHeight: 1.4 }}>
+        {res.kind === "take" && res.pct && <div style={{ display: "flex", height: 7, borderRadius: 4, overflow: "hidden", marginBottom: 6 }}><span style={{ width: res.pct.agree + "%", background: PS.box }} /><span style={{ flex: 1, background: PS.out }} /></div>}
+        {res.text}
+      </div>}
+      {!done && n > 0 && (
+        <div ref={box} style={{ flex: 1, minHeight: 0, position: "relative", margin: "0 16px" }}>
+          {cards[i + 2] && <div style={{ position: "absolute", inset: 0, borderRadius: 22, background: "#141418", border: `1px solid ${C.border}`, transform: "translateY(16px) scale(.92)", opacity: .5 }} />}
+          {cards[i + 1] && <div style={{ position: "absolute", inset: 0, borderRadius: 22, background: "#141418", border: `1px solid ${C.border}`, transform: "translateY(8px) scale(.96)", opacity: .8 }} />}
+          {card && (
+            <div key={kind + ":" + card.id} data-ps-card="" data-kind={kind} data-id={String(card.id)} className={spin ? "ps-donut" : undefined}
+              onPointerDown={down} onPointerMove={move} onPointerUp={up} onPointerCancel={() => setDrag(null)}
+              style={{ position: "absolute", inset: 0, borderRadius: 22, overflow: "hidden", background: "#141418", border: "1px solid rgba(255,255,255,.12)", boxShadow: "0 14px 32px rgba(0,0,0,.6)", touchAction: "none", userSelect: "none",
+                transform: spin ? undefined : `translate(${tx}px, ${ty}px) rotate(${tx / 22}deg)`, opacity: leave ? 0 : 1, transition: drag ? "none" : "transform .22s ease-out, opacity .22s" }}>
+              <PsFace card={card} />
+              {stampText && <span data-ps-stamp="" style={{ position: "absolute", top: 22, left: stampAct === "box" || stampAct === "fast" ? 18 : stampAct === "radio" ? "50%" : "auto", right: stampAct === "out" ? 18 : "auto", transform: stampAct === "radio" ? "translateX(-50%)" : `rotate(${stampAct === "out" ? 14 : -14}deg)`, padding: "5px 10px", border: `3px solid ${PS[stampAct]}`, borderRadius: 9, color: PS[stampAct], background: "rgba(0,0,0,.4)", fontFamily: F_HEAD, fontWeight: 900, fontStyle: "italic", fontSize: 22, letterSpacing: 1 }}>{stampText}</span>}
+              {kind === "news" && <button className="press" data-ps-why="" onPointerDown={e => e.stopPropagation()} onClick={() => setWhy(true)} style={{ position: "absolute", left: 12, bottom: 10, display: "flex", alignItems: "center", gap: 6, padding: "6px 9px", borderRadius: 999, background: "rgba(0,0,0,.5)", border: `1px solid ${C.border}`, fontFamily: F_BODY, fontWeight: 700, fontSize: 10.5, color: C.muted }}><span style={{ width: 14, height: 14, borderRadius: "50%", border: `1px solid ${C.muted}`, display: "inline-flex", alignItems: "center", justifyContent: "center", fontSize: 9 }}>?</span>Perché la vedo</button>}
+            </div>
+          )}
+          {spin && <><span className="ps-smoke" /><span className="ps-smoke ps-smoke2" /></>}
+          {rain && <div data-ps-rain="" aria-hidden="true" style={{ position: "absolute", inset: 0, pointerEvents: "none", borderRadius: 22, overflow: "hidden" }}>{[8, 22, 37, 51, 66, 80, 93].map((l, k) => <i key={l} className="ps-drop" style={{ left: l + "%", animationDelay: (k * .13) + "s" }} />)}<i className="ps-wiper" /></div>}
+          {warn && <div role="status" data-ps-warn="" style={{ position: "absolute", left: 0, right: 0, bottom: 14, display: "flex", justifyContent: "center", pointerEvents: "none" }}><span style={{ padding: "6px 11px", borderRadius: 8, background: C.gold, color: "#15120A", fontFamily: F_HEAD, fontWeight: 900, fontStyle: "italic", fontSize: 12.5 }}>{warn}</span></div>}
+        </div>
+      )}
+      {!done && n > 0 && (
+        <div style={{ display: "flex", justifyContent: "center", alignItems: "center", gap: 12, padding: "14px 0 18px" }}>
+          {btn("undo", "Bandiera rossa: torna alla carta di prima", C.accent, true, "↺")}
+          {btn("out", kind === "take" ? "Non d'accordo" : kind === "tf" ? "Falso" : "Stay out: salta", PS.out, false, "✕")}
+          {btn("fast", "Giro veloce: la preferita del giorno", PS.fast, true, "★")}
+          {btn("box", kind === "take" ? "D'accordo" : kind === "tf" ? "Vero" : kind === "driver" ? "Avanti" : "Box box: salva", PS.box, false, "✓")}
+          {btn("radio", "Radio: manda in chat", PS.radio, true, "↑")}
+        </div>
+      )}
+      {n === 0 && <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", padding: 24, textAlign: "center", fontFamily: F_BODY, fontSize: 13.5, color: C.muted }}>Nessuna notizia nuova per il giro di oggi: torna più tardi.</div>}
+      {done && endInfo && <PsEnd info={endInfo} onSaved={onSaved} onShare={onShare} />}
+      {why && card && kind === "news" && (
+        <div onClick={() => setWhy(false)} style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,.55)", display: "flex", alignItems: "flex-end", zIndex: 5 }}>
+          <div data-ps-why-sheet="" onClick={e => e.stopPropagation()} style={{ width: "100%", borderRadius: "20px 20px 0 0", background: "#16161A", borderTop: "1px solid rgba(255,255,255,.12)", padding: "16px 16px 22px" }}>
+            <h3 style={{ margin: "0 0 8px", fontFamily: F_HEAD, fontWeight: 900, fontStyle: "italic", fontSize: 17, color: C.text }}>Perché vedo questa carta</h3>
+            {whyOf(card).map((r, k) => <div key={k} style={{ display: "flex", alignItems: "center", gap: 9, padding: "9px 0", borderTop: k ? `1px solid ${C.divider}` : "none", fontFamily: F_BODY, fontSize: 13, color: C.text }}><span style={{ width: 8, height: 8, borderRadius: 2, background: [PS.box, PS.radio, C.gold][k % 3] }} />{r}</div>)}
+            <div style={{ display: "flex", gap: 8, marginTop: 12, flexWrap: "wrap" }}>
+              <button className="press" onClick={() => { onLess(card); setWhy(false); }} style={{ padding: "8px 12px", borderRadius: 999, border: `1px solid ${C.border}`, fontFamily: F_BODY, fontWeight: 700, fontSize: 12, color: C.text }}>Meno carte così</button>
+              <button className="press" data-ps-mode={mode} onClick={() => onMode(mode === "date" ? "taste" : "date")} style={{ padding: "8px 12px", borderRadius: 999, border: `1px solid ${mode === "date" ? C.accent : C.border}`, fontFamily: F_BODY, fontWeight: 700, fontSize: 12, color: C.text }}>{mode === "date" ? "Ordine per data: acceso" : "Ordine per data, senza gusti"}</button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Bandiera a scacchi: riepilogo del giro, serie, missioni della settimana, livello, stessa strategia.
+function PsEnd({ info, onSaved, onShare }) {
+  const { box, votes, tfOk, tfTot, fast, streak, missions, level, nextText, strategy } = info;
+  const cell = (label, v) => <div style={{ borderRadius: 12, background: "#141418", border: `1px solid ${C.border}`, padding: "9px 10px" }}><div style={{ fontFamily: F_BODY, fontWeight: 700, fontSize: 9.5, letterSpacing: .6, color: C.muted }}>{label}</div><div style={{ fontFamily: F_HEAD, fontWeight: 900, fontStyle: "italic", fontSize: 20, color: C.text, marginTop: 2 }}>{v}</div></div>;
+  return (
+    <div data-ps-end="" className="scrollcol" style={{ flex: 1, minHeight: 0, overflowY: "auto", padding: "8px 16px 24px" }}>
+      <div style={{ display: "flex", justifyContent: "center", margin: "6px 0 8px" }}>
+        <svg width="170" height="44" viewBox="0 0 170 44" aria-hidden="true"><defs><pattern id="pschk" width="11" height="11" patternUnits="userSpaceOnUse"><rect width="5.5" height="5.5" fill="#fff" /><rect x="5.5" y="5.5" width="5.5" height="5.5" fill="#fff" /></pattern></defs><rect width="170" height="44" rx="7" fill="#111" /><rect width="170" height="44" rx="7" fill="url(#pschk)" opacity=".92" /></svg>
+      </div>
+      <h2 style={{ margin: "0 0 12px", textAlign: "center", fontFamily: F_HEAD, fontWeight: 900, fontStyle: "italic", fontSize: 24, color: C.text }}>Giro completato</h2>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>{cell("NEL BOX", box)}{cell("OPINIONI", votes)}{cell("VERO O FALSO", `${tfOk} / ${tfTot}`)}{cell("GIRO VELOCE", fast)}</div>
+      <div style={{ marginTop: 10, padding: "11px 12px", borderRadius: 14, background: "rgba(231,179,76,.1)", border: "1px solid rgba(231,179,76,.35)" }}>
+        <div style={{ fontFamily: F_HEAD, fontWeight: 900, fontStyle: "italic", fontSize: 14, color: C.gold }}>{streak.n} GP DI FILA</div>
+        <div style={{ fontFamily: F_BODY, fontSize: 12, color: C.text, marginTop: 3, lineHeight: 1.45 }}>Pit stop salva-serie: {streak.pits || 0} di 2. Ne guadagni uno ogni 5 giri completati; se salti un GP la serie usa un pit stop.</div>
+      </div>
+      <div style={{ marginTop: 12, fontFamily: F_BODY, fontWeight: 700, fontSize: 10.5, letterSpacing: 1.2, color: C.muted }}>MISSIONI DELLA SETTIMANA</div>
+      {missions.map(m => (
+        <div key={m.id} data-ps-mission={m.id} data-done={m.done ? "1" : "0"} style={{ display: "flex", alignItems: "center", gap: 10, padding: "9px 0", borderBottom: `1px solid ${C.divider}` }}>
+          <span style={{ width: 20, height: 20, borderRadius: 6, display: "flex", alignItems: "center", justifyContent: "center", background: m.done ? PS.box : "rgba(255,255,255,.08)" }}>{m.done && <Icon name="check" size={13} color="#000" sw={3} />}</span>
+          <span style={{ flex: 1, fontFamily: F_BODY, fontSize: 13, color: C.text }}>{m.text}</span>
+          <span style={{ fontFamily: F_HEAD, fontWeight: 800, fontSize: 12, color: m.done ? PS.box : C.muted }}>{m.value}/{m.goal}</span>
+        </div>
+      ))}
+      <div style={{ marginTop: 12 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", fontFamily: F_BODY, fontWeight: 700, fontSize: 10.5, letterSpacing: .6, color: C.muted, marginBottom: 5 }}><span>LIVELLO: {level.name.toUpperCase()}</span><span>{level.nextName ? `${level.toNext} punti a ${level.nextName}` : "livello massimo"}</span></div>
+        <div style={{ height: 6, borderRadius: 3, background: "rgba(255,255,255,.1)", overflow: "hidden" }}><div style={{ height: "100%", width: `${Math.round(level.frac * 100)}%`, background: C.accent }} /></div>
+      </div>
+      {strategy && (
+        <div data-ps-strategy="" style={{ marginTop: 12, padding: "11px 12px", borderRadius: 14, background: "rgba(76,141,255,.1)", border: "1px solid rgba(76,141,255,.35)" }}>
+          <div style={{ fontFamily: F_HEAD, fontWeight: 900, fontStyle: "italic", fontSize: 15, color: C.text }}>Stessa strategia!</div>
+          <div style={{ fontFamily: F_BODY, fontSize: 12.5, color: C.text, marginTop: 3 }}>Tu e {strategy.name} (lega "{strategy.league}") avete votato uguale su {strategy.same} opinioni su {strategy.both}.</div>
+        </div>
+      )}
+      <div style={{ display: "flex", gap: 8, marginTop: 14 }}>
+        <button className="press" onClick={onSaved} style={{ flex: 1, padding: "11px 0", borderRadius: 12, border: `1px solid ${C.border}`, fontFamily: F_HEAD, fontWeight: 900, fontStyle: "italic", fontSize: 13, color: C.text }}>I tuoi Salvati</button>
+        <button className="press" data-ps-share="" onClick={onShare} style={{ flex: 1, padding: "11px 0", borderRadius: 12, background: C.accent, fontFamily: F_HEAD, fontWeight: 900, fontStyle: "italic", fontSize: 13, color: "#fff" }}>Condividi il giro</button>
+      </div>
+      <p style={{ margin: "12px 0 0", textAlign: "center", fontFamily: F_BODY, fontSize: 12, color: C.muted }}>Prossimo mazzo: {nextText}</p>
+    </div>
+  );
+}
+
+// Opinioni di Pit Swipe scritte dall'admin (shared/bt-takes).
+function AdminTakesTab({ takes = [], onSave }) {
+  const [text, setText] = useState("");
+  const save = list => onSave && onSave(list);
+  const add = () => { const t = text.trim(); if (!t) return; save([{ id: "t" + Date.now().toString(36), text: t.slice(0, 140), on: true, at: nowMs() }, ...takes]); setText(""); };
+  return (
+    <div style={{ padding: "0 16px 24px" }}>
+      <p style={{ fontFamily: F_BODY, fontSize: 12.5, color: C.muted, lineHeight: 1.5, margin: "0 0 10px" }}>Le opinioni entrano nel mazzo di Pit Swipe (due per giro, tra quelle accese e non ancora votate). I tifosi votano d'accordo o no; la percentuale si vede da 20 voti.</p>
+      <textarea data-take-input="" value={text} maxLength={140} onChange={e => setText(e.target.value)} placeholder="Es. A Monaco la qualifica conta più della gara." rows={3} style={{ width: "100%", boxSizing: "border-box", padding: 12, borderRadius: 12, background: C.card, border: `1px solid ${C.border}`, color: C.text, fontFamily: F_BODY, fontSize: 14, resize: "none" }} />
+      <ABtn onClick={add} kind="primary">AGGIUNGI</ABtn>
+      {takes.map(t => (
+        <div key={t.id} data-take-row={t.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 0", borderBottom: `1px solid ${C.divider}` }}>
+          <span style={{ flex: 1, fontFamily: F_BODY, fontSize: 13, color: t.on ? C.text : C.dim }}>{t.text}</span>
+          <button className="press" onClick={() => save(takes.map(x => (x.id === t.id ? { ...x, on: !x.on } : x)))} style={{ padding: "6px 9px", borderRadius: 8, border: `1px solid ${C.border}`, fontFamily: F_HEAD, fontWeight: 800, fontSize: 11, color: t.on ? PS.box : C.muted }}>{t.on ? "ACCESA" : "SPENTA"}</button>
+          <button className="press" aria-label={"Elimina " + t.text} onClick={() => save(takes.filter(x => x.id !== t.id))} style={{ padding: 6 }}><Icon name="trash" size={16} color={C.muted} /></button>
+        </div>
+      ))}
+    </div>
+  );
+}
 
 function App() {
   // Account: undefined finché Authentication non dice se c'è una sessione salvata, null = nessun account.
@@ -9140,6 +9436,12 @@ function App() {
   // 31/10: temi delle feste: comando dell'admin (shared/bt-holidays) e scelta dell'utente (Profilo; sul telefono per l'avvio).
   const [holidayCfg, setHolidayCfg] = useState(() => shared0.holidays || local.get("bt-holidays-cfg") || { force: null, off: [] });
   const [holidaysOn, setHolidaysOn] = useState(() => local.get("bt-holidays-on") !== false);
+  // Pit Swipe (1/11): dati dell'account (gusti, mazzo, serie, missioni, easter egg), opinioni dell'admin, voti veri.
+  const [swipe, setSwipe] = useState(USER_INIT.swipe);
+  const [takes, setTakes] = useState(shared0.takes || []);
+  const [psVotes, setPsVotes] = useState([]);
+  const [psRes, setPsRes] = useState(null);       // risultato dell'ultima opinione o vero o falso
+  const [psRain, setPsRain] = useState(false);    // easter egg: pioggia vera sul circuito del weekend
   // Mini Pit Board in tutta l'app (31/10 sera): interruttore nel Profilo (sul telefono) e sessione chiusa con la X.
   const [miniPitOn, setMiniPitOn] = useState(() => local.get("bt-minipit-on") !== false);
   const [miniPitHidden, setMiniPitHidden] = useState(null);
@@ -9364,6 +9666,7 @@ function App() {
     highlights: keep(setHighlights), silly: keep(setSillyOfficial), predictions: keep(setPredictions),
     homePoll: keep(setHomePoll), fantaStats: keep(setFantaStats), driverPhotos: keep(setDriverPhotos), commonsPhotos: keep(setCommonsPhotos),
     trophies: keep(setTrophyCfg), holidays: v => { keep(setHolidayCfg)(v); local.set("bt-holidays-cfg", v); },
+    takes: keep(setTakes),
   };
   // Rilegge i contenuti indicati (tutti, all'avvio) e mette nello stato quelli letti davvero.
   const refreshShared = kinds => AppData.loadShared(nowMs(), kinds ? { kinds } : undefined).then(r => {
@@ -9400,7 +9703,7 @@ function App() {
   const userReady = useRef(false);   // dati dell'account letti: da qui in poi le modifiche si salvano
   const userSnap = useRef({});       // ultimo valore letto o salvato di ogni dato (JSON): si manda solo quello che cambia
   const userVals = { saved, favTeam, favDriver, notifPrefs, votes, squad, squadBase, freeTransfers, predAnswers, sillyPreds, stratPreds, pitBest, wxGuess, ratings, dotd, notifSeenAt,
-    theme, sounds, haptics, helmet, hidden, trophies, premium, squadLog, leagues: leagueCodes, holidays: holidaysOn };
+    theme, sounds, haptics, helmet, hidden, trophies, premium, squadLog, leagues: leagueCodes, holidays: holidaysOn, swipe };
   const userValsRef = useRef(userVals);
   userValsRef.current = userVals;
   const userSet = { saved: setSaved, favTeam: setFavTeam, favDriver: setFavDriver, notifPrefs: setNotifPrefs, votes: setVotes, squad: setSquad, squadBase: setSquadBase,
@@ -9408,6 +9711,7 @@ function App() {
     ratings: setRatings, dotd: setDotd, notifSeenAt: setNotifSeenAt,
     theme: v => setTheme(cleanTheme(v) || USER_INIT.theme), sounds: v => setSounds(v !== false), haptics: v => setHaptics(v !== false),
     holidays: v => { setHolidaysOn(v !== false); local.set("bt-holidays-on", v !== false); },
+    swipe: v => setSwipe(v && typeof v === "object" && !Array.isArray(v) ? v : {}),
     helmet: v => setHelmet(v == null ? null : cleanHelmet(v)), hidden: v => setHidden(Array.isArray(v) ? v : []),
     trophies: v => setTrophies(cleanTrophies(v)), premium: v => setPremium(cleanPremium(v)),
     squadLog: v => setSquadLog(FantaSeason.cleanLog(v).slice(-80)), leagues: v => setLeagueCodes(Array.isArray(v) ? v.filter(c => /^BT-[A-Z0-9]{4,6}$/.test(c)).slice(0, 10) : []) };
@@ -10117,6 +10421,7 @@ function App() {
     if (userDataWait()) return;
     if (q.kind === "history" && predAnswers[q.id] != null) return;
     setPredAnswers(a => ({ ...a, [q.id]: v }));
+    if (!predAnswers[q.id]) psBump("pred");
     showToast(q.kind === "history" ? (BtLogic.predictionCorrect(q, v) ? "Giusto! +1 punto FantaF1" : "Risposta sbagliata") : "Previsione salvata");
   };
   const readAll = () => {
@@ -10156,7 +10461,7 @@ function App() {
   const viewBack = {
     article: backFromLink, circuit: backFromLink, ghost: backFromLink, chats: () => setView("tab"),
     profilo: () => setView("tab"), notifiche: () => setView("tab"), instagram: () => setView(igFrom),
-    adminLock: () => setView("profilo"), admin: () => setView("profilo"), chatThread: () => goTab("race"),
+    adminLock: () => setView("profilo"), admin: () => setView("profilo"), chatThread: () => goTab("race"), pitswipe: () => setView("tab"),
   };
   const closeLogin = () => { setLoginOpen(false); setLoginReason(null); };
   const inApp = authed || guest;
@@ -10257,7 +10562,8 @@ function App() {
     about: aboutMe, helmet, squad: squadOwn ? squad : null, saved, pitBest, sillyPreds,
     ratings: { ...demoVotes.ratings, ...ratings }, dotd: { ...demoVotes.dotd, ...dotd },
     correctPreds: bonus.filter(x => x.kind === "previsione").length, correctWx: bonus.filter(x => x.kind === "meteo").length,
-    correctPolls: bonus.filter(x => x.kind === "sondaggio").length, events: { chat: chatMine, egg: eggFound, pumpkins: holiday === "halloween" && pumpkins.day === BtHolidays.romeDay(nowMs()) ? pumpkins.n : 0 },
+    correctPolls: bonus.filter(x => x.kind === "sondaggio").length, events: { chat: chatMine, egg: eggFound, pumpkins: holiday === "halloween" && pumpkins.day === BtHolidays.romeDay(nowMs()) ? pumpkins.n : 0, eggs: Array.isArray(swipe.eggs) ? swipe.eggs : [] },
+    swipe: { box: (swipe.tot || {}).box, votes: (swipe.tot || {}).votes, tfBest: (swipe.tf || {}).best },
   }, trophyList);
   const trophyReady = !!userEmail && userLoaded === userEmail;
   const trophyNew = trophyReady ? trophyList.filter(t => trophyProg[t.id] && trophyProg[t.id].done && !trophies[t.id]).map(t => t.id).join(",") : "";
@@ -10352,6 +10658,156 @@ function App() {
   }, [tab, view, holiday, appShown]);
   // 31/10: aprendo il Profilo (anche da un'altra pagina, non solo dal tasto in alto) si rilegge chi è admin.
   useEffect(() => { if (view === "profilo" && account && Account.refreshAdmin) Account.refreshAdmin().catch(() => {}); }, [view]);
+  // ── Pit Swipe (1/11) ─────────────────────────────────────────────────
+  const psFacts = React.useMemo(() => BtSwipe.makeFacts({ drivers: F1.DRIVER_DATA, circuits: CIRCUIT_INFO }), []);
+  const psTally = React.useMemo(() => BtSwipe.tallyVotes(psVotes), [psVotes]);
+  const psRounds = React.useMemo(() => races.slice().sort((a, b) => String(a.date).localeCompare(String(b.date))).map(r => r.id), [races]);
+  const psRace = weekendRace(races);
+  const psSessions = psRace && CIRCUIT_INFO[psRace.circuitId] ? (CIRCUIT_INFO[psRace.circuitId].weekend || []) : [];
+  const psEnds = psSessions.map(x => Date.parse(x.utc) + (x.key === "RACE" ? 2 : 1) * 3600000).filter(isFinite);
+  const psKey = BtSwipe.deckKey(nowMs(), psEnds);
+  const psNews = BtLogic.newestFirst(articles.filter(a => a && a.published !== false && !hidden.includes(a.id)))
+    .map(a => ({ ...a, topics: [...articleTags(a).map(t => t.key), a.cat ? "k:" + String(a.cat).toLowerCase() : null].filter(Boolean) }));
+  const psDriverCard = (() => {
+    const d = favDriver ? driverById(favDriver) : null;
+    if (!d) return null;
+    const rows = (lastRace && lastRace.rows) || [], ri = rows.findIndex(r => r[0] === favDriver);
+    const sd = (standings && standings.drivers) || [], si = sd.findIndex(r => r[0] === favDriver);
+    return { id: favDriver, name: d.full, race: lastRace ? lastRace.name : null, racePos: ri >= 0 ? ri + 1 : null, raceGap: ri > 0 ? String(rows[ri][1] || "") : ri === 0 ? "vincitore" : null,
+      champPos: si >= 0 ? si + 1 : null, pts: si >= 0 ? sd[si][1] : null };
+  })();
+  const myVotesT = myAid ? Object.fromEntries(Object.entries(psTally).filter(([k, t]) => k.startsWith("t:") && t.byAid[myAid] != null).map(([k, t]) => [k.slice(2), t.byAid[myAid]])) : {};
+  const psFresh = BtSwipe.buildDeck({ news: psNews, takes, voted: myVotesT, facts: psFacts, driverCard: psDriverCard, weights: swipe.w || {}, fav: { driver: favDriver, team: favTeam }, mode: swipe.mode || "taste", key: psKey });
+  const psDeck = swipe.deck && swipe.deck.key === psKey ? swipe.deck : null;
+  const psCards = psDeck ? (psDeck.cards || []).map(c => (c.k === "news" ? (psNews.find(a => a.id === c.id) || articles.find(a => a.id === c.id)) && { ...(psNews.find(a => a.id === c.id) || articles.find(a => a.id === c.id)), kind: "news" }
+      : c.k === "take" ? takes.find(t => t.id === c.id) && { ...takes.find(t => t.id === c.id), kind: "take" }
+      : c.k === "tf" ? psFacts.find(f => f.id === c.id) && { ...psFacts.find(f => f.id === c.id), kind: "tf" }
+      : c.k === "driver" && psDriverCard ? { ...psDriverCard, kind: "driver" } : null)).filter(Boolean) : psFresh;
+  const psWeek = BtSwipe.weekKey(nowMs());
+  const psMissions = BtSwipe.missionStatus(swipe.week, psWeek);
+  const psStreak = BtSwipe.streakNow(swipe.streak, { round: BtSwipe.roundOf(races, nowMs()), rounds: psRounds });
+  const psTrophies = trophyList.filter(t => trophies[t.id]).length;
+  const psLevel = BtSwipe.levelOf(BtSwipe.xpOf(swipe.tot || {}, psTrophies));
+  const psNextText = (() => { const h = Number(new Intl.DateTimeFormat("en-GB", { timeZone: "Europe/Rome", hour: "2-digit", hourCycle: "h23" }).format(new Date(nowMs()))); return h < 8 ? "oggi alle 8:00" : "domani alle 8:00, o dopo la prossima sessione"; })();
+  const openPitSwipe = () => {
+    if (!psDeck) setSwipe(s => ({ ...s, deck: { key: psKey, cards: psFresh.map(c => ({ k: c.kind, id: c.id })), i: 0, acts: {}, hist: [], seen: [], fast: null, done: false, ok: 0 } }));
+    setPsRes(null); setView("pitswipe");
+  };
+  const psVotesLoad = () => SwipeVotes.load().then(v => setPsVotes(v), () => {});
+  const psVotedAt = useRef(0);
+  useEffect(() => {
+    if (!(view === "pitswipe" || (view === "tab" && tab === "home"))) return;
+    if (nowMs() - psVotedAt.current < 60000) return;
+    psVotedAt.current = nowMs(); psVotesLoad();
+  }, [view, tab]);
+  const psEgg = id => setSwipe(s => {
+    const eggs = Array.isArray(s.eggs) ? s.eggs : [];
+    if (eggs.includes(id)) return s;
+    const next = [...eggs, id];
+    setTimeout(() => showToast(`Easter egg trovato: ${PS_EGG_NAME[id] || id} (${next.length}/6)`), 0);
+    return { ...s, eggs: next };
+  });
+  // Pioggia vera: solo nel weekend del GP, se il meteo vero del circuito (MET Norway) dice pioggia adesso.
+  useEffect(() => {
+    if (view !== "pitswipe" || !psRace || !psEnds.length) { setPsRain(false); return undefined; }
+    const now = nowMs(), first = Math.min(...psSessions.map(x => Date.parse(x.utc)).filter(isFinite));
+    if (!(now > first - 86400000 && now < Math.max(...psEnds) + 3 * 3600000)) return undefined;
+    let alive = true;
+    Meteo.forecast(psRace.circuitId).then(fc => { if (alive && BtSwipe.rainingNow(fc, nowMs())) { setPsRain(true); psEgg("pioggia"); } }, () => {});
+    return () => { alive = false; };
+  }, [view, psRace && psRace.circuitId]);
+  // Contatori della settimana e totali (missioni, livello): uno per evento.
+  const psBumpIn = (s, ev, n = 1) => ({ ...s, week: BtSwipe.bumpWeek(s.week, ev, n, BtSwipe.weekKey(nowMs())), tot: { ...(s.tot || {}), [ev]: ((s.tot || {})[ev] || 0) + n } });
+  const psMissionsDone = (before, after) => {
+    const wk = BtSwipe.weekKey(nowMs()), was = BtSwipe.missionStatus(before.week, wk).filter(m => m.done).map(m => m.id);
+    const now = BtSwipe.missionStatus(after.week, wk).filter(m => m.done && !was.includes(m.id));
+    if (!now.length) return after;
+    setTimeout(() => { showToast("Missione completata: " + now[0].text); fx.play("done"); }, 0);
+    return { ...after, tot: { ...(after.tot || {}), missions: ((after.tot || {}).missions || 0) + now.length } };
+  };
+  const psBump = ev => { if (guest || userDataWait()) return; setSwipe(s => psMissionsDone(s, psBumpIn(s, ev))); };
+  const psAct = act => {
+    const dk = swipe.deck;
+    if (!dk || dk.key !== psKey || dk.done) return;
+    const card = psCards[dk.i];
+    if (!card) return;
+    const needAcc = card.kind === "take" || (card.kind === "news" && act !== "out");
+    if (needAcc && guest) { needLogin("Per salvare e votare in Pit Swipe serve un account."); return; }
+    if (needAcc && userDataWait()) return;
+    const key = card.kind + ":" + card.id, first = !(dk.seen || []).includes(key);
+    let s = { ...swipe, deck: { ...dk, hist: [...(dk.hist || []), { i: dk.i, w: swipe.w || {} }].slice(-10) } };
+    if (card.kind === "news") {
+      s.w = BtSwipe.applySwipe(swipe.w, card.topics, act);
+      if (act === "box" || act === "fast") { if (!saved.includes(card.id)) setSaved(x => (x.includes(card.id) ? x : [card.id, ...x])); if (first) s = psBumpIn(s, "box"); }
+      if (act === "fast") { s.deck.fast = card.id; if (first) { s = psBumpIn(s, "fast"); SwipeVotes.vote({ k: "f", id: card.id, aid: myAid, v: 1 }).then(item => setPsVotes(v => [...v, item]), () => {}); } }
+      if (act === "radio") { if (first) s = psBumpIn(s, "radio"); shareToChat({ t: "news", id: card.id, ti: card.title, su: card.excerpt || "" }); }
+      fx.play(act === "out" ? "drs" : act === "radio" ? "radio" : "gun"); fx.buzz(act === "out" ? "drs" : "gun");
+      setPsRes(null);
+    } else if (card.kind === "take") {
+      const v = act === "out" ? -1 : 1;
+      const item = { k: "t", id: card.id, aid: myAid, v, at: nowMs() };
+      SwipeVotes.vote(item).catch(() => showToast("Voto non inviato: controlla la connessione"));
+      const arr = [...psVotes, item];
+      setPsVotes(arr);
+      if (first) s = psBumpIn(s, "votes");
+      const pc = BtSwipe.pctOf(BtSwipe.tallyVotes(arr)["t:" + card.id]);
+      setPsRes({ kind: "take", pct: pc, text: pc ? `${pc.agree}% d'accordo · ${pc.disagree}% no · ${pc.total} voti dei tifosi B&T` : "Sei tra i primi a votare: la percentuale si vede da 20 voti." });
+      fx.play("tick"); fx.buzz("select");
+    } else if (card.kind === "tf") {
+      const ok = (act === "box") === !!card.truth;
+      if (first) {
+        const run = ok ? (((swipe.tf || {}).run) || 0) + 1 : 0;
+        s.tf = { run, best: Math.max(((swipe.tf || {}).best) || 0, run) };
+        s.deck.ok = (dk.ok || 0) + (ok ? 1 : 0);
+        if (ok) s = psBumpIn(s, "tfOk");
+      }
+      setPsRes({ kind: "tf", ok, text: (ok ? "Giusto! " : "Sbagliato. ") + (card.note || "") });
+      fx.play(ok ? "done" : "abort"); fx.buzz(ok ? "success" : "error");
+    } else { setPsRes(null); fx.play("tick"); }
+    s.deck.acts = { ...(dk.acts || {}), [key]: act };
+    s.deck.seen = first ? [...(dk.seen || []), key] : (dk.seen || []);
+    s.deck.i = dk.i + 1;
+    if (s.deck.i >= psCards.length) {
+      s.deck.done = true;
+      s = psBumpIn(s, "decks");
+      s.streak = BtSwipe.streakAfterDeck(swipe.streak, { round: BtSwipe.roundOf(races, nowMs()), rounds: psRounds });
+      setPsRes(null);
+      setTimeout(() => { fx.play("flag"); fx.buzz("flag"); }, 240);
+    }
+    setSwipe(psMissionsDone(swipe, s));
+  };
+  const psUndo = () => {
+    const dk = swipe.deck;
+    if (!dk || dk.done || !(dk.hist && dk.hist.length)) return;
+    const h = dk.hist[dk.hist.length - 1], card = psCards[h.i], acts = { ...(dk.acts || {}) };
+    if (card) delete acts[card.kind + ":" + card.id];
+    setSwipe({ ...swipe, w: h.w, deck: { ...dk, i: h.i, hist: dk.hist.slice(0, -1), acts, fast: card && dk.fast === card.id ? null : dk.fast } });
+    setPsRes(null); fx.play("tick");
+  };
+  // Stessa strategia: con chi delle tue leghe hai votato più opinioni uguali (almeno 3 in comune).
+  const psStrategy = (() => {
+    if (!myAid) return null;
+    let best = null;
+    leagues.forEach(l => (l.members || []).forEach(m => {
+      if (!m || m.aid === myAid) return;
+      const r = BtSwipe.sameStrategy(psTally, myAid, m.aid);
+      if (r.both >= 3 && (!best || r.same / r.both > best.same / best.both)) best = { ...r, name: m.name, league: l.name };
+    }));
+    return best && best.same / best.both >= 0.6 ? best : null;
+  })();
+  const psDoneDeck = psDeck && psDeck.done ? psDeck : null;
+  const psEndInfo = psDoneDeck ? {
+    box: Object.values(psDoneDeck.acts || {}).filter(a => a === "box" || a === "fast").length - psCards.filter(c => c.kind !== "news" && (psDoneDeck.acts || {})[c.kind + ":" + c.id] === "box").length,
+    votes: psCards.filter(c => c.kind === "take" && (psDoneDeck.acts || {})["take:" + c.id]).length,
+    tfOk: psDoneDeck.ok || 0, tfTot: psCards.filter(c => c.kind === "tf").length, fast: psDoneDeck.fast ? 1 : 0,
+    streak: { n: (swipe.streak || {}).n || 0, pits: (swipe.streak || {}).pits || 0 }, missions: psMissions, level: psLevel, nextText: psNextText, strategy: psStrategy,
+  } : null;
+  const psShare = () => {
+    const e = psEndInfo || {};
+    const text = `Giro di Pit Swipe completato su Sector 4: ${e.box || 0} notizie nel box, ${e.tfOk || 0}/${e.tfTot || 0} al vero o falso, ${(swipe.streak || {}).n || 0} GP di fila. Livello: ${psLevel.name}.`;
+    if (nativeShareKind()) shareNative({ title: "Il mio giro di Pit Swipe", text }, "Condividi il giro");
+    else { copyText(text); showToast("Testo del giro copiato"); }
+  };
   if (account === undefined && !guest) {   // si aspetta Authentication: forse c'è già una sessione
     return shell(
       <div data-auth-wait="" style={{ height: "100%", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 12, fontFamily: F_BODY, fontSize: 13, color: C.muted }}><LedGrid mode="seq" size={7} />Caricamento…</div>
@@ -10438,10 +10894,15 @@ function App() {
   if (view === "article" && activeArticle) body = <ArticleScreen article={activeArticle} onBack={viewBack.article} isPremium={isPremium} onPremium={() => setPremiumOpen(true)} onTag={filterByTag} saved={saved.includes(activeArticle.id)} onToggleSave={() => toggleSave(activeArticle.id)} onShare={() => setShareId(activeArticle.id)} vote={votes["art-" + activeArticle.id] || null} onVote={castVote} />;
   else if (view === "circuit" && circuitId) body = <CircuitScreen circuitId={circuitId} races={races} articles={articles} onBack={viewBack.circuit} onTag={filterByTag} onOpenArticle={openArticle} />;
   else if (view === "adminLock") body = <AdminKeypad onOk={() => { setAdminUnlocked(true); setView("admin"); }} onCancel={viewBack.adminLock} />;
-  else if (view === "admin" && adminUnlocked && Account.isAdmin()) body = <AdminScreen holidayCfg={holidayCfg} holiday={holiday} onHolidays={v => commitShared("holidays", () => v).then(ok => { if (ok) showToast("Temi delle feste salvati"); })} photos={commonsPhotos} setPhotos={adminSet.commonsPhotos} silly={sillyOfficial} onSilly={officialSeat} highlights={highlights} setHighlights={adminSet.highlights} onBack={viewBack.admin} onPublish={publishArticle} articles={articles} setArticles={adminSet.articles} fantaStats={fantaStats} setFantaStats={adminSet.fantaStats} standings={standings} setStandings={adminSet.standings} races={races} setRaces={adminSet.races} extraRaces={racesDoc.extra} setExtraRaces={adminSet.extraRaces} ig={ig} setIg={adminSet.ig} sentNotifs={sentNotifs} onSendNotif={sendNotif} onDeleteNotif={deleteNotif} onToast={showToast} tab={adminTab} setTab={setAdminTab} chats={chats} reports={reports} banned={banned} onDeleteMsg={deleteChatMsg} onSuspend={suspendUser} onUnsuspend={unsuspendUser} onIgnoreReport={ignoreReport} liveProps={liveProps} polls={allPolls} votes={votes} onPollAnswer={setPollAnswer} predictions={predictions} setPredictions={adminSet.predictions} predAnswers={predAnswers} />;
+  else if (view === "admin" && adminUnlocked && Account.isAdmin()) body = <AdminScreen takes={takes} onTakes={v => commitShared("takes", () => v).then(ok => { if (ok) showToast("Opinioni salvate"); })} holidayCfg={holidayCfg} holiday={holiday} onHolidays={v => commitShared("holidays", () => v).then(ok => { if (ok) showToast("Temi delle feste salvati"); })} photos={commonsPhotos} setPhotos={adminSet.commonsPhotos} silly={sillyOfficial} onSilly={officialSeat} highlights={highlights} setHighlights={adminSet.highlights} onBack={viewBack.admin} onPublish={publishArticle} articles={articles} setArticles={adminSet.articles} fantaStats={fantaStats} setFantaStats={adminSet.fantaStats} standings={standings} setStandings={adminSet.standings} races={races} setRaces={adminSet.races} extraRaces={racesDoc.extra} setExtraRaces={adminSet.extraRaces} ig={ig} setIg={adminSet.ig} sentNotifs={sentNotifs} onSendNotif={sendNotif} onDeleteNotif={deleteNotif} onToast={showToast} tab={adminTab} setTab={setAdminTab} chats={chats} reports={reports} banned={banned} onDeleteMsg={deleteChatMsg} onSuspend={suspendUser} onUnsuspend={unsuspendUser} onIgnoreReport={ignoreReport} liveProps={liveProps} polls={allPolls} votes={votes} onPollAnswer={setPollAnswer} predictions={predictions} setPredictions={adminSet.predictions} predAnswers={predAnswers} />;
   else if (view === "chatThread" && activeChat) body = <ChatThreadScreen chat={activeChat} onBack={viewBack.chatThread} onSend={guest ? () => needLogin("Per scrivere in chat serve un account.") : sendMessage} isPremium={isPremium} blocked={blocked} onReport={guest ? () => needLogin("Per segnalare un messaggio serve un account.") : reportMessage} onBlock={blockUser} onReact={guest ? () => needLogin("Per reagire ai messaggi serve un account.") : reactMessage} trophyList={trophyList} myWon={trophies} pendingLink={pendingLink} onPendingUsed={() => setPendingLink(null)} onOpenLink={openLink} liveRace={races.find(r => r.status === "LIVE") || null} />;
   else if (view === "instagram") body = <InstagramView ig={ig} onToast={showToast} onBack={viewBack.instagram} />;
   else if (view === "ghost") body = <GhostLap key={ghostInit ? JSON.stringify(ghostInit) : "ghost"} init={ghostInit} onBack={viewBack.ghost} />;
+  else if (view === "pitswipe") body = <PitSwipeScreen cards={psCards} deck={psDeck || { i: 0, acts: {}, hist: [] }} results={psRes} onAct={psAct} onUndo={psUndo} onBack={() => setView("tab")}
+    onOpenArticle={openArticle} whyOf={c => BtSwipe.whyReasons(c, { fav: { driver: favDriver, team: favTeam }, weights: swipe.w || {}, hot: ((psTally["f:" + c.id] || {}).total || 0) >= 3, labelOf: psLabelOf })}
+    onLess={c => { if (!guest && !userDataWait()) setSwipe(s => ({ ...s, w: BtSwipe.applySwipe(BtSwipe.applySwipe(s.w, c.topics, "out"), c.topics, "out") })); showToast("Meno carte così"); }}
+    mode={swipe.mode || "taste"} onMode={m => { if (!guest && !userDataWait()) setSwipe(s => ({ ...s, mode: m })); }} rain={psRain} onEgg={psEgg} streak={{ n: (swipe.streak || {}).n || 0 }}
+    endInfo={psEndInfo} onSaved={() => { setSavedOnly(true); setView("tab"); goTab("home"); }} onShare={psShare} />;
   else if (view === "chats") body = <ChatsView chats={chats} onOpen={openChat} blocked={blocked} onBack={viewBack.chats} unreadOf={(id, ms) => Chat.unread(id, ms)} />;
   else if (view === "profilo") body = <ProfiloScreen ig={ig} onOpenIg={() => { setIgFrom("profilo"); setView("instagram"); }} aboutMe={aboutMe} onSaveAboutMe={a => Account.updateAbout(a).catch(e => showToast(e && (e.code === "too-young" || e.code === "not-loaded") ? messageOf(e) : NOT_SAVED))} account={account} onSaveName={n => Account.updateName(n)} isAdmin={Account.isAdmin()} trial={trialActive ? trial : null} trialUsed={!!trial} onBack={viewBack.profilo} onNotifiche={() => setView("notifiche")} onPremium={() => setPremiumOpen(true)} onAdmin={() => guest ? needLogin("Accedi per usare il pannello admin.") : setView(adminUnlocked ? "admin" : "adminLock")} onLogout={logout} isPremium={isPremium} onAbout={() => setInfoModal({ title: "Info su B&T", body: ABOUT_TEXT, credits: true })} onFeedback={() => setFeedbackOpen(true)} onHelp={() => setInfoModal({ title: "Assistenza", body: HELP_TEXT })} favTeam={favTeam} favDriver={favDriver} onPickTeam={() => guest ? needLogin("Per scegliere scuderia e pilota del cuore serve un account.") : setPicker("team")} onPickDriver={() => guest ? needLogin("Per scegliere scuderia e pilota del cuore serve un account.") : setPicker("driver")} guest={guest} onLogin={() => needLogin(null)} onTerms={() => setTermsOpen(true)} blocked={blocked} onUnblock={unblockUser} onDeleteAccount={deleteAccount} savedCount={saved.length} onOpenSaved={openSaved} onTheme={() => setThemeOpen(true)} helmet={helmet} onHelmet={() => setHelmetOpen(true)} trophies={trophies} trophyProg={trophyProg} trophyList={trophyList}
     onAdPrivacy={Ads.privacyRequired() ? () => Ads.openPrivacy().catch(() => showToast("Le preferenze sulla privacy degli annunci non sono disponibili in questo momento.")) : null}
@@ -10450,13 +10911,14 @@ function App() {
     miniPit={miniPitOn} onMiniPit={v => { setMiniPitOn(v); local.set("bt-minipit-on", v); fx.play("tick"); }} />;
   else if (view === "notifiche") body = <NotificheScreen offline={offline} onBack={viewBack.notifiche} onAction={a => { if (a === "feedback") { if (feedbackAsk && !feedbackAsk.read) saveAsk({ ...feedbackAsk, read: true }); setFeedbackOpen(true); } }} notifs={notifs} onReadAll={readAll} isPremium={isPremium} onPremium={() => setPremiumOpen(true)} favTeam={favTeam} favDriver={favDriver} prefs={notifPrefs} onPrefs={v => { if (!userDataWait()) setNotifPrefs(v); }} onGoProfilo={() => setView("profilo")} />;
   else {
-    if (tab === "home") body = <HomeScreen holidayTop={holiday ? <HolidayCard id={holiday} onOpen={holidayOpen(holiday)} /> : null} ig={ig} highlights={highlights} onOpenIg={() => { setIgFrom("tab"); setView("instagram"); }} articles={articles} tagFilter={tagFilter} onTag={filterByTag} onClearTag={() => setTagFilter(null)} onOpenArticle={openArticle} isPremium={isPremium} onPremium={() => setPremiumOpen(true)} onToast={showToast} onLiveTrack={() => setLiveTrackOpen(true)} onGoFanta={() => goTab("fanta")}  saved={saved} onToggleSave={toggleSave} savedOnly={savedOnly} setSavedOnly={setSavedOnly} onOpenCircuit={openCircuit} homePoll={homePoll} homeVote={votes.home || null} onVote={castVote}
+    if (tab === "home") body = <HomeScreen holidayTop={holiday ? <HolidayCard id={holiday} onOpen={holidayOpen(holiday)} /> : null}
+      pitSwipe={<PitSwipeCard info={{ total: psCards.length, i: psDeck ? psDeck.i : 0, done: !!(psDeck && psDeck.done), streak: psStreak, level: psLevel, missions: psMissions, nextText: psNextText }} onOpen={openPitSwipe} />} ig={ig} highlights={highlights} onOpenIg={() => { setIgFrom("tab"); setView("instagram"); }} articles={articles} tagFilter={tagFilter} onTag={filterByTag} onClearTag={() => setTagFilter(null)} onOpenArticle={openArticle} isPremium={isPremium} onPremium={() => setPremiumOpen(true)} onToast={showToast} onLiveTrack={() => setLiveTrackOpen(true)} onGoFanta={() => goTab("fanta")}  saved={saved} onToggleSave={toggleSave} savedOnly={savedOnly} setSavedOnly={setSavedOnly} onOpenCircuit={openCircuit} homePoll={homePoll} homeVote={votes.home || null} onVote={castVote}
       hidden={hidden} onHide={hideArticle} onUnhideAll={() => { if (!userDataWait()) setHidden([]); }} onSwipeSave={saveFromSwipe}
       onRefresh={() => refreshShared(["news", "highlights", "ig", "homePoll"]).catch(() => {})} />;
     else if (tab === "race") body = <RaceScreen onStandingsEnd={isPremium ? null : Ads.standingsEnd} favDriver={favDriver} dotdVote={live ? votesNow.dotd[live.raceId] : null} onDotdVote={(k, id) => live && voteDotd(live.raceId, k, id)} ratings={votesNow.ratings} onRate={rateDriver} onOpenChats={() => setView("chats")} onOpenGhost={() => setView("ghost")} races={races} standings={shownStandings} isPremium={isPremium} onPremium={() => setPremiumOpen(true)} onSelectDriver={setSelectedDriver} live={live} liveSt={liveSt} onExpandMap={() => setLiveTrackOpen(true)} onTelemetry={(carId, lapNo, sector) => setTelemetry({ carId, lapNo, sector })} onOpenCircuit={openCircuit} wxGuess={wxGuess} wxResult={wxResult} onGuessWeather={guessWeather} onLapTimes={setLapList} onSecondScreen={() => setSsOpen(true)} lastRace={lastRace} of1={of1} onOf1Refresh={() => of1TickRef.current && of1TickRef.current(true)} of1Sessions={of1Sessions}
       onOf1Pick={key => { of1PickRef.current = key === of1Sessions.latest ? null : key; setOf1Sessions(x => ({ ...x, shown: key })); if (of1TickRef.current) of1TickRef.current(true); }}
       sessionNote={of1Live && of1Live.raw && !of1Live.raw.laps.length && of1Live.raw.session_result.length ? "I tempi giro per giro non sono ancora su OpenF1 (arrivano qualche ora dopo la fine): intanto la classifica con il miglior giro di ognuno." : null} replay={replayCtl} />;
-    else if (tab === "garage") body = <GarageScreen races={races} pitBest={pitBest} onPitResult={t => { if (!userDataWait()) setPitBest(b => b == null || t < b ? t : b); }} sillyPreds={sillyPreds} onPredict={predictSeat} sillyOfficial={sillyOfficial} live={live} stratPreds={stratPreds} onStrat={(id, st) => { if (!userDataWait()) setStratPreds(x => ({ ...x, [id]: { stints: st, at: nowMs() } })); }} bluffTags={bluffNow} onBluffRefresh={loadBluffTags} />;
+    else if (tab === "garage") body = <GarageScreen races={races} pitBest={pitBest} onPitResult={t => { if (!userDataWait()) { setPitBest(b => b == null || t < b ? t : b); psBump("pit"); } }} sillyPreds={sillyPreds} onPredict={predictSeat} sillyOfficial={sillyOfficial} live={live} stratPreds={stratPreds} onStrat={(id, st) => { if (!userDataWait()) setStratPreds(x => ({ ...x, [id]: { stints: st, at: nowMs() } })); }} bluffTags={bluffNow} onBluffRefresh={loadBluffTags} />;
     else if (tab === "fanta") body = <FantaScreen standings={shownStandings} squad={squad} setSquad={setSquad} base={squadBase} freeTransfers={freeTransfers} budget={FANTA_BUDGET} stats={fantaStats} race={fantaRace} lock={teamLockInfo} weekends={fantaLive} isPremium={isPremium} onPremium={() => setPremiumOpen(true)} onToast={showToast} bonus={bonus} leagues={leagueRows} seasonPts={fantaSeason.total} realWeek={fantaRace ? fantaSeason.rounds.find(r => r.round === fantaRace.round) || null : null} meAid={account ? account.aid : null} onCreateLeague={createLeague} onJoinLeague={joinLeague} onLeaveLeague={leaveLeague} onRenameLeague={renameLeague} needAccount={needAccount} predictions={predictionsOpen} predAnswers={predAnswers} predLockOf={predLockOf} onAnswerPrediction={answerPrediction} />;
   }
 

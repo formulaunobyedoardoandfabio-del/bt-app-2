@@ -65,7 +65,12 @@ const SHARED_DOCS = {
   "bt-commons-photos": { drivers: {}, cars: {}, logos: {} },   // Tappa 3 (G30): foto di Commons scelte dall'admin
   "bt-trophies": null,                    // 25/10: trofei cambiati da Firebase (niente documento: quelli di serie)
   "bt-holidays": { force: null, off: [] }, // 31/10: temi delle feste: force = tema acceso sempre, off = temi spenti
+  "bt-takes": [],                          // 1/11: opinioni di Pit Swipe scritte dall'admin [{ id, text, on, at }]
 };
+// Opinioni di Pit Swipe: solo quelle con id e testo, al massimo 140 caratteri, le più nuove prima, al massimo 60.
+const cleanTakes = v => (Array.isArray(v) ? v : []).filter(t => isObj(t) && typeof t.id === "string" && /^[A-Za-z0-9_-]{1,40}$/.test(t.id) && typeof t.text === "string" && t.text.trim())
+  .map(t => ({ id: t.id, text: t.text.trim().slice(0, 140), on: t.on !== false, at: Number(t.at) || 0 }))
+  .sort((a, b) => b.at - a.at).slice(0, 60);
 
 // Ogni contenuto dell'app (nome dello stato della 2.0) → i suoi documenti e le conversioni.
 // from(documenti, ora) dà il valore per l'app; to(valore) dà i documenti da scrivere (null = documento da cancellare).
@@ -94,13 +99,14 @@ const KINDS = {
   trophies: { docs: ["bt-trophies"], from: d => T.cleanTrophyConfig(d["bt-trophies"]) },
   // 31/10: temi delle feste comandati dall'admin (src/logic/holidays.js).
   holidays: { docs: ["bt-holidays"], from: d => H.cleanConfig(d["bt-holidays"]), to: v => ({ "bt-holidays": H.cleanConfig(v) }) },
+  takes: { docs: ["bt-takes"], from: d => cleanTakes(d["bt-takes"]), to: v => ({ "bt-takes": cleanTakes(v) }) },
 };
 
 // Dati personali dell'account (users/<email>.app2): ognuno vede e modifica solo i suoi.
 // Tappa 3: colori dell'app (theme), suoni e vibrazioni (sounds, haptics), casco (helmet), notizie nascoste (hidden).
 // 24/10: Premium dell'anteprima (premium = { sub, trial }): prima restava solo in memoria e chiudendo l'app spariva.
 const USER_KEYS = ["saved", "favTeam", "favDriver", "notifPrefs", "votes", "squad", "squadBase", "freeTransfers", "predAnswers", "sillyPreds", "stratPreds", "pitBest", "wxGuess", "ratings", "dotd", "notifSeenAt",
-  "theme", "sounds", "haptics", "helmet", "hidden", "trophies", "premium", "squadLog", "leagues", "holidays"];   // 31/10: temi delle feste   // 31/10: FantaF1 vero
+  "theme", "sounds", "haptics", "helmet", "hidden", "trophies", "premium", "squadLog", "leagues", "holidays", "swipe"];   // 1/11: Pit Swipe (gusti, mazzo, serie, missioni, easter egg)   // 31/10: temi delle feste   // 31/10: FantaF1 vero
 const USER_SAVE_MS = 800;
 const pickUser = v => { const out = {}; if (isObj(v)) USER_KEYS.forEach(k => { if (v[k] !== undefined) out[k] = v[k]; }); return out; };
 

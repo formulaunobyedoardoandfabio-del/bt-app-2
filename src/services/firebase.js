@@ -143,6 +143,12 @@ async function sharedAppend(k, item) {
   const FieldValue = W().firebase.firestore.FieldValue;
   await track(withTimeout(d.collection("shared").doc(k).set({ __arr: FieldValue.arrayUnion(clone(item)) }, { merge: true }), WRITE_TIMEOUT));
 }
+// Come sharedAppend, per un documento di un'altra raccolta (1/11: voti di Pit Swipe in fanta/pitswipe-voti).
+async function docAppend(col, id, item) {
+  const d = await needDb();
+  const FieldValue = W().firebase.firestore.FieldValue;
+  await track(withTimeout(d.collection(col).doc(id).set({ __arr: FieldValue.arrayUnion(clone(item)) }, { merge: true }), WRITE_TIMEOUT));
+}
 // Toglie dalla lista gli elementi per cui drop(x) è vero (transazione, come oggi).
 async function sharedRemoveWhere(k, drop) {
   const d = await needDb();
@@ -237,6 +243,6 @@ async function dropImage(ref) {
 
 module.exports = {
   FIREBASE_CONFIG, getDb, getAuth, isOnline, loadScript,
-  ss, sg, sgStrict, sd, dbGet, dbSet, dbDelete, dbQuery, sharedAppend, sharedRemoveWhere, listOf, local,
+  ss, sg, sgStrict, sd, dbGet, dbSet, dbDelete, dbQuery, sharedAppend, docAppend, sharedRemoveWhere, listOf, local,
   IMG_REF, IMG_MAX_CHARS, compressImage, uploadImage, loadImage, dropImage,
 };

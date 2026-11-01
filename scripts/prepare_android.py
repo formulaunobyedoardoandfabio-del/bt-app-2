@@ -70,6 +70,13 @@ if "com.google.android.gms.ads.APPLICATION_ID" not in manifest:
     open(MANIFEST, "w").write(manifest)
     print("AdMob App ID aggiunto al manifest")
 
+# 1/11: promemoria sul telefono (@capacitor/local-notifications): da Android 13 serve il permesso delle notifiche.
+manifest = open(MANIFEST).read()
+if "android.permission.POST_NOTIFICATIONS" not in manifest:
+    manifest = manifest.replace("<application", '<uses-permission android:name="android.permission.POST_NOTIFICATIONS" />\n    <application', 1)
+    open(MANIFEST, "w").write(manifest)
+    print("Permesso POST_NOTIFICATIONS aggiunto al manifest")
+
 gradle = open(GRADLE).read()
 build_number = os.environ.get("BUILD_NUMBER")
 if os.environ.get("CM_KEYSTORE_PATH"):

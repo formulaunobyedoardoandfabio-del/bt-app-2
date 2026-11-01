@@ -25,6 +25,11 @@ const TROPHIES = [
   { id: "avvento", name: "Pole di Natale", how: "Apri tutte le caselle della griglia dell'Avvento", secret: true },
   { id: "calza", name: "La calza", how: "Apri la calza della Befana", secret: true },
   { id: "monza", name: "Ero a Monza", how: "Corri sotto il podio a fine gara a Monza, in diretta", secret: true },
+  // 1/11: Pit Swipe (src/logic/pitswipe.js) e i suoi easter egg.
+  { id: "boxbox", name: "Box box", how: "Metti 100 notizie nel box in Pit Swipe", goal: 100 },
+  { id: "opinionista", name: "Opinionista", how: "Vota 50 opinioni in Pit Swipe", goal: 50 },
+  { id: "giroperfetto", name: "Giro perfetto", how: "Indovina 10 vero o falso di fila", goal: 10 },
+  { id: "ingegnere", name: "Ingegnere di pista", how: "Trova tutti e sei gli easter egg nascosti", secret: true },
 ];
 const SECRET_NAME = "Trofeo segreto", SECRET_HOW = "Si trova da qualche parte nell'app";
 
@@ -73,6 +78,7 @@ function trophyProgress(input, defs = TROPHIES) {
   const about = isObj(x.about) ? x.about : null;
   const squad = isObj(x.squad) ? x.squad : null;
   const ev = isObj(x.events) ? x.events : {};
+  const ps = isObj(x.swipe) ? x.swipe : {};   // Pit Swipe: { box, votes, tfBest }
   const pit = typeof x.pitBest === "number" && isFinite(x.pitBest) && x.pitBest > 0 ? x.pitBest : null;
   const goals = Object.fromEntries((Array.isArray(defs) ? defs : TROPHIES).map(t => [t.id, t.goal]));
   const count = (value, goal) => ({ done: value >= goal, value, goal });
@@ -98,6 +104,10 @@ function trophyProgress(input, defs = TROPHIES) {
     avvento: () => ({ done: !!ev.advent }),
     calza: () => ({ done: !!ev.stocking }),
     monza: () => ({ done: !!ev.monza }),
+    boxbox: g => count(num(ps.box), g),
+    opinionista: g => count(num(ps.votes), g),
+    giroperfetto: g => count(num(ps.tfBest), g),
+    ingegnere: () => { const n = Array.isArray(ev.eggs) ? ev.eggs.length : 0; return { done: n >= 6, value: n, goal: 6 }; },
   };
   const out = {};
   Object.keys(goals).forEach(id => { if (all[id]) out[id] = all[id](goals[id]); });
