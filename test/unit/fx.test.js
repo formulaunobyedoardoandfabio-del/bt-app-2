@@ -3,9 +3,9 @@
 // Uso: node test/unit/fx.test.js [filtro]
 const assert = require('assert');
 const path = require('path');
-const { createFx, SOUNDS, BUZZ } = require(path.join(__dirname, '..', '..', 'src', 'services', 'fx.js'));
+const { createFx, SOUNDS, SOUND_MAP, FILES, BUZZ } = require(path.join(__dirname, '..', '..', 'src', 'services', 'fx.js'));
 
-// Web Audio finto: ricorda gli oscillatori e i rumori avviati.
+// Web Audio finto: ricorda gli oscillatori e i suoni avviati (dal 1/11 i file di Edoardo: createBufferSource).
 function fakeAudio({ failResume = false, failCreate = false, state = 'suspended' } = {}) {
   const log = { ctx: 0, osc: [], noise: [], resumed: 0 };
   const param = () => ({ value: 0, setValueAtTime() {}, linearRampToValueAtTime() {}, exponentialRampToValueAtTime() {}, setTargetAtTime() {}, cancelScheduledValues() {} });
@@ -20,7 +20,8 @@ function fakeAudio({ failResume = false, failCreate = false, state = 'suspended'
       createGain() { return node({ gain: param() }); },
       createBiquadFilter() { return node({ type: 'lowpass', frequency: param(), Q: param(), gain: param() }); },
       createBuffer(ch, len) { return { getChannelData: () => new Float32Array(len), length: len }; },
-      createBufferSource() { const s = node({ buffer: null, start() { log.noise.push(s); }, stop() {} }); return s; },
+      createBufferSource() { const s = node({ buffer: null, playbackRate: param(), start() { log.noise.push(s); }, stop() {} }); return s; },
+      decodeAudioData(ab) { log.decoded = (log.decoded || 0) + 1; return ab && ab.bad ? Promise.reject(new Error('file rotto')) : Promise.resolve({ duration: 0.3, from: ab && ab.url }); },
     };
     return ctx;
   };
@@ -33,6 +34,8 @@ const fakeHaptics = () => {
   return { calls, impact: rec('impact'), notification: rec('notification'), vibrate: rec('vibrate'), selectionStart: rec('selectionStart'), selectionChanged: rec('selectionChanged'), selectionEnd: rec('selectionEnd') };
 };
 const tick = () => new Promise(r => setTimeout(r, 0));
+// I file dei suoni finti: { url } come ArrayBuffer; miss = file che non arriva, bad = file rotto.
+const fakeLoad = ({ miss = [], bad = [] } = {}) => { const urls = []; const fn = url => { urls.push(url); if (miss.some(m => url.includes(m))) return Promise.reject(new Error('404')); return Promise.resolve({ url, bad: bad.some(m => url.includes(m)) }); }; fn.urls = urls; return fn; };
 
 const tests = {
   // 31/10 (Edoardo: "più suoni e vibrazioni stile F1"): semaforo, via, pistola delle gomme, DRS, bandiera a scacchi.
@@ -40,10 +43,10 @@ const tests = {
     for (const name of ['light', 'go', 'gun', 'drs', 'flag']) {
       assert.ok(SOUNDS.includes(name), 'manca il suono ' + name);
       const a = fakeAudio({ state: 'running' });
-      const fx = createFx({ audioCtx: a.factory, local: fakeLocal() });
+      const fx = createFx({ audioCtx: a.factory, load: fakeLoad(), local: fakeLocal() });
       fx.unlock(); await tick();
       assert.strictEqual(fx.play(name), true, name);
-      assert.ok(a.log.osc.length + a.log.noise.length >= 2, name + ': troppo poco suono');
+      assert.ok(a.log.noise.length >= 1, name + ': nessun suono');
     }
   },
   async 'vibrazioni a sequenza nell\'APK: la bandiera dà più colpi nel tempo'() {
@@ -73,7 +76,7 @@ const tests = {
   async 'temi delle feste: setHoliday cambia i suoni (tic → campanellino); senza tema tornano quelli di sempre'() {
     for (const name of ['bell', 'howl', 'swoosh']) assert.ok(SOUNDS.includes(name), 'manca il suono ' + name);
     const a = fakeAudio({ state: 'running' });
-    const fx = createFx({ audioCtx: a.factory, local: fakeLocal() });
+    const fx = createFx({ audioCtx: a.factory, load: fakeLoad(), local: fakeLocal() });
     fx.unlock(); await tick();
     fx.setHoliday({ tick: 'bell' });
     assert.strictEqual(fx.soundOf('tick'), 'bell');
@@ -86,18 +89,18 @@ const tests = {
   },
   async 'prima di unlock nessun suono e nessun errore'() {
     const a = fakeAudio();
-    const fx = createFx({ audioCtx: a.factory, local: fakeLocal() });
+    const fx = createFx({ audioCtx: a.factory, load: fakeLoad(), local: fakeLocal() });
     for (const name of SOUNDS) assert.strictEqual(fx.play(name), false, name + ' prima del primo tocco');
     assert.strictEqual(a.log.ctx, 0, 'l\'audio non deve partire prima di un tocco');
     assert.strictEqual(fx.play('nessuno'), false);
   },
-  async 'dopo unlock play("shift") crea gli oscillatori'() {
+  async 'dopo unlock play("shift") suona il file del cambio di scheda'() {
     const a = fakeAudio();
-    const fx = createFx({ audioCtx: a.factory, local: fakeLocal() });
+    const fx = createFx({ audioCtx: a.factory, load: fakeLoad(), local: fakeLocal() });
     fx.unlock(); await tick();
     assert.strictEqual(a.log.ctx, 1); assert.strictEqual(a.log.resumed, 1);
     assert.strictEqual(fx.play('shift'), true);
-    assert(a.log.osc.length >= 1, 'nessun oscillatore per la cambiata');
+    assert(a.log.noise.length >= 1 && a.log.noise[0].buffer && /nav\.mp3$/.test(a.log.noise[0].buffer.from), 'la cambiata non suona nav.mp3');
     fx.unlock(); await tick();
     assert.strictEqual(a.log.ctx, 1, 'un secondo tocco non crea un altro audio');
     const before = a.log.osc.length + a.log.noise.length;
@@ -144,7 +147,7 @@ const tests = {
   },
   async 'audio che non parte: nessun errore'() {
     const a = fakeAudio({ failCreate: true });
-    const fx = createFx({ audioCtx: a.factory, local: fakeLocal() });
+    const fx = createFx({ audioCtx: a.factory, load: fakeLoad(), local: fakeLocal() });
     assert.doesNotThrow(() => fx.unlock());
     assert.strictEqual(fx.play('tick'), false);
     const b = fakeAudio({ failResume: true });
@@ -162,10 +165,44 @@ const tests = {
     assert.strictEqual(fx5.sounds(), true);
     assert.doesNotThrow(() => fx5.setSounds(false));
   },
+  // 1/11 (Edoardo: "cambia i suoni dell'app che fanno schifo, usa quelli che ti ho allegato").
+  async 'i 5 file di Edoardo: si caricano al primo tocco e ogni suono usa il suo file, con velocità e volume'() {
+    assert.deepStrictEqual(Object.keys(FILES).sort(), ['click', 'nav', 'radio', 'swipe', 'tap']);
+    for (const [name, m] of Object.entries(SOUND_MAP)) assert.ok(FILES[m.f], name + ' usa un file che non c\'è');
+    for (const url of Object.values(FILES)) {   // i file veri, accanto alla pagina (Vite li copia da public)
+      const f = path.join(__dirname, '..', '..', 'public', url);
+      assert.ok(require('fs').existsSync(f) && require('fs').statSync(f).size < 20000, url + ' manca o è troppo grande');
+    }
+    const a = fakeAudio({ state: 'running' }), load = fakeLoad();
+    const fx = createFx({ audioCtx: a.factory, load, local: fakeLocal() });
+    assert.strictEqual(load.urls.length, 0, 'nessun file prima del primo tocco');
+    fx.unlock(); await tick();
+    assert.deepStrictEqual(load.urls.slice().sort(), Object.values(FILES).sort(), 'al primo tocco si caricano i 5 file');
+    assert.strictEqual(fx.loaded(), 5);
+    fx.unlock(); await tick();
+    assert.strictEqual(load.urls.length, 5, 'un secondo tocco non li ricarica');
+    assert.strictEqual(fx.play('tick'), true);
+    assert.strictEqual(fx.play('gun'), true);
+    const [t, g] = a.log.noise;
+    assert.ok(/tap\.mp3$/.test(t.buffer.from) && t.playbackRate.value === 1, 'il tic è il tocco morbido a velocità normale');
+    assert.ok(/click\.mp3$/.test(g.buffer.from) && g.playbackRate.value === 1.3, 'la pistola è il click più acuto');
+  },
+  async 'file che non arriva o rotto: quel suono tace, gli altri suonano, nessun errore'() {
+    const a = fakeAudio({ state: 'running' });
+    const fx = createFx({ audioCtx: a.factory, load: fakeLoad({ miss: ['radio'], bad: ['swipe'] }), local: fakeLocal() });
+    assert.doesNotThrow(() => fx.unlock()); await tick();
+    assert.strictEqual(fx.loaded(), 3);
+    assert.strictEqual(fx.play('radio'), false, 'radio.mp3 non è arrivato');
+    assert.strictEqual(fx.play('swoosh'), false, 'swipe.mp3 è rotto');
+    assert.strictEqual(fx.play('clack'), true);
+    const none = createFx({ audioCtx: fakeAudio({ state: 'running' }).factory, local: fakeLocal() });
+    none.unlock(); await tick();
+    assert.strictEqual(none.play('tick'), false, 'senza i file nessun suono (e nessun sintetizzatore)');
+  },
   async 'app in secondo piano: nessun suono'() {
     const a = fakeAudio();
     let hidden = false;
-    const fx = createFx({ audioCtx: a.factory, local: fakeLocal(), hidden: () => hidden });
+    const fx = createFx({ audioCtx: a.factory, load: fakeLoad(), local: fakeLocal(), hidden: () => hidden });
     fx.unlock(); await tick();
     hidden = true;
     assert.strictEqual(fx.play('tick'), false);

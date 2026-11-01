@@ -54,7 +54,9 @@ run({
     assert(![...before.errs, ...after.errs, ...next.errs].length, [...before.errs, ...after.errs, ...next.errs].join(' | '));
   },
 
-  async 'Premium: le funzioni della gara, il Second Screen, gli avvisi e i sondaggi sono gratis; stagione 6 €, prova per un GP'(b) {
+  // 1/11 (Edoardo): Second Screen, telemetria, tempi sul giro, radio e gomme tornano funzioni Pro (Premium o un video);
+  // avvisi e sondaggi restano gratis.
+  async 'Premium: avvisi e sondaggi gratis; Second Screen e funzioni della gara sono Pro; stagione 6 €, prova per un GP'(b) {
     const POLL = { 'shared/bt-home-poll': { id: 'home', q: 'Chi vince il prossimo GP?', options: [{ id: 'a', label: 'Norris' }, { id: 'b', label: 'Leclerc' }] } };
     const { ctx, p, errs } = await open(b, { seed: { addDocs: POLL } }); await login(p);
     const poll = await p.evaluate(() => document.querySelectorAll('[data-poll-option]').length);
@@ -63,7 +65,7 @@ run({
     await tapSel(p, '[aria-label="Chiudi"]'); await w(p, 300);
     await goTab(p, 'RACE'); await w(p, 400);
     await tapText(p, 'Modalità Second Screen'); await w(p, 700);
-    const ss = await p.evaluate(() => !!document.querySelector('[data-ss]'));
+    const ss = await p.evaluate(() => ({ open: !!document.querySelector('[data-ss]'), gate: !!document.querySelector('[data-pro-gate="ss"]') }));
     await ctx.close();
     assert(poll === 2, 'il sondaggio della redazione senza Premium: ' + poll);
     ['Tempi su giro in tempo reale', 'Gomme: usura e strategia', 'Team radio audio live', 'Pit stop e distacchi completi', 'Modalità Second Screen durante la gara', 'Notifiche personalizzate in tempo reale', 'Sondaggi e contenuti della redazione']
@@ -71,7 +73,8 @@ run({
     assert(/6 €/.test(sheet) && /stagione/i.test(sheet) && /1 € in meno/.test(sheet), 'prezzo a stagione: ' + sheet.slice(0, 400));
     assert(/PROVA GRATIS PER UN GP/.test(sheet), 'prova per un GP');
     assert(!/2,99|24,99|2 SETTIMANE/.test(sheet), 'prezzi o prova vecchi');
-    assert(ss, 'il Second Screen senza Premium');
+    assert(!ss.open && ss.gate, 'il Second Screen senza Premium chiede Premium: ' + JSON.stringify(ss));
+    assert(/Second Screen in orizzontale/.test(sheet) && /Telemetria e tempi sul giro/.test(sheet) && /Radio e gomme in diretta/.test(sheet), 'nel Premium mancano le funzioni Pro della gara');
     assert(!errs.length, errs.join(' | '));
   },
 

@@ -39,9 +39,8 @@ jobs:
           GENERATE_SOURCEMAP: "false"
           NODE_OPTIONS: --max-old-space-size=6144
         run: npm run build
-      - name: Crea progetto Android (Capacitor + AdMob di prova)
-        env:
-          BT_ADMOB_TEST: "1"
+      # 1/11 (Edoardo: "rendi vere le pubblicità"): annunci veri; agli admin l'app mostra quelli di prova da sola.
+      - name: Crea progetto Android (Capacitor + AdMob)
         run: |
           # versionCode che cresce sempre: minuti dal 1/1/2026
           export BUILD_NUMBER=$(( ($(date +%s) - 1767225600) / 60 ))

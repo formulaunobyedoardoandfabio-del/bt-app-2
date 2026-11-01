@@ -1,7 +1,7 @@
 // Firebase finto per le prove: la parte dell'API compat 10 (Firestore + Authentication) usata dai servizi dell'app.
 // Si carica prima dell'app: i servizi trovano window.firebase e non scaricano niente da gstatic.
 // Salva nel localStorage (chiavi bt-fake-fs e bt-fake-auth), quindi i dati restano ricaricando la pagina.
-// Dati di partenza: window.__btSeed = { docs, addDocs, admin, users, freshInstall, requireRecentLogin, holdReads } (vedi
+// Dati di partenza: window.__btSeed = { docs, addDocs, admin, pro, users, freshInstall, requireRecentLogin, holdReads } (vedi
 // seedDefaults): docs sostituisce i documenti di serie, addDocs si aggiunge a quelli (l'account di prova a@b.it resta).
 // Comandi per le prove: firebase.__fake.offline = true (niente rete: le letture falliscono, le scritture restano in
 // sospeso finché la rete torna, come in Firestore), .failWrites = true (scritture rifiutate dalle regole: permission-denied),
@@ -39,6 +39,8 @@
     const docs0 = clone({ ...(s.docs || d.docs), ...(s.addDocs || {}) });   // addDocs: in più dei documenti di serie
     // 31/10: a@b.it è un utente normale (gli admin hanno Premium e tutti i trofei); admin con seed.admin o openAdmin().
     if (!s.admin) delete docs0['admins/a@b.it'];
+    // 1/11: pro = il tester è Premium (le funzioni Pro della gara: Second Screen, telemetria, tempi sul giro, radio, gomme).
+    if (s.pro && docs0['users/a@b.it']) docs0['users/a@b.it'].app2 = { ...(docs0['users/a@b.it'].app2 || {}), premium: { sub: true, trial: null } };
     if (s.plainTester && docs0['users/a@b.it'] && !(s.addDocs || {})['users/a@b.it'] && !(s.docs || {})['users/a@b.it']) delete docs0['users/a@b.it'].app2;
     save(FS_KEY, docs0);
     save(AUTH_KEY, { users: clone(s.users || d.users), current: null, resetSent: [], requireRecentLogin: !!s.requireRecentLogin, recent: false });

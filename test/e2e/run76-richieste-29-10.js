@@ -99,7 +99,7 @@ run({
     assert(off === 'off', 'prima della pubblicità niente Pro: ' + off);
     assert(calls.some(c => c.startsWith('prepareRewardVideoAd')) && calls.includes('showRewardVideoAd'), 'annuncio con premio non mostrato: ' + calls.join(','));
     assert(on === 'on', 'dopo la pubblicità il Pro deve essere attivo: ' + on);
-    assert(/Pro sbloccato finché non chiudi l'app/.test(page), 'manca l\'avviso del Pro sbloccato');
+    assert(/Funzioni Pro sbloccate finché non chiudi l'app/.test(page), 'manca l\'avviso del Pro sbloccato');   // 1/11: nuovo testo
     assert(later === 'off', 'spegnendo lo schermo il Pro gratis finisce: ' + later);
     assert(!errs.length, errs.join(' | '));
   },
@@ -110,7 +110,7 @@ run({
     const on = await chip(p), page = await text(p);
     await ctx.close();
     assert(on === 'off', 'senza premio niente Pro: ' + on);
-    assert(/Guarda la pubblicità fino in fondo/.test(page), 'manca l\'avviso: guarda fino in fondo');
+    assert(/Guarda il video fino in fondo/.test(page), 'manca l\'avviso: guarda fino in fondo');   // 1/11: nuovo testo
     assert(!errs.length, errs.join(' | '));
   },
 

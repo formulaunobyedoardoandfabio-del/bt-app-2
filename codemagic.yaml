@@ -31,10 +31,8 @@ workflows:
       <<: *env
       groups:
         - bt_secrets
-      vars:
-        # Annunci di prova di Google (scritta "Test Ad"): si vede che la pubblicità
-        # funziona senza cliccare quelli veri.
-        BT_ADMOB_TEST: "1"
+      # 1/11 (Edoardo: "rendi vere le pubblicità"): annunci veri; agli admin l'app
+      # mostra da sola quelli di prova (src/App.jsx, adsTestForAdmin).
     # Build automatica a ogni push su main (una volta collegato il webhook
     # su GitHub — vedi README.md), così non serve più premere "Start new
     # build" a mano dopo ogni correzione.
@@ -69,11 +67,7 @@ workflows:
         - bt_keystore
       groups:
         - bt_secrets
-      vars:
-        # Test chiuso (24/10): annunci di prova anche qui, perché gli amici che toccano gli
-        # annunci veri metterebbero a rischio l'account AdMob. PER L'USCITA PUBBLICA TOGLIERE
-        # QUESTE DUE RIGHE: allora l'app usa le unità vere di B&T (src/services/ads.js).
-        BT_ADMOB_TEST: "1"
+      # 1/11: annunci veri anche nel test chiuso (Edoardo); quelli di prova solo agli admin.
     scripts:
       - *install
       # I loghi sono marchi delle scuderie: restano solo nelle versioni di prova

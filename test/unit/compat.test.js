@@ -269,8 +269,12 @@ t('chat: messaggio della 2.0 nel formato di oggi {id,user,aid,txt,t}', () => {
 // ── Account ─────────────────────────────────────────────────────────────
 t('account vecchio senza about: profilo con about a null e nessun errore', () => {
   const p = C.profileFromStore(S.oldUser);
-  assert.deepStrictEqual(p, { name: 'Edo', nick: 'Edo', email: 'edo@b.it', about: { birth: null, follow: null, fan: null }, app2: {}, isPremium: false });
+  assert.deepStrictEqual(p, { name: 'Edo', nick: 'Edo', email: 'edo@b.it', about: { birth: null, follow: null, fan: null }, app2: {}, isPremium: false, paidPremium: false });
   const q = C.profileFromStore({ email: 'f@b.it', name: 'Fabio', about: { fan: 'vivo' }, app2: { saved: ['n1'] }, isPremium: true });
+  // 1/11: paidPremium = solo il Premium scritto dal server (isPremium del documento), non quello di app2.premium
+  assert.strictEqual(q.paidPremium, true);
+  assert.strictEqual(C.profileFromStore({ email: 'g@b.it', app2: { premium: { sub: true, src: 'play' } } }).paidPremium, false);
+  assert.strictEqual(C.profileFromStore({ email: 'g@b.it', app2: { premium: { sub: true, src: 'play' } } }).isPremium, true);
   assert.deepStrictEqual(q.about, { birth: null, follow: null, fan: 'vivo' });
   assert.strictEqual(q.nick, 'Fabio');
   assert.deepStrictEqual(q.app2, { saved: ['n1'] });

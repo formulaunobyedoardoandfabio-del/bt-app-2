@@ -1,5 +1,5 @@
 # Handoff
-Updated: 2026-11-01 by Claude (claude-opus-5-5)   Branch: tappa-3   (vedi "1/11 mattina" in fondo per l'ultimo lavoro)
+Updated: 2026-11-01 by Claude (claude-opus-5-5)   Branch: tappa-3   (vedi "1/11 pomeriggio" in fondo per l'ultimo lavoro)
 
 ## Goal
 Tappa 3 della 2.0: "fai prima tutti gli easter egg e le nuove grafiche, poi vedo l'apk di prova e poi ci sono altre
@@ -440,3 +440,38 @@ Da fare:
 - Prove: test/unit/pitswipe.test.js, test/unit/swipe-services.test.js, trophies (23), appdata (27 chiavi);
   e2e run83-pitswipe, run84-easter, run85-duolingo.
 - Verificato 1/11: suite completa, 4 file rotti dal riquadro Instagram spostato e dal numero dei trofei (run20, run34-admin, run72, run73) sistemati e rilanciati verdi.
+
+## 1/11 pomeriggio: pubblicità vere, funzioni Pro col video, notizie Premium, suoni nuovi, Google Play e Stripe
+- Suoni: i 5 file di Edoardo (Pixabay, licenza libera) in public/sounds (tap, click, nav, swipe, radio: silenzio tolto,
+  mono, volume pareggiato con ffmpeg); src/services/fx.js li carica al primo tocco (Web Audio, buffer) e ogni nome dell'app
+  (tick, clack, shift, swoosh, radio, done, abort, light, go, gun, drs, flag, rev, howl, bell) usa un file con velocità e
+  volume (SOUND_MAP). Niente più sintetizzatori. Le carte di Pit Swipe suonano swoosh.
+- Pubblicità vere: tolto BT_ADMOB_TEST da .github/workflows/apk-prova.yml e da codemagic.yaml (APK di prova e Play Store);
+  ads.js accetta test come funzione: agli admin unità di prova (adsTestForAdmin), ma gli admin sono Premium e di fatto non
+  vedono annunci. Rischio: chi tocca apposta gli annunci veri mette a rischio l'account AdMob.
+- Funzioni Pro (Edoardo): Second Screen, telemetria, tempi sul giro, radio e gomme della diretta. Senza Premium: foglio
+  "Funzione Pro" (ProGateSheet, data-pro-gate) o scheda bloccata (ProLockCard, data-pro-lock) con GUARDA UN VIDEO
+  (data-pro-ad, solo nell'APK) e PASSA A PREMIUM. Un video le sblocca TUTTE finché non chiudi l'app (adPro, come prima);
+  se Google non ha annunci ("unavailable", per esempio finché AdMob non approva l'app) si sblocca lo stesso.
+  isPaid = Premium vero (account.paidPremium dal server, app2.premium.sub, prova, admin): toglie banner e interstitial e
+  apre le notizie Premium; isPremium = isPaid || adPro (funzioni Pro). Il video NON toglie più i banner.
+- Notizie Premium: un video per notizia (data-article-ad), resta sbloccata sul telefono (bt-ad-news, ultime 200). Admin:
+  interruttore SOLO PREMIUM (data-news-premium) per qualsiasi categoria.
+- Pagamenti veri (PAYMENTS_ENABLED = true, src/services/billing.js): nell'APK SOLO Google Play (regole del Play Store:
+  niente Stripe, link o schede del browser verso pagamenti esterni), plugin @capgo/native-purchases (NativePurchases).
+  Prodotti da creare nella Play Console (nomi fissi): abbonamento premium_stagione con piano base stagione (annuale,
+  6 euro); prodotto singolo caffe (si consuma, si può offrire di nuovo). Pagato con Google Play: app2.premium = { sub: true,
+  src: "play", at } (vale anche sul sito); all'apertura dell'APK, se Google Play non vede più l'abbonamento, sub torna false
+  (solo per src "play"). Il prezzo vero di Google Play compare nel foglio Premium e accanto a "Offrici un caffè".
+- Sul sito Stripe: api/stripe-checkout.js (pagina di pagamento; torna a ?pagamento=ok&cosa=premium|coffee o
+  ?pagamento=annullato, avviso dopo l'accesso) e api/stripe-webhook.js (firma controllata; scrive in users/<email> solo
+  isPremium, plan, premiumSource, premiumUntil, stripeSubscriptionId, stripeCustomerId; mai account nuovi); api/_lib/pay.js
+  senza librerie (fetch e crypto). Variabili da mettere su Vercel (le scrive Edoardo): STRIPE_SECRET_KEY,
+  STRIPE_WEBHOOK_SECRET, STRIPE_PRICE_PREMIUM, STRIPE_PRICE_COFFEE, FIREBASE_SERVICE_ACCOUNT. Webhook in Stripe:
+  https://bt-app-2.vercel.app/api/stripe-webhook con checkout.session.completed, customer.subscription.updated/deleted.
+- Da sapere: Vercel gratis (Hobby) è solo per uso non commerciale: coi pagamenti serve Vercel Pro o spostare le due
+  funzioni altrove. Il Premium di Google Play per ora lo decide il telefono (nessun controllo dal server con l'API di Google
+  Play) e le regole di Firestore lasciano scrivere all'utente il suo documento: chi sa programmare potrebbe darsi il
+  Premium. Prossimo passo: controllo dal server e regole che proteggono i campi del Premium.
+- Prove: test/unit/billing.test.js, test/unit/payments-api.test.js, fx (12), ads (10), compat (paidPremium);
+  e2e run86-pro-pagamenti (7); aggiornate run14, run40 (seed pro), run69, run76; seed.pro nel Firebase finto.

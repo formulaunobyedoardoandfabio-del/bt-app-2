@@ -393,11 +393,17 @@ const tests = {
     assert(code(a) && code(b2) && code(a) !== code(b2), `il pilota non cambia (${code(a)} → ${code(b2)})`);
   },
   // 18/10 (Edoardo): il Second Screen non è più Premium: si apre per tutti.
-  async 'second screen: si apre anche senza Premium; senza diretta mostra la prossima gara'(b) {
-    const { ctx, p } = await open(b); await login(p); await goRace(p);
+  // 1/11 (Edoardo): il Second Screen è una funzione Pro (Premium o un video nell'APK); prima (29/10) era gratis.
+  async 'second screen: funzione Pro (senza Premium chiede Premium); col Premium senza diretta mostra la prossima gara'(b) {
+    const free = await open(b); await login(free.p); await goRace(free.p);
+    await tapText(free.p, 'Modalità Second Screen'); await w(free.p, 500);
+    const gate = await free.p.evaluate(() => ({ gate: document.querySelector('[data-pro-gate]') && document.querySelector('[data-pro-gate]').getAttribute('data-pro-gate'), ss: !!document.querySelector('[data-ss]'), video: !!document.querySelector('[data-pro-ad]') }));
+    await free.ctx.close();
+    const { ctx, p } = await open(b, { seed: { pro: true } }); await login(p); await goRace(p);
     await tapText(p, 'Modalità Second Screen'); await w(p, 500);
     const r = await stageInfo(p); const t2 = norm(await text(p)); await ctx.close();
-    assert(!/PROVA GRATIS/.test(t2), 'senza Premium il Second Screen chiede ancora di abbonarsi');
+    assert(gate.gate === 'ss' && !gate.ss, 'senza Premium il Second Screen deve chiedere Premium: ' + JSON.stringify(gate));
+    assert(!gate.video, 'sul sito non ci sono video con premio');
     assert(r && r.map && /Nessuna sessione in corso/.test(t2), 'senza diretta non si vede la mappa della prossima gara');
   },
   // ── Premium: prova gratuita di 2 settimane ────────────────────────────

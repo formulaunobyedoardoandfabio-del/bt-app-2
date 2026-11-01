@@ -48,7 +48,7 @@ run({
   // ── Blocco e caricamento ──────────────────────────────────────────────
   async 'gara LIVE e OpenF1 bloccato: riquadro SESSIONE IN CORSO e classifica dei primi 10'(b) {
     const of1 = of1Route('locked');
-    const { ctx, p, errs } = await open(b, { seed: { addDocs: BAKU_LIVE }, routes: of1.routes }); await login(p);
+    const { ctx, p, errs } = await open(b, { seed: { addDocs: BAKU_LIVE, pro: true }, routes: of1.routes }); await login(p);   // 1/11: funzioni Pro
     await goTab(p, 'RACE'); await w(p, 1500);
     const box = norm(await inner(p, '[data-of1-locked]')), rows = await count(p, '[data-of1-locked] [data-of1-standing]');
     const latest = () => of1.calls.filter(c => c.path === 'sessions' && /session_key=latest/.test(c.q)).length;
@@ -63,7 +63,7 @@ run({
   },
   async 'sbloccata: alla fine Russell primo, gomme vere e direzione gara con la Safety Car'(b) {
     const of1 = of1Route();
-    const { ctx, p, errs } = await open(b, { seed: { addDocs: BAKU_LIVE }, routes: of1.routes }); await login(p);
+    const { ctx, p, errs } = await open(b, { seed: { addDocs: BAKU_LIVE, pro: true }, routes: of1.routes }); await login(p);   // 1/11: funzioni Pro
     await goTab(p, 'RACE');
     const ok = await waitReplay(p); await w(p, 500);
     const st = ok ? await p.evaluate(() => { const s = window.__btLive.state(); return { first: s.cars[0].code, finished: s.finished, total: s.totalLaps, t: s.t }; }) : null;
@@ -89,7 +89,7 @@ run({
   // 31/10 sera (Edoardo): sessione finita ma non seguita in diretta: niente schermata con la bandiera a scacchi.
   async 'sessione finita non vista in diretta: niente sfondo a scacchi né "BANDIERA A SCACCHI"; il podio resta'(b) {
     const of1 = of1Route();
-    const { ctx, p, errs } = await open(b, { seed: { addDocs: BAKU_LIVE }, routes: of1.routes }); await login(p);
+    const { ctx, p, errs } = await open(b, { seed: { addDocs: BAKU_LIVE, pro: true }, routes: of1.routes }); await login(p);   // 1/11: funzioni Pro
     await goTab(p, 'RACE');
     const ok = await waitReplay(p); await w(p, 600);
     const finished = ok && await p.evaluate(() => window.__btLive.state().finished);
@@ -113,7 +113,7 @@ run({
   },
   async '429 e poi risposta: la pagina si riprende senza errori'(b) {
     const of1 = of1Route('429once');
-    const { ctx, p, errs } = await open(b, { seed: { addDocs: BAKU_LIVE }, routes: of1.routes }); await login(p);
+    const { ctx, p, errs } = await open(b, { seed: { addDocs: BAKU_LIVE, pro: true }, routes: of1.routes }); await login(p);   // 1/11: funzioni Pro
     await goTab(p, 'RACE');
     const ok = await waitReplay(p, 40000);
     const [first, second] = of1.calls.filter(c => c.path === 'sessions' && /session_key=latest/.test(c.q));
@@ -126,7 +126,7 @@ run({
   // ── Schede ────────────────────────────────────────────────────────────
   async 'radio: audio veri col pilota e il giro'(b) {
     const of1 = of1Route();
-    const { ctx, p, errs } = await open(b, { seed: { addDocs: BAKU_LIVE }, routes: of1.routes }); await login(p);
+    const { ctx, p, errs } = await open(b, { seed: { addDocs: BAKU_LIVE, pro: true }, routes: of1.routes }); await login(p);   // 1/11: funzioni Pro
     await goTab(p, 'RACE'); await waitReplay(p); await w(p, 300);
     await raceTab(p, 'radio');
     const rows = await p.evaluate(() => [...document.querySelectorAll('[data-radio-row]')].map(r => ({ t: r.innerText.replace(/\s+/g, ' '), src: (r.querySelector('audio[controls]') || {}).src || null })));
@@ -140,7 +140,7 @@ run({
   },
   async 'elenchi vuoti: "Dati non ancora disponibili", nessun errore JS'(b) {
     const of1 = of1Route('empty');
-    const { ctx, p, errs } = await open(b, { seed: { addDocs: BAKU_LIVE }, routes: of1.routes }); await login(p);
+    const { ctx, p, errs } = await open(b, { seed: { addDocs: BAKU_LIVE, pro: true }, routes: of1.routes }); await login(p);   // 1/11: funzioni Pro
     await goTab(p, 'RACE'); await w(p, 4000);
     const t0 = norm(await text(p)), sim = await p.evaluate(() => !!window.__btLive);
     await raceTab(p, 'gomme'); const tg = norm(await text(p));
@@ -154,7 +154,7 @@ run({
   },
   async 'meteo: valori veri, nessun radar e nessuna previsione inventata'(b) {
     const of1 = of1Route(), last = FX.weather[FX.weather.length - 1];
-    const { ctx, p, errs } = await open(b, { seed: { addDocs: BAKU_LIVE }, routes: of1.routes }); await login(p);
+    const { ctx, p, errs } = await open(b, { seed: { addDocs: BAKU_LIVE, pro: true }, routes: of1.routes }); await login(p);   // 1/11: funzioni Pro
     await goTab(p, 'RACE'); await waitReplay(p); await w(p, 300);
     await raceTab(p, 'meteo');
     const now = norm(await inner(p, '[data-wx-now]')), all = norm(await text(p));
@@ -170,7 +170,7 @@ run({
   // ── Telemetria e pilota ───────────────────────────────────────────────
   async 'telemetria: toccando un giro arriva car_data e il grafico'(b) {
     const of1 = of1Route();
-    const { ctx, p, errs } = await open(b, { seed: { addDocs: BAKU_LIVE }, routes: of1.routes }); await login(p);
+    const { ctx, p, errs } = await open(b, { seed: { addDocs: BAKU_LIVE, pro: true }, routes: of1.routes }); await login(p);   // 1/11: funzioni Pro
     await goTab(p, 'RACE'); await waitReplay(p);
     await p.evaluate(t => window.__btLive.jumpTo(t), lapStart(63, 12) + 5); await w(p, 600);
     await tapSel(p, '[aria-label="Tempi sul giro di RUS"]'); await w(p, 400);

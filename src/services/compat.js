@@ -479,6 +479,9 @@ function profileFromStore(doc) {
     app2: isObj(doc.app2) ? doc.app2 : {},
     // 31/10: il Premium sta in app2.premium.sub (isPremium dell'app di prima vale ancora finché il profilo non si sistema).
     isPremium: !!doc.isPremium || !!(isObj(doc.app2) && isObj(doc.app2.premium) && doc.app2.premium.sub === true),
+    // 1/11: il Premium scritto dal server (Stripe sul sito, o dato a mano): quello di app2.premium l'app lo ha già nei
+    // dati dell'account, sempre aggiornato (anche quando un abbonamento di Google Play finisce).
+    paidPremium: !!doc.isPremium,
   };
 }
 

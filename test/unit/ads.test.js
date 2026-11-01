@@ -41,6 +41,21 @@ t('pubblicità: prima il consenso (UE), poi il banner; con il modulo di Google s
   assert.ok(p.names().includes('showPrivacyOptionsForm'));
 });
 
+// 1/11 (Edoardo: "rendi vere le pubblicità"): unità vere per tutti, quelle di prova solo per gli admin (test come funzione).
+t('pubblicità vere: unità di B&T; per l\'admin (test() vero dopo l\'accesso) quelle di prova di Google', async () => {
+  let admin = false;
+  const p = fakeAdMob();
+  const A = createAds({ plugin: () => p, test: () => admin });
+  A.setBanner('home'); await settle();
+  assert.ok(p.calls.some(c => c.startsWith('showBanner:') && c.includes(UNITS.banner.home) && c.includes('"isTesting":false')), 'banner vero: ' + p.calls.join(' '));
+  admin = true;
+  A.setBanner('race'); await settle();
+  assert.ok(p.calls.some(c => c.startsWith('showBanner:') && c.includes(TEST_UNITS.banner) && c.includes('"isTesting":true')), 'banner di prova per l\'admin: ' + p.calls.join(' '));
+  const broken = createAds({ plugin: () => p, test: () => { throw new Error('rotto'); } });
+  broken.setBanner('home'); await settle();
+  assert.ok(p.calls.filter(c => c.includes(TEST_UNITS.banner)).length >= 2, 'se non si sa chi è: annunci di prova');
+});
+
 t('pubblicità: senza consenso a chiedere annunci, nessun banner; senza plugin (sito) niente di niente', async () => {
   const p = fakeAdMob({ consent: { status: 'REQUIRED', isConsentFormAvailable: true, canRequestAds: false }, afterForm: { status: 'REQUIRED', canRequestAds: false } });
   const A = createAds({ plugin: () => p, test: true });

@@ -10,8 +10,8 @@
 // - 29/10: con premio: guardata la pubblicità fino in fondo, il Pro si sblocca finché l'app non si chiude o lo schermo si
 //   spegne (lo decide l'App). Se un'unità non ha annunci si prova la successiva. Interstitial "in fondo alla classifica":
 //   arrivati in fondo si carica, la volta dopo si mostra, con gli stessi limiti di tempo di quello tra le notizie.
-// - test = annunci di prova di Google (scritta "Test Ad"): nell'APK di prova e nel test chiuso del Play Store, dove gli
-//   amici che toccano gli annunci veri metterebbero a rischio l'account AdMob.
+// - test = annunci di prova di Google (scritta "Test Ad"). Dal 1/11 (Edoardo: "rendi vere le pubblicità") solo per gli
+//   admin: chi tocca i propri annunci veri mette a rischio l'account AdMob.
 const TEST = "ca-app-pub-3940256099942544/";   // unità di prova pubbliche di Google
 const UNITS = {
   banner: {
@@ -31,7 +31,9 @@ const OP_TIMEOUT_MS = 10000;
 
 const withTimeout = (p, ms) => Promise.race([Promise.resolve(p), new Promise((_, rej) => setTimeout(() => rej(new Error("AdMob: tempo scaduto")), ms))]);
 
+// test: true/false oppure una funzione (1/11: annunci di prova per gli admin, che si sa chi sono solo dopo l'accesso).
 function createAds({ plugin = () => null, test = false, now = () => Date.now(), onBanner = () => {} } = {}) {
+  const isTest = () => { try { return typeof test === "function" ? !!test() : !!test; } catch (e) { return true; } };
   const startedAt = now();
   let readyP = null, privacy = false;
   function ready() {
@@ -40,7 +42,7 @@ function createAds({ plugin = () => null, test = false, now = () => Date.now(), 
       const A = plugin();
       if (!A) return false;
       try {
-        await withTimeout(A.initialize({ initializeForTesting: !!test }), OP_TIMEOUT_MS);
+        await withTimeout(A.initialize({ initializeForTesting: isTest() }), OP_TIMEOUT_MS);
         let info = await withTimeout(A.requestConsentInfo(), OP_TIMEOUT_MS);
         if (info && info.isConsentFormAvailable && info.status === "REQUIRED") info = await A.showConsentForm();
         privacy = !!info && info.privacyOptionsRequirementStatus === "REQUIRED";
@@ -71,7 +73,7 @@ function createAds({ plugin = () => null, test = false, now = () => Date.now(), 
     }
     const slot = want;
     if (!slot || !(await ready()) || want !== slot) return;
-    await withTimeout(A.showBanner({ adId: test ? TEST_UNITS.banner : UNITS.banner[slot], adSize: "ADAPTIVE_BANNER", position: "BOTTOM_CENTER", margin: 0, isTesting: !!test }), OP_TIMEOUT_MS)
+    await withTimeout(A.showBanner({ adId: isTest() ? TEST_UNITS.banner : UNITS.banner[slot], adSize: "ADAPTIVE_BANNER", position: "BOTTOM_CENTER", margin: 0, isTesting: isTest() }), OP_TIMEOUT_MS)
       .then(() => { shown = slot; }, () => {});
   };
   const setBanner = slot => {
@@ -88,7 +90,7 @@ function createAds({ plugin = () => null, test = false, now = () => Date.now(), 
     const A = plugin();
     if (!A || loaded || loading || sLoaded || sinceLast < INTERSTITIAL_AFTER || !timeOk()) return;
     loading = true;
-    ready().then(ok => (ok ? withTimeout(A.prepareInterstitial({ adId: test ? TEST_UNITS.interstitial : UNITS.interstitial.news, isTesting: !!test }), 30000).then(() => { loaded = true; }) : null))
+    ready().then(ok => (ok ? withTimeout(A.prepareInterstitial({ adId: isTest() ? TEST_UNITS.interstitial : UNITS.interstitial.news, isTesting: isTest() }), 30000).then(() => { loaded = true; }) : null))
       .catch(() => {})   // Google senza annunci da mostrare: si riprova più avanti
       .then(() => { loading = false; });
   }
@@ -112,7 +114,7 @@ function createAds({ plugin = () => null, test = false, now = () => Date.now(), 
     }
     if (sLoading || loaded || now() - startedAt < QUIET_START_MS) return;
     sLoading = true;
-    ready().then(ok => (ok ? withTimeout(A.prepareInterstitial({ adId: test ? TEST_UNITS.interstitial : UNITS.interstitial.standings, isTesting: !!test }), 30000).then(() => { sLoaded = true; }) : null))
+    ready().then(ok => (ok ? withTimeout(A.prepareInterstitial({ adId: isTest() ? TEST_UNITS.interstitial : UNITS.interstitial.standings, isTesting: isTest() }), 30000).then(() => { sLoaded = true; }) : null))
       .catch(() => {}).then(() => { sLoading = false; });
   }
 
@@ -125,8 +127,8 @@ function createAds({ plugin = () => null, test = false, now = () => Date.now(), 
       const A = plugin();
       if (!A || !(await ready())) return "unavailable";
       let loadedUnit = null;
-      for (const adId of test ? [TEST_UNITS.rewarded] : UNITS.rewarded) {
-        try { await withTimeout(A.prepareRewardVideoAd({ adId, isTesting: !!test }), 30000); loadedUnit = adId; break; } catch (e) {}
+      for (const adId of isTest() ? [TEST_UNITS.rewarded] : UNITS.rewarded) {
+        try { await withTimeout(A.prepareRewardVideoAd({ adId, isTesting: isTest() }), 30000); loadedUnit = adId; break; } catch (e) {}
       }
       if (!loadedUnit) return "unavailable";
       let earned = false, closed;

@@ -41,6 +41,7 @@ import { createOpenF1, buildReplay, lastRaceFromResult, sessionType as of1Sessio
 import { createJolpica, pick as pickStandings } from "./services/jolpica";
 import { createMeteo, sessionForecast, skyOf } from "./services/meteo";
 import { createAds } from "./services/ads";
+import { createBilling, BUY_MSG } from "./services/billing";
 import { createF1Data, apply as applyF1Data } from "./services/f1data";
 import FantaSeason from "./logic/fanta-season";
 import { createFantaLeague } from "./services/fantaleague";
@@ -99,9 +100,9 @@ const PRIVACY_URL = SITE_URL + "/privacy.html";
 const CONTACT_EMAIL = "bt.formula1@gmail.com";
 const APP_NAME = "Sector 4";   // nome dell'app (dal 10/10/2026); B&T resta il nome della squadra di Edoardo e Fabio
 const F1_DISCLAIMER = APP_NAME + " è un'app non ufficiale e non è associata in alcun modo alle società di Formula 1. F1, FORMULA ONE, FORMULA 1, FIA FORMULA ONE WORLD CHAMPIONSHIP, GRAND PRIX e i marchi correlati sono marchi di Formula One Licensing B.V.";
-// Pagamenti veri (abbonamento con Google Play Billing): spenti, come nell'app di oggi. Finché sono spenti la §4 dei
-// Termini dice che il Premium non è ancora disponibile.
-const PAYMENTS_ENABLED = false;
+// Pagamenti veri (1/11, Edoardo): nell'APK con Google Play, sul sito con Stripe (src/services/billing.js). La §4 dei
+// Termini spiega prezzo, rinnovo e disdetta.
+const PAYMENTS_ENABLED = true;
 // Prova del Premium dell'anteprima 2.0: si attiva con un tocco, senza pagare. La toglie il Task 11 (D44, Premium come oggi).
 const PREMIUM_DEMO = true;
 // Prova gratuita per un GP (18/10, Edoardo), una sola volta per account: fino alla fine del prossimo GP (4 ore dopo la
@@ -112,8 +113,7 @@ const trialEndFor = (races, now) => {
 };
 // Premium a stagione (18/10): 6 € la prima, ogni stagione dopo 1 € in meno, fino a 1 €.
 const SEASON_PRICE = 6;
-// Link di Buy Me a Coffee: finché manca, nel Profilo "Offrici un caffè" è "in arrivo".
-const COFFEE_URL = "";
+// "Offrici un caffè" (1/11): nell'APK con Google Play (prodotto "caffe"), sul sito con Stripe (src/services/billing.js).
 const premiumOffer = ({ trialUsed, isPremium }) => isPremium ? "premium" : trialUsed ? "subscribe" : "trial";
 const trialDaysLeft = trial => trial ? Math.max(0, Math.ceil((trial.end - nowMs()) / 86400000)) : 0;
 const fmtDay = ms => new Date(ms).toLocaleDateString("it-IT", { day: "numeric", month: "long", year: "numeric" });
@@ -464,7 +464,11 @@ const isNativeApp = () => { try { return !!(window.Capacitor && window.Capacitor
 const adMobPlugin = () => (ADS_ON && isNativeApp() ? capPlugin("AdMob") : null);
 // Altezza vera del banner nativo (0 = nessun banner): la manda AdMob, la root lascia lo spazio sotto le schede.
 const adBannerBus = { h: 0, subs: new Set(), set(h) { if (h === this.h) return; this.h = h; this.subs.forEach(f => f(h)); } };
-const Ads = createAds({ plugin: adMobPlugin, test: ADMOB_TEST, now: nowMs, onBanner: h => adBannerBus.set(h) });
+// 1/11 (Edoardo: "rendi vere le pubblicità"): annunci veri per tutti; agli admin restano quelli di prova di Google, così
+// i loro tocchi non contano come clic non validi (AdMob chiude gli account che toccano i propri annunci).
+let adsTestForAdmin = false;
+const Billing = createBilling({ plugin: () => (isNativeApp() ? capPlugin("NativePurchases") : null), native: isNativeApp });
+const Ads = createAds({ plugin: adMobPlugin, test: () => ADMOB_TEST || adsTestForAdmin, now: nowMs, onBanner: h => adBannerBus.set(h) });
 // Una finestra aperta sopra l'app (role="dialog", aria-modal o un livello a tutto schermo): il banner nativo, disegnato
 // da Android sopra la pagina, coprirebbe i suoi tasti. Solo nell'APK (on).
 const overlayOpen = () => [...document.querySelectorAll('[role="dialog"], [aria-modal="true"], [style*="inset: 0"]')]
@@ -602,6 +606,12 @@ const CHAT_ROOMS = [
 // Le notifiche dell'admin stanno in shared/bt-notifs, nel formato di oggi (src/services/appdata.js).
 
 const PREMIUM_CATEGORIES = [
+  // 1/11 (Edoardo): funzioni Pro della gara (senza Premium: un video nell'APK le sblocca tutte finché non chiudi l'app).
+  { name: "Gara", items: [
+    { icon: "grid", title: "Second Screen in orizzontale" },
+    { icon: "stopwatch", title: "Telemetria e tempi sul giro" },
+    { icon: "flag", title: "Radio e gomme in diretta" },
+  ]},
   { name: "Fanta F1", items: [
     { icon: "trophy", title: "Fanta F1 completo con leghe" },
     { icon: "group", title: "Leghe private illimitate" },
@@ -786,6 +796,38 @@ function FeatureRow({ icon, title, starIcon }) {
       {starIcon ? <Icon name="star" size={18} color={C.gold} /> : <Icon name={icon} size={18} color={C.text} />}
       <span style={{ flex: 1, fontFamily: F_BODY, fontWeight: 500, fontSize: 13.5, color: C.text }}>{title}</span>
       <Icon name="check" size={15} color={C.green} sw={2.6} />
+    </div>
+  );
+}
+
+// 1/11 (Edoardo): Second Screen, telemetria, tempi sul giro, radio e gomme sono funzioni Pro. Chi non è Premium le sblocca
+// tutte insieme con un video con premio, finché non chiude l'app (adPro); sul sito, dove non ci sono video, solo Premium.
+const PRO_WHAT = { ss: "il Second Screen", telemetry: "la telemetria", laps: "i tempi sul giro", radio: "la radio", gomme: "le gomme" };
+const PRO_LINE = "Second Screen, telemetria, tempi sul giro, radio e gomme";
+function ProLockCard({ what, onAd, onPremium, busy = false }) {
+  return (
+    <div data-pro-lock={what} style={{ margin: "0 16px 16px", padding: 18, borderRadius: 16, background: "rgba(231,179,76,.08)", border: "1px solid rgba(231,179,76,.3)", textAlign: "center" }}>
+      <Icon name="lock" size={22} color={C.gold} />
+      <p style={{ fontFamily: F_HEAD, fontWeight: 800, fontSize: 14, color: C.text, margin: "8px 0 4px" }}>Funzione Pro</p>
+      <p style={{ fontFamily: F_BODY, fontSize: 12.5, color: C.muted, lineHeight: 1.5, margin: "0 0 14px" }}>
+        {onAd ? `Per vedere ${PRO_WHAT[what] || "questa funzione"} guarda un video: sblocchi ${PRO_LINE} finché non chiudi l'app. Con Premium sono sempre tue.` : `${PRO_LINE} sono per gli abbonati B&T Premium.`}
+      </p>
+      {onAd && <button className="press" data-pro-ad="" disabled={busy} onClick={() => onAd()} style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8, width: "100%", padding: "13px 0", marginBottom: 8, borderRadius: 12, border: `1.5px solid ${C.gold}`, fontFamily: F_HEAD, fontWeight: 900, fontStyle: "italic", fontSize: 13.5, color: C.gold }}>
+        {busy ? <ShiftLight label="Carico la pubblicità" /> : <><Icon name="play" size={14} color={C.gold} />GUARDA UN VIDEO</>}
+      </button>}
+      <button className="press" data-pro-premium="" onClick={onPremium} style={{ width: "100%", padding: "12px 0", borderRadius: 12, background: C.gold, fontFamily: F_HEAD, fontWeight: 800, fontStyle: "italic", fontSize: 13, color: "#141414" }}>PASSA A PREMIUM</button>
+    </div>
+  );
+}
+function ProGateSheet({ what, onAd, onPremium, onClose, busy }) {
+  return (
+    <div role="dialog" aria-modal="true" aria-label="Funzione Pro" style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,.75)", zIndex: 640, display: "flex", alignItems: "flex-end" }} onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
+      <div data-pro-gate={what} style={{ background: C.card, borderRadius: "24px 24px 0 0", width: "100%", padding: "18px 0 22px" }}>
+        <div style={{ display: "flex", justifyContent: "flex-end", padding: "0 16px 4px" }}>
+          <button className="press" aria-label="Chiudi" onClick={onClose} style={{ width: 32, height: 32, borderRadius: "50%", background: "rgba(255,255,255,.08)", display: "flex", alignItems: "center", justifyContent: "center" }}><Icon name="close" size={12} color="#fff" sw={2.4} /></button>
+        </div>
+        <ProLockCard what={what} onAd={onAd} onPremium={onPremium} busy={busy} />
+      </div>
     </div>
   );
 }
@@ -2115,7 +2157,7 @@ function HomeScreen({ holidayTop = null, pitSwipe = null, ig, onOpenIg, highligh
   );
 }
 
-function ArticleScreen({ article, onBack, isPremium, onPremium, onTag, saved = false, onToggleSave, onShare, vote = null, onVote }) {
+function ArticleScreen({ article, onBack, isPremium, onPremium, onAdUnlock = null, adBusy = false, onTag, saved = false, onToggleSave, onShare, vote = null, onVote }) {
   const [zoomed, setZoomed] = useState(false);   // foto a tutto schermo, con lo zoom
   useBack(zoomed, () => setZoomed(false));
   const photo = useImageSrc(article.image);       // foto salvata su Firebase (fsimg:) o link: finché non arriva, il riquadro B&T
@@ -2164,7 +2206,10 @@ function ArticleScreen({ article, onBack, isPremium, onPremium, onTag, saved = f
         {locked ? (
           <div style={{ padding: 20, borderRadius: 16, background: "rgba(231,179,76,.08)", border: "1px solid rgba(231,179,76,.3)", textAlign: "center" }}>
             <Icon name="lock" size={22} color={C.gold} />
-            <p style={{ fontFamily: F_BODY, fontSize: 13, color: C.muted, lineHeight: 1.6, margin: "10px 0 16px" }}>Questo articolo è riservato agli abbonati B&amp;T Premium.</p>
+            <p style={{ fontFamily: F_BODY, fontSize: 13, color: C.muted, lineHeight: 1.6, margin: "10px 0 16px" }}>Questo articolo è riservato agli abbonati B&amp;T Premium.{onAdUnlock ? " Oppure guarda un video e leggi questo." : ""}</p>
+            {onAdUnlock && <button className="press" data-article-ad="" disabled={adBusy} onClick={() => onAdUnlock()} style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8, width: "100%", padding: "12px 0", marginBottom: 8, borderRadius: 12, border: `1.5px solid ${C.gold}`, fontFamily: F_HEAD, fontWeight: 900, fontStyle: "italic", fontSize: 13, color: C.gold }}>
+              {adBusy ? <ShiftLight label="Carico la pubblicità" /> : <><Icon name="play" size={14} color={C.gold} />GUARDA UN VIDEO PER LEGGERLO</>}
+            </button>}
             <button className="press" onClick={onPremium} style={{ padding: "12px 22px", borderRadius: 12, background: C.gold, fontFamily: F_HEAD, fontWeight: 800, fontStyle: "italic", fontSize: 13, color: "#141414" }}>SBLOCCA CON PREMIUM</button>
           </div>
         ) : (
@@ -5728,7 +5773,7 @@ function EndSpy({ onEnd }) {
   }, []);
   return <div ref={ref} data-end-spy="" aria-hidden="true" style={{ height: 1 }} />;
 }
-function RaceScreen({ onStandingsEnd = null, isPremium, onPremium, onSelectDriver, races, standings, live, liveSt, onExpandMap, onTelemetry, onOpenCircuit, wxGuess, wxResult, onGuessWeather, onLapTimes, onSecondScreen, lastRace, dotdVote, onDotdVote, ratings = {}, onRate, onOpenChats, onOpenGhost, of1 = null, onOf1Refresh, replay = null, favDriver = null, of1Sessions = null, onOf1Pick = null, sessionNote = null }) {
+function RaceScreen({ proOk = true, onProAd = null, proBusy = false, onStandingsEnd = null, isPremium, onPremium, onSelectDriver, races, standings, live, liveSt, onExpandMap, onTelemetry, onOpenCircuit, wxGuess, wxResult, onGuessWeather, onLapTimes, onSecondScreen, lastRace, dotdVote, onDotdVote, ratings = {}, onRate, onOpenChats, onOpenGhost, of1 = null, onOf1Refresh, replay = null, favDriver = null, of1Sessions = null, onOf1Pick = null, sessionNote = null }) {
   const [tab, setTab] = useState(null);
   // Pit Board (G27): si vede quando la tabella dei tempi arriva in cima alla pagina (stato cambiato solo al passaggio).
   const scRef = useRef(null), tblRef = useRef(null);
@@ -5817,7 +5862,9 @@ function RaceScreen({ onStandingsEnd = null, isPremium, onPremium, onSelectDrive
           field={lastRace.rows.map(x => ({ id: x.id, pos: x.pos || null, dnf: x.dnf || null }))} />
       ); })()}
 
-      {curTab === "gomme" && (
+      {/* 1/11: gomme e radio della diretta sono funzioni Pro (video con premio o Premium) */}
+      {curTab === "gomme" && st && !proOk && <ProLockCard what="gomme" onAd={onProAd} onPremium={onPremium} busy={proBusy} />}
+      {curTab === "gomme" && (!st || proOk) && (
         <div data-tyres="" style={{ ...card, padding: "4px 0" }}>
           {!st && <p data-tyres-empty="" style={{ margin: 0, padding: 16, fontFamily: F_BODY, fontSize: 12.5, color: C.dim, lineHeight: 1.5 }}>{TYRES_EMPTY}</p>}
           {st && st.cars.map((c, i) => { const d = driverById(c.id), laps = c.tyreAge != null ? `${c.tyreAge} ${c.tyreAge === 1 ? "giro" : "giri"}` : "–"; return (
@@ -5882,7 +5929,8 @@ function RaceScreen({ onStandingsEnd = null, isPremium, onPremium, onSelectDrive
         </div>
       )}
 
-      {curTab === "radio" && (
+      {curTab === "radio" && st && !proOk && <ProLockCard what="radio" onAd={onProAd} onPremium={onPremium} busy={proBusy} />}
+      {curTab === "radio" && (!st || proOk) && (
         <div data-radios="" style={card}>
           {isOf1Live(live) && st ? <RadioList live={live} st={st} />
             : st ? radioFeed(st, 6).map((r, i, all) => (
@@ -7310,7 +7358,7 @@ function TrophyCase({ trophies = {}, progress = {}, helmet = null, defs = TROPHI
   );
 }
 
-function ProfiloScreen({ fanLevel = null, reminders = true, onReminders = null, holidays = true, onHolidays = null, miniPit = true, onMiniPit = null, ig, onOpenIg, trial = null, trialUsed = false, onBack, onNotifiche, onPremium, onAdmin, onLogout, isPremium, onAbout, onHelp, onFeedback, aboutMe, onSaveAboutMe, favTeam, favDriver, onPickTeam, onPickDriver, guest, onLogin, onTerms, blocked = [], onUnblock, onDeleteAccount, savedCount = 0, onOpenSaved, account = null, onSaveName, isAdmin = false, onTheme, sounds = true, haptics = true, onSounds, onHaptics, helmet = null, onHelmet, trophies = {}, trophyProg = {}, trophyList = TROPHIES, onAdPrivacy = null }) {
+function ProfiloScreen({ onCoffee = null, coffeePrice = null, fanLevel = null, reminders = true, onReminders = null, holidays = true, onHolidays = null, miniPit = true, onMiniPit = null, ig, onOpenIg, trial = null, trialUsed = false, onBack, onNotifiche, onPremium, onAdmin, onLogout, isPremium, onAbout, onHelp, onFeedback, aboutMe, onSaveAboutMe, favTeam, favDriver, onPickTeam, onPickDriver, guest, onLogin, onTerms, blocked = [], onUnblock, onDeleteAccount, savedCount = 0, onOpenSaved, account = null, onSaveName, isAdmin = false, onTheme, sounds = true, haptics = true, onSounds, onHaptics, helmet = null, onHelmet, trophies = {}, trophyProg = {}, trophyList = TROPHIES, onAdPrivacy = null }) {
   const ft = favTeam ? teamById(favTeam) : null;
   const fd = favDriver ? driverById(favDriver) : null;
   const favRows = [
@@ -7356,8 +7404,8 @@ function ProfiloScreen({ fanLevel = null, reminders = true, onReminders = null, 
     ...(isAdmin ? [{ icon: "gear", label: "Pannello Admin · Pubblica notizia", onClick: onAdmin, badge: "ADMIN" }] : []),
     { icon: "help", label: "Assistenza", onClick: onHelp, chevron: true },
     { icon: "chat", label: "Invia feedback", onClick: onFeedback, chevron: true },   // come oggi, ma dal Profilo (niente pulsante fluttuante)
-    // Buy Me a Coffee (18/10): finché il link non c'è, "in arrivo".
-    { icon: "star", label: "Offrici un caffè", onClick: COFFEE_URL ? () => openUrl(COFFEE_URL) : undefined, ...(COFFEE_URL ? { chevron: true } : { badge: "IN ARRIVO" }) },
+    // "Offrici un caffè" (1/11): Google Play nell'APK, Stripe sul sito; "in arrivo" solo nell'APK senza Google Play.
+    { icon: "star", label: "Offrici un caffè", onClick: onCoffee || undefined, ...(onCoffee ? { chevron: true, value: coffeePrice || undefined } : { badge: "IN ARRIVO" }) },
     { icon: "info", label: "Info su B&T", onClick: onAbout, chevron: true },
     { icon: "lock", label: "Privacy Policy", onClick: () => openUrl(PRIVACY_URL), chevron: true },
     // Scelte sul consenso degli annunci (UE): Google chiede che si possano cambiare quando servono (Termini, punto 7).
@@ -7474,6 +7522,7 @@ function ProfiloScreen({ fanLevel = null, reminders = true, onReminders = null, 
               <div style={{ width: 36, height: 36, borderRadius: 10, background: "rgba(255,255,255,.06)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}><Icon name={r.icon} size={16} /></div>
               <span style={{ flex: 1, fontFamily: F_BODY, fontWeight: 600, fontSize: 14, color: C.text }}>{r.label}</span>
               {r.badge && <span style={{ padding: "2px 8px", borderRadius: 6, background: "rgba(231,179,76,.16)", fontFamily: F_HEAD, fontWeight: 800, fontSize: 9, color: C.gold, letterSpacing: .4 }}>{r.badge}</span>}
+              {r.value && <span style={{ fontFamily: F_BODY, fontSize: 12, color: C.muted, whiteSpace: "nowrap" }}>{r.value}</span>}
               {r.chevron && <Icon name="chevron" size={16} color={C.dim} />}
             </button>
             )}
@@ -7712,7 +7761,7 @@ function ImagePicker({ id, value, onChange, label = "Allega immagine", changeLab
 }
 
 function AdminNewsTab({ articles, setArticles, onPublish, onToast }) {
-  const empty = { title: "", summary: "", cat: "NEWS", author: "Team B&T", image: "", body: "", published: true };
+  const empty = { title: "", summary: "", cat: "NEWS", author: "Team B&T", image: "", body: "", published: true, premium: false };
   const [f, setF] = useState(empty);
   const [customCat, setCustomCat] = useState(false);
   const [teams, setTeams] = useState([]);
@@ -7752,7 +7801,7 @@ function AdminNewsTab({ articles, setArticles, onPublish, onToast }) {
     if (pollOn && (!pollQ.trim() || opts.length < 2)) { setError("Per il sondaggio servono la domanda e almeno 2 risposte."); return; }
     const poll = pollOn ? { q: pollQ.trim(), answer: null, options: opts.map((label, k) => ({ id: "o" + (k + 1), label, base: 0 })) } : undefined;
     // Il modulo si svuota solo se la notizia è salvata su Firebase; altrimenti resta per riprovare.
-    Promise.resolve(onPublish({ title: f.title.trim(), excerpt: (f.summary.trim() || body.split("\n")[0]).slice(0, 140), cat: f.cat.trim().toUpperCase(), premium: customCat, author: f.author.trim(), image: f.image, body, published: f.published, teams, drivers, circuits, ...(poll ? { poll } : {}) })).then(ok => {
+    Promise.resolve(onPublish({ title: f.title.trim(), excerpt: (f.summary.trim() || body.split("\n")[0]).slice(0, 140), cat: f.cat.trim().toUpperCase(), premium: customCat || !!f.premium, author: f.author.trim(), image: f.image, body, published: f.published, teams, drivers, circuits, ...(poll ? { poll } : {}) })).then(ok => {
       if (ok === false) return;
       setF(empty); setCustomCat(false); setTeams([]); setDrivers([]); setCircuits([]); setPollOn(false); setPollQ(""); setPollOpts(["", "", "", ""]);
     });
@@ -7822,6 +7871,12 @@ function AdminNewsTab({ articles, setArticles, onPublish, onToast }) {
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
           <span style={{ fontFamily: F_BODY, fontWeight: 700, fontSize: 12, color: C.text }}>PUBBLICATO <span style={{ fontWeight: 400, color: C.dim }}>{f.published ? "" : "(salva come bozza)"}</span></span>
           <Toggle on={f.published} onChange={v => set("published", v)} label="Pubblicato" />
+        </div>
+        {/* 1/11 (Edoardo: "metti anche per le notizie premium"): qualsiasi notizia può essere Premium; chi non lo è la legge
+            con un video (una notizia per video). */}
+        <div data-news-premium="" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, marginBottom: 12 }}>
+          <span style={{ fontFamily: F_BODY, fontWeight: 700, fontSize: 12, color: C.gold }}>SOLO PREMIUM <span style={{ fontWeight: 400, color: C.dim }}>(gli altri la leggono con un video)</span></span>
+          <Toggle on={customCat || !!f.premium} disabled={customCat} onChange={v => set("premium", v)} label="Solo Premium" />
         </div>
         {error && <p role="alert" style={{ margin: "0 0 10px", fontFamily: F_BODY, fontSize: 12, color: "#ff6b6b" }}>{error}</p>}
         <ABtn onClick={publish}>{f.published ? "PUBBLICA" : "SALVA BOZZA"}</ABtn>
@@ -8472,9 +8527,9 @@ function AdminScreen({ takes = [], onTakes = null, photos, setPhotos, silly = {}
   );
 }
 
-function PremiumModal({ onClose, isPremium, plan, setPlan, onSubscribe, subscribing, subscribed, trialUsed, onTrial, trial, onAdPro = null, adBusy = false }) {
+function PremiumModal({ onClose, isPremium, plan, setPlan, onSubscribe, subscribing, subscribed, trialUsed, onTrial, trial, onAdPro = null, adBusy = false, playPrice = null }) {
   const offer = premiumOffer({ trialUsed, isPremium });
-  const price = SEASON_PRICE + " € a stagione";
+  const price = (playPrice || SEASON_PRICE + " €") + " a stagione";   // 1/11: nell'APK il prezzo vero di Google Play
   const heroGradient = `linear-gradient(135deg, ${shade(C.accent, .11)}, ${alpha(C.accentInk, .27)}, ${shade(C.accent, .11)})`;
   if (subscribed) {
     return (
@@ -8546,9 +8601,9 @@ function PremiumModal({ onClose, isPremium, plan, setPlan, onSubscribe, subscrib
               {onAdPro && (
                 <div data-ad-pro="" style={{ marginTop: 14, padding: "12px 12px 10px", borderRadius: 14, background: "rgba(255,255,255,.04)", border: `1px solid ${C.border}` }}>
                   <button className="press" disabled={adBusy} onClick={onAdPro} style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8, width: "100%", padding: "13px 0", borderRadius: 12, border: `1.5px solid ${C.gold}`, fontFamily: F_HEAD, fontWeight: 900, fontStyle: "italic", fontSize: 13.5, color: C.gold }}>
-                    {adBusy ? <ShiftLight label="Carico la pubblicità" /> : <><Icon name="play" size={14} color={C.gold} />GUARDA UNA PUBBLICITÀ: PRO GRATIS</>}
+                    {adBusy ? <ShiftLight label="Carico la pubblicità" /> : <><Icon name="play" size={14} color={C.gold} />GUARDA UN VIDEO: FUNZIONI PRO GRATIS</>}
                   </button>
-                  <p style={{ textAlign: "center", fontFamily: F_BODY, fontSize: 11, color: C.muted, margin: "8px 0 0", lineHeight: 1.45 }}>Il Pro resta attivo finché non chiudi l'app o spegni lo schermo.</p>
+                  <p style={{ textAlign: "center", fontFamily: F_BODY, fontSize: 11, color: C.muted, margin: "8px 0 0", lineHeight: 1.45 }}>{PRO_LINE}: sbloccati finché non chiudi l'app o spegni lo schermo. Pubblicità e notizie Premium restano.</p>
                 </div>
               )}
               <p style={{ textAlign: "center", fontFamily: F_BODY, fontSize: 10.5, color: C.dim, lineHeight: 1.7, margin: "14px 0 0" }}>
@@ -8585,7 +8640,7 @@ function TermsSheet({ review, onAccept, onClose }) {
     ["1. Accettazione dei Termini", `Utilizzando l'app ${APP_NAME} (“l'App”), l'utente accetta di essere vincolato ai presenti Termini e Condizioni. Se non si accettano questi termini, si prega di non utilizzare l'App.`],
     ["2. Descrizione del Servizio", `${APP_NAME} è un'app di informazione e intrattenimento dedicata alla Formula 1. Offre notizie, classifiche, dati live delle gare tramite OpenF1 API, una sezione community (chat) e funzionalità Fanta F1.`],
     ["3. Account Utente", "Per accedere a tutte le funzionalità è necessario creare un account. L'utente è responsabile della riservatezza delle proprie credenziali. Ogni attività effettuata dall'account è responsabilità dell'utente."],
-    ["4. Abbonamento Premium", PAYMENTS_ENABLED ? "L'abbonamento Premium (6 € a stagione, ogni stagione dopo 1 € in meno, fino a 1 €) sblocca funzionalità avanzate e rimuove la pubblicità. Il rinnovo è automatico e può essere annullato in qualsiasi momento dal profilo. Non sono previsti rimborsi per il periodo in corso." : "L'abbonamento Premium non è ancora disponibile. Quando verrà attivato, prezzi, rinnovo e modalità di disdetta saranno indicati in questa sezione e nella schermata di acquisto."],
+    ["4. Abbonamento Premium", PAYMENTS_ENABLED ? "L'abbonamento Premium (6 € a stagione, ogni stagione dopo 1 € in meno, fino a 1 €) sblocca funzionalità avanzate e rimuove la pubblicità. Nell'app si paga con Google Play, sul sito con Stripe. Il rinnovo è automatico e si può disdire in qualsiasi momento: nell'app da Google Play → Pagamenti e abbonamenti, sul sito dal link nella ricevuta di Stripe. Il Premium resta attivo fino alla fine del periodo già pagato; per i rimborsi valgono le regole di Google Play o di Stripe. \"Offrici un caffè\" è un'offerta libera: non sblocca niente." : "L'abbonamento Premium non è ancora disponibile. Quando verrà attivato, prezzi, rinnovo e modalità di disdetta saranno indicati in questa sezione e nella schermata di acquisto."],
     ["5. Contenuti e Proprietà Intellettuale", "Tutti i contenuti pubblicati dal Team B&T (articoli, immagini, video) sono di proprietà del Team B&T. I dati di gara sono forniti da OpenF1 API. I loghi e i marchi di Formula 1, FIA e team sono di proprietà dei rispettivi titolari. Le foto di piloti e monoposto vengono da Wikimedia Commons con licenza libera e i crediti dell'autore (Profilo → Info su B&T). Se pensi che un contenuto dell'app violi un tuo diritto d'autore, scrivici a bt.formula1@gmail.com con il link o la descrizione del contenuto: lo controlliamo e, se serve, lo togliamo.", `${F1_DISCLAIMER} ${APP_NAME} non è associata nemmeno alla FIA, alle scuderie o ai piloti.`],
     ["6. Condotta degli Utenti", "Nella chat community è vietato pubblicare contenuti offensivi, discriminatori, sessualmente espliciti, spam, materiale illegale, informazioni personali altrui o contenuti di altri (testi, foto, video) senza il loro permesso. Con il tasto ⋯ su ogni messaggio puoi segnalarlo o bloccare chi l'ha scritto: i messaggi segnalati vengono controllati dai moderatori e rimossi se violano queste regole. Le violazioni possono comportare la sospensione dalla chat o dell'account."],
     ["7. Pubblicità", "Gli utenti non abbonati visualizzeranno annunci pubblicitari forniti tramite Google AdMob. Nell'Unione Europea ti chiediamo il consenso con il messaggio di Google e puoi cambiare le tue scelte in qualsiasi momento da Profilo → Preferenze privacy annunci."],
@@ -9096,7 +9151,9 @@ const USER_INIT = {
 // Premium dell'anteprima salvato nell'account (24/10): sub = abbonamento di prova, trial = prova per un GP { start, end }.
 const cleanPremium = v => {
   const t = v && v.trial, ok = t && isFinite(t.start) && isFinite(t.end);
-  return { sub: !!(v && v.sub), trial: ok ? { start: +t.start, end: +t.end, ...(t.converted ? { converted: true } : {}) } : null };
+  // 1/11: src "play" = abbonamento di Google Play (si toglie da solo quando Google Play non lo vede più), at = quando.
+  const src = v && v.src === "play" ? { src: "play", ...(isFinite(v.at) ? { at: +v.at } : {}) } : {};
+  return { sub: !!(v && v.sub), ...src, trial: ok ? { start: +t.start, end: +t.end, ...(t.converted ? { converted: true } : {}) } : null };
 };
 // Dati dell'account che restano anche sul telefono: uscendo dall'account non tornano quelli di serie.
 const PHONE_KEYS = ["theme", "sounds", "haptics"];
@@ -9583,7 +9640,15 @@ function App() {
     return () => document.removeEventListener("visibilitychange", h);
   }, []);
   const isAdminNow = !!account && Account.isAdmin();   // 31/10: gli admin hanno Premium e tutti i trofei, gratis
-  const isPremium = !!(account && account.isPremium) || premium.sub || (!!trial && nowMs() < trial.end) || adPro || isAdminNow;
+  // 1/11: isPaid = Premium vero (abbonamento, prova, admin): niente pubblicità e notizie Premium. isPremium = funzioni Pro,
+  // anche col video con premio (adPro): un video le sblocca tutte, ma i banner restano e le notizie si sbloccano una per video.
+  const isPaid = !!(account && (account.paidPremium !== undefined ? account.paidPremium : account.isPremium)) || premium.sub || (!!trial && nowMs() < trial.end) || isAdminNow;
+  const isPremium = isPaid || adPro;
+  adsTestForAdmin = isAdminNow;
+  const [proAsk, setProAsk] = useState(null);   // foglio "Funzione Pro": { what, then }
+  const proGate = (what, then) => { if (isPremium) then(); else setProAsk({ what, then }); };
+  // Notizie Premium sbloccate col video: restano sbloccate su questo telefono (le ultime 200).
+  const [adNews, setAdNews] = useState(() => { const v = local.get("bt-ad-news"); return Array.isArray(v) ? v : []; });
   const [plan, setPlan] = useState("annual");
   const [subscribing, setSubscribing] = useState(false);
   const [subscribed, setSubscribed] = useState(false);
@@ -9854,6 +9919,32 @@ function App() {
   // FantaF1 vero (31/10): a ogni cambio della squadra (completa, coi dati dell'account arrivati) una voce nella storia,
   // salvata nell'account e mandata alle mie leghe; leghe e risultati veri si rileggono aprendo FANTA.
   const fantaUserReady = !!userEmail && userLoaded === userEmail;
+  // 1/11: pagamenti veri. Nell'APK i prezzi veri di Google Play e, coi dati dell'account arrivati, l'abbonamento di Google
+  // Play attivo sul telefono: c'è → Premium (src "play", vale anche sul sito); non c'è più (disdetto e scaduto) → si
+  // toglie, ma solo quello preso con Google Play.
+  const [playPrices, setPlayPrices] = useState({});
+  const [payMsg, setPayMsg] = useState(null);   // avviso del ritorno da Stripe, mostrato appena si è dentro l'app
+  useEffect(() => { if (Billing.where() === "play") Billing.prices().then(p => setPlayPrices(p || {}), () => {}); }, []);
+  useEffect(() => {
+    if (!fantaUserReady || Billing.where() !== "play") return;
+    const em = userEmailRef.current;   // se intanto si esce o entra un altro account, la risposta non vale
+    Billing.playActive().then(on => {
+      if (on === null || userEmailRef.current !== em) return;
+      setPremium(p => (on && !p.sub ? { ...p, sub: true, src: "play", at: nowMs() } : !on && p.sub && p.src === "play" ? { ...p, sub: false } : p));
+    });
+  }, [fantaUserReady]);
+  // Ritorno dalla pagina di Stripe (sul sito): ?pagamento=ok&cosa=premium|coffee oppure ?pagamento=annullato. Il Premium
+  // lo scrive il server: l'account si rilegge qualche volta nei secondi dopo.
+  useEffect(() => {
+    let q = null;
+    try { q = new URLSearchParams(window.location.search); } catch (e) { return; }
+    const pay = q.get("pagamento"), cosa = q.get("cosa");
+    if (!pay) return;
+    try { const u = new URL(window.location.href); u.searchParams.delete("pagamento"); u.searchParams.delete("cosa"); window.history.replaceState(null, "", u.pathname + u.search + u.hash); } catch (e) {}
+    setPayMsg(pay !== "ok" ? "Pagamento annullato" : cosa === "coffee" ? "Grazie per il caffè! Ci dai la carica per il prossimo GP" : "Pagamento ricevuto: il Premium si attiva tra pochi secondi");
+    const rs = pay === "ok" && cosa === "premium" ? [4000, 10000, 20000].map(ms => setTimeout(() => Account.retry().catch(() => {}), ms)) : [];
+    return () => { rs.forEach(clearTimeout); };
+  }, []);
   const fantaBonusRef = useRef(0);
   useEffect(() => {
     if (!fantaUserReady || !account) return;
@@ -10551,12 +10642,30 @@ function App() {
     if (feedbackAsk && !feedbackAsk.read) saveAsk({ ...feedbackAsk, read: true });
   };
 
+  // 1/11: abbonamento vero. Nell'APK Google Play: pagato, il Premium si salva subito nell'account (src "play", vale anche sul
+  // sito); sul sito si va alla pagina di Stripe e al ritorno il Premium lo scrive il server (api/stripe-webhook.js).
   const doSubscribe = () => {
     if (guest) { setPremiumOpen(false); needLogin("Per abbonarti a B&T Premium serve un account."); return; }
-    setSubscribing(true);
     if (userDataWait()) { setPremiumOpen(false); return; }
+    if (subscribing) return;
     setSubscribing(true);
-    setTimeout(() => { setSubscribing(false); setSubscribed(true); setPremium(p => ({ sub: true, trial: p.trial ? { ...p.trial, converted: true } : null })); }, 1100);
+    Billing.buy("premium", { email: account && account.email, token: account && account.aid }).then(r => {
+      if (r.ok && r.via === "play") {
+        setSubscribing(false); setSubscribed(true); fx.play("done"); fx.buzz("success");
+        setPremium(p => ({ ...p, sub: true, src: "play", at: nowMs(), trial: p.trial ? { ...p.trial, converted: true } : null }));
+      } else if (!r.ok) { setSubscribing(false); showToast(BUY_MSG[r.reason] || BUY_MSG.failed); }
+      // Stripe: la pagina cambia, il tasto resta in attesa
+    });
+  };
+  const [coffeeBusy, setCoffeeBusy] = useState(false);
+  const buyCoffee = () => {
+    if (coffeeBusy) return;
+    setCoffeeBusy(true);
+    Billing.buy("coffee", { email: account && account.email, token: account && account.aid }).then(r => {
+      if (!(r.ok && r.via === "stripe")) setCoffeeBusy(false);
+      if (r.ok && r.via === "play") { fx.play("done"); fx.buzz("success"); showToast("Grazie per il caffè! Ci dai la carica per il prossimo GP"); }
+      else if (!r.ok && r.reason !== "cancelled") showToast(BUY_MSG[r.reason] || BUY_MSG.failed);
+    });
   };
   const doTrial = () => {
     if (guest) { setPremiumOpen(false); needLogin("Per la prova gratuita di B&T Premium serve un account."); return; }
@@ -10566,15 +10675,26 @@ function App() {
     setTimeout(() => { const now = nowMs(); setPremium(p => ({ ...p, trial: { start: now, end: trialEndFor(races, now) } })); setSubscribing(false); setSubscribed("trial"); }, 900);
   };
   const closePremium = () => { setPremiumOpen(false); setTimeout(() => setSubscribed(false), 300); };
-  const watchAdPro = () => {
+  // Video con premio. "unavailable" (Google non ha annunci da mostrare, per esempio finché AdMob non ha approvato l'app):
+  // si sblocca lo stesso, così nessuno resta bloccato per colpa nostra.
+  const watchReward = done => {
     if (adBusy) return;
     setAdBusy(true); adShowing.current = Infinity;
     Ads.showRewarded().then(r => {
       adShowing.current = performance.now() + 2500; setAdBusy(false);
-      if (r === "ok") { setAdPro(true); closePremium(); fx.play("done"); fx.buzz("success"); showToast("Pro sbloccato finché non chiudi l'app"); }
-      else showToast(r === "skipped" ? "Guarda la pubblicità fino in fondo per sbloccare il Pro" : "Nessuna pubblicità disponibile ora: riprova tra poco");
+      if (r === "ok" || r === "unavailable") { fx.play("done"); fx.buzz("success"); done(r); }
+      else showToast("Guarda il video fino in fondo per sbloccare");
     });
   };
+  const watchAdPro = after => watchReward(r => {
+    setAdPro(true); closePremium(); setProAsk(null);
+    showToast(r === "ok" ? "Funzioni Pro sbloccate finché non chiudi l'app" : "Nessuna pubblicità disponibile ora: funzioni Pro sbloccate lo stesso");
+    if (typeof after === "function") setTimeout(after, 0);
+  });
+  const watchAdNews = id => watchReward(r => {
+    setAdNews(list => { const next = [...list.filter(x => x !== id), id].slice(-200); local.set("bt-ad-news", next); return next; });
+    showToast(r === "ok" ? "Notizia sbloccata" : "Nessuna pubblicità disponibile ora: notizia sbloccata lo stesso");
+  });
 
   // ── Tasto indietro di Android e barra di stato (nell'APK) ──────────────
   // Pagine interne: il tasto indietro fa come la freccia in alto a sinistra.
@@ -10586,6 +10706,7 @@ function App() {
   };
   const closeLogin = () => { setLoginOpen(false); setLoginReason(null); };
   const inApp = authed || guest;
+  useEffect(() => { if (inApp && payMsg) { const t = setTimeout(() => { showToast(payMsg); setPayMsg(null); }, 600); return () => clearTimeout(t); } }, [inApp, payMsg]);
   // 30/10 (Edoardo): mentre una notizia è aperta niente screenshot, registrazioni né "Cerchia e cerca" (FLAG_SECURE col
   // plugin nativo SecureScreen di scripts/prepare_android.py; per condividere la notizia c'è Condividi).
   const secureOn = view === "article";
@@ -10725,14 +10846,14 @@ function App() {
   const appShown = !(account === undefined && !guest) && !((!authed || loginHold) && !guest) && !(loginOpen && (!authed || loginHold));
   const adsPaused = splash || !termsAccepted || !appShown || overlay || premiumOpen || !!selectedDriver || liveTrackOpen || ssOpen || !!lapList || !!telemetry
     || !!infoModal || helmetOpen || themeOpen || !!picker || termsOpen || feedbackOpen;
-  const bannerSlot = !isPremium && view === "tab" && !adsPaused && (tab === "home" || tab === "race") ? tab : null;
+  const bannerSlot = !isPaid && view === "tab" && !adsPaused && !proAsk && (tab === "home" || tab === "race") ? tab : null;
   useEffect(() => { Ads.setBanner(bannerSlot); }, [bannerSlot]);
   // Interstitial tra le notizie: si conta ogni notizia aperta e si mostra tornando alla lista (src/services/ads.js).
   const adView = useRef(view);
   useEffect(() => {
     const was = adView.current;
     adView.current = view;
-    if (isPremium || was === view) return;
+    if (isPaid || was === view) return;
     if (view === "article") Ads.articleOpened();
     else if (was === "article") Ads.articleClosed();
   }, [view]);
@@ -10865,7 +10986,7 @@ function App() {
       if (act === "box" || act === "fast") { if (!saved.includes(card.id)) setSaved(x => (x.includes(card.id) ? x : [card.id, ...x])); if (first) s = psBumpIn(s, "box"); }
       if (act === "fast") { s.deck.fast = card.id; if (first) { s = psBumpIn(s, "fast"); SwipeVotes.vote({ k: "f", id: card.id, aid: myAid, v: 1 }).then(item => setPsVotes(v => [...v, item]), () => {}); } }
       if (act === "radio") { if (first) s = psBumpIn(s, "radio"); shareToChat({ t: "news", id: card.id, ti: card.title, su: card.excerpt || "" }); }
-      fx.play(act === "out" ? "drs" : act === "radio" ? "radio" : "gun"); fx.buzz(act === "out" ? "drs" : "gun");
+      fx.play(act === "radio" ? "radio" : "swoosh"); fx.buzz(act === "out" ? "drs" : "gun");   // 1/11: la carta lanciata è swipe.mp3 di Edoardo
       setPsRes(null);
     } else if (card.kind === "take") {
       const v = act === "out" ? -1 : 1;
@@ -11052,7 +11173,7 @@ function App() {
   };
 
   let body;
-  if (view === "article" && activeArticle) body = <ArticleScreen article={activeArticle} onBack={viewBack.article} isPremium={isPremium} onPremium={() => setPremiumOpen(true)} onTag={filterByTag} saved={saved.includes(activeArticle.id)} onToggleSave={() => toggleSave(activeArticle.id)} onShare={() => setShareId(activeArticle.id)} vote={votes["art-" + activeArticle.id] || null} onVote={castVote} />;
+  if (view === "article" && activeArticle) body = <ArticleScreen article={activeArticle} onBack={viewBack.article} isPremium={isPaid || adNews.includes(activeArticle.id)} onAdUnlock={Ads.canReward() ? () => watchAdNews(activeArticle.id) : null} adBusy={adBusy} onPremium={() => setPremiumOpen(true)} onTag={filterByTag} saved={saved.includes(activeArticle.id)} onToggleSave={() => toggleSave(activeArticle.id)} onShare={() => setShareId(activeArticle.id)} vote={votes["art-" + activeArticle.id] || null} onVote={castVote} />;
   else if (view === "circuit" && circuitId) body = <CircuitScreen circuitId={circuitId} races={races} articles={articles} onBack={viewBack.circuit} onTag={filterByTag} onOpenArticle={openArticle} />;
   else if (view === "adminLock") body = <AdminKeypad onOk={() => { setAdminUnlocked(true); setView("admin"); }} onCancel={viewBack.adminLock} />;
   else if (view === "admin" && adminUnlocked && Account.isAdmin()) body = <AdminScreen takes={takes} onTakes={v => commitShared("takes", () => v).then(ok => { if (ok) showToast("Opinioni salvate"); })} holidayCfg={holidayCfg} holiday={holiday} onHolidays={v => commitShared("holidays", () => v).then(ok => { if (ok) showToast("Temi delle feste salvati"); })} photos={commonsPhotos} setPhotos={adminSet.commonsPhotos} silly={sillyOfficial} onSilly={officialSeat} highlights={highlights} setHighlights={adminSet.highlights} onBack={viewBack.admin} onPublish={publishArticle} articles={articles} setArticles={adminSet.articles} fantaStats={fantaStats} setFantaStats={adminSet.fantaStats} standings={standings} setStandings={adminSet.standings} races={races} setRaces={adminSet.races} extraRaces={racesDoc.extra} setExtraRaces={adminSet.extraRaces} ig={ig} setIg={adminSet.ig} sentNotifs={sentNotifs} onSendNotif={sendNotif} onDeleteNotif={deleteNotif} onToast={showToast} tab={adminTab} setTab={setAdminTab} chats={chats} reports={reports} banned={banned} onDeleteMsg={deleteChatMsg} onSuspend={suspendUser} onUnsuspend={unsuspendUser} onIgnoreReport={ignoreReport} liveProps={liveProps} polls={allPolls} votes={votes} onPollAnswer={setPollAnswer} predictions={predictions} setPredictions={adminSet.predictions} predAnswers={predAnswers} />;
@@ -11065,7 +11186,7 @@ function App() {
     mode={swipe.mode || "taste"} onMode={m => { if (!guest && !userDataWait()) setSwipe(s => ({ ...s, mode: m })); }} rain={psRain} onEgg={psEgg} streak={{ n: (swipe.streak || {}).n || 0 }}
     endInfo={psEndInfo} onSaved={() => { setSavedOnly(true); setView("tab"); goTab("home"); }} onShare={psShare} onDuel={!guest ? sendDuel : null} />;
   else if (view === "chats") body = <ChatsView chats={chats} onOpen={openChat} blocked={blocked} onBack={viewBack.chats} unreadOf={(id, ms) => Chat.unread(id, ms)} />;
-  else if (view === "profilo") body = <ProfiloScreen ig={ig} onOpenIg={() => { setIgFrom("profilo"); setView("instagram"); }} aboutMe={aboutMe} onSaveAboutMe={a => Account.updateAbout(a).catch(e => showToast(e && (e.code === "too-young" || e.code === "not-loaded") ? messageOf(e) : NOT_SAVED))} account={account} onSaveName={n => Account.updateName(n)} isAdmin={Account.isAdmin()} trial={trialActive ? trial : null} trialUsed={!!trial} onBack={viewBack.profilo} onNotifiche={() => setView("notifiche")} onPremium={() => setPremiumOpen(true)} onAdmin={() => guest ? needLogin("Accedi per usare il pannello admin.") : setView(adminUnlocked ? "admin" : "adminLock")} onLogout={logout} isPremium={isPremium} onAbout={() => setInfoModal({ title: "Info su B&T", body: ABOUT_TEXT, credits: true })} onFeedback={() => setFeedbackOpen(true)} onHelp={() => setInfoModal({ title: "Assistenza", body: HELP_TEXT })} favTeam={favTeam} favDriver={favDriver} onPickTeam={() => guest ? needLogin("Per scegliere scuderia e pilota del cuore serve un account.") : setPicker("team")} onPickDriver={() => guest ? needLogin("Per scegliere scuderia e pilota del cuore serve un account.") : setPicker("driver")} guest={guest} onLogin={() => needLogin(null)} onTerms={() => setTermsOpen(true)} blocked={blocked} onUnblock={unblockUser} onDeleteAccount={deleteAccount} savedCount={saved.length} onOpenSaved={openSaved} onTheme={() => setThemeOpen(true)} helmet={helmet} onHelmet={() => setHelmetOpen(true)} trophies={trophies} trophyProg={trophyProg} trophyList={trophyList}
+  else if (view === "profilo") body = <ProfiloScreen onCoffee={Billing.where() ? buyCoffee : null} coffeePrice={playPrices.coffee || null} ig={ig} onOpenIg={() => { setIgFrom("profilo"); setView("instagram"); }} aboutMe={aboutMe} onSaveAboutMe={a => Account.updateAbout(a).catch(e => showToast(e && (e.code === "too-young" || e.code === "not-loaded") ? messageOf(e) : NOT_SAVED))} account={account} onSaveName={n => Account.updateName(n)} isAdmin={Account.isAdmin()} trial={trialActive ? trial : null} trialUsed={!!trial} onBack={viewBack.profilo} onNotifiche={() => setView("notifiche")} onPremium={() => setPremiumOpen(true)} onAdmin={() => guest ? needLogin("Accedi per usare il pannello admin.") : setView(adminUnlocked ? "admin" : "adminLock")} onLogout={logout} isPremium={isPremium} onAbout={() => setInfoModal({ title: "Info su B&T", body: ABOUT_TEXT, credits: true })} onFeedback={() => setFeedbackOpen(true)} onHelp={() => setInfoModal({ title: "Assistenza", body: HELP_TEXT })} favTeam={favTeam} favDriver={favDriver} onPickTeam={() => guest ? needLogin("Per scegliere scuderia e pilota del cuore serve un account.") : setPicker("team")} onPickDriver={() => guest ? needLogin("Per scegliere scuderia e pilota del cuore serve un account.") : setPicker("driver")} guest={guest} onLogin={() => needLogin(null)} onTerms={() => setTermsOpen(true)} blocked={blocked} onUnblock={unblockUser} onDeleteAccount={deleteAccount} savedCount={saved.length} onOpenSaved={openSaved} onTheme={() => setThemeOpen(true)} helmet={helmet} onHelmet={() => setHelmetOpen(true)} trophies={trophies} trophyProg={trophyProg} trophyList={trophyList}
     onAdPrivacy={Ads.privacyRequired() ? () => Ads.openPrivacy().catch(() => showToast("Le preferenze sulla privacy degli annunci non sono disponibili in questo momento.")) : null}
     sounds={sounds} haptics={haptics} onSounds={v => { if (userDataWait()) return; setSounds(v); fx.setSounds(v); if (v) fx.play("tick"); }} onHaptics={v => { if (userDataWait()) return; setHaptics(v); fx.setHaptics(v); if (v) fx.buzz("light"); }}
     holidays={holidaysOn} onHolidays={v => { if (userDataWait()) return; setHolidaysOn(v); local.set("bt-holidays-on", v); fx.play("tick"); }}
@@ -11082,7 +11203,7 @@ function App() {
       </>} ig={ig} highlights={highlights} onOpenIg={() => { setIgFrom("tab"); setView("instagram"); }} articles={articles} tagFilter={tagFilter} onTag={filterByTag} onClearTag={() => setTagFilter(null)} onOpenArticle={openArticle} isPremium={isPremium} onPremium={() => setPremiumOpen(true)} onToast={showToast} onLiveTrack={() => setLiveTrackOpen(true)} onGoFanta={() => goTab("fanta")}  saved={saved} onToggleSave={toggleSave} savedOnly={savedOnly} setSavedOnly={setSavedOnly} onOpenCircuit={openCircuit} homePoll={homePoll} homeVote={votes.home || null} onVote={castVote}
       hidden={hidden} onHide={hideArticle} onUnhideAll={() => { if (!userDataWait()) setHidden([]); }} onSwipeSave={saveFromSwipe}
       onRefresh={() => refreshShared(["news", "highlights", "ig", "homePoll"]).catch(() => {})} />;
-    else if (tab === "race") body = <RaceScreen onStandingsEnd={isPremium ? null : Ads.standingsEnd} favDriver={favDriver} dotdVote={live ? votesNow.dotd[live.raceId] : null} onDotdVote={(k, id) => live && voteDotd(live.raceId, k, id)} ratings={votesNow.ratings} onRate={rateDriver} onOpenChats={() => setView("chats")} onOpenGhost={() => setView("ghost")} races={races} standings={shownStandings} isPremium={isPremium} onPremium={() => setPremiumOpen(true)} onSelectDriver={setSelectedDriver} live={live} liveSt={liveSt} onExpandMap={() => setLiveTrackOpen(true)} onTelemetry={(carId, lapNo, sector) => setTelemetry({ carId, lapNo, sector })} onOpenCircuit={openCircuit} wxGuess={wxGuess} wxResult={wxResult} onGuessWeather={guessWeather} onLapTimes={setLapList} onSecondScreen={() => setSsOpen(true)} lastRace={lastRace} of1={of1} onOf1Refresh={() => of1TickRef.current && of1TickRef.current(true)} of1Sessions={of1Sessions}
+    else if (tab === "race") body = <RaceScreen proOk={isPremium} onProAd={Ads.canReward() ? () => watchAdPro() : null} proBusy={adBusy} onStandingsEnd={isPaid ? null : Ads.standingsEnd} favDriver={favDriver} dotdVote={live ? votesNow.dotd[live.raceId] : null} onDotdVote={(k, id) => live && voteDotd(live.raceId, k, id)} ratings={votesNow.ratings} onRate={rateDriver} onOpenChats={() => setView("chats")} onOpenGhost={() => setView("ghost")} races={races} standings={shownStandings} isPremium={isPremium} onPremium={() => setPremiumOpen(true)} onSelectDriver={setSelectedDriver} live={live} liveSt={liveSt} onExpandMap={() => setLiveTrackOpen(true)} onTelemetry={(carId, lapNo, sector) => proGate("telemetry", () => setTelemetry({ carId, lapNo, sector }))} onOpenCircuit={openCircuit} wxGuess={wxGuess} wxResult={wxResult} onGuessWeather={guessWeather} onLapTimes={id => proGate("laps", () => setLapList(id))} onSecondScreen={() => proGate("ss", () => setSsOpen(true))} lastRace={lastRace} of1={of1} onOf1Refresh={() => of1TickRef.current && of1TickRef.current(true)} of1Sessions={of1Sessions}
       onOf1Pick={key => { of1PickRef.current = key === of1Sessions.latest ? null : key; setOf1Sessions(x => ({ ...x, shown: key })); if (of1TickRef.current) of1TickRef.current(true); }}
       sessionNote={of1Live && of1Live.raw && !of1Live.raw.laps.length && of1Live.raw.session_result.length ? "I tempi giro per giro non sono ancora su OpenF1 (arrivano qualche ora dopo la fine): intanto la classifica con il miglior giro di ognuno." : null} replay={replayCtl} />;
     else if (tab === "garage") body = <GarageScreen openGame={garageGame} onGameOpened={() => setGarageGame(null)} races={races} pitBest={pitBest} onPitResult={t => {
@@ -11147,10 +11268,11 @@ function App() {
           onTrick={() => { setPumpkinStep(null); setTrickOn(true); fx.play("howl"); fx.buzz("error"); setTimeout(() => setTrickOn(false), 2200); }}
           onWear={() => { if (userDataWait()) return; setHelmet({ ...PUMPKIN_HELMET, number: helmet && helmet.number != null ? helmet.number : null }); setPumpkinStep(null); showToast("Casco Zucca messo"); fx.play("clack"); }} />}
         {trickOn && <div data-trick="" role="status" className="hol-trick" style={{ position: "absolute", left: 0, right: 0, top: 0, zIndex: 770, padding: "16px 16px 14px", background: FLAG_UI.yellow.color, color: FLAG_UI.yellow.ink, textAlign: "center", fontFamily: F_HEAD, fontWeight: 900, fontStyle: "italic", fontSize: 17, letterSpacing: .6, boxShadow: "0 8px 24px rgba(0,0,0,.5)" }}>BANDIERA GIALLA… SCHERZETTO!</div>}
-        {premiumOpen && <PremiumModal onClose={closePremium} isPremium={isPremium} plan={plan} setPlan={setPlan} onSubscribe={doSubscribe} subscribing={subscribing} subscribed={subscribed} trialUsed={!!trial} onTrial={doTrial} trial={trial} onAdPro={Ads.canReward() ? watchAdPro : null} adBusy={adBusy} />}
+        {premiumOpen && <PremiumModal playPrice={playPrices.premium || null} onClose={closePremium} isPremium={isPremium} plan={plan} setPlan={setPlan} onSubscribe={doSubscribe} subscribing={subscribing} subscribed={subscribed} trialUsed={!!trial} onTrial={doTrial} trial={trial} onAdPro={Ads.canReward() ? () => watchAdPro() : null} adBusy={adBusy} />}
         {selectedDriver && <DriverDetailModal driver={selectedDriver} lastRace={lastRace} races={races} onClose={() => setSelectedDriver(null)} />}
         {liveTrackOpen && <LiveMapView race={live ? races.find(r => r.id === live.raceId) : weekendRace(races)} live={live} st={liveSt} onClose={() => setLiveTrackOpen(false)} />}
         {ssOpen && <SecondScreen chat={chats.find(c => c.id === "generale")} blocked={blocked} onChatSend={guest ? () => needLogin("Per scrivere in chat serve un account.") : t => sendMessage("generale", t)} race={live ? races.find(r => r.id === live.raceId) : weekendRace(races)} live={live} st={liveSt} standings={shownStandings} layout={ssLayout} setLayout={setSsLayout} prefs={ssPrefs} setPrefs={setSsPrefs} vote={live ? votesNow.dotd[live.raceId] || {} : {}} onVote={(k, id) => live && voteDotd(live.raceId, k, id)} notice={notice} onCloseNotice={nextNotice} onClose={() => setSsOpen(false)} />}
+        {proAsk && <ProGateSheet what={proAsk.what} busy={adBusy} onAd={Ads.canReward() ? () => watchAdPro(proAsk.then) : null} onPremium={() => { setProAsk(null); setPremiumOpen(true); }} onClose={() => setProAsk(null)} />}
         {lapList && live && liveSt && <LapTimesModal live={live} st={liveSt} carId={lapList} onOpenLap={n => setTelemetry({ carId: lapList, lapNo: n, sector: 0 })} onClose={() => setLapList(null)} />}
         {telemetry && live && liveSt && <TelemetryModal live={live} st={liveSt} carId={telemetry.carId} lapNo={telemetry.lapNo} sector={telemetry.sector} onClose={() => setTelemetry(null)} />}
         {infoModal && <InfoModal title={infoModal.title} body={infoModal.body} extra={infoModal.credits ? <CommonsCredits /> : null} onClose={() => setInfoModal(null)} />}
@@ -11160,7 +11282,7 @@ function App() {
           options={TEAMS.map(t => ({ id: t.id, label: t.name, color: t.color, sub: t.tag }))} />}
         {picker === "driver" && <PickerModal title="PILOTA DEL CUORE" selected={favDriver} onPick={v => { if (!userDataWait()) setFavDriver(v); }} onClose={() => setPicker(null)}
           options={DRIVERS.map(d => ({ id: d.id, label: d.full, color: d.color, sub: d.team, driver: d }))} />}
-        <ChatShare.Provider value={chatShareCtx}>{shareArticle && view === "article" && <ShareSheet article={shareArticle} locked={!!shareArticle.premium && !isPremium} handle={ig.handle} onClose={() => setShareId(null)} onToast={showToast} />}</ChatShare.Provider>
+        <ChatShare.Provider value={chatShareCtx}>{shareArticle && view === "article" && <ShareSheet article={shareArticle} locked={!!shareArticle.premium && !(isPaid || adNews.includes(shareArticle.id))} handle={ig.handle} onClose={() => setShareId(null)} onToast={showToast} />}</ChatShare.Provider>
         {linkShare && <ChatRoomPicker onPick={id => { setPendingLink(linkShare); setLinkShare(null); openChat(id); }} onClose={() => setLinkShare(null)} />}
         {termsAccepted && termsOpen && <TermsSheet review onClose={() => setTermsOpen(false)} />}
         {feedbackOpen && <FeedbackModal onClose={() => setFeedbackOpen(false)} onSend={sendFeedback} />}
