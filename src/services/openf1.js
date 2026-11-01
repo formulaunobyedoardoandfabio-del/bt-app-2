@@ -160,7 +160,7 @@ function resample(seg) {
   return Array.from({ length: PER }, (_, i) => SEGMENT[a[Math.min(a.length - 1, Math.floor(i * a.length / PER))]] || "none");
 }
 
-function buildReplay(raw = {}, track = null, { drivers = [], of1 = null, live = false } = {}) {
+function buildReplay(raw = {}, track = null, { drivers = [], of1 = null, live = false, laps = null } = {}) {
   raw = raw || {};
   const session = raw.session || {};
   const type = sessionType(session);
@@ -329,7 +329,8 @@ function buildReplay(raw = {}, track = null, { drivers = [], of1 = null, live = 
   const winnerRes = arr(raw.session_result).find(r => r && r.position === 1);
   let maxLap = 0;
   metaBy.forEach(M => M.forEach(g => { maxLap = Math.max(maxLap, g.lapNo); }));
-  const totalLaps = isRace ? (winnerRes && isNum(winnerRes.number_of_laps) && winnerRes.number_of_laps > 0 ? winnerRes.number_of_laps : maxLap) : 0;
+  // 1/11 notte (Edoardo: "in Messico sono 71 non 50"): in diretta i giri previsti del circuito (laps), non quelli fatti.
+  const totalLaps = isRace ? (winnerRes && isNum(winnerRes.number_of_laps) && winnerRes.number_of_laps > 0 ? winnerRes.number_of_laps : Math.max(maxLap, isNum(laps) && laps > 0 ? laps : 0)) : 0;
   let lastEnd = null;
   metaBy.forEach(M => M.forEach(g => { const e = g.done != null ? g.done : g.start; if (lastEnd == null || e > lastEnd) lastEnd = e; }));
   const lastMsg = rc.length ? rc[rc.length - 1].t : null;
@@ -483,6 +484,16 @@ function buildReplay(raw = {}, track = null, { drivers = [], of1 = null, live = 
       x = clamp(duration - 60, 0, duration);
     },
     state,
+    // 1/11 notte (Edoardo: "pit stop fatti per pilota, toccando quali gomme ha cambiato"): gli stint veri di OpenF1 fino
+    // al giro di adesso: [{ c: mescola, from, to, age }] (to = null se è lo stint in corso).
+    stints(id) {
+      const num = [...info.keys()].find(n => info.get(n).id === id);
+      if (num == null) return [];
+      const now = done(num, x) + 1;
+      return (stintBy.get(num) || []).slice().sort((a, b) => (a.lap_start || 0) - (b.lap_start || 0))
+        .filter(st => (st.lap_start || 1) <= now)
+        .map(st => ({ c: COMPOUND[String(st.compound || "").toUpperCase()] || null, from: st.lap_start || 1, to: st.lap_end && st.lap_end < now ? st.lap_end : null, age: isNum(st.tyre_age_at_start) ? st.tyre_age_at_start : null }));
+    },
     laps(id) {
       const num = [...info.keys()].find(n => info.get(n).id === id);
       return num == null ? [] : (recsBy.get(num) || []).slice(0, done(num, x));

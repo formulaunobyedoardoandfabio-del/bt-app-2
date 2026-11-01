@@ -2530,8 +2530,23 @@ function GridCar({ color }) {
     </svg>
   );
 }
-function RedFlagGrid({ st }) {
+// Ripartenza dopo la bandiera rossa: l'ultimo messaggio della direzione gara con l'ora ("RACE WILL RESUME AT 15:05",
+// ora del circuito). Secondi dalla partenza della sessione, contati dall'ora scritta nel messaggio stesso; o null.
+function resumeAt(st) {
+  const ms = (st.messages || []).slice().reverse();
+  for (const m of ms) {
+    const x = /(RESUM|RESTART)[A-Z ]*?(\d{1,2})[:.](\d{2})/.exec(String(m.text || "").toUpperCase());
+    const c = /^(\d{1,2}):(\d{2}):(\d{2})/.exec(String(m.time || ""));
+    if (!x || !c || !isFinite(m.t)) continue;
+    let d = (+x[2] * 3600 + +x[3] * 60) - (+c[1] * 3600 + +c[2] * 60 + +c[3]);
+    if (d < -43200) d += 86400;
+    return { t: m.t + d, clock: x[2].padStart(2, "0") + ":" + x[3] };
+  }
+  return null;
+}
+function RedFlagGrid({ st, now = null }) {
   const cars = st.cars.filter(c => !c.dnf);
+  const rs = resumeAt(st), left = rs && now != null ? Math.round(rs.t - now) : null;
   const rows = [];
   for (let i = 0; i < cars.length; i += 2) rows.push(cars.slice(i, i + 2));
   const delta = c => (c.grid != null && c.pos != null ? c.grid - c.pos : null);
@@ -2548,7 +2563,11 @@ function RedFlagGrid({ st }) {
   return (
     <div data-red-grid="" style={{ margin: "0 16px 14px", padding: 12, borderRadius: 16, background: "rgba(0,0,0,.35)", border: "1px solid rgba(255,90,95,.45)" }}>
       <div style={{ fontFamily: F_HEAD, fontWeight: 900, fontStyle: "italic", fontSize: 13, letterSpacing: .6, color: "#fff", marginBottom: 4 }}>NUOVA GRIGLIA</div>
-      <div style={{ fontFamily: F_BODY, fontSize: 11, color: C.muted, marginBottom: 10 }}>Ordine alla bandiera rossa · ▲▼ posizioni rispetto alla partenza</div>
+      {rs && <div data-red-resume={rs.clock} style={{ margin: "2px 0 8px", fontFamily: F_HEAD, fontWeight: 900, fontStyle: "italic", fontSize: 18, color: "#fff" }}>
+        {left != null && left > 0 ? `RIPARTENZA TRA ${Math.floor(left / 60)}:${String(left % 60).padStart(2, "0")}` : left != null ? "RIPARTENZA IN CORSO" : "RIPARTENZA ALLE " + rs.clock}
+        <span style={{ display: "block", fontFamily: F_BODY, fontWeight: 400, fontStyle: "normal", fontSize: 11, color: C.muted }}>Ora del circuito {rs.clock} · dalla direzione gara</span>
+      </div>}
+      <div style={{ fontFamily: F_BODY, fontSize: 11, color: C.muted, marginBottom: 10 }}>Ordine alla bandiera rossa · ▲▼ posizioni rispetto alla partenza · con la rossa le auto aspettano in pit lane</div>
       {rows.map((r, i) => (
         <div key={i} style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 8 }}>
           {r[0] && slot(r[0])}
@@ -3540,14 +3559,16 @@ function RadioList({ live, st }) {
   const seen = useRef(null);   // radio già in elenco all'apertura: quelle partono solo al tocco
   if (seen.current === null) seen.current = new Set(rs.map(r => r.url));
   const note = (k, t) => <p data-radio-empty={k} style={{ margin: 0, padding: 16, fontFamily: F_BODY, fontSize: 12.5, color: C.dim, lineHeight: 1.5 }}>{t}</p>;
-  if (!live.sim.radios().length) return note("none", RADIO_NONE);
-  if (!rs.length) return note("later", "Ancora nessuna radio a questo punto della sessione.");
-  const newest = rs[0] && rs[rs.length - 1] && rs[0].t < rs[rs.length - 1].t ? rs.slice(-3) : rs.slice(0, 3);   // le 3 più recenti
-  return <>
+  const autoRow = (
     <div data-radio-auto={auto ? "on" : "off"} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, padding: "10px 14px", borderBottom: `1px solid ${C.divider}` }}>
       <span style={{ fontFamily: F_BODY, fontWeight: 700, fontSize: 12.5, color: C.text }}>Ascolta i team radio <span style={{ fontWeight: 400, color: C.dim }}>(partono da soli appena arrivano)</span></span>
       <Toggle on={auto} onChange={v => { setAuto(v); local.set("bt-radio-auto", v); }} label="Ascolta i team radio" />
-    </div>
+    </div>);
+  if (!live.sim.radios().length) return <>{autoRow}{note("none", RADIO_NONE)}</>;
+  if (!rs.length) return <>{autoRow}{note("later", "Ancora nessuna radio a questo punto della sessione.")}</>;
+  const newest = rs[0] && rs[rs.length - 1] && rs[0].t < rs[rs.length - 1].t ? rs.slice(-3) : rs.slice(0, 3);   // le 3 più recenti
+  return <>
+    {autoRow}
     {rs.map((r, i) => { const d = driverById(r.id), fresh = !seen.current.has(r.url); if (fresh) seen.current.add(r.url); return (
     <div key={r.url} data-radio-row={r.id} style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 14px", borderBottom: i < rs.length - 1 ? `1px solid ${C.divider}` : "none" }}>
       {d && <Headshot driver={d} size={36} />}
@@ -5860,6 +5881,7 @@ function EndSpy({ onEnd }) {
   return <div ref={ref} data-end-spy="" aria-hidden="true" style={{ height: 1 }} />;
 }
 function RaceScreen({ proOk = true, onProAd = null, proBusy = false, onStandingsEnd = null, isPremium, onPremium, onSelectDriver, races, standings, live, liveSt, onExpandMap, onTelemetry, onOpenCircuit, wxGuess, wxResult, onGuessWeather, onLapTimes, onSecondScreen, lastRace, dotdVote, onDotdVote, ratings = {}, onRate, onOpenChats, onOpenGhost, of1 = null, onOf1Refresh, replay = null, favDriver = null, of1Sessions = null, onOf1Pick = null, sessionNote = null }) {
+  const [pitOpen, setPitOpen] = useState(null);   // 1/11 notte: pilota con le gomme dei pit aperte (scheda Gomme)
   const [tab, setTab] = useState(null);
   // Pit Board (G27): si vede quando la tabella dei tempi arriva in cima alla pagina (stato cambiato solo al passaggio).
   const scRef = useRef(null), tblRef = useRef(null);
@@ -5939,7 +5961,7 @@ function RaceScreen({ proOk = true, onProAd = null, proBusy = false, onStandings
       </div>
 
       <div key={curTab} data-race-pane={curTab} data-sub-enter={subDir || undefined} className={subDir ? "sub-enter-" + subDir : undefined}>
-      {curTab === "classifica" && st && st.flag === "red" && isRaceType(st.type) && <RedFlagGrid st={st} />}
+      {curTab === "classifica" && st && st.flag === "red" && isRaceType(st.type) && <RedFlagGrid st={st} now={live && live.sim ? live.sim.t : null} />}
       {curTab === "classifica" && st && <div ref={tblRef}><TimingTable st={st} onTelemetry={onTelemetry} onSelectDriver={onSelectDriver} onLapTimes={onLapTimes} /></div>}
       {curTab === "messaggi" && st && <RaceControlList messages={st.messages} />}
       {curTab === "meteo" && <WeatherPanel race={shown} st={st} live={live} guesses={wxGuess} results={wxResult} onGuess={onGuessWeather} />}
@@ -5963,7 +5985,19 @@ function RaceScreen({ proOk = true, onProAd = null, proBusy = false, onStandings
                 <span style={{ flex: 1, minWidth: 0, fontFamily: F_BODY, fontWeight: 600, fontSize: 13, color: C.text }}>{d ? d.full : c.code}</span>
                 <span title={tyreUi(c.tyre)[1]} style={{ width: 12, height: 12, borderRadius: "50%", border: `2.5px solid ${tyreUi(c.tyre)[0]}`, flexShrink: 0 }} />
                 <span style={{ fontFamily: F_BODY, fontSize: 11.5, color: c.dnf ? "#FF5A5F" : C.muted, whiteSpace: "nowrap" }}>{c.dnf ? "Ritirato" : `${tyreUi(c.tyre)[1]} · ${laps}${c.pit ? " · ai box" : ""}`}</span>
+                {c.stops != null && <button className="press" data-pit-count={c.id} aria-expanded={pitOpen === c.id ? "true" : "false"} onClick={() => setPitOpen(pitOpen === c.id ? null : c.id)}
+                  style={{ flexShrink: 0, padding: "4px 9px", borderRadius: 999, background: pitOpen === c.id ? alpha(C.accentInk, .2) : "rgba(255,255,255,.06)", border: `1px solid ${C.border}`, fontFamily: F_HEAD, fontWeight: 800, fontSize: 10.5, color: C.text, whiteSpace: "nowrap" }}>{c.stops} {c.stops === 1 ? "PIT" : "PIT"}</button>}
               </div>
+              {pitOpen === c.id && live && live.sim && live.sim.stints && (() => { const ss = live.sim.stints(c.id); return (
+                <div data-pit-stints={c.id} style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 6, marginTop: 8, paddingLeft: 29 }}>
+                  {ss.length ? ss.map((x, k) => <React.Fragment key={k}>
+                    {k > 0 && <span aria-hidden="true" style={{ color: C.dim, fontSize: 11 }}>→</span>}
+                    <span style={{ display: "inline-flex", alignItems: "center", gap: 5, padding: "3px 8px", borderRadius: 8, background: "rgba(255,255,255,.05)", fontFamily: F_BODY, fontSize: 11, color: C.text }}>
+                      <span style={{ width: 10, height: 10, borderRadius: "50%", border: `2.5px solid ${tyreUi(x.c)[0]}` }} />{tyreUi(x.c)[1]} · giri {x.from}{x.to ? "-" + x.to : "+"}{x.age ? ` · usata (${x.age})` : ""}
+                    </span>
+                  </React.Fragment>) : <span style={{ fontFamily: F_BODY, fontSize: 11, color: C.dim }}>Gomme non ancora disponibili</span>}
+                </div>
+              ); })()}
               {c.wear != null && <div style={{ height: 5, marginTop: 7, borderRadius: 3, background: "rgba(255,255,255,.08)", overflow: "hidden" }}><div style={{ height: "100%", width: c.wear + "%", borderRadius: 3, background: c.wear > 50 ? C.red : C.green }} /></div>}
             </div>
           ); })}
@@ -10256,7 +10290,7 @@ function App() {
           setOf1Live(null); setOf1({ status: "empty", raceId: realLiveId });
           return;
         }
-        const sim = buildReplay(raw, track, { drivers: LIVE_DRIVERS, of1: OF1, live: liveNow });
+        const sim = buildReplay(raw, track, { drivers: LIVE_DRIVERS, of1: OF1, live: liveNow, laps: race && CIRCUIT_INFO[race.circuitId] ? CIRCUIT_INFO[race.circuitId].laps : null });
         // ongoing (31/10): dati della diretta (api/live) con la sessione non ancora finita: non è "finita" anche se si
         // vede l'ultimo momento arrivato. Solo allora si ricarica ogni 15 s (una sessione passata presa da api/live no).
         const endAt = endOf(target);

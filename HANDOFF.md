@@ -506,3 +506,9 @@ Da fare:
 - Da fare (piano): mappa con location vera, B&T Highlights (pit più
   veloce, rientro dopo il pit), telecronaca scritta, avvisi ogni 20 giri / SC / rossa / penalità, notifiche push.
 - Prove: holidays (Black Friday e sconti), billing (offerta della festa), payments-api (coupon).
+- 1/11 23:00 (Edoardo durante il GP del Messico): giri totali dal circuito (CIRCUIT_INFO.laps, buildReplay laps: in
+  Messico 71, non i giri fatti); bandiera rossa con "RIPARTENZA TRA m:ss" dal messaggio della direzione gara
+  (resumeAt: "... RESUME AT 15:05", ora del circuito); interruttore "Ascolta i team radio" anche prima delle radio;
+  scheda Gomme: tasto "N PIT" per pilota, toccando gli stint veri (sim.stints: mescola, giri, usata). Non provati con
+  la suite (Edoardo ha fermato le prove). Da capire: punti sulla mappa spariti con la rossa (le auto sono in pit lane) e
+  telemetria del giro che ancora non arriva in diretta.
