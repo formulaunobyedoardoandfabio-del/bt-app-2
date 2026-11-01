@@ -512,3 +512,6 @@ Da fare:
   scheda Gomme: tasto "N PIT" per pilota, toccando gli stint veri (sim.stints: mescola, giri, usata). Non provati con
   la suite (Edoardo ha fermato le prove). Da capire: punti sulla mappa spariti con la rossa (le auto sono in pit lane) e
   telemetria del giro che ancora non arriva in diretta.
+- 1/11 23:20: punti dei piloti spariti dalla mappa in diretta (Edoardo) → tolto il ritardo di 20 s (LIVE_LAG_S = 0, come
+  prima delle 22:44); la mappa fluida va fatta con location di OpenF1. Pagina Race: trascina in giù per aggiornare
+  (usePullRefresh con onOf1Refresh, data-race-pull).

@@ -439,7 +439,10 @@ const LIVE_DRIVERS = DRIVERS.map(d => ({ id: d.id, code: driverCode(d), number: 
 // 31/10: con l'abbonamento Sponsor di OpenF1 la diretta passa dalla nostra funzione su Vercel (api/live.js, credenziali
 // solo nelle variabili di Vercel); durante la sessione si ricarica ogni 15 secondi.
 const OF1_LIVE_BASE = "https://bt-app-2.vercel.app/api/live", OF1_LIVE_MS = 15000;
-const LIVE_LAG_S = 20;   // 1/11 sera: in diretta si guarda 20 s dietro gli ultimi dati (più di un aggiornamento da 15 s)
+// 1/11 sera: in diretta si guardava 20 s dietro gli ultimi dati per far scorrere la mappa; 1/11 23:15 (Edoardo: "i punti
+// dei piloti non si vedono"): tolto (0). Con i giri di OpenF1 dietro l'ultimo giro chiuso le auto finivano tutte sulla
+// linea del traguardo, una sopra l'altra. La mappa fluida va fatta con le coordinate vere (location di OpenF1).
+const LIVE_LAG_S = 0;
 const OF1 = createOpenF1({ liveBase: OF1_LIVE_BASE });
 // Classifiche del mondiale in automatico (24/10): Jolpica F1, gratis e senza chiave (src/services/jolpica.js), lette al
 // massimo ogni 30 minuti. È pensato per uso non commerciale: prima dell'uscita pubblica con la pubblicità serve il
@@ -5885,6 +5888,8 @@ function RaceScreen({ proOk = true, onProAd = null, proBusy = false, onStandings
   const [tab, setTab] = useState(null);
   // Pit Board (G27): si vede quando la tabella dei tempi arriva in cima alla pagina (stato cambiato solo al passaggio).
   const scRef = useRef(null), tblRef = useRef(null);
+  // 1/11 23:15 (Edoardo): anche la pagina Race si aggiorna trascinando in giù (dati di OpenF1 riletti subito).
+  const pullRace = usePullRefresh(scRef, () => Promise.resolve(onOf1Refresh ? onOf1Refresh() : null));
   const [board, setBoard] = useState(false);
   const checkBoard = () => { const sc = scRef.current, tb = tblRef.current; const v = !!(sc && tb && tb.getBoundingClientRect().top < sc.getBoundingClientRect().top + 4); setBoard(b => (b === v ? b : v)); };
   const [champ, setChamp] = useState("piloti");
@@ -5902,7 +5907,8 @@ function RaceScreen({ proOk = true, onProAd = null, proBusy = false, onStandings
   const card = { margin: "0 16px 16px", borderRadius: 18, background: C.card, border: `1px solid ${C.border}`, overflow: "hidden" };
   useEffect(checkBoard, [curTab, !!st]);
   return (
-    <div className="scrollcol" ref={scRef} onScroll={checkBoard} data-red-screen={st && st.flag === "red" ? "on" : undefined} style={{ height: "100%", ...(st && st.flag === "red" ? { background: RED_SCREEN_BG } : {}) }}>
+    <div className="scrollcol" ref={scRef} onScroll={checkBoard} {...pullRace.handlers} data-race-pull="" data-red-screen={st && st.flag === "red" ? "on" : undefined} style={{ height: "100%", position: "relative", overscrollBehaviorY: "contain", ...(st && st.flag === "red" ? { background: RED_SCREEN_BG } : {}) }}>
+      {(pullRace.pull > 0 || pullRace.busy) && <PullGauge rev={pullRace.rev} busy={pullRace.busy} pull={pullRace.pull} />}
       {st && st.flag === "red" && <div role="status" data-red-banner="" style={{ position: "sticky", top: 0, zIndex: 6, margin: "0 0 10px", padding: "10px 12px", background: FLAG_UI.red.color, fontFamily: F_HEAD, fontWeight: 900, fontStyle: "italic", fontSize: 15, letterSpacing: .8, color: "#fff", textAlign: "center" }}>BANDIERA ROSSA · SESSIONE SOSPESA</div>}
       {st && curTab === "classifica" && <PitBoard st={st} driverId={favDriver} visible={board} />}
       {st && liveRace && st.finished && isRaceType(st.type) && <FinishPodium st={st} race={liveRace} onSelectDriver={onSelectDriver} />}
@@ -10298,7 +10304,7 @@ function App() {
         // 1/11 sera (Edoardo: "la mappa va a scatti, i punti si teletrasportano"): in diretta si guarda LIVE_LAG_S secondi
         // dietro gli ultimi dati e il tempo scorre da solo (vedi l'intervallo da 250 ms): così fra un aggiornamento e
         // l'altro (15 s) le auto si muovono di continuo invece di stare ferme e poi saltare.
-        if (ongoing && sim.jumpTo && isFinite(sim.duration)) sim.jumpTo(Math.max(0, sim.duration - LIVE_LAG_S));
+        if (LIVE_LAG_S > 0 && ongoing && sim.jumpTo && isFinite(sim.duration)) sim.jumpTo(Math.max(0, sim.duration - LIVE_LAG_S));
         loaded = shownKey = target.session_key; loadedAt = nowMs(); empty = false; liveMode = ongoing;
         setReplay(r => ({ ...r, playing: false }));
         setOf1Live({ raceId: race.id, type: sim.type, sim, track, source: "openf1", raw, sessionKey: target.session_key, ongoing });
