@@ -2533,6 +2533,44 @@ function GridCar({ color }) {
     </svg>
   );
 }
+// 1/11 notte (Edoardo: "il grafico del degrado della gomma nel tempo"): tempi sul giro veri, uno stint per colore
+// (mescola), senza giri di uscita, lenti, con bandiere o neutralizzazioni; per ogni stint la retta dei tempi e quanto
+// si perde a giro (degrado). Solo dati veri: con meno di 3 giri buoni lo stint non ha la retta.
+function TyreDegChart({ laps = [], stints = [] }) {
+  const W = 320, H = 120, P = { l: 48, r: 8, t: 8, b: 18 };
+  const stintOf = n => stints.find(x => n >= x.from && (x.to == null || n <= x.to));
+  const good = laps.filter(l => l && isFinite(l.time) && l.time > 0 && l.lapNo > 1 && l.kind !== "out" && l.kind !== "cool" && (!l.flag || l.flag === "green"));   // kind: out/push, flag: green se pulito
+  if (good.length < 3) return <p data-deg-empty="" style={{ margin: "8px 0 0", fontFamily: F_BODY, fontSize: 11, color: C.dim }}>Il grafico del degrado arriva dopo qualche giro buono.</p>;
+  const med = good.map(l => l.time).sort((a, b) => a - b)[Math.floor(good.length / 2)];
+  const pts = good.filter(l => l.time < med * 1.07).map(l => ({ n: l.lapNo, t: l.time, s: stintOf(l.lapNo) }));
+  const n0 = Math.min(...pts.map(q => q.n)), n1 = Math.max(...pts.map(q => q.n)), t0 = Math.min(...pts.map(q => q.t)), t1 = Math.max(...pts.map(q => q.t));
+  const X = n => P.l + (n1 > n0 ? (n - n0) / (n1 - n0) : .5) * (W - P.l - P.r), Y = t => P.t + (t1 > t0 ? (t1 - t) / (t1 - t0) : .5) * (H - P.t - P.b);
+  const lines = stints.map(st => {
+    const q = pts.filter(x => x.s === st);
+    if (q.length < 3) return null;
+    const mx = q.reduce((a, x) => a + x.n, 0) / q.length, my = q.reduce((a, x) => a + x.t, 0) / q.length;
+    const k = q.reduce((a, x) => a + (x.n - mx) * (x.t - my), 0) / (q.reduce((a, x) => a + (x.n - mx) ** 2, 0) || 1);
+    const a = q[0].n, b = q[q.length - 1].n;
+    return { st, k, x1: X(a), y1: Y(my + k * (a - mx)), x2: X(b), y2: Y(my + k * (b - mx)) };
+  }).filter(Boolean);
+  return (
+    <div data-deg-chart="" style={{ marginTop: 8 }}>
+      <svg viewBox={`0 0 ${W} ${H}`} width="100%" role="img" aria-label="Degrado delle gomme: tempi sul giro per stint" style={{ display: "block" }}>
+        <line x1={P.l} y1={H - P.b} x2={W - P.r} y2={H - P.b} stroke="rgba(255,255,255,.15)" />
+        <text x={P.l - 4} y={P.t + 8} textAnchor="end" fontSize="9" fill={C.dim}>{LiveSim.fmtLap(t1)}</text>
+        <text x={P.l - 4} y={H - P.b} textAnchor="end" fontSize="9" fill={C.dim}>{LiveSim.fmtLap(t0)}</text>
+        <text x={P.l} y={H - 4} fontSize="9" fill={C.dim}>giro {n0}</text>
+        <text x={W - P.r} y={H - 4} textAnchor="end" fontSize="9" fill={C.dim}>giro {n1}</text>
+        {pts.map(q => <circle key={q.n} cx={X(q.n)} cy={Y(q.t)} r="2.6" fill={q.s ? tyreUi(q.s.c)[0] : C.muted} />)}
+        {lines.map((l, i) => <line key={i} x1={l.x1} y1={l.y1} x2={l.x2} y2={l.y2} stroke={tyreUi(l.st.c)[0]} strokeWidth="2" strokeDasharray="5 3" />)}
+      </svg>
+      {lines.length > 0 && <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 4 }}>
+        {lines.map((l, i) => <span key={i} data-deg={l.st.c} style={{ fontFamily: F_BODY, fontSize: 11, color: C.muted }}><b style={{ color: tyreUi(l.st.c)[0] }}>{tyreUi(l.st.c)[1]}</b> {l.k >= 0 ? "+" : "−"}{Math.abs(l.k).toFixed(2)} s/giro{l.k < 0 ? " (più veloce: cala la benzina)" : ""}</span>)}
+      </div>}
+    </div>
+  );
+}
+
 // Ripartenza dopo la bandiera rossa: l'ultimo messaggio della direzione gara con l'ora ("RACE WILL RESUME AT 15:05",
 // ora del circuito). Secondi dalla partenza della sessione, contati dall'ora scritta nel messaggio stesso; o null.
 function resumeAt(st) {
@@ -6002,6 +6040,7 @@ function RaceScreen({ proOk = true, onProAd = null, proBusy = false, onStandings
                       <span style={{ width: 10, height: 10, borderRadius: "50%", border: `2.5px solid ${tyreUi(x.c)[0]}` }} />{tyreUi(x.c)[1]} · giri {x.from}{x.to ? "-" + x.to : "+"}{x.age ? ` · usata (${x.age})` : ""}
                     </span>
                   </React.Fragment>) : <span style={{ fontFamily: F_BODY, fontSize: 11, color: C.dim }}>Gomme non ancora disponibili</span>}
+                  <div style={{ flexBasis: "100%" }}><TyreDegChart laps={live.sim.laps(c.id)} stints={ss} /></div>
                 </div>
               ); })()}
               {c.wear != null && <div style={{ height: 5, marginTop: 7, borderRadius: 3, background: "rgba(255,255,255,.08)", overflow: "hidden" }}><div style={{ height: "100%", width: c.wear + "%", borderRadius: 3, background: c.wear > 50 ? C.red : C.green }} /></div>}

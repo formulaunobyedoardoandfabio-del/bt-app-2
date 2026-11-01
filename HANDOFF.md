@@ -515,3 +515,6 @@ Da fare:
 - 1/11 23:20: punti dei piloti spariti dalla mappa in diretta (Edoardo) → tolto il ritardo di 20 s (LIVE_LAG_S = 0, come
   prima delle 22:44); la mappa fluida va fatta con location di OpenF1. Pagina Race: trascina in giù per aggiornare
   (usePullRefresh con onOf1Refresh, data-race-pull).
+- 1/11 23:40: grafico del degrado delle gomme (TyreDegChart, data-deg-chart) aprendo "N PIT" nella scheda Gomme: tempi
+  veri per stint (senza giri di uscita, bandiere, neutralizzazioni e oltre il 107% della mediana), retta e s/giro.
+  Verificato con la gara vera di Baku a metà gara: grafico visibile; 20 punti distinti sulla mappa.
