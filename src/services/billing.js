@@ -17,11 +17,11 @@ const API = "https://bt-app-2.vercel.app/api/";
 const PURCHASED = ["PURCHASED", "1", 1];
 
 // plugin: () => NativePurchases (o null); native: () => true nell'APK (lì mai Stripe, anche senza plugin);
-// go: url => apre la pagina di Stripe (sul sito: la stessa scheda).
-function createBilling({ plugin = () => null, native = () => false, fetchImpl = (...a) => fetch(...a), api = API, go = url => { window.location.assign(url); } } = {}) {
+// go: url => apre la pagina di Stripe (sul sito: la stessa scheda); web: false = Stripe sul sito spento.
+function createBilling({ plugin = () => null, native = () => false, web = true, fetchImpl = (...a) => fetch(...a), api = API, go = url => { window.location.assign(url); } } = {}) {
   const P = () => { try { return plugin() || null; } catch (e) { return null; } };
   const isNative = () => { try { return !!native(); } catch (e) { return false; } };
-  const where = () => (P() ? "play" : isNative() ? null : "stripe");
+  const where = () => (P() ? "play" : isNative() || !web ? null : "stripe");
   async function supported() {
     const A = P();
     if (!A) return false;
@@ -67,6 +67,7 @@ function createBilling({ plugin = () => null, native = () => false, fetchImpl = 
       }
     }
     if (isNative()) return { ok: false, reason: "unsupported" };   // APK senza Google Play: mai Stripe nell'app
+    if (!web) return { ok: false, reason: "config" };
     try {
       const r = await fetchImpl(api + "stripe-checkout", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ kind, email: who.email || null }) });
       let j = null;

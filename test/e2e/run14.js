@@ -419,7 +419,7 @@ const tests = {
     await tapSel(p, '[aria-label="Indietro"]'); await w(p, 300);
     const chip = await p.evaluate(() => { const e = document.querySelector('[data-premium-chip]'); return e ? e.innerText.replace(/\s+/g, ' ') : ''; });
     await ctx.close();
-    assert(/PROVA GRATIS PER UN GP/.test(t0) && /poi/i.test(t0), 'nel Premium manca la prova gratuita per un GP');
+    assert(/PROVA GRATIS PER UN GP/.test(t0) && /fino alla fine del prossimo GP/.test(t0), 'nel Premium manca la prova gratuita per un GP');   // 1/11 sera: pagamenti spenti
     assert(/Prova gratuita attiva/.test(t1) && /prossimo GP/.test(t1), 'dopo la prova non dice che è attiva per il prossimo GP');
     assert(/Prova gratuita/.test(prof) && /\d+ giorni rimasti/.test(prof), 'nel profilo non si vedono i giorni rimasti');
     assert(/PROVA/.test(chip) && /\d/.test(chip), 'in alto non si vede la prova con i giorni: ' + chip);

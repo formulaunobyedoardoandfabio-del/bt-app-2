@@ -100,9 +100,13 @@ const PRIVACY_URL = SITE_URL + "/privacy.html";
 const CONTACT_EMAIL = "bt.formula1@gmail.com";
 const APP_NAME = "Sector 4";   // nome dell'app (dal 10/10/2026); B&T resta il nome della squadra di Edoardo e Fabio
 const F1_DISCLAIMER = APP_NAME + " è un'app non ufficiale e non è associata in alcun modo alle società di Formula 1. F1, FORMULA ONE, FORMULA 1, FIA FORMULA ONE WORLD CHAMPIONSHIP, GRAND PRIX e i marchi correlati sono marchi di Formula One Licensing B.V.";
-// Pagamenti veri (1/11, Edoardo): nell'APK con Google Play, sul sito con Stripe (src/services/billing.js). La §4 dei
-// Termini spiega prezzo, rinnovo e disdetta.
-const PAYMENTS_ENABLED = true;
+// Pagamenti (1/11 sera, Edoardo: "io non voglio un account commerciale in ogni caso"): spenti. Niente Google Play
+// Billing nell'app (serve l'account commerciante di Google) e Stripe sul sito spento (WEB_PAY). Il codice resta pronto in
+// src/services/billing.js e api/stripe-*.js: per riaccenderli PAYMENTS_ENABLED = true, WEB_PAY = true e, nell'APK, il
+// plugin @capgo/native-purchases in package.json. Finché sono spenti la §4 dei Termini dice che il Premium non è
+// ancora disponibile; restano la prova gratuita di un GP e i video con premio.
+const PAYMENTS_ENABLED = false;
+const WEB_PAY = false;
 // Prova del Premium dell'anteprima 2.0: si attiva con un tocco, senza pagare. La toglie il Task 11 (D44, Premium come oggi).
 const PREMIUM_DEMO = true;
 // Prova gratuita per un GP (18/10, Edoardo), una sola volta per account: fino alla fine del prossimo GP (4 ore dopo la
@@ -467,7 +471,7 @@ const adBannerBus = { h: 0, subs: new Set(), set(h) { if (h === this.h) return; 
 // 1/11 (Edoardo: "rendi vere le pubblicità"): annunci veri per tutti; agli admin restano quelli di prova di Google, così
 // i loro tocchi non contano come clic non validi (AdMob chiude gli account che toccano i propri annunci).
 let adsTestForAdmin = false;
-const Billing = createBilling({ plugin: () => (isNativeApp() ? capPlugin("NativePurchases") : null), native: isNativeApp });
+const Billing = createBilling({ plugin: () => (PAYMENTS_ENABLED && isNativeApp() ? capPlugin("NativePurchases") : null), native: isNativeApp, web: PAYMENTS_ENABLED && WEB_PAY });
 const Ads = createAds({ plugin: adMobPlugin, test: () => ADMOB_TEST || adsTestForAdmin, now: nowMs, onBanner: h => adBannerBus.set(h) });
 // Una finestra aperta sopra l'app (role="dialog", aria-modal o un livello a tutto schermo): il banner nativo, disegnato
 // da Android sopra la pagina, coprirebbe i suoi tasti. Solo nell'APK (on).
@@ -8527,7 +8531,7 @@ function AdminScreen({ takes = [], onTakes = null, photos, setPhotos, silly = {}
   );
 }
 
-function PremiumModal({ onClose, isPremium, plan, setPlan, onSubscribe, subscribing, subscribed, trialUsed, onTrial, trial, onAdPro = null, adBusy = false, playPrice = null }) {
+function PremiumModal({ onClose, isPremium, plan, setPlan, onSubscribe, subscribing, subscribed, trialUsed, onTrial, trial, onAdPro = null, adBusy = false, playPrice = null, canBuy = false }) {
   const offer = premiumOffer({ trialUsed, isPremium });
   const price = (playPrice || SEASON_PRICE + " €") + " a stagione";   // 1/11: nell'APK il prezzo vero di Google Play
   const heroGradient = `linear-gradient(135deg, ${shade(C.accent, .11)}, ${alpha(C.accentInk, .27)}, ${shade(C.accent, .11)})`;
@@ -8572,12 +8576,12 @@ function PremiumModal({ onClose, isPremium, plan, setPlan, onSubscribe, subscrib
                 </React.Fragment>
               ))}
 
-              <div data-season-plan="" style={{ margin: "18px 0 0", padding: "14px 16px", borderRadius: 14, background: "rgba(231,179,76,.12)", border: `1.5px solid ${C.gold}`, textAlign: "center" }}>
+              {canBuy && <div data-season-plan="" style={{ margin: "18px 0 0", padding: "14px 16px", borderRadius: 14, background: "rgba(231,179,76,.12)", border: `1.5px solid ${C.gold}`, textAlign: "center" }}>
                 <span style={{ display: "block", fontFamily: F_BODY, fontWeight: 700, fontSize: 10, color: C.muted, letterSpacing: .6, marginBottom: 6 }}>STAGIONE</span>
                 <span style={{ display: "block", fontFamily: F_HEAD, fontWeight: 900, fontSize: 22, color: C.text }}>{SEASON_PRICE} €</span>
                 <span style={{ display: "block", fontFamily: F_BODY, fontSize: 11, color: C.dim, marginTop: 2 }}>per tutta la stagione</span>
                 <span style={{ display: "block", fontFamily: F_BODY, fontSize: 11.5, color: C.gold, marginTop: 8, lineHeight: 1.4 }}>Ogni stagione dopo costa 1 € in meno, fino a 1 €</span>
-              </div>
+              </div>}
 
               {!PREMIUM_DEMO ? (
                 <>
@@ -8589,8 +8593,13 @@ function PremiumModal({ onClose, isPremium, plan, setPlan, onSubscribe, subscrib
                 <button className="press" disabled={subscribing} onClick={onTrial} style={{ display: "block", width: "100%", marginTop: 16, padding: "16px 0", borderRadius: 14, background: subscribing ? "#555" : C.accent, boxShadow: subscribing ? "none" : `0 10px 22px -10px ${C.accent}`, fontFamily: F_HEAD, fontWeight: 900, fontStyle: "italic", fontSize: 14.5, color: "#fff", letterSpacing: .2, textAlign: "center" }}>
                   {subscribing ? <ShiftLight /> : "PROVA GRATIS PER UN GP"}
                 </button>
-                <p style={{ textAlign: "center", fontFamily: F_BODY, fontSize: 11.5, color: C.muted, margin: "10px 0 0" }}>Poi {price}: si rinnova da solo a ogni stagione finché non disdici. Disdici quando vuoi, anche durante la prova.</p>
-                <button className="press" disabled={subscribing} onClick={onSubscribe} style={{ display: "block", margin: "8px auto 0", padding: "8px 12px", fontFamily: F_BODY, fontWeight: 700, fontSize: 12, color: C.gold }}>Oppure abbonati subito: {price}</button>
+                {canBuy ? <>
+                  <p style={{ textAlign: "center", fontFamily: F_BODY, fontSize: 11.5, color: C.muted, margin: "10px 0 0" }}>Poi {price}: si rinnova da solo a ogni stagione finché non disdici. Disdici quando vuoi, anche durante la prova.</p>
+                  <button className="press" disabled={subscribing} onClick={onSubscribe} style={{ display: "block", margin: "8px auto 0", padding: "8px 12px", fontFamily: F_BODY, fontWeight: 700, fontSize: 12, color: C.gold }}>Oppure abbonati subito: {price}</button>
+                </> : <p data-no-pay="" style={{ textAlign: "center", fontFamily: F_BODY, fontSize: 11.5, color: C.muted, margin: "10px 0 0" }}>Gratis fino alla fine del prossimo GP, una volta per account. Nessun pagamento.</p>}
+              </>) : !canBuy ? (<>
+                <p data-no-pay="" style={{ textAlign: "center", fontFamily: F_BODY, fontSize: 12, color: C.muted, margin: "16px 0 0", lineHeight: 1.5 }}>Gli abbonamenti per ora non ci sono.{onAdPro ? " Le funzioni Pro si sbloccano con un video." : ""}</p>
+                {trialUsed && <p style={{ textAlign: "center", fontFamily: F_BODY, fontSize: 11.5, color: C.muted, margin: "8px 0 0" }}>Hai già usato la prova gratuita di un GP.</p>}
               </>) : (<>
                 <button className="press" disabled={subscribing} onClick={onSubscribe} style={{ display: "block", width: "100%", marginTop: 16, padding: "16px 0", borderRadius: 14, background: subscribing ? "#555" : C.accent, boxShadow: subscribing ? "none" : `0 10px 22px -10px ${C.accent}`, fontFamily: F_HEAD, fontWeight: 900, fontStyle: "italic", fontSize: 14.5, color: "#fff", letterSpacing: .2, textAlign: "center" }}>
                   {subscribing ? <ShiftLight /> : `ABBONATI · ${price}`}
@@ -8606,9 +8615,9 @@ function PremiumModal({ onClose, isPremium, plan, setPlan, onSubscribe, subscrib
                   <p style={{ textAlign: "center", fontFamily: F_BODY, fontSize: 11, color: C.muted, margin: "8px 0 0", lineHeight: 1.45 }}>{PRO_LINE}: sbloccati finché non chiudi l'app o spegni lo schermo. Pubblicità e notizie Premium restano.</p>
                 </div>
               )}
-              <p style={{ textAlign: "center", fontFamily: F_BODY, fontSize: 10.5, color: C.dim, lineHeight: 1.7, margin: "14px 0 0" }}>
-                Rinnovo automatico a ogni stagione al prezzo di quella stagione ({SEASON_PRICE} €, poi 1 € in meno ogni anno, fino a 1 €) finché non disdici. Si disdice quando vuoi da Google Play → Abbonamenti.<br /><span style={{ color: C.accentInk }}>Anteprima demo: nessun pagamento reale</span>
-              </p>
+              {canBuy && <p style={{ textAlign: "center", fontFamily: F_BODY, fontSize: 10.5, color: C.dim, lineHeight: 1.7, margin: "14px 0 0" }}>
+                Rinnovo automatico a ogni stagione al prezzo di quella stagione ({SEASON_PRICE} €, poi 1 € in meno ogni anno, fino a 1 €) finché non disdici. Si disdice quando vuoi da Google Play → Abbonamenti.
+              </p>}
               </>}
             </>
           )}
@@ -11273,7 +11282,7 @@ function App() {
           onTrick={() => { setPumpkinStep(null); setTrickOn(true); fx.play("howl"); fx.buzz("error"); setTimeout(() => setTrickOn(false), 2200); }}
           onWear={() => { if (userDataWait()) return; setHelmet({ ...PUMPKIN_HELMET, number: helmet && helmet.number != null ? helmet.number : null }); setPumpkinStep(null); showToast("Casco Zucca messo"); fx.play("clack"); }} />}
         {trickOn && <div data-trick="" role="status" className="hol-trick" style={{ position: "absolute", left: 0, right: 0, top: 0, zIndex: 770, padding: "16px 16px 14px", background: FLAG_UI.yellow.color, color: FLAG_UI.yellow.ink, textAlign: "center", fontFamily: F_HEAD, fontWeight: 900, fontStyle: "italic", fontSize: 17, letterSpacing: .6, boxShadow: "0 8px 24px rgba(0,0,0,.5)" }}>BANDIERA GIALLA… SCHERZETTO!</div>}
-        {premiumOpen && <PremiumModal playPrice={playPrices.premium || null} onClose={closePremium} isPremium={isPremium} plan={plan} setPlan={setPlan} onSubscribe={doSubscribe} subscribing={subscribing} subscribed={subscribed} trialUsed={!!trial} onTrial={doTrial} trial={trial} onAdPro={Ads.canReward() ? () => watchAdPro() : null} adBusy={adBusy} />}
+        {premiumOpen && <PremiumModal canBuy={!!Billing.where()} playPrice={playPrices.premium || null} onClose={closePremium} isPremium={isPremium} plan={plan} setPlan={setPlan} onSubscribe={doSubscribe} subscribing={subscribing} subscribed={subscribed} trialUsed={!!trial} onTrial={doTrial} trial={trial} onAdPro={Ads.canReward() ? () => watchAdPro() : null} adBusy={adBusy} />}
         {selectedDriver && <DriverDetailModal driver={selectedDriver} lastRace={lastRace} races={races} onClose={() => setSelectedDriver(null)} />}
         {liveTrackOpen && <LiveMapView race={live ? races.find(r => r.id === live.raceId) : weekendRace(races)} live={live} st={liveSt} onClose={() => setLiveTrackOpen(false)} />}
         {ssOpen && <SecondScreen chat={chats.find(c => c.id === "generale")} blocked={blocked} onChatSend={guest ? () => needLogin("Per scrivere in chat serve un account.") : t => sendMessage("generale", t)} race={live ? races.find(r => r.id === live.raceId) : weekendRace(races)} live={live} st={liveSt} standings={shownStandings} layout={ssLayout} setLayout={setSsLayout} prefs={ssPrefs} setPrefs={setSsPrefs} vote={live ? votesNow.dotd[live.raceId] || {} : {}} onVote={(k, id) => live && voteDotd(live.raceId, k, id)} notice={notice} onCloseNotice={nextNotice} onClose={() => setSsOpen(false)} />}

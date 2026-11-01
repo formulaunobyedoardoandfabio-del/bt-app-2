@@ -96,6 +96,14 @@ t('sito: Stripe con la nostra funzione, poi la pagina di pagamento; errori spieg
   assert.strictEqual(PRODUCTS.premium.id, 'premium_stagione');
 });
 
+t('Stripe sul sito spento (web: false): niente funzione, niente pagina di Stripe', async () => {
+  const api = fakeApi(), opened = [];
+  const B = createBilling({ plugin: () => null, native: () => false, web: false, fetchImpl: api.fetchImpl, go: u => opened.push(u) });
+  assert.strictEqual(B.where(), null);
+  assert.strictEqual((await B.buy('coffee')).reason, 'config');
+  assert.strictEqual(api.calls.length + opened.length, 0);
+});
+
 (async () => {
   const filter = process.argv[2] ? new RegExp(process.argv[2], 'i') : null;
   for (const [name, fn] of tests) {

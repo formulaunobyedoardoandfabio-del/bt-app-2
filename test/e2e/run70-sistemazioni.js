@@ -81,8 +81,9 @@ run({
     assert(!errs.length, errs.join(' | '));
   },
 
-  // 1/11: l'abbonamento è vero: nell'APK con Google Play (finto, l'acquisto resta sul "telefono"), non più quello di prova.
-  async 'Premium: l\'abbonamento di Google Play resta dopo aver chiuso e riaperto l\'app'(b) {
+  // 1/11 sera: pagamenti spenti (nessun account commerciante). Il Premium scritto dal server (per esempio dato a mano o
+  // pagato fuori dall'app) resta dopo aver chiuso e riaperto; nel foglio niente "Abbonati" e Google Play mai chiamato.
+  async 'Premium: quello del server resta dopo aver chiuso e riaperto l\'app; senza pagamenti niente "Abbonati"'(b) {
     const PLAY = `(() => {
       const owned = () => localStorage.getItem('fake-play-owned') === '1';
       window.Capacitor = { isNativePlatform: () => true, getPlatform: () => 'android', Plugins: {
@@ -95,10 +96,13 @@ run({
           getPurchases: () => Promise.resolve({ purchases: owned() ? [{ productIdentifier: 'premium_stagione', purchaseState: 'PURCHASED' }] : [] }),
         } } };
     })();`;
-    const { ctx, p, errs } = await open(b, { init: PLAY }); await login(p);
-    await tapSel(p, '[data-premium-chip="off"]'); await w(p, 400);
-    await tapText(p, 'Oppure abbonati subito'); await w(p, 1600);
-    await tapText(p, 'INIZIA'); await w(p, 1500);
+    const free = await open(b, { init: PLAY }); await login(free.p);
+    await tapSel(free.p, '[data-premium-chip="off"]'); await w(free.p, 400);
+    const sheet = await text(free.p), bought = await free.p.evaluate(() => localStorage.getItem('fake-play-owned'));
+    await free.ctx.close();
+    assert(!/abbonati subito/i.test(sheet) && !/ABBONATI/.test(sheet) && /PROVA GRATIS PER UN GP/.test(sheet) && bought === null, 'senza pagamenti: ' + sheet.slice(0, 300));
+    const PAID = { 'users/a@b.it': { name: 'Tester', email: 'a@b.it', about: { birth: null, follow: 2, fan: 'vivo' }, isPremium: true, plan: 'stagione', premiumSource: 'stripe', stripeSubscriptionId: 'sub_1' } };
+    const { ctx, p, errs } = await open(b, { init: PLAY, seed: { addDocs: PAID } }); await login(p); await w(p, 600);
     const before = await chip(p);
     await reopen(p);
     const after = await chip(p);
@@ -120,7 +124,7 @@ run({
     const sheet = await text(p);
     await ctx.close();
     assert(after === 'off:Premium', 'dopo il GP la prova è ancora attiva: ' + after);
-    assert(!/PROVA GRATIS PER UN GP/.test(sheet) && /ABBONATI/.test(sheet), 'la prova si può rifare: ' + sheet.slice(0, 300));
+    assert(!/PROVA GRATIS PER UN GP/.test(sheet) && /Gli abbonamenti per ora non ci sono/.test(sheet), 'la prova si può rifare: ' + sheet.slice(0, 300));   // 1/11 sera: pagamenti spenti
     assert(!errs.length, errs.join(' | '));
   },
 

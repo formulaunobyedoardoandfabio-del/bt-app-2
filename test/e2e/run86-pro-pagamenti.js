@@ -127,55 +127,41 @@ run({
     assert(!errs.length, errs.join(' | '));
   },
 
-  async 'APK: Premium con Google Play (prezzo vero, piano "stagione"), salvato nell\'account; disdetto e scaduto si toglie'(b) {
-    const { ctx, p, errs } = await open(b, { init: PHONE({ owned: false }), seed: { addDocs: TRIAL_USED } }); await login(p); await w(p, 800);
+  // 1/11 sera (Edoardo: "io non voglio un account commerciale in ogni caso"): pagamenti spenti. Prima qui si provavano
+  // l'abbonamento e il caffè con Google Play e il caffè con Stripe sul sito (il codice resta in src/services/billing.js,
+  // provato da test/unit/billing.test.js).
+  async 'pagamenti spenti, APK: niente "Abbonati" né prezzi, Google Play mai chiamato; il caffè è "in arrivo"'(b) {
+    const { ctx, p, errs } = await open(b, { init: PHONE(), seed: { addDocs: TRIAL_USED } }); await login(p); await w(p, 800);
     await tapSel(p, '[data-premium-chip="off"]'); await w(p, 500);
     const sheet = await text(p);
-    await tapText(p, 'ABBONATI'); await w(p, 1500);
+    await tapSel(p, '[aria-label="Chiudi"]').catch(() => {}); await w(p, 300);
+    await tapSel(p, '[aria-label="Profilo"]'); await w(p, 500);
+    const prof = await text(p);
+    await tapText(p, 'Offrici un caffè').catch(() => {}); await w(p, 600);
     const buys = await p.evaluate(() => window.__buys.slice());
-    await w(p, 1200);
-    const user = await doc(p, 'users/a@b.it');
     await ctx.close();
-    assert(/5,99 € a stagione/.test(sheet), 'prezzo di Google Play: ' + sheet.slice(0, 500));
-    assert(buys.length === 1 && buys[0].productIdentifier === 'premium_stagione' && buys[0].planIdentifier === 'stagione' && buys[0].productType === 'subs', 'acquisto: ' + JSON.stringify(buys));
-    assert(!JSON.stringify(buys).includes('a@b.it'), 'mai l\'email a Google');
-    const pr = user && user.app2 && user.app2.premium;
-    assert(pr && pr.sub === true && pr.src === 'play', 'Premium nell\'account: ' + JSON.stringify(pr));
-    // stesso account, Google Play non lo vede più (disdetto e scaduto): all'apertura si toglie
-    const again = await open(b, { init: PHONE({ owned: false }), seed: { addDocs: { 'users/a@b.it': { ...TRIAL_USED['users/a@b.it'], app2: { premium: { sub: true, src: 'play', trial: { start: 1, end: 2 } } } } } } });
-    await login(again.p); await w(again.p, 2000);
-    const u2 = await doc(again.p, 'users/a@b.it'), chip = await again.p.evaluate(() => document.querySelector('[data-premium-chip]').getAttribute('data-premium-chip'));
-    await again.ctx.close();
-    assert(u2.app2.premium.sub === false && chip === 'off', 'abbonamento finito: ' + JSON.stringify(u2.app2.premium) + ' ' + chip);
-    assert(!errs.length && !again.errs.length, errs.concat(again.errs).join(' | '));
+    assert(!/ABBONATI/.test(sheet) && !/abbonati subito/i.test(sheet) && !/6 €|5,99/.test(sheet), 'nel foglio Premium niente acquisti: ' + sheet.slice(0, 400));
+    assert(/Gli abbonamenti per ora non ci sono/.test(sheet) && /GUARDA UN VIDEO/.test(sheet), 'il foglio dice che c\'è il video: ' + sheet.slice(0, 400));
+    assert(/Offrici un caffè/.test(prof) && /IN ARRIVO/.test(prof), 'caffè "in arrivo" nel Profilo');
+    assert(buys.length === 0, 'Google Play chiamato: ' + JSON.stringify(buys));
+    assert(!errs.length, errs.join(' | '));
   },
 
-  async 'caffè: nell\'APK con Google Play (da consumare); sul sito con Stripe, e il ritorno dice grazie'(b) {
-    const apk = await open(b, { init: PHONE() }); await login(apk.p); await w(apk.p, 600);
-    await tapSel(apk.p, '[aria-label="Profilo"]'); await w(apk.p, 500);
-    const prof = await text(apk.p);
-    await tapText(apk.p, 'Offrici un caffè'); await w(apk.p, 900);
-    const buys = await apk.p.evaluate(() => window.__buys.slice()), thanks = await text(apk.p);
-    await apk.ctx.close();
+  async 'pagamenti spenti, sito: nessuna chiamata a Stripe; il ritorno da Stripe (se mai si riaccende) dice grazie'(b) {
     const asked = [];
     const web = await open(b, { routes: {
-      'https://bt-app-2.vercel.app/api/stripe-checkout': r => { asked.push(JSON.parse(r.request().postData() || '{}')); return r.fulfill({ status: 200, contentType: 'application/json', headers: { 'access-control-allow-origin': '*' }, body: JSON.stringify({ ok: true, url: 'https://checkout.stripe.com/c/pay/cs_test_prova' }) }); },
-      'https://checkout.stripe.com/**': r => r.fulfill({ status: 200, contentType: 'text/html', body: '<p>Stripe finto</p>' }),
+      'https://bt-app-2.vercel.app/api/stripe-checkout': r => { asked.push(1); return r.fulfill({ status: 200, contentType: 'application/json', body: '{"ok":true,"url":"https://checkout.stripe.com/x"}' }); },
     } });
     await login(web.p);
     await tapSel(web.p, '[aria-label="Profilo"]'); await w(web.p, 500);
-    await tapText(web.p, 'Offrici un caffè'); await w(web.p, 1500);
+    await tapText(web.p, 'Offrici un caffè').catch(() => {}); await w(web.p, 900);
     const url = web.p.url();
     await web.ctx.close();
-    const back = await open(b, { query: '?pagamento=ok&cosa=coffee' }); await login(back.p); await w(back.p, 300);   // l'avviso arriva dentro l'app
+    const back = await open(b, { query: '?pagamento=ok&cosa=coffee' }); await login(back.p); await w(back.p, 300);
     const msg = await text(back.p);
     await back.ctx.close();
-    assert(/1,99 €/.test(prof), 'prezzo del caffè di Google Play nel Profilo');
-    assert(buys.length === 1 && buys[0].productIdentifier === 'caffe' && buys[0].isConsumable === true, 'caffè con Google Play: ' + JSON.stringify(buys));
-    assert(/Grazie per il caffè/.test(thanks), 'manca il grazie');
-    assert(asked.length === 1 && asked[0].kind === 'coffee', 'sul sito la funzione di Stripe: ' + JSON.stringify(asked));
-    assert(url.startsWith('https://checkout.stripe.com/'), 'sul sito si va alla pagina di Stripe: ' + url);
+    assert(asked.length === 0 && !url.includes('stripe'), 'Stripe chiamato col sito spento: ' + asked.length + ' ' + url);
     assert(/Grazie per il caffè/.test(msg), 'tornando da Stripe: ' + msg.slice(0, 200));
-    assert(!apk.errs.length && !back.errs.length, apk.errs.concat(back.errs).join(' | '));
+    assert(!web.errs.length && !back.errs.length, web.errs.concat(back.errs).join(' | '));
   },
 });
