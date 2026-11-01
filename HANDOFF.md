@@ -1,5 +1,5 @@
 # Handoff
-Updated: 2026-11-01 by Claude (claude-opus-5-5)   Branch: tappa-3   (vedi "1/11 sera" in fondo per l'ultimo lavoro)
+Updated: 2026-11-01 by Claude (claude-opus-5-5)   Branch: tappa-3   (vedi "1/11 pomeriggio" in fondo per l'ultimo lavoro)
 
 ## Goal
 Tappa 3 della 2.0: "fai prima tutti gli easter egg e le nuove grafiche, poi vedo l'apk di prova e poi ci sono altre
@@ -476,14 +476,7 @@ Da fare:
 - Prove: test/unit/billing.test.js, test/unit/payments-api.test.js, fx (12), ads (10), compat (paidPremium);
   e2e run86-pro-pagamenti (7); aggiornate run14, run40 (seed pro), run69, run76; seed.pro nel Firebase finto.
 
-## 1/11 sera: pagamenti spenti (Edoardo: "io non voglio un account commerciale in ogni caso")
-- Google Play Billing vuole l'account commerciante di Google: Edoardo non lo vuole. PAYMENTS_ENABLED = false, WEB_PAY =
-  false (Stripe sul sito spento), tolto @capgo/native-purchases da package.json (niente fatturazione nell'APK).
-- Foglio Premium senza pagamenti (canBuy false): niente "Abbonati", prezzi e rinnovo; restano la prova gratuita di un GP
-  ("Nessun pagamento") e il video per le funzioni Pro; a prova usata "Gli abbonamenti per ora non ci sono". "Offrici un
-  caffè" torna "IN ARRIVO". §4 dei Termini: "non è ancora disponibile".
-- Il codice dei pagamenti resta pronto (src/services/billing.js con l'opzione web, api/stripe-checkout.js,
-  api/stripe-webhook.js, prove unitarie): per riaccenderli PAYMENTS_ENABLED, WEB_PAY e il plugin in package.json.
-- Restano: pubblicità vere (per guadagnare AdMob chiede comunque un profilo pagamenti, anche privato), funzioni Pro col
-  video, notizie Premium col video, suoni nuovi.
-- Prove aggiornate: run8, run14, run33, run69, run70, run86 (pagamenti spenti), billing.test (web: false).
+## 1/11 sera, dopo: pagamenti di nuovo accesi
+- Edoardo: "no, perché li hai tolti, ci sono tante altre possibilità, fai tornare tutto come prima". Annullato il commit
+  9126781 (pagamenti spenti): tornano Google Play Billing nell'app (@capgo/native-purchases), Stripe sul sito, i prezzi e
+  "Abbonati" nel foglio Premium, la §4 dei Termini coi pagamenti. Vale la sezione "1/11 pomeriggio".
