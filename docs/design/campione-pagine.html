@@ -1,0 +1,125 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Campione del mondo nelle pagine</title>
+<link href="https://fonts.googleapis.com/css2?family=Titillium+Web:ital,wght@0,700;0,900;1,700;1,900&family=Work+Sans:wght@400;600;700&display=swap" rel="stylesheet">
+<style>
+/* 2/11/2026 (Edoardo: "e le grafiche delle cose sulla Home e nelle altre pagine?"). Dopo il titolo, per 48 ore, ogni
+   pagina ha il suo pezzo del campione. Esempio Kimi Antonelli (Mercedes #12), numeri d'esempio. Turchese della
+   squadra solo per il campione; oro B&T per il "1" e i premi. */
+:root{--bg:#0B0B0D;--ink:#F3F1EE;--mut:#9A9AA3;--dim:#6B6B73;--card:#16161A;--line:rgba(255,255,255,.09);--acc:#FF1801;--gold:#E7B34C;--team:#27F4D2}
+*{box-sizing:border-box;margin:0}
+body{background:#060607;color:var(--ink);font-family:'Work Sans',sans-serif;padding:36px 32px 44px}
+.h{font-family:'Titillium Web',sans-serif;font-style:italic;font-weight:900}
+.top h1{font:italic 900 36px 'Titillium Web'}.top p{color:var(--mut);font-size:13.5px;margin:6px 0 24px;max-width:760px;line-height:1.5}
+.row{display:flex;gap:22px;align-items:flex-start}
+.col{width:300px;flex-shrink:0}.col h2{font:italic 900 16px 'Titillium Web';margin:12px 2px 4px}.col p{color:var(--mut);font-size:12px;line-height:1.5;margin:0 2px}
+.phone{width:300px;height:620px;border-radius:34px;border:1px solid #26262c;background:var(--bg);overflow:hidden;position:relative}
+.bar{height:5px;background:var(--team)}
+.hd{display:flex;justify-content:space-between;align-items:center;padding:12px 14px 8px}
+.logo{font:italic 900 19px 'Titillium Web'}.logo i{color:var(--acc)}
+.pill{padding:5px 10px;border-radius:20px;border:1px solid rgba(39,244,210,.5);color:var(--team);font:italic 900 11px 'Titillium Web'}
+.pad{padding:4px 12px;display:flex;flex-direction:column;gap:9px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:16px}
+.lbl{font:700 9.5px 'Work Sans';letter-spacing:1.2px;color:var(--dim)}
+.hero{height:178px;border-radius:18px;position:relative;overflow:hidden;background:radial-gradient(90% 80% at 80% 10%,rgba(39,244,210,.45),transparent 60%),linear-gradient(160deg,#0b3a33,#0B0B0D 75%);border:1px solid rgba(39,244,210,.35)}
+.hero .one{position:absolute;right:-6px;top:-30px;font:italic 900 210px/1 'Titillium Web';color:transparent;-webkit-text-stroke:2px rgba(231,179,76,.8)}
+.hero .tx{position:absolute;left:14px;bottom:14px;right:110px}
+.hero .k{font:700 10px 'Work Sans';letter-spacing:2px;color:var(--team)}
+.hero .n{font:italic 900 24px/1 'Titillium Web';margin-top:4px}
+.hero .go{display:inline-block;margin-top:8px;padding:5px 10px;border-radius:8px;background:var(--gold);color:#141414;font:italic 900 11px 'Titillium Web'}
+.news{display:flex;gap:10px;padding:10px;align-items:center}.news .th{width:64px;height:48px;border-radius:10px;background:linear-gradient(135deg,#27F4D2,#0B0B0D 120%);flex-shrink:0}
+.news b{font-size:12.5px;line-height:1.3}
+.tw{display:grid;grid-template-columns:22px 1fr 50px;gap:8px;align-items:center;padding:9px 12px;border-top:1px solid var(--line);font-size:12.5px}
+.tw:first-child{border-top:0}.tw b{font:italic 900 14px 'Titillium Web'}.chip{display:inline-block;width:4px;height:15px;border-radius:2px;margin-right:6px;vertical-align:-3px}
+.champrow{background:linear-gradient(90deg,rgba(231,179,76,.18),transparent);}
+.crown{display:inline-block;padding:2px 6px;border-radius:6px;background:var(--gold);color:#141414;font:italic 900 9.5px 'Titillium Web';margin-left:6px;vertical-align:1px}
+.tabs{display:flex;gap:6px;padding:0 12px}.tabs span{padding:7px 10px;border-radius:10px;background:var(--card);border:1px solid var(--line);font:italic 900 11px 'Titillium Web';color:var(--mut)}
+.tabs span.on{background:var(--acc);border-color:var(--acc);color:#fff}
+.msg{max-width:84%;padding:8px 11px;border-radius:14px;font-size:12.5px;line-height:1.4;background:var(--card);border:1px solid var(--line)}
+.me{align-self:flex-end;background:#3a1210;border-color:rgba(255,24,1,.35)}
+.sys{align-self:center;max-width:100%;text-align:center;padding:10px 12px;border-radius:14px;background:rgba(39,244,210,.08);border:1px dashed rgba(39,244,210,.5);font-size:12px}
+.sys b{color:var(--team)}
+.reac{display:flex;gap:5px;justify-content:center;margin-top:6px}.reac span{padding:3px 8px;border-radius:12px;background:rgba(255,255,255,.07);font-size:11px}
+.lead{display:grid;grid-template-columns:20px 1fr 46px;gap:8px;align-items:center;padding:9px 12px;border-top:1px solid var(--line);font-size:12.5px}
+.lead:first-child{border-top:0}.plus{color:var(--gold);font:italic 900 12px 'Titillium Web'}
+.notif{display:flex;gap:10px;padding:11px 12px}.dot{width:34px;height:34px;border-radius:50%;background:rgba(39,244,210,.15);display:flex;align-items:center;justify-content:center;flex-shrink:0;color:var(--team);font:italic 900 15px 'Titillium Web'}
+.flow{margin-top:26px;padding:14px 18px;border-radius:16px;border:1px solid var(--line);background:#0e0e11;font-size:12.5px;color:var(--mut);line-height:1.6}.flow b{color:var(--ink)}
+</style>
+</head>
+<body>
+<div class="top"><h1>IL CAMPIONE NELLE PAGINE</h1><p>Dopo il titolo, per 48 ore: un pezzo in ogni pagina, poi l'app torna normale (resta solo il distintivo nel Profilo e il campione segnato nella classifica). Esempio Kimi Antonelli, numeri d'esempio.</p></div>
+<div class="row">
+  <!-- HOME -->
+  <div class="col"><div class="phone">
+    <div class="bar"></div>
+    <div class="hd"><span class="logo">B<i>&amp;</i>T</span><span class="pill">CAMPIONE 2026</span></div>
+    <div class="pad">
+      <div class="hero"><div class="one">1</div><div class="tx"><div class="k">CAMPIONE DEL MONDO</div><div class="n">KIMI<br>ANTONELLI</div><span class="go">RIVIVI IL TITOLO</span></div></div>
+      <div class="card news"><div class="th"></div><div><div class="lbl">STORIA</div><b>Da Bologna al numero 1: la stagione di Kimi in 9 vittorie</b></div></div>
+      <div class="card news"><div class="th" style="background:linear-gradient(135deg,#E7B34C,#0B0B0D 120%)"></div><div><div class="lbl">PIT SWIPE</div><b>Mazzo speciale: 10 carte sul titolo di Kimi</b></div></div>
+    </div>
+  </div><h2>Home</h2><p>Riquadro in cima col "1" d'oro: tocca e rivedi l'animazione. Le notizie del titolo e un mazzo speciale di Pit Swipe.</p></div>
+
+  <!-- RACE -->
+  <div class="col"><div class="phone">
+    <div class="hd"><span class="h" style="font-size:16px">RACE</span><span class="pill">MONDIALE CHIUSO</span></div>
+    <div class="tabs"><span>Classifica</span><span class="on">Mondiale</span><span>Gomme</span></div>
+    <div class="pad" style="margin-top:8px">
+      <div class="card" style="overflow:hidden">
+        <div class="tw champrow"><b style="color:var(--gold)">1</b><span><span class="chip" style="background:#27F4D2"></span>Antonelli<span class="crown">CAMPIONE</span></span><b style="text-align:right">406</b></div>
+        <div class="tw"><b>2</b><span><span class="chip" style="background:#27F4D2"></span>Russell</span><b style="text-align:right">388</b></div>
+        <div class="tw"><b>3</b><span><span class="chip" style="background:#FF8000"></span>Norris</span><b style="text-align:right">355</b></div>
+        <div class="tw"><b>4</b><span><span class="chip" style="background:#E8002D"></span>Leclerc</span><b style="text-align:right">301</b></div>
+      </div>
+      <div class="card" style="padding:12px"><div class="lbl">LA CORSA AL TITOLO</div>
+        <svg viewBox="0 0 270 90" width="100%" aria-hidden="true" style="margin-top:6px"><polyline points="0,80 40,70 80,52 120,48 160,30 200,24 240,12 270,8" fill="none" stroke="#27F4D2" stroke-width="2.5"/><polyline points="0,82 40,66 80,58 120,44 160,38 200,30 240,22 270,18" fill="none" stroke="#7FA6A0" stroke-width="2" stroke-dasharray="4 3"/><circle cx="270" cy="8" r="4" fill="#E7B34C"/></svg>
+        <div style="font-size:11px;color:var(--mut)">Punti GP dopo GP: Antonelli contro Russell</div></div>
+    </div>
+  </div><h2>Race</h2><p>Nel Mondiale la riga del campione è d'oro con "CAMPIONE" (resta fino alla nuova stagione). Grafico vero della corsa al titolo.</p></div>
+
+  <!-- FANTA -->
+  <div class="col"><div class="phone">
+    <div class="hd"><span class="h" style="font-size:16px">FANTA</span><span class="pill" style="border-color:rgba(231,179,76,.5);color:var(--gold)">BONUS DEL TITOLO</span></div>
+    <div class="pad">
+      <div class="card" style="padding:12px;border-color:rgba(231,179,76,.4)"><div class="lbl" style="color:var(--gold)">PRONOSTICO DEL MONDIALE</div><div class="h" style="font-size:18px;margin-top:4px">Hai indovinato: +10</div><div style="font-size:11.5px;color:var(--mut);margin-top:2px">Avevi scelto Antonelli a marzo. Solo 3 su 12 nella tua lega.</div></div>
+      <div class="card" style="overflow:hidden"><div style="padding:10px 12px 4px" class="lbl">LEGA "AMICI DEL BOX"</div>
+        <div class="lead"><b class="h">1</b><span>Edoardo</span><span class="plus">+10</span></div>
+        <div class="lead"><b class="h">2</b><span>Fabio</span><span class="plus" style="color:var(--dim)">0</span></div>
+        <div class="lead"><b class="h">3</b><span>Marco</span><span class="plus">+10</span></div>
+      </div>
+      <div class="card" style="padding:12px;font-size:12px;color:var(--mut)">Chi aveva Kimi in squadra nel GP del titolo: <b style="color:var(--team)">punti doppi</b> per lui in quel GP.</div>
+    </div>
+  </div><h2>Fanta</h2><p>Bonus a chi aveva indovinato il campione nei pronostici, con la classifica della lega che si muove. Idea in più: punti doppi al campione nel GP del titolo.</p></div>
+
+  <!-- CHAT -->
+  <div class="col"><div class="phone">
+    <div class="hd"><span class="h" style="font-size:16px">CHAT GENERALE</span><span class="pill">FESTA</span></div>
+    <div class="pad" style="gap:8px">
+      <div class="msg">Ultimo giro, non respiro</div>
+      <div class="sys"><b>KIMI È CAMPIONE DEL MONDO</b><br>Abu Dhabi, giro 58: il titolo è matematico<div class="reac"><span>12 🏆</span><span>8 🔥</span><span>5 🇮🇹</span></div></div>
+      <div class="msg">GRANDEEEE KIMI</div>
+      <div class="msg me">Lo dicevo da marzo</div>
+      <div class="msg">Russell secondo a 18 punti, che stagione</div>
+    </div>
+  </div><h2>Chat</h2><p>Messaggio della app nella chat al momento del titolo, con le reazioni. Si può rispondere come agli altri.</p></div>
+
+  <!-- PROFILO / NOTIFICHE -->
+  <div class="col"><div class="phone">
+    <div class="hd"><span class="h" style="font-size:16px">NOTIFICHE</span></div>
+    <div class="pad">
+      <div class="card notif"><div class="dot">1</div><div><b style="font-size:12.5px">Kimi Antonelli è campione del mondo</b><div style="font-size:11.5px;color:var(--mut);margin-top:2px">Tocca per rivivere il titolo · adesso</div></div></div>
+      <div class="card notif"><div class="dot" style="background:rgba(231,179,76,.15);color:var(--gold)">★</div><div><b style="font-size:12.5px">Trofeo segreto: Ci credevo</b><div style="font-size:11.5px;color:var(--mut);margin-top:2px">Il tuo pilota del cuore ha vinto il mondiale</div></div></div>
+      <div class="lbl" style="margin-top:6px">PROFILO</div>
+      <div class="card" style="padding:12px;display:flex;align-items:center;gap:10px">
+        <svg width="40" height="40" viewBox="0 0 150 150" aria-hidden="true"><path d="M18 92 C18 46 52 18 92 18 C122 18 138 40 138 66 L138 98 C138 112 128 122 114 122 L40 122 C27 122 18 108 18 92 Z" fill="#27F4D2"/><path d="M58 64 C66 52 84 46 108 46 C124 46 134 54 136 66 L136 80 L64 80 C58 80 54 72 58 64 Z" fill="#0B0B0D"/></svg>
+        <div><b style="font-size:13px">Edoardo</b><div style="margin-top:4px"><span style="padding:3px 8px;border-radius:7px;background:rgba(39,244,210,.12);color:var(--team);font:italic 900 11px 'Titillium Web'">CAMPIONE 2026 · KIMI</span></div></div>
+      </div>
+    </div>
+  </div><h2>Notifiche e Profilo</h2><p>Avviso del titolo (sul telefono quando ci saranno le notifiche del server), trofeo segreto, distintivo nel Profilo per chi ci credeva.</p></div>
+</div>
+<div class="flow"><b>Regole:</b> 48 ore di tema del campione (barra turchese in alto, "CAMPIONE 2026" al posto del tasto Premium nella testata), poi si torna normali. Restano: riga d'oro nel Mondiale fino alla nuova stagione, distintivo nel Profilo, trofeo. Chi ha spento i temi delle feste non vede il tema, ma vede il resto. Tutti i numeri dalla classifica vera.</div>
+</body>
+</html>

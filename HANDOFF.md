@@ -531,3 +531,7 @@ Da fare:
 - Animazione del titolo (docs/design/campione-animazione.html e .mp4, ~7 s, solo transform e opacity): ultimo giro →
   bandiera a scacchi → lampo turchese e "KIMI È CAMPIONE!" sulla pagina Race → "1" d'oro → casco → nome e titolo →
   numeri della stagione e coriandoli → tasti. Con "Rimuovi animazioni" solo l'ultima schermata.
+- Il campione nelle pagine (docs/design/campione-pagine.html e .png), per 48 ore: Home (riquadro col "1" d'oro che
+  rivede l'animazione, notizie e mazzo Pit Swipe del titolo), Race (riga d'oro "CAMPIONE" nel Mondiale fino alla nuova
+  stagione, grafico della corsa al titolo), Fanta (bonus del pronostico, lega, punti doppi al campione nel GP del
+  titolo), Chat (messaggio dell'app con reazioni), Notifiche e Profilo (avviso, trofeo, distintivo). Non ancora nel codice.
