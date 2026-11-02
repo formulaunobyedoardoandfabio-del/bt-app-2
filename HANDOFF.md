@@ -523,3 +523,8 @@ Da fare:
   stimato dalla fine dell'ultimo (ghost, giro tipico, max 2 giri; mai ai box, ritirata o a gara finita); in diretta il
   tempo scorre da solo fino a 90 s oltre gli ultimi dati (LIVE_AHEAD_S) e coi dati nuovi si riparte da dove si era
   (lastOf1Sim). Prova: test/unit/openf1.test.js "diretta senza il giro in corso".
+
+## 2/11 mattina: progetto grafico "Campione del mondo" (esempio Kimi Antonelli)
+- docs/design/campione-del-mondo.html e .png: 1) match point (vantaggio contro punti in palio, cosa serve), 2) schermata
+  del titolo a tutto schermo una volta sola, 3) storia Instagram 9:16, 4) dopo: trofeo segreto "Ci credevo", tema della
+  squadra 48 ore, bonus FantaF1 del pronostico. Numeri d'esempio. Non ancora nel codice.
