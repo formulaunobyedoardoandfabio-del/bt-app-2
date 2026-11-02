@@ -2572,6 +2572,44 @@ function TyreDegChart({ laps = [], stints = [] }) {
   );
 }
 
+// 2/11 (Edoardo: "metti nel codice le cose del campione del mondo", design docs/design/campione-*.html): versione
+// ridotta (token quasi finiti). Campione = mondiale finito, oppure il primo ha più punti di vantaggio di quelli ancora
+// in palio (25 a GP + 8 a Sprint). Solo dati veri dalla classifica piloti. Da fare: match point, storia da condividere,
+// trofeo "Ci credevo", bonus FantaF1, messaggio in chat, tema di 48 ore.
+function champOf(standings, races, now) {
+  const ds = ((standings && standings.drivers) || []).slice().sort((a, b) => a.position - b.position);
+  if (ds.length < 2 || !isFinite(ds[0].points) || !isFinite(ds[1].points)) return null;
+  const left = (races || []).filter(r => isFinite(raceStartMs(r)) && raceStartMs(r) + 3 * 3600e3 > now);
+  const pts = left.reduce((a, r) => a + 25 + (CIRCUIT_INFO[r.circuitId] && CIRCUIT_INFO[r.circuitId].sprint ? 8 : 0), 0);
+  const lead = ds[0].points - ds[1].points;
+  return lead > pts ? { id: ds[0].id, points: ds[0].points, lead, second: ds[1].id, year: new Date(now).getFullYear() } : null;
+}
+function ChampionTakeover({ champ, onClose }) {
+  const d = driverById(champ.id), t = d ? teamById(d.teamId) : null, col = t ? t.color : C.gold, sec = driverById(champ.second);
+  useEffect(() => { fx.play("flag"); fx.buzz("flag"); }, []);
+  const conf = Array.from({ length: 22 }, (_, i) => ({ left: (i * 37) % 330 + 4, bg: [col, C.gold, "#fff"][i % 3], delay: 2.1 + (i % 9) * .12, dur: 2.2 + (i % 5) * .3 }));
+  return (
+    <div role="dialog" aria-modal="true" aria-label={"Campione del mondo: " + (d ? d.full : champ.id)} data-champ={champ.id} className="champ-root"
+      style={{ position: "absolute", inset: 0, zIndex: 900, overflow: "hidden", background: `radial-gradient(110% 60% at 50% 12%, ${alpha(col, .42)}, ${alpha(col, .06)} 55%, transparent 70%), #0B0B0D` }}>
+      <div className="champ-one" aria-hidden="true" style={{ position: "absolute", left: "50%", top: 40, marginLeft: -62, fontFamily: F_HEAD, fontStyle: "italic", fontWeight: 900, fontSize: 230, lineHeight: 1, color: "transparent", WebkitTextStroke: `2px ${alpha(C.gold, .9)}` }}>1</div>
+      <div className="champ-rise" style={{ position: "absolute", left: "50%", top: 205, transform: "translateX(-50%)" }}>{d && <Headshot driver={d} size={120} />}</div>
+      <div style={{ position: "absolute", left: 0, right: 0, top: 350, textAlign: "center", padding: "0 16px" }}>
+        <div className="champ-fade1" style={{ fontFamily: F_BODY, fontWeight: 700, fontSize: 11, letterSpacing: 3, color: col }}>CAMPIONE DEL MONDO {champ.year}</div>
+        <div className="champ-slide" style={{ fontFamily: F_HEAD, fontStyle: "italic", fontWeight: 900, fontSize: 32, lineHeight: 1.05, color: C.text, marginTop: 6 }}>{d ? d.full.toUpperCase() : champ.id}</div>
+        {t && <div className="champ-pop" style={{ display: "inline-block", marginTop: 10, padding: "6px 12px", borderRadius: 8, background: C.gold, fontFamily: F_HEAD, fontStyle: "italic", fontWeight: 900, fontSize: 14, color: "#141414" }}>{t.name.toUpperCase()}</div>}
+      </div>
+      <div className="champ-up" style={{ position: "absolute", left: 16, right: 16, top: 500, display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+        {[[champ.points, "punti"], ["+" + champ.lead, sec ? "su " + sec.full.split(" ").slice(-1)[0] : "di vantaggio"]].map(([v, l], i) => (
+          <div key={i} style={{ padding: "10px 4px", borderRadius: 12, background: "rgba(0,0,0,.45)", border: "1px solid rgba(255,255,255,.1)", textAlign: "center" }}>
+            <b style={{ display: "block", fontFamily: F_HEAD, fontStyle: "italic", fontWeight: 900, fontSize: 24, color: C.text }}>{v}</b><span style={{ fontFamily: F_BODY, fontSize: 11, color: C.muted }}>{l}</span>
+          </div>))}
+      </div>
+      {conf.map((c, i) => <span key={i} className="champ-conf" aria-hidden="true" style={{ position: "absolute", top: -20, left: c.left, width: 6, height: 12, borderRadius: 1, background: c.bg, animationDelay: c.delay + "s", animationDuration: c.dur + "s" }} />)}
+      <button className="press champ-btn" data-champ-close="" onClick={onClose} style={{ position: "absolute", left: 16, right: 16, bottom: 28, padding: "15px 0", borderRadius: 14, background: col, fontFamily: F_HEAD, fontStyle: "italic", fontWeight: 900, fontSize: 15, color: "#0B0B0D" }}>CONTINUA</button>
+    </div>
+  );
+}
+
 // Ripartenza dopo la bandiera rossa: l'ultimo messaggio della direzione gara con l'ora ("RACE WILL RESUME AT 15:05",
 // ora del circuito). Secondi dalla partenza della sessione, contati dall'ora scritta nel messaggio stesso; o null.
 function resumeAt(st) {
@@ -5922,7 +5960,7 @@ function EndSpy({ onEnd }) {
   }, []);
   return <div ref={ref} data-end-spy="" aria-hidden="true" style={{ height: 1 }} />;
 }
-function RaceScreen({ proOk = true, onProAd = null, proBusy = false, onStandingsEnd = null, isPremium, onPremium, onSelectDriver, races, standings, live, liveSt, onExpandMap, onTelemetry, onOpenCircuit, wxGuess, wxResult, onGuessWeather, onLapTimes, onSecondScreen, lastRace, dotdVote, onDotdVote, ratings = {}, onRate, onOpenChats, onOpenGhost, of1 = null, onOf1Refresh, replay = null, favDriver = null, of1Sessions = null, onOf1Pick = null, sessionNote = null }) {
+function RaceScreen({ champion = null, proOk = true, onProAd = null, proBusy = false, onStandingsEnd = null, isPremium, onPremium, onSelectDriver, races, standings, live, liveSt, onExpandMap, onTelemetry, onOpenCircuit, wxGuess, wxResult, onGuessWeather, onLapTimes, onSecondScreen, lastRace, dotdVote, onDotdVote, ratings = {}, onRate, onOpenChats, onOpenGhost, of1 = null, onOf1Refresh, replay = null, favDriver = null, of1Sessions = null, onOf1Pick = null, sessionNote = null }) {
   const [pitOpen, setPitOpen] = useState(null);   // 1/11 notte: pilota con le gomme dei pit aperte (scheda Gomme)
   const [tab, setTab] = useState(null);
   // Pit Board (G27): si vede quando la tabella dei tempi arriva in cima alla pagina (stato cambiato solo al passaggio).
@@ -6064,6 +6102,7 @@ function RaceScreen({ proOk = true, onProAd = null, proBusy = false, onStandings
               : top.map((r, i) => { const t = teamById(r.id); return t ? { title: t.name, value: r.points + " pt", ...tr(r), figure: <TeamFigure team={t} place={i + 1} /> } : null; }).filter(Boolean);
             return (
               <div data-champ-podium={champ} style={{ padding: "14px 12px 0", marginBottom: 10, borderRadius: 18, background: C.card, border: `1px solid ${C.border}`, overflow: "hidden" }}>
+                {champ === "piloti" && champion && driverById(champion.id) && <div data-champ-tag="" style={{ margin: "0 0 10px", padding: "7px 10px", borderRadius: 10, background: alpha(C.gold, .16), border: `1px solid ${alpha(C.gold, .5)}`, fontFamily: F_HEAD, fontStyle: "italic", fontWeight: 900, fontSize: 12.5, color: C.gold, textAlign: "center" }}>CAMPIONE DEL MONDO {champion.year} · {driverById(champion.id).full.toUpperCase()}</div>}
                 <Podium label={champ === "piloti" ? "Podio del mondiale piloti" : "Podio del mondiale costruttori"} items={items} />
               </div>
             );
@@ -6082,7 +6121,7 @@ function RaceScreen({ proOk = true, onProAd = null, proBusy = false, onStandings
                     </span>
                     {d ? <Headshot driver={d} size={32} /> : <TeamBadge team={t} size={32} />}
                     <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontFamily: F_BODY, fontWeight: 600, fontSize: 13, color: C.text }}>{d ? d.full : t.name}</div>
+                      <div style={{ fontFamily: F_BODY, fontWeight: 600, fontSize: 13, color: C.text }}>{d ? d.full : t.name}{d && champion && champion.id === row.id && <span data-champ-tag="" style={{ marginLeft: 6, padding: "2px 6px", borderRadius: 6, background: C.gold, fontFamily: F_HEAD, fontStyle: "italic", fontWeight: 900, fontSize: 9.5, color: "#141414" }}>CAMPIONE</span>}</div>
                       <div style={{ fontFamily: F_BODY, fontSize: 10, color: C.dim }}>{d ? t.name : t.tag}</div>
                     </div>
                     <span style={{ fontFamily: F_HEAD, fontWeight: 800, fontSize: 14, color: C.text }}>{row.points}<span style={{ fontFamily: F_BODY, fontWeight: 600, fontSize: 10, color: C.dim }}> pt</span></span>
@@ -9826,6 +9865,7 @@ function App() {
   const isPremium = isPaid || adPro;
   adsTestForAdmin = isAdminNow;
   const [proAsk, setProAsk] = useState(null);   // foglio "Funzione Pro": { what, then }
+  const [champSeen, setChampSeen] = useState(false);   // 2/11: schermata del campione chiusa in questa apertura
   const proGate = (what, then) => { if (isPremium) then(); else setProAsk({ what, then }); };
   // Notizie Premium sbloccate col video: restano sbloccate su questo telefono (le ultime 200).
   const [adNews, setAdNews] = useState(() => { const v = local.get("bt-ad-news"); return Array.isArray(v) ? v : []; });
@@ -11310,6 +11350,10 @@ function App() {
     : id === "monza" ? () => { setCircuitId("it-1922"); setView("circuit"); }
     : null;
   const activeChat = chats.find(c => c.id === chatId);
+  // 2/11: campione del mondo (champOf) e la sua schermata, una volta per telefono (bt-champ-<anno>-<pilota>).
+  const champion = champOf(shownStandings, races, nowMs());
+  const champKey = champion ? "bt-champ-" + champion.year + "-" + champion.id : null;
+  const champShow = !!champion && !champSeen && local.get(champKey) !== true;
   // Fine dell'ultimo GP già corso (partenza della gara + 4 ore): da lì ripartono le stanze della gara.
   const lastGpEnd = (races || []).map(r => raceStartMs(r) + 4 * 3600e3).filter(t => isFinite(t) && t < nowMs()).sort((a, b) => b - a)[0] || 0;
   const chatSince = id => (!id || id === "generale" || id === "fanta" ? 0 : lastGpEnd);
@@ -11401,7 +11445,7 @@ function App() {
       </>} ig={ig} highlights={highlights} onOpenIg={() => { setIgFrom("tab"); setView("instagram"); }} articles={articles} tagFilter={tagFilter} onTag={filterByTag} onClearTag={() => setTagFilter(null)} onOpenArticle={openArticle} isPremium={isPremium} onPremium={() => setPremiumOpen(true)} onToast={showToast} onLiveTrack={() => setLiveTrackOpen(true)} onGoFanta={() => goTab("fanta")}  saved={saved} onToggleSave={toggleSave} savedOnly={savedOnly} setSavedOnly={setSavedOnly} onOpenCircuit={openCircuit} homePoll={homePoll} homeVote={votes.home || null} onVote={castVote}
       hidden={hidden} onHide={hideArticle} onUnhideAll={() => { if (!userDataWait()) setHidden([]); }} onSwipeSave={saveFromSwipe}
       onRefresh={() => refreshShared(["news", "highlights", "ig", "homePoll"]).catch(() => {})} />;
-    else if (tab === "race") body = <RaceScreen proOk={isPremium} onProAd={Ads.canReward() ? () => watchAdPro() : null} proBusy={adBusy} onStandingsEnd={isPaid ? null : Ads.standingsEnd} favDriver={favDriver} dotdVote={live ? votesNow.dotd[live.raceId] : null} onDotdVote={(k, id) => live && voteDotd(live.raceId, k, id)} ratings={votesNow.ratings} onRate={rateDriver} onOpenChats={() => setView("chats")} onOpenGhost={() => setView("ghost")} races={races} standings={shownStandings} isPremium={isPremium} onPremium={() => setPremiumOpen(true)} onSelectDriver={setSelectedDriver} live={live} liveSt={liveSt} onExpandMap={() => setLiveTrackOpen(true)} onTelemetry={(carId, lapNo, sector) => proGate("telemetry", () => setTelemetry({ carId, lapNo, sector }))} onOpenCircuit={openCircuit} wxGuess={wxGuess} wxResult={wxResult} onGuessWeather={guessWeather} onLapTimes={id => proGate("laps", () => setLapList(id))} onSecondScreen={() => proGate("ss", () => setSsOpen(true))} lastRace={lastRace} of1={of1} onOf1Refresh={() => of1TickRef.current && of1TickRef.current(true)} of1Sessions={of1Sessions}
+    else if (tab === "race") body = <RaceScreen champion={champion} proOk={isPremium} onProAd={Ads.canReward() ? () => watchAdPro() : null} proBusy={adBusy} onStandingsEnd={isPaid ? null : Ads.standingsEnd} favDriver={favDriver} dotdVote={live ? votesNow.dotd[live.raceId] : null} onDotdVote={(k, id) => live && voteDotd(live.raceId, k, id)} ratings={votesNow.ratings} onRate={rateDriver} onOpenChats={() => setView("chats")} onOpenGhost={() => setView("ghost")} races={races} standings={shownStandings} isPremium={isPremium} onPremium={() => setPremiumOpen(true)} onSelectDriver={setSelectedDriver} live={live} liveSt={liveSt} onExpandMap={() => setLiveTrackOpen(true)} onTelemetry={(carId, lapNo, sector) => proGate("telemetry", () => setTelemetry({ carId, lapNo, sector }))} onOpenCircuit={openCircuit} wxGuess={wxGuess} wxResult={wxResult} onGuessWeather={guessWeather} onLapTimes={id => proGate("laps", () => setLapList(id))} onSecondScreen={() => proGate("ss", () => setSsOpen(true))} lastRace={lastRace} of1={of1} onOf1Refresh={() => of1TickRef.current && of1TickRef.current(true)} of1Sessions={of1Sessions}
       onOf1Pick={key => { of1PickRef.current = key === of1Sessions.latest ? null : key; setOf1Sessions(x => ({ ...x, shown: key })); if (of1TickRef.current) of1TickRef.current(true); }}
       sessionNote={of1Live && of1Live.raw && !of1Live.raw.laps.length && of1Live.raw.session_result.length ? "I tempi giro per giro non sono ancora su OpenF1 (arrivano qualche ora dopo la fine): intanto la classifica con il miglior giro di ognuno." : null} replay={replayCtl} />;
     else if (tab === "garage") body = <GarageScreen openGame={garageGame} onGameOpened={() => setGarageGame(null)} races={races} pitBest={pitBest} onPitResult={t => {
@@ -11470,6 +11514,7 @@ function App() {
         {selectedDriver && <DriverDetailModal driver={selectedDriver} lastRace={lastRace} races={races} onClose={() => setSelectedDriver(null)} />}
         {liveTrackOpen && <LiveMapView race={live ? races.find(r => r.id === live.raceId) : weekendRace(races)} live={live} st={liveSt} onClose={() => setLiveTrackOpen(false)} />}
         {ssOpen && <SecondScreen chat={chats.find(c => c.id === "generale")} blocked={blocked} onChatSend={guest ? () => needLogin("Per scrivere in chat serve un account.") : t => sendMessage("generale", t)} race={live ? races.find(r => r.id === live.raceId) : weekendRace(races)} live={live} st={liveSt} standings={shownStandings} layout={ssLayout} setLayout={setSsLayout} prefs={ssPrefs} setPrefs={setSsPrefs} vote={live ? votesNow.dotd[live.raceId] || {} : {}} onVote={(k, id) => live && voteDotd(live.raceId, k, id)} notice={notice} onCloseNotice={nextNotice} onClose={() => setSsOpen(false)} />}
+        {champShow && <ChampionTakeover champ={champion} onClose={() => { local.set(champKey, true); setChampSeen(true); }} />}
         {proAsk && <ProGateSheet what={proAsk.what} busy={adBusy} onAd={Ads.canReward() ? () => watchAdPro(proAsk.then) : null} onPremium={() => { setProAsk(null); setPremiumOpen(true); }} onClose={() => setProAsk(null)} />}
         {lapList && live && liveSt && <LapTimesModal live={live} st={liveSt} carId={lapList} onOpenLap={n => setTelemetry({ carId: lapList, lapNo: n, sector: 0 })} onClose={() => setLapList(null)} />}
         {telemetry && live && liveSt && <TelemetryModal live={live} st={liveSt} carId={telemetry.carId} lapNo={telemetry.lapNo} sector={telemetry.sector} onClose={() => setTelemetry(null)} />}

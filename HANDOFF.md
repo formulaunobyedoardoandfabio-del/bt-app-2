@@ -535,3 +535,8 @@ Da fare:
   rivede l'animazione, notizie e mazzo Pit Swipe del titolo), Race (riga d'oro "CAMPIONE" nel Mondiale fino alla nuova
   stagione, grafico della corsa al titolo), Fanta (bonus del pronostico, lega, punti doppi al campione nel GP del
   titolo), Chat (messaggio dell'app con reazioni), Notifiche e Profilo (avviso, trofeo, distintivo). Non ancora nel codice.
+- Campione del mondo nel codice (versione ridotta, token quasi finiti): champOf (vantaggio > punti ancora in palio,
+  25 a GP + 8 a Sprint, solo classifica vera) → ChampionTakeover a schermo intero una volta per telefono
+  (bt-champ-<anno>-<pilota>), animazioni in App.css (solo transform/opacity, reduced-motion), riga d'oro
+  "CAMPIONE DEL MONDO" sopra al podio del Mondiale + etichetta nella lista. Test: test/e2e/run87-campione.js.
+  Da fare: match point, storia da condividere, trofeo "Ci credevo", bonus FantaF1, messaggio in chat, tema 48 ore, Home.
