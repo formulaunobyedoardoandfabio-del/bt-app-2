@@ -528,3 +528,6 @@ Da fare:
 - docs/design/campione-del-mondo.html e .png: 1) match point (vantaggio contro punti in palio, cosa serve), 2) schermata
   del titolo a tutto schermo una volta sola, 3) storia Instagram 9:16, 4) dopo: trofeo segreto "Ci credevo", tema della
   squadra 48 ore, bonus FantaF1 del pronostico. Numeri d'esempio. Non ancora nel codice.
+- Animazione del titolo (docs/design/campione-animazione.html e .mp4, ~7 s, solo transform e opacity): ultimo giro →
+  bandiera a scacchi → lampo turchese e "KIMI È CAMPIONE!" sulla pagina Race → "1" d'oro → casco → nome e titolo →
+  numeri della stagione e coriandoli → tasti. Con "Rimuovi animazioni" solo l'ultima schermata.

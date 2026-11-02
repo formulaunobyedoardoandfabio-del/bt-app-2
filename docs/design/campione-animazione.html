@@ -1,0 +1,141 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Campione del mondo: animazione</title>
+<link href="https://fonts.googleapis.com/css2?family=Titillium+Web:ital,wght@0,700;0,900;1,700;1,900&family=Work+Sans:wght@400;600;700&display=swap" rel="stylesheet">
+<style>
+/* 2/11/2026 (Edoardo: "l'animazione di quando diventa campione del mondo durante la gara, appena finita").
+   Esempio Kimi Antonelli, numeri d'esempio. Solo transform e opacity (regola dell'app); con "Rimuovi animazioni"
+   si vede subito l'ultima schermata. Durata ~7 s: 1) ultimo giro, 2) bandiera a scacchi + "CAMPIONE", 3) il "1" e il
+   casco, 4) nome e titolo, 5) numeri della stagione e coriandoli, 6) tasti. */
+:root{--bg:#0B0B0D;--ink:#F3F1EE;--mut:#9A9AA3;--line:rgba(255,255,255,.09);--gold:#E7B34C;--team:#27F4D2;--acc:#FF1801}
+*{box-sizing:border-box;margin:0}
+body{background:#060607;color:var(--ink);font-family:'Work Sans',sans-serif;min-height:100vh;display:flex;flex-direction:column;align-items:center;padding:28px 16px}
+.h{font-family:'Titillium Web',sans-serif;font-style:italic;font-weight:900}
+.phone{width:330px;height:690px;border-radius:38px;border:1px solid #26262c;background:var(--bg);overflow:hidden;position:relative}
+.layer{position:absolute;inset:0}
+/* 1. pagina Race all'ultimo giro */
+.race{padding:44px 14px 0}
+.lap{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px}
+.lap b{font:italic 900 15px 'Titillium Web'}.live{padding:3px 8px;border-radius:6px;background:var(--acc);font:italic 900 11px 'Titillium Web'}
+.map{height:150px;border-radius:16px;border:1px solid var(--line);background:#111114;position:relative;overflow:hidden;margin-bottom:10px}
+.map svg{position:absolute;inset:0}
+.tw{display:grid;grid-template-columns:22px 1fr 70px;gap:8px;align-items:center;padding:10px 12px;border-bottom:1px solid var(--line);font-size:13px}
+.tw b{font:italic 900 14px 'Titillium Web'}.chip{display:inline-block;width:4px;height:16px;border-radius:2px;margin-right:7px;vertical-align:-3px}
+.tower{border:1px solid var(--line);border-radius:14px;overflow:hidden;background:#16161A}
+.kimi{position:relative}
+.kimi:after{content:"";position:absolute;inset:0;background:rgba(39,244,210,.22);opacity:0;animation:hl .8s 1.3s forwards}
+.chk{position:absolute;left:14px;right:14px;top:96px;padding:10px;border-radius:10px;background:#fff;color:#0B0B0D;text-align:center;font:italic 900 14px 'Titillium Web';letter-spacing:.6px;opacity:0;transform:translateY(-14px);animation:drop .35s .7s forwards}
+.chk i{display:inline-block;width:24px;height:14px;margin-right:8px;vertical-align:-2px;background:repeating-conic-gradient(#0B0B0D 0 25%,#fff 0 50%) 0 0/7px 7px}
+.flash{background:var(--team);opacity:0;animation:flash .9s 1.5s}
+.wc1{position:absolute;left:0;right:0;top:300px;text-align:center;opacity:0;transform:scale(.7);animation:pop .4s 1.6s forwards, out .3s 2.4s forwards}
+.wc1 span{display:inline-block;padding:10px 16px;border-radius:12px;background:#0B0B0D;border:2px solid var(--team);font:italic 900 20px 'Titillium Web';color:var(--team)}
+/* 2. schermata del titolo */
+.champ{opacity:0;animation:fade .5s 2.5s forwards}
+.bgc{background:radial-gradient(110% 60% at 50% 12%,rgba(39,244,210,.4),rgba(39,244,210,.06) 55%,transparent 70%),linear-gradient(180deg,#07211d,#0B0B0D 60%)}
+.one{position:absolute;left:50%;top:40px;margin-left:-62px;font:italic 900 230px/1 'Titillium Web';color:transparent;-webkit-text-stroke:2px rgba(231,179,76,.9);opacity:0;transform:scale(1.6);animation:one .7s 2.7s cubic-bezier(.2,.8,.2,1) forwards}
+.glow{position:absolute;left:50%;top:70px;width:200px;height:200px;margin-left:-100px;border-radius:50%;background:radial-gradient(circle,rgba(231,179,76,.35),transparent 65%);opacity:0;animation:glow 1.2s 3.1s forwards}
+.helm{position:absolute;left:50%;top:214px;margin-left:-60px;opacity:0;transform:translateY(80px);animation:rise .6s 3.2s cubic-bezier(.2,.8,.2,1) forwards}
+.ct{position:absolute;left:0;right:0;top:352px;text-align:center}
+.k{font:700 11px 'Work Sans';letter-spacing:3px;color:var(--team);opacity:0;animation:fade .4s 3.6s forwards}
+.nm{font:italic 900 30px/1.02 'Titillium Web';margin-top:6px}
+.nm span{display:block;opacity:0;transform:translateX(-40px);animation:slide .45s forwards}
+.nm span:nth-child(1){animation-delay:3.8s}.nm span:nth-child(2){animation-delay:3.95s}
+.badge{display:inline-block;margin-top:10px;padding:6px 12px;border-radius:8px;background:var(--gold);color:#141414;font:italic 900 14px 'Titillium Web';letter-spacing:.6px;opacity:0;transform:scale(.6);animation:pop .35s 4.3s forwards}
+.stats{position:absolute;left:14px;right:14px;top:486px;display:grid;grid-template-columns:repeat(4,1fr);gap:6px}
+.st{padding:10px 4px;border-radius:12px;background:rgba(0,0,0,.45);border:1px solid rgba(255,255,255,.1);text-align:center;opacity:0;transform:translateY(16px);animation:up .35s forwards}
+.st:nth-child(1){animation-delay:4.6s}.st:nth-child(2){animation-delay:4.7s}.st:nth-child(3){animation-delay:4.8s}.st:nth-child(4){animation-delay:4.9s}
+.st b{display:block;font:italic 900 22px 'Titillium Web'}.st span{font-size:10px;color:var(--mut)}
+.btns{position:absolute;left:14px;right:14px;bottom:26px;display:flex;flex-direction:column;gap:8px;opacity:0;animation:fade .4s 5.4s forwards}
+.b1{padding:14px;border-radius:14px;background:var(--team);color:#062b25;text-align:center;font:italic 900 15px 'Titillium Web'}
+.b2{padding:12px;border-radius:14px;border:1px solid rgba(255,255,255,.18);text-align:center;font:700 13px 'Work Sans'}
+.conf{position:absolute;top:-20px;width:6px;height:12px;border-radius:1px;opacity:0;animation:fall 2.6s linear forwards}
+/* passi sotto il telefono */
+.steps{display:flex;gap:6px;margin-top:16px;flex-wrap:wrap;justify-content:center;max-width:520px}
+.steps span{padding:5px 9px;border-radius:8px;border:1px solid var(--line);font:600 11px 'Work Sans';color:var(--mut)}
+.again{margin-top:14px;padding:10px 16px;border-radius:12px;border:1px solid rgba(255,255,255,.2);background:none;color:var(--ink);font:700 13px 'Work Sans';cursor:pointer}
+.note{margin-top:10px;font-size:12px;color:#6B6B73;text-align:center;max-width:460px;line-height:1.5}
+@keyframes drop{to{opacity:1;transform:none}}
+@keyframes hl{to{opacity:1}}
+@keyframes flash{0%{opacity:0}25%{opacity:.85}100%{opacity:0}}
+@keyframes pop{70%{opacity:1;transform:scale(1.08)}100%{opacity:1;transform:scale(1)}}
+@keyframes out{to{opacity:0;transform:scale(1.15)}}
+@keyframes fade{to{opacity:1}}
+@keyframes one{to{opacity:1;transform:none}}
+@keyframes glow{0%{opacity:0;transform:scale(.6)}50%{opacity:1}100%{opacity:.6;transform:scale(1.2)}}
+@keyframes rise{to{opacity:1;transform:none}}
+@keyframes slide{to{opacity:1;transform:none}}
+@keyframes up{to{opacity:1;transform:none}}
+@keyframes fall{0%{opacity:1;transform:translateY(0) rotate(0)}100%{opacity:.9;transform:translateY(720px) rotate(540deg)}}
+@media (prefers-reduced-motion: reduce){
+  .race,.chk,.flash,.wc1{display:none}
+  .champ,.one,.helm,.k,.nm span,.badge,.st,.btns,.glow{animation:none!important;opacity:1!important;transform:none!important}
+  .conf{display:none}
+}
+</style>
+</head>
+<body>
+<div class="phone" id="ph">
+  <!-- 1. pagina Race all'ultimo giro -->
+  <div class="layer race">
+    <div class="lap"><b>GIRO 58/58 · GP DI ABU DHABI</b><span class="live">LIVE</span></div>
+    <div class="map"><svg viewBox="0 0 300 150" width="100%" height="100%" aria-hidden="true">
+      <path d="M40 110 C20 90 30 50 70 45 L190 30 C240 25 270 50 260 80 C252 105 220 112 190 108 L120 104 C90 103 70 125 40 110 Z" fill="none" stroke="#2a2a30" stroke-width="10"/>
+      <circle cx="58" cy="114" r="6" fill="#27F4D2" stroke="#0B0B0D" stroke-width="2"/><circle cx="84" cy="110" r="6" fill="#27F4D2" stroke="#0B0B0D" stroke-width="2"/><circle cx="130" cy="104" r="6" fill="#FF8000" stroke="#0B0B0D" stroke-width="2"/>
+    </svg></div>
+    <div class="tower">
+      <div class="tw"><b>1</b><span><span class="chip" style="background:#27F4D2"></span>Russell</span><b style="text-align:right">LEADER</b></div>
+      <div class="tw kimi"><b>2</b><span><span class="chip" style="background:#27F4D2"></span>Antonelli</span><b style="text-align:right">+1.204</b></div>
+      <div class="tw"><b>3</b><span><span class="chip" style="background:#FF8000"></span>Norris</span><b style="text-align:right">+6.880</b></div>
+      <div class="tw" style="border:0;font-size:12px;color:var(--mut);display:block">Mondiale se finisse ora: <b style="color:var(--team)">Antonelli campione</b> (+11)</div>
+    </div>
+  </div>
+  <div class="chk"><i></i>BANDIERA A SCACCHI</div>
+  <div class="layer flash"></div>
+  <div class="wc1"><span>KIMI È CAMPIONE!</span></div>
+  <!-- 2. schermata del titolo -->
+  <div class="layer champ">
+    <div class="layer bgc"></div>
+    <div class="glow"></div>
+    <div class="one">1</div>
+    <svg class="helm" width="120" height="120" viewBox="0 0 150 150" aria-hidden="true">
+      <path d="M18 92 C18 46 52 18 92 18 C122 18 138 40 138 66 L138 98 C138 112 128 122 114 122 L40 122 C27 122 18 108 18 92 Z" fill="#27F4D2"/>
+      <path d="M58 64 C66 52 84 46 108 46 C124 46 134 54 136 66 L136 80 L64 80 C58 80 54 72 58 64 Z" fill="#0B0B0D"/>
+      <path d="M24 100 C40 90 70 86 110 88 L138 90 L138 98 L24 108 Z" fill="#E7B34C"/>
+      <text x="44" y="116" font-family="Titillium Web" font-style="italic" font-weight="900" font-size="20" fill="#0B0B0D">12</text>
+    </svg>
+    <div class="ct">
+      <div class="k">ABU DHABI · 6 DICEMBRE</div>
+      <div class="nm"><span>ANDREA KIMI</span><span>ANTONELLI</span></div>
+      <div class="badge">CAMPIONE DEL MONDO 2026</div>
+    </div>
+    <div class="stats">
+      <div class="st"><b>9</b><span>vittorie</span></div><div class="st"><b>16</b><span>podi</span></div>
+      <div class="st"><b>8</b><span>pole</span></div><div class="st"><b>406</b><span>punti</span></div>
+    </div>
+    <div class="btns"><div class="b1">CONDIVIDI LA STORIA</div><div class="b2">Continua</div></div>
+    <div id="cf"></div>
+  </div>
+</div>
+<div class="steps"><span>0 s ultimo giro</span><span>0,7 s bandiera a scacchi</span><span>1,5 s lampo + "KIMI È CAMPIONE!"</span><span>2,7 s il "1" d'oro</span><span>3,2 s casco</span><span>3,8 s nome e titolo</span><span>4,6 s numeri + coriandoli</span><span>5,4 s tasti</span></div>
+<button class="again" onclick="restart()">Rivedi l'animazione</button>
+<p class="note">Numeri d'esempio. Nell'app: parte quando il titolo diventa matematico (anche a gara in corso, col lampo sulla pagina Race); se l'utente non c'era, alla prima apertura dopo, senza la parte della gara. Suono: bandiera a scacchi; vibrazione lunga.</p>
+<script>
+// Coriandoli: posizioni e ritardi fissi (sempre uguali), colori della squadra, oro e bianco.
+const cols = ['#27F4D2', '#E7B34C', '#ffffff'];
+const cf = document.getElementById('cf');
+for (let i = 0; i < 26; i++) {
+  const d = document.createElement('div');
+  d.className = 'conf';
+  d.style.left = ((i * 37) % 320 + 5) + 'px';
+  d.style.background = cols[i % 3];
+  d.style.animationDelay = (4.5 + (i % 9) * 0.12) + 's';
+  d.style.animationDuration = (2.2 + (i % 5) * 0.3) + 's';
+  cf.appendChild(d);
+}
+function restart() { const p = document.getElementById('ph'); const c = p.cloneNode(true); p.replaceWith(c); }
+</script>
+</body>
+</html>
