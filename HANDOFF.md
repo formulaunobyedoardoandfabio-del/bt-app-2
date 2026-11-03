@@ -540,3 +540,12 @@ Da fare:
   (bt-champ-<anno>-<pilota>), animazioni in App.css (solo transform/opacity, reduced-motion), riga d'oro
   "CAMPIONE DEL MONDO" sopra al podio del Mondiale + etichetta nella lista. Test: test/e2e/run87-campione.js.
   Da fare: match point, storia da condividere, trofeo "Ci credevo", bonus FantaF1, messaggio in chat, tema 48 ore, Home.
+
+## 3/11: via immagini e Pit Swipe (versione ridotta, token al 2%)
+- Niente immagini di piloti, scuderie e loghi: useCommonsPhoto restituisce sempre null, Headshot solo disegno,
+  podio/scheda/pagina pilota senza foto, scheda FOTO tolta dall'admin (AdminPhotosTab resta nel codice, spento).
+- Pit Swipe tolto dalla Home (PitSwipeCard non più mostrata; il codice resta).
+- Highlights: se manca la copertina, usa quella del video YouTube (ytThumb, i.ytimg.com/vi/<id>/hqdefault.jpg).
+- Passaggio tra schede più rapido (.24s, ease) con will-change.
+- Prove su foto/caschi/Pit Swipe dalla Home ora possono fallire: aggiornarle (non cancellarle).
+- Da fare: archivio storico GP modificabile dall'admin (aggiungi/modifica/togli), magari dati FastF1 da script.

@@ -338,6 +338,8 @@ function useCommonsTick() {
 const GEO_ONLY = !(typeof window !== "undefined" && window.__btCommons);   // le prove di Commons (run67) lo riaccendono
 function useCommonsPhoto(kind, id) {
   useCommonsTick();
+  return null;   // 3/11 (Edoardo): via le immagini di piloti, scuderie e loghi; restano i disegni
+  // eslint-disable-next-line no-unreachable
   if (GEO_ONLY) return null;
   if (kind === "logos" && !CommonsData.SHOW_TEAM_LOGOS) return null;
   return commonsPhotoOf(commonsFile(kind, id));
@@ -1107,11 +1109,8 @@ function Headshot({ driver, size = 32 }) {
   if (!driver) return <span style={{ width: size, height: size, borderRadius: "50%", background: "rgba(255,255,255,.1)", flexShrink: 0 }} />;
   const ring = Math.max(2, Math.round(size / 14));
   // Foto piccola = il casco del pilota; se manca, il volto; poi la foto di Commons; altrimenti le iniziali.
-  const kind = driver.helmet ? "casco" : driver.avatar ? "volto" : driver.photo ? "foto" : ph ? "commons" : "disegno";
-  const bg = driver.helmet ? `#1c1c20 url(${driver.helmet}) 50% 55% / 86% auto no-repeat`
-    : driver.avatar ? `#1c1c20 url(${driver.avatar}) center / cover no-repeat`
-    : driver.photo ? `#1c1c20 url(${driver.photo}) 50% 3% / 190% auto no-repeat`
-    : ph ? `#1c1c20 url("${ph.thumb}") 50% 22% / cover no-repeat` : `radial-gradient(circle at 50% 30%, ${alpha(driver.color, .35)}, #141418 70%)`;
+  const kind = "disegno";   // 3/11: solo il disegno, niente foto o caschi
+  const bg = `radial-gradient(circle at 50% 30%, ${alpha(driver.color, .35)}, #141418 70%)`;
   return (
     <span aria-hidden="true" style={{ width: size, height: size, borderRadius: "50%", flexShrink: 0, padding: ring, background: driver.color, display: "inline-block", boxSizing: "border-box" }}>
       <span data-img={kind} style={{ display: "flex", alignItems: "center", justifyContent: "center", width: "100%", height: "100%", borderRadius: "50%", background: bg, overflow: "hidden" }}>
@@ -4370,12 +4369,17 @@ function ImageViewer({ src, onClose }) {
 // Video di B&T (commenti, reazioni, sorpassi spiegati da noi), non filmati della TV. link: indirizzo del video
 // (per esempio il post Instagram); thumb: copertina caricata dall'admin. L'archivio sta in shared/bt-highlights.
 const HL_BG = ["#3a0a0c", "#1a1a2e", "#241505", "#0d2a24"];
+// 3/11: copertina presa da YouTube (link del video), se l'admin non ne ha caricata una.
+function ytThumb(link) {
+  const m = /(?:youtu\.be\/|youtube\.com\/(?:watch\?(?:.*&)?v=|shorts\/|embed\/|live\/))([\w-]{11})/.exec(link || "");
+  return m ? "https://i.ytimg.com/vi/" + m[1] + "/hqdefault.jpg" : null;
+}
 function HighlightsStrip({ items, onToast }) {
   return (
     <div data-highlights="" className="scrollrow" style={{ display: "flex", gap: 8, overflowX: "auto", scrollbarWidth: "none" }}>
       {items.map((h, i) => (
         <button key={h.id} className="press" data-highlight={h.id} onClick={() => h.link ? window.open(h.link, "_blank") : onToast("Video in arrivo (demo)")} style={{ flex: "0 0 132px", borderRadius: 12, overflow: "hidden", background: C.bg, border: `1px solid ${C.border}`, textAlign: "left" }}>
-          <span style={{ position: "relative", display: "flex", alignItems: "center", justifyContent: "center", height: 74, background: h.thumb ? `center / cover no-repeat url(${h.thumb})` : `linear-gradient(155deg, ${HL_BG[i % HL_BG.length]} 0%, #0f0f12 70%)` }}>
+          <span style={{ position: "relative", display: "flex", alignItems: "center", justifyContent: "center", height: 74, background: (h.thumb || ytThumb(h.link)) ? `center / cover no-repeat url(${h.thumb || ytThumb(h.link)})` : `linear-gradient(155deg, ${HL_BG[i % HL_BG.length]} 0%, #0f0f12 70%)` }}>
             <span style={{ width: 30, height: 30, borderRadius: "50%", background: "rgba(0,0,0,.45)", display: "flex", alignItems: "center", justifyContent: "center" }}><Icon name="play" size={14} color="#fff" /></span>
             {h.dur && <span style={{ position: "absolute", right: 5, bottom: 5, padding: "1px 5px", borderRadius: 5, background: "rgba(0,0,0,.7)", fontFamily: F_BODY, fontWeight: 700, fontSize: 9.5, color: "#fff" }}>{h.dur}</span>}
           </span>
@@ -6741,7 +6745,7 @@ function Podium({ items, label }) {
 // Sul podio: il pilota in piedi (foto scontornata), la monoposto della scuderia o le iniziali del giocatore.
 function DriverFigure({ driver, place }) {
   const h = place === 1 ? 112 : place === 2 ? 96 : 88;
-  if (driver && driver.photo) return <img src={driver.photo} alt="" data-podium-photo={driver.id} style={{ height: h, maxWidth: "100%", objectFit: "contain", objectPosition: "bottom", display: "block" }} />;
+  if (false) return <img src={driver.photo} alt="" data-podium-photo={driver.id} style={{ height: h, maxWidth: "100%", objectFit: "contain", objectPosition: "bottom", display: "block" }} />;
   return <Headshot driver={driver} size={place === 1 ? 64 : 54} />;
 }
 // Monoposto generica (non è la livrea vera) nel colore della scuderia.
@@ -6932,7 +6936,7 @@ function FantaSlot({ kind, index, id, stats, boost, locked, standings, onOpen, o
         <div data-card-front="" style={{ ...face, position: "relative", background: "#0B0B0E", pointerEvents: flip ? "none" : "auto" }}>
           <button className="press" onClick={() => setFlip(true)} aria-label={`Gira la carta di ${label}`} style={{ display: "block", width: "100%", textAlign: "left" }}>
             {isD
-              ? <div data-card-photo={ph ? "commons" : d.photo ? "foto" : "disegno"} style={{ height: 70, overflow: "hidden", display: "flex", alignItems: "flex-end", justifyContent: "center", background: d.photo ? `${t.color} url(${d.photo}) 50% 0 / 100% auto no-repeat` : ph ? `${t.color} url("${ph.thumb}") 50% 20% / cover no-repeat` : `radial-gradient(circle at 50% 35%, ${alpha("#FFFFFF", .28)}, ${t.color} 70%)` }}>{!d.photo && !ph && <DriverFace d={d} size={78} />}</div>
+              ? <div data-card-photo={ph ? "commons" : false ? "foto" : "disegno"} style={{ height: 70, overflow: "hidden", display: "flex", alignItems: "flex-end", justifyContent: "center", background: false ? `${t.color} url(${false}) 50% 0 / 100% auto no-repeat` : ph ? `${t.color} url("${ph.thumb}") 50% 20% / cover no-repeat` : `radial-gradient(circle at 50% 35%, ${alpha("#FFFFFF", .28)}, ${t.color} 70%)` }}>{!false && !ph && <DriverFace d={d} size={78} />}</div>
               : ph ? <div data-card-photo="commons" style={{ height: 62, background: `${t.color} url("${ph.thumb}") center / cover no-repeat` }} />
               : <div style={{ height: 62, background: t.color, display: "flex", alignItems: "flex-end", justifyContent: "center", paddingBottom: 2 }}><CarSilhouette color="#F4F2EF" width={118} /></div>}
             <div style={{ padding: "6px 8px 8px" }}>
@@ -7884,7 +7888,7 @@ function AdminKeypad({ onOk, onCancel }) {
 }
 
 /* ── PANNELLO ADMIN (stesse sezioni della versione vecchia) ─────────── */
-const ADMIN_TABS = ["NEWS", "SONDAGGI", "OPINIONI", "FANTA F1", "PREVISIONI", "CLASSIFICHE", "GARA LIVE", "MERCATO", "INSTAGRAM", "VIDEO", "FOTO", "NOTIFICHE", "CHAT", "TEMI"];
+const ADMIN_TABS = ["NEWS", "SONDAGGI", "OPINIONI", "FANTA F1", "PREVISIONI", "CLASSIFICHE", "GARA LIVE", "MERCATO", "INSTAGRAM", "VIDEO", "NOTIFICHE", "CHAT", "TEMI"];
 // 31/10: temi delle feste dal Pannello Admin (shared/bt-holidays): di serie seguono le date; si può accenderne uno
 // sempre (per provarlo o per un evento) o spegnerne uno.
 function AdminHolidaysTab({ cfg, onSave, active }) {
@@ -8728,7 +8732,7 @@ function AdminScreen({ takes = [], onTakes = null, photos, setPhotos, silly = {}
         {tab === "INSTAGRAM" && <AdminInstagramTab key={"ig:" + versionOf(ig)} ig={ig} setIg={setIg} onToast={onToast} />}
         {tab === "MERCATO" && <AdminSillyTab official={silly} onOfficial={onSilly} onToast={onToast} />}
         {tab === "VIDEO" && <AdminHighlightsTab items={highlights} setItems={setHighlights} onToast={onToast} />}
-        {tab === "FOTO" && <AdminPhotosTab photos={photos || {}} setPhotos={setPhotos} onToast={onToast} />}
+        {false && <AdminPhotosTab photos={photos || {}} setPhotos={setPhotos} onToast={onToast} />}
         {tab === "NOTIFICHE" && <AdminNotifTab sent={sentNotifs} onSend={onSendNotif} onDelete={onDeleteNotif} />}
         {tab === "CHAT" && <AdminChatTab chats={chats} reports={reports} banned={banned} onDeleteMsg={onDeleteMsg} onSuspend={onSuspend} onUnsuspend={onUnsuspend} onIgnore={onIgnoreReport} />}
       </div>
@@ -9220,7 +9224,7 @@ function DriverDetailModal({ driver, lastRace = null, races = [], onClose }) {
     <div style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,.75)", zIndex: 600, display: "flex", alignItems: "flex-end" }} onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
       <div data-driver-modal={driver.id} className="scrollcol" style={{ background: C.card, borderRadius: "24px 24px 0 0", width: "100%", maxHeight: "90%", position: "relative" }}>
         <div style={{ position: "relative", height: 230, borderRadius: "24px 24px 0 0", overflow: "hidden", background: `linear-gradient(160deg, ${driver.color} 0%, ${driver.color}55 45%, ${C.card} 100%)` }}>
-          {driver.photo ? (
+          {false ? (
             <img src={driver.photo} alt={driver.full} style={{ position: "absolute", right: 8, bottom: 0, height: 222, width: "auto", maxWidth: "50%", objectFit: "contain", objectPosition: "right bottom" }} />
           ) : ph ? (
             <>
@@ -11440,7 +11444,6 @@ function App() {
     if (tab === "home") body = <HomeScreen holidayTop={holiday ? <HolidayCard id={holiday} onOpen={holidayOpen(holiday)} /> : null}
       pitSwipe={<>
         {onboardShow && <OnboardCard steps={onboardSteps} onHide={() => setSwipe(s => ({ ...s, onb: "off" }))} />}
-        <PitSwipeCard info={{ total: psCards.length, i: psDeck ? psDeck.i : 0, done: !!(psDeck && psDeck.done), streak: psStreak, level: psLevel, missions: psMissions, nextText: psNextText }} onOpen={openPitSwipe} />
         {duelList.length > 0 && <DuelsCard duels={duelList} onPlay={playDuel} />}
       </>} ig={ig} highlights={highlights} onOpenIg={() => { setIgFrom("tab"); setView("instagram"); }} articles={articles} tagFilter={tagFilter} onTag={filterByTag} onClearTag={() => setTagFilter(null)} onOpenArticle={openArticle} isPremium={isPremium} onPremium={() => setPremiumOpen(true)} onToast={showToast} onLiveTrack={() => setLiveTrackOpen(true)} onGoFanta={() => goTab("fanta")}  saved={saved} onToggleSave={toggleSave} savedOnly={savedOnly} setSavedOnly={setSavedOnly} onOpenCircuit={openCircuit} homePoll={homePoll} homeVote={votes.home || null} onVote={castVote}
       hidden={hidden} onHide={hideArticle} onUnhideAll={() => { if (!userDataWait()) setHidden([]); }} onSwipeSave={saveFromSwipe}

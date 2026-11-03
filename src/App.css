@@ -179,8 +179,8 @@
      scivolata niente transform (backwards, non both): con transform le finestre aperte dentro la scheda non coprirebbero
      lo schermo. Col dito la pagina segue lo swipe (stile in linea dal codice, src/logic/gesture.js: dragFollow); se lo
      swipe è corto torna a posto con .tab-back. */
-  .tab-enter-left{ animation:tabinleft .3s cubic-bezier(.2,.8,.2,1) backwards; }
-  .tab-enter-right{ animation:tabinright .3s cubic-bezier(.2,.8,.2,1) backwards; }
+  .tab-enter-left{ animation:tabinleft .24s cubic-bezier(.25,.1,.25,1) backwards; will-change:transform; }
+  .tab-enter-right{ animation:tabinright .24s cubic-bezier(.25,.1,.25,1) backwards; will-change:transform; }
   @keyframes tabinleft{ from{ transform:translateX(var(--tab-in,100%)); } to{ transform:translateX(0); } }
   @keyframes tabinright{ from{ transform:translateX(var(--tab-in,-100%)); } to{ transform:translateX(0); } }
   .tab-leave{ position:absolute; inset:0; pointer-events:none; animation:tabout .3s cubic-bezier(.2,.8,.2,1) forwards; }
