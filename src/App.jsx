@@ -822,7 +822,7 @@ function ProLockCard({ what, onAd, onPremium, busy = false }) {
       {onAd && <button className="press" data-pro-ad="" disabled={busy} onClick={() => onAd()} style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8, width: "100%", padding: "13px 0", marginBottom: 8, borderRadius: 12, border: `1.5px solid ${C.gold}`, fontFamily: F_HEAD, fontWeight: 900, fontStyle: "italic", fontSize: 13.5, color: C.gold }}>
         {busy ? <ShiftLight label="Carico la pubblicità" /> : <><Icon name="play" size={14} color={C.gold} />GUARDA UN VIDEO</>}
       </button>}
-      <button className="press" data-pro-premium="" onClick={onPremium} style={{ width: "100%", padding: "12px 0", borderRadius: 12, background: C.gold, fontFamily: F_HEAD, fontWeight: 800, fontStyle: "italic", fontSize: 13, color: "#141414" }}>PASSA A PREMIUM</button>
+      <button className="press cta-shine" data-pro-premium="" onClick={onPremium} style={{ position: "relative", overflow: "hidden", width: "100%", padding: "12px 0", borderRadius: 12, background: C.gold, fontFamily: F_HEAD, fontWeight: 800, fontStyle: "italic", fontSize: 13, color: "#141414" }}>PASSA A PREMIUM</button>
     </div>
   );
 }
@@ -1133,7 +1133,11 @@ function Toggle({ on, onChange, disabled, label }) {
       onClick={() => { if (disabled) return; fx.play("tick"); fx.buzz("select"); onChange(!on); }}
       style={{ width: 50, height: 30, borderRadius: 15, background: "rgba(255,255,255,.16)", position: "relative", flexShrink: 0, opacity: disabled ? .45 : 1, overflow: "hidden" }}>
       <span data-pill-on="" className="pill-on" style={{ position: "absolute", inset: 0, borderRadius: 15, background: C.accent, opacity: lit ? 1 : 0 }} />
-      <span data-pill-knob="" className="pill-knob" style={{ position: "absolute", top: 3, left: 3, width: 24, height: 24, borderRadius: "50%", background: "#fff", boxShadow: "0 2px 6px rgba(0,0,0,.38), 0 0 1px rgba(0,0,0,.3)", transform: `translateX(${lit ? 20 : 0}px)` }} />
+      <span data-pill-knob="" className="pill-knob" style={{ position: "absolute", top: 3, left: 3, width: 24, height: 24, borderRadius: "50%", background: "#fff", boxShadow: "0 2px 6px rgba(0,0,0,.38), 0 0 1px rgba(0,0,0,.3)", transform: `translateX(${lit ? 20 : 0}px)` }}>
+        <span aria-hidden="true" className="knob-face" style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", transform: `rotateY(${lit ? 180 : 0}deg)` }}>
+          {lit ? <span style={{ width: 2.5, height: 10, borderRadius: 2, background: C.accent }} /> : <span style={{ width: 8, height: 8, borderRadius: "50%", border: "2px solid rgba(0,0,0,.25)", boxSizing: "border-box" }} />}
+        </span>
+      </span>
     </button>
   );
 }
@@ -1756,12 +1760,12 @@ function PollCard({ poll, vote, onVote, title = "SONDAGGIO" }) {
       </div>
       <div style={{ fontFamily: F_HEAD, fontWeight: 800, fontSize: 15, color: C.text, marginBottom: 10 }}>{poll.q}</div>
       <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-        {poll.options.map(o => {
+        {poll.options.map((o, i) => {
           const right = poll.answer === o.id, mine = vote === o.id;
           return (
             <button key={o.id} data-poll-option={o.id} className="press" disabled={!!poll.answer} onClick={() => onVote && onVote(poll.id, o.id)} aria-pressed={mine ? "true" : "false"}
               style={{ position: "relative", width: "100%", minHeight: 38, borderRadius: 10, background: "rgba(255,255,255,.05)", border: `1px solid ${right ? TIMING.green : mine ? C.gold : C.border}`, overflow: "hidden", textAlign: "left" }}>
-              {show && <div style={{ position: "absolute", top: 0, bottom: 0, left: 0, width: pct(o) + "%", background: right ? "rgba(62,214,107,.18)" : "rgba(231,179,76,.16)" }} />}
+              {show && <div className="poll-bar" data-poll-bar={pct(o)} style={{ position: "absolute", top: 0, bottom: 0, left: 0, width: "100%", transformOrigin: "0 50%", transform: `scaleX(${pct(o) / 100})`, animationDelay: i * 90 + "ms", background: right ? "rgba(62,214,107,.18)" : "rgba(231,179,76,.16)" }} />}
               <span style={{ position: "relative", display: "flex", alignItems: "center", gap: 8, minHeight: 38, padding: "0 12px", fontFamily: F_BODY, fontWeight: 600, fontSize: 12.5, color: C.text }}>
                 <span style={{ flex: 1 }}>{o.label}</span>
                 {right && <span style={{ fontFamily: F_HEAD, fontWeight: 800, fontSize: 9.5, color: TIMING.green }}>RISPOSTA ESATTA</span>}
@@ -2583,6 +2587,65 @@ function champOf(standings, races, now) {
   const lead = ds[0].points - ds[1].points;
   return lead > pts ? { id: ds[0].id, points: ds[0].points, lead, second: ds[1].id, year: new Date(now).getFullYear() } : null;
 }
+// 4/11 (video di Edoardo, "Score Wheel"): ogni cifra gira su un tamburo e si ferma sul valore. Solo transform.
+const ROLL_DIGITS = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9];
+function RollNumber({ value }) {
+  const str = String(value);
+  const [on, setOn] = useState(false);
+  useEffect(() => { const t = requestAnimationFrame(() => setOn(true)); return () => cancelAnimationFrame(t); }, []);
+  return (
+    <span data-roll={str} aria-label={str} style={{ display: "inline-flex", fontVariantNumeric: "tabular-nums" }}>
+      {str.split("").map((ch, i) => /\d/.test(ch)
+        ? <span key={"d" + (str.length - i)} aria-hidden="true" style={{ display: "inline-block", height: "1.15em", lineHeight: "1.15em", overflow: "hidden" }}>
+            <span className="roll-col" style={{ display: "block", transform: `translateY(${on ? -Number(ch) * 1.15 : 0}em)`, transitionDelay: i * 80 + "ms" }}>
+              {ROLL_DIGITS.map(d => <span key={d} style={{ display: "block", height: "1.15em" }}>{d}</span>)}
+            </span>
+          </span>
+        : <span key={"c" + i} aria-hidden="true">{ch}</span>)}
+    </span>
+  );
+}
+// 4/11 ("Warning Pulse"): triangolo che entra e manda anelli, nel banner della bandiera rossa.
+function WarnPulse() {
+  return (
+    <span aria-hidden="true" data-warn-pulse="" style={{ position: "relative", display: "inline-block", width: 18, height: 16, marginRight: 8, verticalAlign: "-2px" }}>
+      <span className="warn-ring" /><span className="warn-ring warn-ring2" />
+      <svg className="warn-tri" viewBox="0 0 24 22" width="18" height="16" style={{ position: "relative", display: "block" }}><path d="M12 1.5 L22.8 20.5 H1.2 Z" fill="#fff" /><path d="M12 8 V13.5 M12 16.8 V17.2" stroke={FLAG_UI.red.color} strokeWidth="2.6" strokeLinecap="round" /></svg>
+    </span>
+  );
+}
+// 4/11 ("3D Push Button"): bottone tondo che affonda quando lo premi e resta giù, con l'anello acceso.
+function PushToggle({ on, onChange, label }) {
+  return (
+    <button className="push3d" data-push={on ? "on" : "off"} role="switch" aria-checked={on} aria-label={label}
+      onClick={() => { fx.play("tick"); fx.buzz("select"); onChange(!on); }}
+      style={{ position: "relative", width: 46, height: 46, borderRadius: "50%", flexShrink: 0, padding: 0, background: "none" }}>
+      <span aria-hidden="true" style={{ position: "absolute", inset: 0, borderRadius: "50%", background: "#0c0c0f", border: "2px solid rgba(255,255,255,.1)" }} />
+      <span aria-hidden="true" className="push3d-ring" style={{ position: "absolute", inset: 0, borderRadius: "50%", border: `2px solid ${C.accent}`, boxShadow: `0 0 12px ${alpha(C.accent, .55)}`, opacity: on ? 1 : 0 }} />
+      <span aria-hidden="true" className="push3d-cap" style={{ position: "absolute", inset: 6, borderRadius: "50%", background: "linear-gradient(180deg, #3b3b43, #232329)", boxShadow: on ? "0 1px 0 #0a0a0c, inset 0 1px 0 rgba(255,255,255,.1)" : "0 4px 0 #0a0a0c, inset 0 1px 0 rgba(255,255,255,.14)", transform: `translateY(${on ? 3 : 0}px)`, display: "flex", alignItems: "center", justifyContent: "center" }}>
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke={on ? C.accent : C.muted} strokeWidth="2.6" strokeLinecap="round"><path d="M12 3v8" /><path d="M6.3 6.8a8 8 0 1 0 11.4 0" /></svg>
+      </span>
+    </button>
+  );
+}
+// 4/11 ("Card Declined"): se il pagamento non va, una carta si gira sul retro rosso e poi torna. Solo transform/opacity.
+function PayFailCard({ onDone }) {
+  useEffect(() => { const t = setTimeout(onDone, 2300); return () => clearTimeout(t); }, []);
+  const face = { position: "absolute", inset: 0, borderRadius: 14, padding: 14, boxSizing: "border-box", backfaceVisibility: "hidden", WebkitBackfaceVisibility: "hidden", display: "flex", flexDirection: "column", justifyContent: "space-between" };
+  return (
+    <div data-pay-fail="" aria-hidden="true" className="payfail-wrap" style={{ position: "absolute", inset: 0, zIndex: 950, display: "flex", alignItems: "center", justifyContent: "center", pointerEvents: "none", perspective: 900 }}>
+      <div className="payfail-card" style={{ position: "relative", width: 220, height: 136, transformStyle: "preserve-3d" }}>
+        <div style={{ ...face, background: `linear-gradient(135deg, ${C.accent}, #3a3a8c)`, boxShadow: "0 18px 36px -14px rgba(0,0,0,.8)" }}>
+          <span style={{ width: 30, height: 22, borderRadius: 5, background: C.gold }} />
+          <span style={{ fontFamily: F_HEAD, fontWeight: 800, fontSize: 14, letterSpacing: 2, color: "#fff" }}>•••• B&T</span>
+        </div>
+        <div style={{ ...face, background: "#C8102E", transform: "rotateY(180deg)", alignItems: "center", justifyContent: "center", textAlign: "center" }}>
+          <span style={{ fontFamily: F_HEAD, fontStyle: "italic", fontWeight: 900, fontSize: 17, color: "#fff", lineHeight: 1.1 }}>PAGAMENTO NON RIUSCITO</span>
+        </div>
+      </div>
+    </div>
+  );
+}
 function ChampionTakeover({ champ, onClose }) {
   const d = driverById(champ.id), t = d ? teamById(d.teamId) : null, col = t ? t.color : C.gold, sec = driverById(champ.second);
   useEffect(() => { fx.play("flag"); fx.buzz("flag"); }, []);
@@ -2600,7 +2663,7 @@ function ChampionTakeover({ champ, onClose }) {
       <div className="champ-up" style={{ position: "absolute", left: 16, right: 16, top: 500, display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
         {[[champ.points, "punti"], ["+" + champ.lead, sec ? "su " + sec.full.split(" ").slice(-1)[0] : "di vantaggio"]].map(([v, l], i) => (
           <div key={i} style={{ padding: "10px 4px", borderRadius: 12, background: "rgba(0,0,0,.45)", border: "1px solid rgba(255,255,255,.1)", textAlign: "center" }}>
-            <b style={{ display: "block", fontFamily: F_HEAD, fontStyle: "italic", fontWeight: 900, fontSize: 24, color: C.text }}>{v}</b><span style={{ fontFamily: F_BODY, fontSize: 11, color: C.muted }}>{l}</span>
+            <b style={{ display: "block", fontFamily: F_HEAD, fontStyle: "italic", fontWeight: 900, fontSize: 24, color: C.text }}><RollNumber value={v} /></b><span style={{ fontFamily: F_BODY, fontSize: 11, color: C.muted }}>{l}</span>
           </div>))}
       </div>
       {conf.map((c, i) => <span key={i} className="champ-conf" aria-hidden="true" style={{ position: "absolute", top: -20, left: c.left, width: 6, height: 12, borderRadius: 1, background: c.bg, animationDelay: c.delay + "s", animationDuration: c.dur + "s" }} />)}
@@ -3641,7 +3704,7 @@ function RadioList({ live, st }) {
   const autoRow = (
     <div data-radio-auto={auto ? "on" : "off"} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, padding: "10px 14px", borderBottom: `1px solid ${C.divider}` }}>
       <span style={{ fontFamily: F_BODY, fontWeight: 700, fontSize: 12.5, color: C.text }}>Ascolta i team radio <span style={{ fontWeight: 400, color: C.dim }}>(partono da soli appena arrivano)</span></span>
-      <Toggle on={auto} onChange={v => { setAuto(v); local.set("bt-radio-auto", v); }} label="Ascolta i team radio" />
+      <PushToggle on={auto} onChange={v => { setAuto(v); local.set("bt-radio-auto", v); }} label="Ascolta i team radio" />
     </div>);
   if (!live.sim.radios().length) return <>{autoRow}{note("none", RADIO_NONE)}</>;
   if (!rs.length) return <>{autoRow}{note("later", "Ancora nessuna radio a questo punto della sessione.")}</>;
@@ -5946,6 +6009,9 @@ function Of1Status({ of1, standings, onRefresh }) {
   return (
     <div data-of1-status={of1.status} role="status" style={card}>
       <div style={{ display: "flex", alignItems: "center", gap: 9, fontFamily: F_HEAD, fontWeight: 800, fontSize: 13.5, color: C.text }}>{of1.status === "loading" && <LedGrid mode="seq" size={4} />}{text}</div>
+      {of1.status === "loading" && <div data-skeleton="" aria-hidden="true" style={{ marginTop: 12, display: "flex", flexDirection: "column", gap: 9 }}>
+        {[0, 1, 2].map(i => <div key={i} style={{ display: "flex", gap: 10, alignItems: "center" }}><span className="skel" style={{ width: 28, height: 28, borderRadius: "50%", flexShrink: 0 }} /><span style={{ flex: 1, display: "flex", flexDirection: "column", gap: 5 }}><span className="skel" style={{ height: 9, width: 80 - i * 14 + "%" }} /><span className="skel" style={{ height: 7, width: 55 - i * 9 + "%" }} /></span></div>)}
+      </div>}
       {of1.status === "empty" && <p style={{ margin: "4px 0 0", fontFamily: F_BODY, fontSize: 12, color: C.muted, lineHeight: 1.5 }}>I dati veri della sessione arrivano da OpenF1 circa 30 minuti dopo la fine.</p>}
       {of1.status !== "loading" && refresh}
     </div>
@@ -5990,7 +6056,7 @@ function RaceScreen({ champion = null, proOk = true, onProAd = null, proBusy = f
   return (
     <div className="scrollcol" ref={scRef} onScroll={checkBoard} {...pullRace.handlers} data-race-pull="" data-red-screen={st && st.flag === "red" ? "on" : undefined} style={{ height: "100%", position: "relative", overscrollBehaviorY: "contain", ...(st && st.flag === "red" ? { background: RED_SCREEN_BG } : {}) }}>
       {(pullRace.pull > 0 || pullRace.busy) && <PullGauge rev={pullRace.rev} busy={pullRace.busy} pull={pullRace.pull} />}
-      {st && st.flag === "red" && <div role="status" data-red-banner="" style={{ position: "sticky", top: 0, zIndex: 6, margin: "0 0 10px", padding: "10px 12px", background: FLAG_UI.red.color, fontFamily: F_HEAD, fontWeight: 900, fontStyle: "italic", fontSize: 15, letterSpacing: .8, color: "#fff", textAlign: "center" }}>BANDIERA ROSSA · SESSIONE SOSPESA</div>}
+      {st && st.flag === "red" && <div role="status" data-red-banner="" style={{ position: "sticky", top: 0, zIndex: 6, margin: "0 0 10px", padding: "10px 12px", background: FLAG_UI.red.color, fontFamily: F_HEAD, fontWeight: 900, fontStyle: "italic", fontSize: 15, letterSpacing: .8, color: "#fff", textAlign: "center", overflow: "hidden" }}><WarnPulse />BANDIERA ROSSA · SESSIONE SOSPESA</div>}
       {st && curTab === "classifica" && <PitBoard st={st} driverId={favDriver} visible={board} />}
       {st && liveRace && st.finished && isRaceType(st.type) && <FinishPodium st={st} race={liveRace} onSelectDriver={onSelectDriver} />}
       {realLive && (!live || live.source === "openf1") && <SessionPicker sessions={of1Sessions} onPick={onOf1Pick} note={st ? sessionNote : null} />}
@@ -6094,9 +6160,12 @@ function RaceScreen({ champion = null, proOk = true, onProAd = null, proBusy = f
 
       {curTab === "mondiale" && (
         <div style={{ margin: "0 16px 16px" }}>
-          <div style={{ display: "flex", gap: 6, marginBottom: 10 }}>
+          <div data-champ-seg={champ} style={{ position: "relative", display: "inline-grid", gridTemplateColumns: "1fr 1fr", padding: 3, marginBottom: 10, borderRadius: 999, background: "rgba(255,255,255,.05)", border: `1px solid ${C.border}` }}>
+            <span aria-hidden="true" className="seg-move" style={{ position: "absolute", top: 3, bottom: 3, left: 3, width: "calc(50% - 3px)", transform: `translateX(${champ === "costruttori" ? 100 : 0}%)` }}>
+              <span key={champ} className="seg-stretch" style={{ display: "block", width: "100%", height: "100%", borderRadius: 999, background: alpha(C.accentInk, .16), border: `1px solid ${C.accentInk}`, boxSizing: "border-box" }} />
+            </span>
             {[["piloti", "Piloti"], ["costruttori", "Costruttori"]].map(([id, l]) => (
-              <button key={id} className="press" onClick={() => setChamp(id)} style={{ padding: "7px 14px", borderRadius: 999, background: champ === id ? alpha(C.accentInk, .16) : "rgba(255,255,255,.05)", border: `1px solid ${champ === id ? C.accentInk : C.border}`, fontFamily: F_BODY, fontWeight: 700, fontSize: 11.5, color: champ === id ? C.text : C.muted }}>{l}</button>
+              <button key={id} className="press" aria-pressed={champ === id} onClick={() => setChamp(id)} style={{ position: "relative", padding: "7px 16px", borderRadius: 999, background: "none", fontFamily: F_BODY, fontWeight: 700, fontSize: 11.5, color: champ === id ? C.text : C.muted }}>{l}</button>
             ))}
           </div>
           {!st && (() => {
@@ -8810,7 +8879,7 @@ function PremiumModal({ onClose, isPremium, plan, setPlan, onSubscribe, subscrib
                 <p style={{ textAlign: "center", fontFamily: F_BODY, fontSize: 11.5, color: C.muted, margin: "10px 0 0" }}>Poi {price}: si rinnova da solo a ogni stagione finché non disdici. Disdici quando vuoi, anche durante la prova.</p>
                 <button className="press" disabled={subscribing} onClick={onSubscribe} style={{ display: "block", margin: "8px auto 0", padding: "8px 12px", fontFamily: F_BODY, fontWeight: 700, fontSize: 12, color: C.gold }}>Oppure abbonati subito: {price}</button>
               </>) : (<>
-                <button className="press" disabled={subscribing} onClick={onSubscribe} style={{ display: "block", width: "100%", marginTop: 16, padding: "16px 0", borderRadius: 14, background: subscribing ? "#555" : C.accent, boxShadow: subscribing ? "none" : `0 10px 22px -10px ${C.accent}`, fontFamily: F_HEAD, fontWeight: 900, fontStyle: "italic", fontSize: 14.5, color: "#fff", letterSpacing: .2, textAlign: "center" }}>
+                <button className={subscribing ? "press" : "press cta-shine"} disabled={subscribing} onClick={onSubscribe} style={{ position: "relative", overflow: "hidden", display: "block", width: "100%", marginTop: 16, padding: "16px 0", borderRadius: 14, background: subscribing ? "#555" : C.accent, boxShadow: subscribing ? "none" : `0 10px 22px -10px ${C.accent}`, fontFamily: F_HEAD, fontWeight: 900, fontStyle: "italic", fontSize: 14.5, color: "#fff", letterSpacing: .2, textAlign: "center" }}>
                   {subscribing ? <ShiftLight /> : `ABBONATI · ${price}`}
                 </button>
                 <p style={{ textAlign: "center", fontFamily: F_BODY, fontSize: 11.5, color: C.muted, margin: "10px 0 0" }}>Si rinnova da solo a ogni stagione finché non disdici. Disdici quando vuoi.</p>
@@ -9869,7 +9938,8 @@ function App() {
   const isPremium = isPaid || adPro;
   adsTestForAdmin = isAdminNow;
   const [proAsk, setProAsk] = useState(null);   // foglio "Funzione Pro": { what, then }
-  const [champSeen, setChampSeen] = useState(false);   // 2/11: schermata del campione chiusa in questa apertura
+  const [champSeen, setChampSeen] = useState(false);
+  const [payFail, setPayFail] = useState(false);   // 4/11: carta che si gira se il pagamento non va   // 2/11: schermata del campione chiusa in questa apertura
   const proGate = (what, then) => { if (isPremium) then(); else setProAsk({ what, then }); };
   // Notizie Premium sbloccate col video: restano sbloccate su questo telefono (le ultime 200).
   const [adNews, setAdNews] = useState(() => { const v = local.get("bt-ad-news"); return Array.isArray(v) ? v : []; });
@@ -10892,7 +10962,7 @@ function App() {
       if (r.ok && r.via === "play") {
         setSubscribing(false); setSubscribed(true); fx.play("done"); fx.buzz("success");
         setPremium(p => ({ ...p, sub: true, src: "play", at: nowMs(), trial: p.trial ? { ...p.trial, converted: true } : null }));
-      } else if (!r.ok) { setSubscribing(false); showToast(BUY_MSG[r.reason] || BUY_MSG.failed); }
+      } else if (!r.ok) { setSubscribing(false); if (r.reason !== "cancelled") setPayFail(true); showToast(BUY_MSG[r.reason] || BUY_MSG.failed); }
       // Stripe: la pagina cambia, il tasto resta in attesa
     });
   };
@@ -10903,7 +10973,7 @@ function App() {
     Billing.buy("coffee", { email: account && account.email, token: account && account.aid }).then(r => {
       if (!(r.ok && r.via === "stripe")) setCoffeeBusy(false);
       if (r.ok && r.via === "play") { fx.play("done"); fx.buzz("success"); showToast("Grazie per il caffè! Ci dai la carica per il prossimo GP"); }
-      else if (!r.ok && r.reason !== "cancelled") showToast(BUY_MSG[r.reason] || BUY_MSG.failed);
+      else if (!r.ok && r.reason !== "cancelled") { setPayFail(true); showToast(BUY_MSG[r.reason] || BUY_MSG.failed); }
     });
   };
   const doTrial = () => {
@@ -11517,6 +11587,7 @@ function App() {
         {selectedDriver && <DriverDetailModal driver={selectedDriver} lastRace={lastRace} races={races} onClose={() => setSelectedDriver(null)} />}
         {liveTrackOpen && <LiveMapView race={live ? races.find(r => r.id === live.raceId) : weekendRace(races)} live={live} st={liveSt} onClose={() => setLiveTrackOpen(false)} />}
         {ssOpen && <SecondScreen chat={chats.find(c => c.id === "generale")} blocked={blocked} onChatSend={guest ? () => needLogin("Per scrivere in chat serve un account.") : t => sendMessage("generale", t)} race={live ? races.find(r => r.id === live.raceId) : weekendRace(races)} live={live} st={liveSt} standings={shownStandings} layout={ssLayout} setLayout={setSsLayout} prefs={ssPrefs} setPrefs={setSsPrefs} vote={live ? votesNow.dotd[live.raceId] || {} : {}} onVote={(k, id) => live && voteDotd(live.raceId, k, id)} notice={notice} onCloseNotice={nextNotice} onClose={() => setSsOpen(false)} />}
+        {payFail && <PayFailCard onDone={() => setPayFail(false)} />}
         {champShow && <ChampionTakeover champ={champion} onClose={() => { local.set(champKey, true); setChampSeen(true); }} />}
         {proAsk && <ProGateSheet what={proAsk.what} busy={adBusy} onAd={Ads.canReward() ? () => watchAdPro(proAsk.then) : null} onPremium={() => { setProAsk(null); setPremiumOpen(true); }} onClose={() => setProAsk(null)} />}
         {lapList && live && liveSt && <LapTimesModal live={live} st={liveSt} carId={lapList} onOpenLap={n => setTelemetry({ carId: lapList, lapNo: n, sector: 0 })} onClose={() => setLapList(null)} />}

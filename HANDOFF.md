@@ -556,3 +556,11 @@ Da fare:
   nel Premium con "-20%"), Flip Knob negli interruttori, 3D Push Button, Shine Sweep su "Passa a Premium", Review Bars
   e Score Wheel nei sondaggi/voti, Flip Down per gli avvisi di aggiornamento, Warning Pulse per bandiera rossa,
   Card Declined per pagamento rifiutato. Blur-up scartato (filter: regola solo transform/opacity).
+- 4/11 pomeriggio, fatte le altre dal video (solo transform/opacity, ferme con reduced-motion):
+  Score Wheel (RollNumber, cifre a tamburo: punti nella schermata del campione), Review Bars (barre del sondaggio che
+  crescono una dopo l'altra, data-poll-bar), Flip Knob (faccia del pomello di Toggle che gira, il pomello resta uguale),
+  Segmented a molla (Mondiale Piloti/Costruttori, data-champ-seg), Shine Sweep (cta-shine sui tasti Premium),
+  Warning Pulse (WarnPulse nel banner della bandiera rossa), Skeleton Pulse (dati della sessione in caricamento),
+  3D Push Button (PushToggle per "Ascolta i team radio"), Card Declined (PayFailCard se il pagamento non va),
+  Flip Down (toast che scende ruotando dal bordo alto). Blur-up scartato (filter).
+  Verificato: check/sem, run61, run87, run15, run62, run14, run69, run40, run86 verdi.
