@@ -2181,7 +2181,7 @@ function ArticleScreen({ article, onBack, isPremium, onPremium, onAdUnlock = nul
         <div style={{ display: "flex", gap: 8 }}>
           <button className="press" aria-label="Condividi articolo" onClick={onShare} style={round}><Icon name="share" size={16} /></button>
           <button className="press" aria-label={saved ? "Togli dai preferiti" : "Salva tra i preferiti"} onClick={onToggleSave} style={round}>
-            <Icon name={saved ? "bookmark-fill" : "bookmark"} size={16} color={saved ? C.gold : C.text} />
+            <span key={saved ? "s" : "u"} data-bm-pop={saved ? "" : undefined} className={saved ? "bm-pop" : undefined} style={{ display: "inline-flex" }}><Icon name={saved ? "bookmark-fill" : "bookmark"} size={16} color={saved ? C.gold : C.text} /></span>
           </button>
         </div>} />
       <div data-ers={ers} role="progressbar" aria-label="ERS: quanto hai letto dell'articolo" aria-valuemin={0} aria-valuemax={100} aria-valuenow={ers}

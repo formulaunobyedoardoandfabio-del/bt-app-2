@@ -549,3 +549,10 @@ Da fare:
 - Passaggio tra schede più rapido (.24s, ease) con will-change.
 - Prove su foto/caschi/Pit Swipe dalla Home ora possono fallire: aggiornarle (non cancellarle).
 - Da fare: archivio storico GP modificabile dall'admin (aggiungi/modifica/togli), magari dati FastF1 da script.
+
+## 4/11: micro-animazioni dal video di Edoardo (token all'1%)
+- Fatto: "Bookmark Save" nell'articolo (segnalibro che si allunga quando salvi: .bm-pop in App.css, data-bm-pop).
+- Da fare dallo stesso video (catalogo di 12 UI): Skeleton Pulse nei caricamenti, Segmented a molla (Mensile/Stagione
+  nel Premium con "-20%"), Flip Knob negli interruttori, 3D Push Button, Shine Sweep su "Passa a Premium", Review Bars
+  e Score Wheel nei sondaggi/voti, Flip Down per gli avvisi di aggiornamento, Warning Pulse per bandiera rossa,
+  Card Declined per pagamento rifiutato. Blur-up scartato (filter: regola solo transform/opacity).
