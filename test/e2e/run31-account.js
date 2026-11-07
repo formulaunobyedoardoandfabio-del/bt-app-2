@@ -14,20 +14,20 @@ async function register(p, { name = 'Fabio', email = 'fabio@b.it', pw = 'abcdef1
   if (birth) await p.fill('#regBirth', '15/06/' + birth);
   if (steps) { await p.focus('#regFollow'); for (let i = 0; i < steps; i++) await p.keyboard.press('ArrowRight'); }
   await tapSel(p, `[data-fan-option="${fan}"]`); await w(p, 150);
-  if (adult) await p.check('#regAdult');
+  if (adult && !birth) await p.fill('#regBirth', '15/06/2000');   // 8/11: niente casella "Ho almeno 14 anni", serve la data
   await tapText(p, 'CREA ACCOUNT', { exact: true }); await w(p, 1500);
 }
 const OLD = { 'users/v@b.it': { name: 'Edo', nick: 'Edo', email: 'v@b.it', pw: 'segreta', isPremium: false, premium: false, notif: { news: true, live: true, fanta: true }, ts: 1726000000000, plan: 'free' } };
 
 run({
-  async 'iscrizione: senza "Ho almeno 14 anni" o nato nel 2015 l\'account non si crea'(b) {
+  async 'iscrizione: senza data di nascita o nato nel 2015 l\'account non si crea'(b) {
     const { ctx, p, errs } = await open(b);
     await register(p, { adult: false });
     const t1 = await text(p), u1 = await doc(p, 'users/fabio@b.it');
-    await p.fill('#regBirth', '15/06/2015'); await p.check('#regAdult');   // 7/11: la data si scrive GG/MM/AAAA (prima il manettino: 2016 poi 2015)
+    await p.fill('#regBirth', '15/06/2015');   // 8/11: l'età si calcola dalla data
     await tapText(p, 'CREA ACCOUNT', { exact: true }); await w(p, 1500);
-    const t2 = await text(p), u2 = await doc(p, 'users/fabio@b.it'), auth = await authState(p); await ctx.close();
-    assert(/Conferma di avere almeno 14 anni\./.test(t1) && !u1, 'senza la casella si è creato l\'account (o manca l\'avviso)');
+    const t2 = await text(p), u2 = await doc(p, 'users/fabio@b.it'), auth = await authState(p), box = await p.evaluate(() => !!document.querySelector('#regAdult')); await ctx.close();
+    assert(/Scrivi la tua data di nascita/.test(t1) && !u1 && !box, 'senza la data si è creato l\'account (o manca l\'avviso, o c\'è ancora la casella)');
     assert(/Per iscriverti a Sector 4 devi avere almeno 14 anni\./.test(t2) && !u2 && !auth.users['fabio@b.it'], 'con meno di 14 anni si è creato l\'account (o manca l\'avviso)');
     assert(!errs.length, errs.join(' | '));
   },

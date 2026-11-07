@@ -62,7 +62,7 @@ run({
     const first = await p.evaluate(() => ({ amb: document.querySelector('[data-news-ambient]').getAttribute('data-news-ambient'), grid: !!document.querySelector('[data-news-grid-toggle]'), list: document.querySelector('[data-news-list]').getAttribute('data-news-list'), rowImgLeft: (() => { const r = document.querySelector('[data-news-item]'); return r ? getComputedStyle(r).display : null; })() }));
     const seen = new Set([first.amb]);
     for (let i = 1; i <= 8; i++) { await p.evaluate(i => { const h = document.querySelector('[data-home]'); h.scrollTop = i * 260; h.dispatchEvent(new Event('scroll')); }, i); await w(p, 250); seen.add(await p.evaluate(() => document.querySelector('[data-news-ambient]').getAttribute('data-news-ambient'))); }
-    const rows = await p.evaluate(() => { const all = [...document.querySelectorAll('[data-news-row]')]; return { n: all.length, shown: all.filter(e => e.classList.contains('news-in')).length }; });
+    const rows = await p.evaluate(() => { const all = [...document.querySelectorAll('[data-news-row]')]; const h = document.querySelector('[data-home]'); return { n: all.length, focus: all.filter(e => getComputedStyle(e).animationName === 'newsFocus').length, side: h.scrollWidth - h.clientWidth }; });
     // scroll-snap: ogni scheda si ferma al centro; quella al centro è a fuoco, le altre più spente
     await p.evaluate(() => { const r = document.querySelectorAll('[data-news-row]')[3]; r.scrollIntoView({ block: 'center' }); });
     await w(p, 500);
@@ -74,8 +74,8 @@ run({
     await ctx.close();
     assert(first.amb && !first.grid && first.list === 'list' && first.rowImgLeft === 'flex', 'elenco di sempre con la luce dietro: ' + JSON.stringify(first));
     assert(seen.size >= 2, 'scorrendo la luce non cambia colore: ' + JSON.stringify([...seen]));
-    assert(rows.shown >= 3, 'le schede non entrano scorrendo: ' + JSON.stringify(rows));
-    assert(/y/.test(snap.type) && /mandatory/.test(snap.type) && /center/.test(snap.align) && snap.near > .9 && snap.far < snap.near, 'scorrimento a scatti con la scheda al centro a fuoco: ' + JSON.stringify(snap));
+    assert(rows.focus === rows.n && rows.n > 3 && rows.side <= 0, '8/11: fuoco fatto dal browser su ogni scheda, la Home non scorre di lato: ' + JSON.stringify(rows));
+    assert(/^y( proximity)?$/.test(snap.type) && /center/.test(snap.align) && snap.near > .85 && snap.far < snap.near, '8/11: scatto leggero (proximity) con la scheda al centro a fuoco: ' + JSON.stringify(snap));
     assert(!errs.length, errs.join(' | '));
   },
 
@@ -87,7 +87,9 @@ run({
     await tapSel(p, '[data-elo-how]'); await w(p, 200);
     const rule = await p.evaluate(() => { const e = document.querySelector('[data-elo-rule]'); return e && e.innerText; });
     await tapSel(p, '[aria-label="Profilo"]'); await w(p, 500);
-    const unl = await p.evaluate(() => [...document.querySelectorAll('[data-pro-unlock]')].map(e => e.getAttribute('data-pro-unlock') + ':' + e.getAttribute('data-done')));
+    const unl = await p.evaluate(() => ({ pro: document.querySelectorAll('[data-pro-unlock]').length, level: !!document.querySelector('[data-fan-level]'), subs: document.querySelectorAll('[data-settings-sub]').length, group: (document.querySelector('[data-settings-group]') || {}).textContent || null }));
+    await tapSel(p, '[data-settings-group]'); await w(p, 200);
+    const open8 = await p.evaluate(() => [...document.querySelectorAll('[data-settings-sub]')].map(e => e.textContent.trim()));
     await tapSel(p, '[aria-label="Indietro"]').catch(() => {}); await w(p, 300);
     await tapSel(p, '[data-premium-chip]'); await w(p, 600);
     const prem = await p.evaluate(() => {
@@ -98,9 +100,30 @@ run({
     await ctx.close();
     assert(elo0 && elo0.v === 'none' && /Parti da 1200/.test(elo0.t), 'ELO senza leghe: ' + JSON.stringify(elo0));
     assert(rule && /scacchi/.test(rule) && /400/.test(rule) && /K vale 40/.test(rule), 'regola dell\'ELO: ' + rule);
-    assert(unl.join(',') === 'laps:0,gomme:0,radio:0,telemetry:0,ss:0', 'sblocchi coi trofei nel Profilo: ' + JSON.stringify(unl));
+    // 8/11: nel mio profilo niente "Livello del tifoso" (lo vedono gli altri) né "Funzioni Pro coi trofei"; sei impostazioni in una voce
+    assert(!unl.pro && !unl.level && unl.subs === 0 && /Personalizza l'app/.test(unl.group || ''), 'profilo: ' + JSON.stringify(unl));
+    assert(['Colori dell\'app', 'Suoni', 'Vibrazioni', 'Temi delle feste', 'Pit Board in tutta l\'app', 'Promemoria sul telefono'].every(x => open8.some(t => t.startsWith(x))), 'dentro "Personalizza l\'app": ' + JSON.stringify(open8));
     assert(prem.title === 'Ogni GP vissuto dal muretto box' && prem.cells >= 20 && prem.perks === 3, 'Premium: ' + JSON.stringify(prem));
     assert(prem.sel.join(',') === 'annual:true,month:false' && /RISPARMI \d+%/.test(prem.saving || '') && prem.after, 'piani: ' + JSON.stringify(prem));
+    assert(!errs.length, errs.join(' | '));
+  },
+
+  // 8/11 (Edoardo): a metà swipe la scheda accanto si vede già dove l'avevi lasciata, non dall'inizio (poi non salta).
+  async 'swipe: la scheda accanto si vede dal punto dove l\'avevi lasciata'(b) {
+    const { ctx, p, errs } = await open(b); await login(p); await w(p, 500);
+    await tapSel(p, '[data-nav-tab="garage"]'); await w(p, 700);
+    const saved = await p.evaluate(() => { const el = document.querySelector('[data-tab-page="garage"] .scrollcol'); el.scrollTop = 420; el.dispatchEvent(new Event('scroll')); return el.scrollTop; });
+    await w(p, 200);
+    await tapSel(p, '[data-nav-tab="home"]'); await w(p, 700);
+    const y = await p.evaluate(() => { const h = document.querySelector('[data-home]').getBoundingClientRect(); return h.top + 40; });
+    await p.mouse.move(300, y); await p.mouse.down(); await p.mouse.move(150, y, { steps: 8 }); await w(p, 250);
+    const half = await p.evaluate(() => { const n = document.querySelector('[data-tab-neighbor] .scrollcol'); return n ? n.scrollTop : null; });
+    await p.mouse.move(40, y, { steps: 4 }); await p.mouse.up(); await w(p, 700);
+    const after = await p.evaluate(() => { const el = document.querySelector('[data-tab-page="garage"]:not([data-tab-neighbor]) .scrollcol'); return el ? el.scrollTop : null; });
+    await ctx.close();
+    assert(saved > 300, 'la pagina GARAGE non scorre abbastanza per la prova: ' + saved);
+    assert(half !== null && Math.abs(half - saved) <= 3, 'a metà swipe GARAGE riparte dall\'inizio: ' + JSON.stringify({ saved, half }));
+    assert(after !== null && Math.abs(after - saved) <= 3, 'arrivati su GARAGE il punto è cambiato: ' + JSON.stringify({ saved, after }));
     assert(!errs.length, errs.join(' | '));
   },
 

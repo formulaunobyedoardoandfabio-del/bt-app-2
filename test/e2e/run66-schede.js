@@ -44,7 +44,7 @@ run({
     assert(t0 === 'home' && t1 === 'garage', 'da HOME a sinistra: ' + JSON.stringify([t0, t1]));
     assert(slide === 'none', 'finita la scivolata GARAGE non è al suo posto: ' + slide);
     assert(t2 === 'home', 'da GARAGE a destra: ' + t2);
-    assert(played.filter(x => x === 'drs').length >= 2, 'manca il DRS dello swipe (31/10, prima era il tic): ' + JSON.stringify(played));
+    assert(played.filter(x => x === 'drs').length === 0, '8/11: passando da una scheda all\'altra non deve suonare: ' + played.join(','));
     assert(!errs.length, errs.join(' | '));
   },
 

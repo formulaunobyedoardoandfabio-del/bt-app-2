@@ -232,7 +232,7 @@ const tests = {
     await p.focus('#regFollow'); await p.keyboard.press('ArrowRight'); await p.keyboard.press('ArrowRight'); await w(p, 400);
     const lbl = await inner(p, '[data-follow-label]');
     await tapSel(p, '[data-fan-option="vroom"]'); await w(p, 150);
-    await p.check('#regAdult');   // Task 22: "Ho almeno 14 anni"
+    await p.fill('#regBirth', '15/06/2000');   // 8/11: l'età dalla data (niente casella "Ho almeno 14 anni")
     await tapText(p, 'CREA ACCOUNT', { exact: true }); await w(p, 2900);   // Task 9: i Termini si accettano al primo avvio, non dopo l'accesso
     await tapSel(p, '[aria-label="Profilo"]'); await w(p, 400);
     const follow = await inner(p, '[data-about-row="follow"]'), fan = await inner(p, '[data-about-row="fan"]'), birth = await inner(p, '[data-about-row="birth"]');
@@ -242,7 +242,7 @@ const tests = {
     assert(lbl === '3 anni', 'il contachilometri non cambia gli anni: ' + lbl);
     assert(follow && /3 anni/.test(follow), 'profilo, segue F1: ' + follow);
     assert(fan && /Se fa Vroom è bello/.test(fan), 'profilo, tipo fan: ' + fan);
-    assert(birth && /Non indicato/.test(birth), 'profilo, anno di nascita non scelto: ' + birth);   // Tappa 3 (G05): niente lineetta lunga
+    assert(birth && /15\/06\/2000/.test(birth), 'profilo, data di nascita: ' + birth);   // 8/11: la data serve all'iscrizione
     assert(!errs.length, errs.join(' | '));
   },
   // Tappa 3 (G16-G17): "Su di te" (prima "About You") con il manettino dell'anno e il contachilometri degli anni.

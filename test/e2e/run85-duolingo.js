@@ -24,13 +24,15 @@ const NOTIF = () => {
 };
 
 run({
-  async 'Profilo: livello del tifoso con i punti e le missioni della settimana'(b) {
+  // 8/11 (Edoardo): il livello del tifoso non è più nel mio Profilo; va nel profilo pubblico e lo vedono gli altri in chat.
+  async 'livello del tifoso: non nel mio Profilo, nel profilo pubblico per gli altri (nome e punti)'(b) {
     const { ctx, p, errs } = await open(b, { seed: { addDocs: { ...NEWS, ...user({ favDriver: 'leclerc', swipe: { tot: { decks: 12, box: 30, votes: 10, tfOk: 5 } } }) } } }); await login(p); await w(p, 800);
     await tapSel(p, '[aria-label="Profilo"]'); await w(p, 600);
-    const card = norm(await inner(p, '[data-fan-level]'));
+    const mine = await p.evaluate(() => !!document.querySelector('[data-fan-level]'));
+    const pub = await p.evaluate(() => { const k = Object.keys(localStorage).find(x => x.startsWith('bt_bt-pubprof-')); try { return k ? JSON.parse(JSON.parse(localStorage.getItem(k)).j) : null; } catch (e) { return null; } });
     await ctx.close();
-    assert(/LIVELLO DEL TIFOSO/i.test(card) && /Pilota titolare|Rookie|Caposquadra/.test(card), 'livello: ' + card);
-    assert(/punti/.test(card) && /MISSIONI/i.test(card), 'punti e missioni: ' + card);
+    assert(!mine, 'nel mio Profilo c\'è ancora il livello del tifoso');
+    assert(pub && /Pilota titolare|Rookie|Caposquadra/.test(pub[3] || '') && pub[4] > 0, 'nel profilo pubblico manca il livello: ' + JSON.stringify(pub));
     assert(!errs.length, errs.join(' | '));
   },
 

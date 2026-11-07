@@ -626,3 +626,21 @@ Da fare:
   run69 (Premium con 3 icone), run70 (fra i giochi in arrivo la telecronaca AI, ora col suo disegno in GARAGE_GLYPHS),
   run76 (usa l'ultimo weekend con prove libere nel file che si aggiorna da solo). Verdi: run60, 66, 67, 69, 70, 76,
   run10, 14, 17, 20, 33, 34, 55, 56, 57, 58, 88.
+
+## 8/11 (dal 7/11 sera): correzioni dopo la prova di Edoardo sull'APK
+- Swipe: la scheda accanto si vede già dal punto dove l'avevi lasciata (useLayoutEffect su nb + scrollMem e scrollSig,
+  ora a livello di file), così arrivandoci non salta; niente suono passando da una scheda all'altra (resta la vibrazione).
+- Home: niente JavaScript a ogni movimento (via paintFocus, via l'entrata delle schede). Fuoco sulla notizia al centro
+  fatto dal browser (CSS animation-timeline: view(), .news-focus e [data-news-row] dentro [data-home]; dove non c'è,
+  niente effetto): al centro misura piena, sopra e sotto 0,88 e spente. Scatto "proximity" (aiuta, non frena chi scorre
+  veloce) e overflowX hidden (l'ingrandimento faceva scorrere la Home di lato e bloccava lo swipe). Luce del colore con
+  IntersectionObserver sulla riga a metà schermo.
+- Profilo: via "Livello del tifoso" dal mio profilo; il livello (nome e punti) va nel profilo pubblico (profiles.js lv,
+  xp) e si vede nel profilo veloce della chat (data-chat-profile-level). Via "Funzioni Pro coi trofei".
+- Premium coi trofei, regola nuova di Edoardo: solo chi vince tutti i trofei ha il Premium (trophypro.js allDone; senza
+  Pit Swipe acceso i suoi due trofei non contano). È in isPaid, come il Premium pagato. Il lucchetto dice quanti mancano.
+- Profilo: Colori dell'app, Suoni, Vibrazioni, Temi delle feste, Pit Board e Promemoria dentro una sola voce che si apre,
+  "Personalizza l'app" (data-settings-group). helpers.js la apre da solo se una prova cerca una di quelle voci.
+- Registrazione: via la casella "Ho almeno 14 anni": serve la data di nascita e l'età si calcola da lì (account.js
+  need-birth; adult true resta valido per le app vecchie senza data).
+- Prove: unit account, profiles, trophypro; run10, 16, 31, 32, 33, 50, 51, 60, 66, 71, 77, 79, 81, 85, 86, 88 verdi.

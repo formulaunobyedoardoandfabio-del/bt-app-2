@@ -133,7 +133,7 @@ run({
     const { ctx, p, errs } = await open(b);
     await tapText(p, 'REGISTRATI', { exact: true }); await w(p, 300);
     await p.fill('#regName', 'Fabio'); await p.fill('#authEmail', 'fabio@b.it'); await p.fill('#authPw', 'abcdef12'); await p.fill('#regPw2', 'abcdef12');
-    await tapSel(p, '[data-fan-option="vivo"]'); await p.check('#regAdult'); await tapText(p, 'CREA ACCOUNT', { exact: true }); await w(p, 1500);
+    await tapSel(p, '[data-fan-option="vivo"]'); await p.fill('#regBirth', '15/06/2000'); await tapText(p, 'CREA ACCOUNT', { exact: true }); await w(p, 1500);
     await openRoom(p); await say(p, 'Messaggio di Fabio');
     await tapSel(p, '[aria-label="Indietro"]').catch(() => {}); await w(p, 300);
     await goTab(p, 'HOME').catch(() => {});

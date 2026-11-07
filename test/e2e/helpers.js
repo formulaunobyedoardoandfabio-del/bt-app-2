@@ -56,7 +56,8 @@ async function tapText(p, txt, { exact = false, timeout = 4000, sel = 'button' }
     const ok = await p.evaluate(({ txt, exact, sel }) => {
       const n = s => s.replace(/\s+/g, ' ').trim();
       const el = [...document.querySelectorAll(sel)].find(b => (exact ? n(b.textContent) === txt : n(b.textContent).includes(txt)));
-      if (!el) return false; el.click(); return true;
+      if (!el) { const g = document.querySelector('[data-settings-group][aria-expanded="false"]'); if (g) g.click(); return false; }   // 8/11: impostazioni in "Personalizza l'app"
+      el.click(); return true;
     }, { txt, exact, sel });
     if (ok) return;
     await w(p, 150);
@@ -66,7 +67,7 @@ async function tapText(p, txt, { exact = false, timeout = 4000, sel = 'button' }
 async function tapSel(p, sel, timeout = 4000) {
   const end = Date.now() + timeout;
   while (Date.now() < end) {
-    if (await p.evaluate(s => { const e = document.querySelector(s); if (!e) return false; e.click(); return true; }, sel)) return;
+    if (await p.evaluate(s => { const e = document.querySelector(s); if (!e) { const g = document.querySelector('[data-settings-group][aria-expanded="false"]'); if (g) g.click(); return false; } e.click(); return true; }, sel)) return;
     await w(p, 150);
   }
   throw new Error(`elemento non trovato: ${sel}`);

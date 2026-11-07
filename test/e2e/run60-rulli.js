@@ -74,7 +74,7 @@ run({
     await p.fill('#regName', 'Piccolo'); await p.fill('#authEmail', 'piccolo@b.it'); await p.fill('#authPw', 'abcdef12'); await p.fill('#regPw2', 'abcdef12');
     await p.fill('#regBirth', '15/06/2015');   // 7/11: la data si scrive (prima il manettino a 2015)
     const k = await p.evaluate(() => document.querySelector('#regBirth').value);
-    await tapSel(p, '[data-fan-option="vivo"]'); await p.check('#regAdult');
+    await tapSel(p, '[data-fan-option="vivo"]');   // 8/11: niente casella, l'età dalla data
     await tapText(p, 'CREA ACCOUNT', { exact: true }); await w(p, 1500);
     const t = await text(p), user = await p.evaluate(() => window.firebase.__fake.doc('users/piccolo@b.it'));
     await ctx.close();

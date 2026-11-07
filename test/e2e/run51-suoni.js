@@ -7,7 +7,8 @@ const switches = p => p.evaluate(() => Object.fromEntries(['Suoni', 'Vibrazioni'
   const e = document.querySelector(`[role="switch"][aria-label="${n}"]`);
   return [n, e ? e.getAttribute('aria-checked') : null];
 })));
-const openProfile = async p => { await tapSel(p, '[aria-label="Profilo"]'); await w(p, 400); };
+// 8/11: Suoni e Vibrazioni sono dentro "Personalizza l'app".
+const openProfile = async p => { await tapSel(p, '[aria-label="Profilo"]'); await w(p, 400); await tapSel(p, '[data-settings-group][aria-expanded="false"]').catch(() => {}); await w(p, 200); };
 
 run({
   async 'Profilo: interruttori Suoni e Vibrazioni accesi di serie, si spengono e restano spenti dopo il riavvio'(b) {

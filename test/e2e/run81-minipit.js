@@ -43,6 +43,7 @@ run({
     await startDemo(p, 'QUALIFICHE'); await goTab(p, 'HOME'); await w(p, 300);
     const again = await mini(p);
     await tapSel(p, '[aria-label="Profilo"]'); await w(p, 500);
+    await tapSel(p, '[data-settings-group]'); await w(p, 200);   // 8/11: dentro "Personalizza l'app"
     const toggle = await has(p, `[role="switch"][aria-label="Pit Board in tutta l'app"]`);
     await tapSel(p, `[role="switch"][aria-label="Pit Board in tutta l'app"]`); await w(p, 300);
     await tapSel(p, '[aria-label="Indietro"]'); await w(p, 400);

@@ -62,14 +62,15 @@ t('7/11 data di nascita intera: età esatta, anno ricavato dalla data, data non 
   assert.strictEqual(c.fs('users/f@b.it').about.birthDate, null, 'il 30 febbraio non esiste');
 });
 
-t('iscrizione: senza "Ho almeno 14 anni" o con meno di 14 anni non si crea l\'account', async () => {
+// 8/11: niente casella "Ho almeno 14 anni": senza data di nascita (e senza adult, come le app vecchie) non si crea.
+t('iscrizione: senza data di nascita o con meno di 14 anni non si crea l\'account', async () => {
   const c = ctx();
   const A = make();
-  await assert.rejects(A.register({ name: 'Fabio', email: 'f@b.it', pw: 'abcdef12', pw2: 'abcdef12', about: {} }), e => e.code === 'need-age');
+  await assert.rejects(A.register({ name: 'Fabio', email: 'f@b.it', pw: 'abcdef12', pw2: 'abcdef12', about: {} }), e => e.code === 'need-birth');
   await assert.rejects(A.register({ name: 'Fabio', email: 'f@b.it', pw: 'abcdef12', pw2: 'abcdef12', about: { birth: 2015 }, adult: true }), e => e.code === 'too-young');
   assert.strictEqual(c.fs('users/f@b.it'), undefined, 'account creato lo stesso');
   assert.ok(!c.auth().users['f@b.it'], 'account Authentication creato lo stesso');
-  assert.strictEqual(MESSAGES['need-age'], 'Conferma di avere almeno 14 anni.');
+  assert.strictEqual(MESSAGES['need-birth'], 'Scrivi la tua data di nascita: serve per controllare che tu abbia almeno 14 anni.');
   assert.strictEqual(MESSAGES['too-young'], 'Per iscriverti a Sector 4 devi avere almeno 14 anni.');
   const u = await A.register({ name: 'Fabio', email: 'f@b.it', pw: 'abcdef12', pw2: 'abcdef12', about: { birth: 2012 }, adult: true });   // 14 anni nel 2026
   assert.strictEqual(u.email, 'f@b.it');

@@ -24,6 +24,7 @@ const MESSAGES = {
   "reset-sent": "Ti abbiamo mandato un'email per scegliere una nuova password. Controlla anche lo spam.",
   "not-enabled": "L'accesso con email e password non è ancora attivo su Firebase (Authentication → Metodo di accesso).",
   "need-age": "Conferma di avere almeno 14 anni.",
+  "need-birth": "Scrivi la tua data di nascita: serve per controllare che tu abbia almeno 14 anni.",   // 8/11
   "too-young": "Per iscriverti a Sector 4 devi avere almeno 14 anni.",
   "not-loaded": "Il tuo profilo non è ancora arrivato: controlla la connessione e riprova tra poco.",
   disabled: "Questo account è stato disattivato. Per saperne di più scrivi a bt.formula1@gmail.com.",
@@ -226,7 +227,9 @@ function createAccount({
     if (!strongPw(pw)) throw mkErr("weak");
     // Età: con l'anno di nascita si controlla quello (anno per anno); in ogni caso serve "Ho almeno 14 anni".
     if (tooYoung(about)) throw mkErr("too-young");
-    if (adult !== true) throw mkErr("need-age");
+    // 8/11 (Edoardo): niente casella "Ho almeno 14 anni": l'età si controlla dalla data di nascita, che serve.
+    // (adult true resta valido per chi chiama senza la data, come le versioni vecchie dell'app.)
+    if (!validDate(about && about.birthDate) && adult !== true) throw mkErr("need-birth");
     const auth = await needAuth();
     const { doc, protectedDoc } = await peekUser(em);
     if (doc || protectedDoc) throw mkErr("exists");

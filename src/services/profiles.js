@@ -20,10 +20,13 @@ function createProfiles({ dbGet = FB.dbGet, dbSet = FB.dbSet, store = null, now 
     const aid = me && me.aid, name = String((me && me.name) || "").trim().slice(0, 40);
     if (!aidOk(aid) || !name) return false;
     const p = C.profOf(me.p), medal = C.medalOk(me.medal);
-    const j = JSON.stringify([name, p, medal]), t = now();
+    // 8/11: livello del tifoso (nome e punti), che gli altri vedono nel profilo veloce della chat.
+    const lv = me.level && typeof me.level.name === "string" && me.level.name.trim() ? me.level.name.trim().slice(0, 30) : null;
+    const xp = me.level && Number.isFinite(me.level.xp) ? Math.max(0, Math.round(me.level.xp)) : null;
+    const j = JSON.stringify([name, p, medal, lv, xp]), t = now();
     const sent = store ? store.get(keyOf(aid)) : null;
     if (sent && sent.j === j && t - (sent.t || 0) < REFRESH_MS) return false;
-    try { await dbSet("fanta", docId(aid), { name, aid, p: p || null, medal: medal || null, t, gone: false }); }
+    try { await dbSet("fanta", docId(aid), { name, aid, p: p || null, medal: medal || null, lv, xp, t, gone: false }); }
     catch (e) { return false; }
     if (store) store.set(keyOf(aid), { j, t });
     delete cache[aid];
@@ -36,7 +39,7 @@ function createProfiles({ dbGet = FB.dbGet, dbSet = FB.dbSet, store = null, now 
     if (c && now() - c.at < CACHE_MS) return c.v;
     let d = null;
     try { d = await dbGet("fanta", docId(aid)); } catch (e) { return null; }
-    const v = d && !d.gone && d.name ? { name: String(d.name).slice(0, 40), p: C.profOf(d.p), medal: C.medalOk(d.medal), t: Number(d.t) || 0 } : null;
+    const v = d && !d.gone && d.name ? { name: String(d.name).slice(0, 40), p: C.profOf(d.p), medal: C.medalOk(d.medal), t: Number(d.t) || 0, ...(typeof d.lv === "string" && d.lv ? { lv: d.lv.slice(0, 30), xp: Number.isFinite(d.xp) ? d.xp : null } : {}) } : null;
     cache[aid] = { v, at: now() };
     return v;
   }
