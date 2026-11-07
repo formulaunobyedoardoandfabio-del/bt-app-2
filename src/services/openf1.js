@@ -206,9 +206,12 @@ function buildReplay(raw = {}, track = null, { drivers = [], of1 = null, live = 
       if (/VIRTUAL SAFETY CAR DEPLOYED/.test(msg)) { vsc = true; sc = false; }
       else if (/VIRTUAL SAFETY CAR ENDING/.test(msg)) vsc = false;
       else if (/SAFETY CAR DEPLOYED/.test(msg)) { sc = true; vsc = false; }
-      if (f === "RED") red = true;
-      if (f === "GREEN" || f === "CHEQUERED") { red = false; sc = false; vsc = false; }
-      if (f === "CLEAR" && scope !== "SECTOR") { red = false; sc = false; vsc = false; yel.clear(); }
+      // 7/11 sera (Interlagos, Q1 rossa al minuto 2): TRACK CLEAR durante la rossa non la toglie (la sessione resta
+      // ferma); la rossa finisce col verde o con la ripresa. SESSION ABORTED / SUSPENDED è la rossa anche senza bandiera.
+      const cat = String(m.category || "").toUpperCase();
+      if (f === "RED" || (cat === "SESSIONSTATUS" && /SESSION (ABORTED|SUSPENDED)/.test(msg))) red = true;
+      if (f === "GREEN" || f === "CHEQUERED" || (cat === "SESSIONSTATUS" && /SESSION (RESUMED|STARTED)/.test(msg))) { red = false; sc = false; vsc = false; }
+      if (f === "CLEAR" && scope !== "SECTOR") { sc = false; vsc = false; yel.clear(); }
       if ((f === "YELLOW" || f === "DOUBLE YELLOW") && scope === "SECTOR" && m.sector != null) { yel.delete(m.sector); yel.set(m.sector, bigSector(m.sector)); }
       if (f === "CLEAR" && scope === "SECTOR" && m.sector != null) yel.delete(m.sector);
       const flag = red ? "red" : sc ? "sc" : vsc ? "vsc" : yel.size ? "yellow" : "green";
@@ -221,7 +224,11 @@ function buildReplay(raw = {}, track = null, { drivers = [], of1 = null, live = 
     for (let i = lastAtOrBefore(flagTL, a) + 1; i < flagTL.length && flagTL[i].t <= b; i++) if (FLAG_RANK[flagTL[i].flag] > FLAG_RANK[w]) w = flagTL[i].flag;
     return w;
   };
-  const chequers = rc.filter(({ m }) => String(m.flag || "").toUpperCase() === "CHEQUERED").map(x => x.t);
+  // Fine della sessione: la prima bandiera a scacchi in gara, l'ultima nelle prove. In qualifica (e Sprint Qualifying)
+  // le scacchi di Q1 e Q2 non chiudono niente: vale quella di Q3 (qualifying_phase di OpenF1; senza, come prima).
+  const isQualiType = type === "QUALI" || type === "SQ";
+  const hasPhase = rc.some(({ m }) => isNum(m.qualifying_phase));
+  const chequers = rc.filter(({ m }) => String(m.flag || "").toUpperCase() === "CHEQUERED" && (!isQualiType || !hasPhase || m.qualifying_phase === 3)).map(x => x.t);
   const chequeredT = chequers.length ? (isRace ? chequers[0] : chequers[chequers.length - 1]) : null;
 
   // Soste, stint, posizioni, distacchi e risultato di ogni pilota.
@@ -352,7 +359,8 @@ function buildReplay(raw = {}, track = null, { drivers = [], of1 = null, live = 
     const d = info.get(b.num);
     return { id: d.id, code: d.code, time: b.time, lapNo: b.lapNo };
   }
-  const raceFinished = at => (chequeredT != null ? at >= chequeredT : !isRace && duration > 0 && at >= duration);
+  // In diretta senza le scacchi finali non è finita: i dati fermi (rossa, macchine ai box) non sono la fine.
+  const raceFinished = at => (chequeredT != null ? at >= chequeredT : !isRace && !live && duration > 0 && at >= duration);
 
   function carAt(num, at) {
     const d = info.get(num), M = metaBy.get(num) || [], R = recsBy.get(num) || [];
@@ -478,6 +486,7 @@ function buildReplay(raw = {}, track = null, { drivers = [], of1 = null, live = 
 
   return {
     source: "openf1", type, totalLaps, duration, sessionKey,
+    ended: chequeredT != null,   // nei dati c'è la bandiera a scacchi finale (in qualifica quella di Q3)
     get t() { return x; },
     advance(sec) { x = clamp(x + (isNum(sec) ? sec : 0), 0, duration + (live ? LIVE_AHEAD_S : 0)); },
     jumpTo(v) { x = clamp(isNum(v) ? v : 0, 0, duration + (live ? LIVE_AHEAD_S : 0)); },

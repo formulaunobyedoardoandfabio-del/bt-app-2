@@ -45,6 +45,8 @@ import { createMeteo, sessionForecast, skyOf } from "./services/meteo";
 import { createAds } from "./services/ads";
 import { createBilling, BUY_MSG } from "./services/billing";
 import { createF1Data, apply as applyF1Data } from "./services/f1data";
+import { createSocial } from "./services/social";
+import { parseSocial } from "./logic/social";
 import FantaSeason from "./logic/fanta-season";
 import { createFantaLeague } from "./services/fantaleague";
 import { createProfiles } from "./services/profiles";
@@ -464,6 +466,8 @@ const Meteo = createMeteo({ store: local, now: nowMs });
 // Dati F1 che si aggiornano da soli (25/10, src/services/f1data.js): Ghost Lap delle ultime qualifiche, gare, qualifiche e
 // prove libere, rigenerati ogni ora nei weekend da GitHub (tools/make_live_data.py) e pubblicati su Vercel.
 const F1Data = createF1Data({ store: local, now: nowMs });
+// Post ufficiali di Instagram e X (7/11, src/services/social.js): public/data/social.json scritto dal workflow social.yml.
+const SocialFeed = createSocial({ store: local, now: nowMs });
 const MET_LICENSE_URL = "https://api.met.no/doc/License";
 // Pubblicità AdMob (24/10, src/services/ads.js): solo nell'APK, banner in Home e in Race e interstitial tra le notizie;
 // niente con il Premium. ADMOB_TEST = annunci di prova di Google: scripts/prepare_android.py scrive
@@ -506,6 +510,7 @@ const OF1_SRC = "Sessione (dati OpenF1)";
 // live from 30 minutes before a session starts until 30 minutes after it ends"). Appena sbloccati possono arrivare a
 // metà: per altri 30 minuti (fino a un'ora dopo la fine) si ricarica ogni 5 minuti.
 const OF1_LIVE_LAG_MS = 30 * 60000, OF1_SETTLE_MS = 30 * 60000, OF1_RELOAD_MS = 5 * 60000;
+const OF1_OVERTIME_MS = 3 * 3600000;   // 7/11: sessione ferma per una rossa, ancora in diretta fino a 3 ore oltre la fine prevista
 const of1NeedsReload = (session, loadedAt, now) => {
   const end = session && Date.parse(session.date_end || session.date_start);
   return isFinite(end) && now < end + OF1_LIVE_LAG_MS + OF1_SETTLE_MS && now - loadedAt >= OF1_RELOAD_MS;
@@ -2087,7 +2092,7 @@ function TyreFilter({ value, onChange }) {
   );
 }
 
-function HomeScreen({ holidayTop = null, pitSwipe = null, ig, onOpenIg, highlights = [], articles, tagFilter, onTag, onClearTag, onOpenArticle, isPremium, onPremium, onToast, onLiveTrack, onGoFanta, saved = [], onToggleSave, savedOnly = false, setSavedOnly, onOpenCircuit, homePoll = null, homeVote = null, onVote, hidden = [], onHide, onUnhideAll, onSwipeSave, onRefresh }) {
+function HomeScreen({ holidayTop = null, pitSwipe = null, social = [], onOpenSocial = null, ig, onOpenIg, highlights = [], articles, tagFilter, onTag, onClearTag, onOpenArticle, isPremium, onPremium, onToast, onLiveTrack, onGoFanta, saved = [], onToggleSave, savedOnly = false, setSavedOnly, onOpenCircuit, homePoll = null, homeVote = null, onVote, hidden = [], onHide, onUnhideAll, onSwipeSave, onRefresh }) {
   const [q, setQ] = useState("");
   const homeRef = useRef(null);
   const pullRev = usePullRefresh(homeRef, onRefresh);
@@ -2215,6 +2220,7 @@ function HomeScreen({ holidayTop = null, pitSwipe = null, ig, onOpenIg, highligh
       {tagFilter && matches.length === 0 && (
         <p style={{ margin: "0 16px 16px", fontFamily: F_BODY, fontSize: 12.5, color: C.dim }}>Nessuna notizia con questo hashtag, per ora.</p>
       )}
+      {!nq && !savedOnly && !tagFilter && onOpenSocial && <SocialStrip posts={social} onOpen={onOpenSocial} />}
 
       </div>
       {featured && (
@@ -2313,6 +2319,129 @@ function HomeScreen({ holidayTop = null, pitSwipe = null, ig, onOpenIg, highligh
   );
 }
 
+/* ── POST UFFICIALI DI INSTAGRAM E X (7/11) ── */
+// Si vedono coi widget ufficiali (iframe "embed" di Instagram, widgets.js di X), come chiedono le loro regole: l'app non
+// copia foto né testi. Prima di toccarli non si carica niente da Instagram o X; toccandoli, loro ricevono l'indirizzo e
+// i dati del telefono (lo dice la privacy). "Mostra sempre i post dei social" lo ricorda (SOCIAL_AUTO_KEY).
+const SOCIAL_AUTO_KEY = "bt-social-auto";
+const NET_NAME = { instagram: "Instagram", x: "X" };
+let xWidgets = null;   // widgets.js di X si carica una volta sola
+const loadXWidgets = () => xWidgets || (xWidgets = new Promise((res, rej) => {
+  const ok = () => { const w = window.twttr; if (w && w.widgets && w.widgets.createTweet) res(w); else rej(new Error("widget di X")); };
+  if (window.twttr && window.twttr.widgets) { ok(); return; }
+  const s = document.createElement("script");
+  s.src = "https://platform.twitter.com/widgets.js"; s.async = true; s.charset = "utf-8";
+  s.onload = () => { const w = window.twttr; if (w && typeof w.ready === "function") w.ready(ok); else ok(); };
+  s.onerror = () => { xWidgets = null; rej(new Error("widget di X")); };
+  document.head.appendChild(s);
+}));
+const NetMark = ({ net, size = 28 }) => (
+  <span aria-hidden="true" style={{ flexShrink: 0, width: size, height: size, borderRadius: size * .3, background: net === "x" ? "#000" : "linear-gradient(135deg,#F58529,#DD2A7B 55%,#8134AF)", border: net === "x" ? "1px solid rgba(255,255,255,.25)" : "none", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: F_HEAD, fontWeight: 900, fontSize: size * .5, color: "#fff" }}>
+    {net === "x" ? "X" : <Icon name="instagram" size={size * .6} color="#fff" />}
+  </span>
+);
+
+function SocialEmbed({ url, account, auto = false }) {
+  const s = parseSocial(url);
+  const [on, setOn] = useState(() => auto || !!local.get(SOCIAL_AUTO_KEY));
+  const [st, setSt] = useState("idle");          // idle | loading | ok | fail
+  const [h, setH] = useState(640);
+  const box = useRef(null), frame = useRef(null);
+  const who = account || (s && s.user) || "";
+  useEffect(() => {
+    if (!on || !s || s.net !== "x") return undefined;
+    let alive = true;
+    const el = box.current;
+    setSt("loading");
+    const t = setTimeout(() => { if (alive) setSt(v => (v === "ok" ? v : "fail")); }, 12000);
+    loadXWidgets().then(tw => tw.widgets.createTweet(s.id, el, { theme: "dark", lang: "it", dnt: true, conversation: "none", align: "center" }))
+      .then(node => { if (alive) setSt(node ? "ok" : "fail"); }, () => { if (alive) setSt("fail"); });
+    return () => { alive = false; clearTimeout(t); if (el) el.innerHTML = ""; };
+  }, [on, url]);
+  // L'embed di Instagram dice la sua altezza con un messaggio "MEASURE": si ascolta solo quello del suo riquadro.
+  useEffect(() => {
+    if (!on || !s || s.net !== "instagram") return undefined;
+    const onMsg = e => {
+      if (e.origin !== "https://www.instagram.com" || !frame.current || e.source !== frame.current.contentWindow) return;
+      let d = e.data;
+      if (typeof d === "string") { try { d = JSON.parse(d); } catch (x) { return; } }
+      const hh = d && d.type === "MEASURE" && d.details && Number(d.details.height);
+      if (hh > 100) { setH(Math.min(1600, Math.round(hh))); setSt("ok"); }
+    };
+    window.addEventListener("message", onMsg);
+    return () => window.removeEventListener("message", onMsg);
+  }, [on, url]);
+  if (!s) return null;
+  const name = NET_NAME[s.net];
+  const openBtn = (
+    <button type="button" className="press" data-social-open="" onClick={() => openUrl(s.url)} style={{ display: "inline-flex", alignItems: "center", gap: 6, minHeight: 40, padding: "0 4px", border: "none", background: "none", fontFamily: F_BODY, fontWeight: 700, fontSize: 12.5, color: C.accentInk }}>
+      Apri su {name} <Icon name="chevron" size={12} color={C.accentInk} />
+    </button>
+  );
+  if (!on) return (
+    <div data-social-embed={s.net} data-social-state="off" style={{ padding: 14, borderRadius: 16, background: C.card, border: `1px solid ${C.border}` }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+        <NetMark net={s.net} />
+        <div style={{ minWidth: 0 }}>
+          <div style={{ fontFamily: F_HEAD, fontWeight: 800, fontSize: 14, color: C.text }}>Post {who ? `di @${who} ` : ""}su {name}</div>
+          <div style={{ fontFamily: F_BODY, fontSize: 11.5, color: C.muted, lineHeight: 1.45 }}>Si carica da {name} solo se lo tocchi: allora {name} riceve l'indirizzo e i dati del tuo telefono.</div>
+        </div>
+      </div>
+      <button type="button" className="press" data-social-show="" onClick={() => { fx.buzz("select"); setOn(true); }} style={{ width: "100%", marginTop: 12, padding: "12px 0", borderRadius: 12, background: C.accent, border: "none", fontFamily: F_HEAD, fontWeight: 800, fontSize: 13, color: "#fff", letterSpacing: .4 }}>MOSTRA IL POST</button>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, marginTop: 4, flexWrap: "wrap" }}>
+        {openBtn}
+        <button type="button" className="press" data-social-always="" onClick={() => { local.set(SOCIAL_AUTO_KEY, true); setOn(true); }} style={{ minHeight: 40, padding: "0 4px", border: "none", background: "none", fontFamily: F_BODY, fontWeight: 600, fontSize: 12, color: C.muted }}>Mostra sempre i post dei social</button>
+      </div>
+    </div>
+  );
+  return (
+    <div data-social-embed={s.net} data-social-state={st} style={{ borderRadius: 16, overflow: "hidden" }}>
+      {s.net === "instagram"
+        ? <iframe ref={frame} title={`Post ${who ? "di @" + who + " " : ""}su Instagram`} src={s.embed} loading="lazy" scrolling="no" allowtransparency="true"
+            sandbox="allow-scripts allow-same-origin allow-popups allow-popups-to-escape-sandbox" style={{ display: "block", width: "100%", height: h, border: 0, borderRadius: 16, background: "#fff" }} />
+        : <div ref={box} style={{ minHeight: st === "ok" ? 0 : 120, display: "flex", justifyContent: "center" }} />}
+      {s.net === "x" && st === "loading" && <div style={{ marginTop: -96, height: 96, display: "flex", alignItems: "center", justifyContent: "center", gap: 8, fontFamily: F_BODY, fontSize: 12, color: C.dim }}><LedGrid mode="seq" size={4} />Carico il post da X…</div>}
+      {s.net === "x" && st === "fail" && <p role="status" style={{ margin: "8px 2px 0", fontFamily: F_BODY, fontSize: 12.5, color: C.muted }}>Il post non si è caricato da X.</p>}
+      <div style={{ textAlign: "right" }}>{openBtn}</div>
+    </div>
+  );
+}
+
+// Striscia "DAI PROFILI UFFICIALI" della Home: solo i post veri di social.json; senza post non si vede.
+function SocialStrip({ posts, onOpen }) {
+  if (!posts || !posts.length) return null;
+  return (
+    <div data-social-strip="" style={{ marginBottom: 14 }}>
+      <SectionLabel icon="instagram">DAI PROFILI UFFICIALI</SectionLabel>
+      <div data-swipe-own="" style={{ display: "flex", gap: 10, overflowX: "auto", padding: "0 16px 4px", scrollbarWidth: "none", touchAction: "pan-x pan-y" }}>
+        {posts.slice(0, 12).map(p => (
+          <button key={p.id} type="button" className="press" data-social-card={p.id} onClick={() => onOpen(p)}
+            style={{ flexShrink: 0, width: 168, textAlign: "left", padding: 12, borderRadius: 14, background: C.card, border: `1px solid ${C.border}`, display: "flex", flexDirection: "column", gap: 8 }}>
+            <NetMark net={p.net} size={26} />
+            <span style={{ fontFamily: F_HEAD, fontWeight: 800, fontSize: 13.5, color: C.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>@{p.account}</span>
+            <span style={{ fontFamily: F_BODY, fontSize: 11.5, color: C.muted }}>{NET_NAME[p.net]} · {Compat.relTime(p.date, nowMs())}</span>
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function SocialSheet({ post, onClose }) {
+  useBack(true, onClose);
+  return sheetWrap({ "data-social-sheet": post.id, "aria-label": `Post di @${post.account} su ${NET_NAME[post.net]}` }, onClose,
+    <div style={{ width: "100%", maxHeight: "90%", overflowY: "auto", boxSizing: "border-box", background: "#111114", borderTop: "1px solid rgba(255,255,255,.12)", borderRadius: "24px 24px 0 0", padding: "10px 16px 22px" }}>
+      <div aria-hidden="true" style={{ margin: "0 auto 12px", width: 40, height: 5, borderRadius: 3, background: "rgba(255,255,255,.22)" }} />
+      <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12 }}>
+        <NetMark net={post.net} />
+        <div style={{ flex: 1, minWidth: 0, fontFamily: F_HEAD, fontWeight: 800, fontSize: 15, color: C.text }}>@{post.account}</div>
+        <button className="press" aria-label="Chiudi" onClick={onClose} style={{ width: 36, height: 36, borderRadius: "50%", background: "rgba(255,255,255,.08)", display: "flex", alignItems: "center", justifyContent: "center" }}><Icon name="close" size={14} /></button>
+      </div>
+      <SocialEmbed url={post.url} account={post.account} />
+    </div>
+  );
+}
+
 function ArticleScreen({ article, onBack, isPremium, onPremium, onAdUnlock = null, adBusy = false, onTag, saved = false, onToggleSave, onShare, vote = null, onVote }) {
   const [zoomed, setZoomed] = useState(false);   // foto a tutto schermo, con lo zoom
   useBack(zoomed, () => setZoomed(false));
@@ -2374,6 +2503,7 @@ function ArticleScreen({ article, onBack, isPremium, onPremium, onAdUnlock = nul
           ))
         )}
         {article.poll && !locked && <div style={{ margin: "4px 0 14px" }}><PollCard poll={articlePoll(article)} vote={vote} onVote={onVote} /></div>}
+        {article.social && !locked && <div data-article-social="" style={{ margin: "4px 0 14px" }}><SocialEmbed url={article.social} /></div>}
         <div style={{ display: "flex", alignItems: "center", gap: 12, marginTop: 10, padding: "14px 16px", borderRadius: 16, background: C.card, border: `1px solid ${C.border}` }}>
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ fontFamily: F_HEAD, fontWeight: 800, fontSize: 14, color: C.text }}>Ti è piaciuto?</div>
@@ -8290,7 +8420,7 @@ function ImagePicker({ id, value, onChange, label = "Allega immagine", changeLab
 }
 
 function AdminNewsTab({ articles, setArticles, onPublish, onToast }) {
-  const empty = { title: "", summary: "", cat: "NEWS", author: "Team B&T", image: "", body: "", published: true, premium: false };
+  const empty = { title: "", summary: "", cat: "NEWS", author: "Team B&T", image: "", body: "", published: true, premium: false, social: "" };
   const [f, setF] = useState(empty);
   const [customCat, setCustomCat] = useState(false);
   const [teams, setTeams] = useState([]);
@@ -8328,9 +8458,11 @@ function AdminNewsTab({ articles, setArticles, onPublish, onToast }) {
     const body = f.body.trim() || f.summary.trim() || "Articolo pubblicato dalla redazione B&T.";
     const opts = pollOpts.map(o => o.trim()).filter(Boolean);
     if (pollOn && (!pollQ.trim() || opts.length < 2)) { setError("Per il sondaggio servono la domanda e almeno 2 risposte."); return; }
+    const social = f.social.trim() ? parseSocial(f.social) : null;
+    if (f.social.trim() && !social) { setError("Il link del post non va: serve quello di un post di Instagram (instagram.com/p/…) o di X (x.com/…/status/…)."); return; }
     const poll = pollOn ? { q: pollQ.trim(), answer: null, options: opts.map((label, k) => ({ id: "o" + (k + 1), label, base: 0 })) } : undefined;
     // Il modulo si svuota solo se la notizia è salvata su Firebase; altrimenti resta per riprovare.
-    Promise.resolve(onPublish({ title: f.title.trim(), excerpt: (f.summary.trim() || body.split("\n")[0]).slice(0, 140), cat: f.cat.trim().toUpperCase(), premium: customCat || !!f.premium, author: f.author.trim(), image: f.image, body, published: f.published, teams, drivers, circuits, ...(poll ? { poll } : {}) })).then(ok => {
+    Promise.resolve(onPublish({ title: f.title.trim(), excerpt: (f.summary.trim() || body.split("\n")[0]).slice(0, 140), cat: f.cat.trim().toUpperCase(), premium: customCat || !!f.premium, author: f.author.trim(), image: f.image, body, published: f.published, teams, drivers, circuits, ...(poll ? { poll } : {}), ...(social ? { social: social.url } : {}) })).then(ok => {
       if (ok === false) return;
       setF(empty); setCustomCat(false); setTeams([]); setDrivers([]); setCircuits([]); setPollOn(false); setPollQ(""); setPollOpts(["", "", "", ""]);
     });
@@ -8370,6 +8502,9 @@ function AdminNewsTab({ articles, setArticles, onPublish, onToast }) {
         )}
         <label style={aLabel} htmlFor="adText">CONTENUTO</label>
         <textarea id="adText" value={f.body} onChange={e => set("body", e.target.value)} rows={5} placeholder="Scrivi l'articolo…" style={{ ...aInput, resize: "vertical", lineHeight: 1.5, marginBottom: 12 }} />
+        {/* 7/11: un post ufficiale si mostra col widget di Instagram o di X (niente copie di foto o testi). */}
+        <label style={aLabel} htmlFor="adSocial">POST UFFICIALE (FACOLTATIVO)</label>
+        <input id="adSocial" value={f.social} onChange={e => set("social", e.target.value)} placeholder="Link di un post di Instagram o di X" inputMode="url" style={{ ...aInput, marginBottom: 12 }} />
         <span style={aLabel}>HASHTAG SCUDERIE</span>
         <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 12 }}>
           {TEAMS.map(t => <button key={t.id} className="press" aria-pressed={teams.includes(t.id)} onClick={() => toggle(teams, setTeams, t.id)} style={aChip(teams.includes(t.id), t.color)}><span style={{ width: 6, height: 6, borderRadius: "50%", background: t.color }} />{t.tag}</button>)}
@@ -10288,6 +10423,10 @@ function App() {
   const [entryView, setEntryView] = useState(() => { const v = local.get(ENTRY_KEY); return v === "form" || v === "door" ? v : "slides"; });
   const [entryMode, setEntryMode] = useState("login");
   const [tourOn, setTourOn] = useState(false);   // giro guidato dell'ospite entrato dall'Entrata (una volta per telefono)
+  // 7/11: post dei profili ufficiali (public/data/social.json); si riguarda quando si torna in Home (al massimo ogni 15 min).
+  const [socialPosts, setSocialPosts] = useState([]);
+  const [socialOpen, setSocialOpen] = useState(null);
+  useEffect(() => { if (tab !== "home") return; let alive = true; SocialFeed.load().then(p => { if (alive) setSocialPosts(p); }); return () => { alive = false; }; }, [tab]);
   const entryDone = () => { local.set(ENTRY_KEY, "form"); setEntryView("form"); setEntryMode("login"); };
   const tourEnd = () => { local.set(TOUR_KEY, { ts: Date.now() }); setTourOn(false); };
   // Un account entrato su questo telefono (anche con la sessione salvata, da prima del 7/11): uscendo si torna ad Accedi.
@@ -10765,7 +10904,9 @@ function App() {
         // ongoing (31/10): dati della diretta (api/live) con la sessione non ancora finita: non è "finita" anche se si
         // vede l'ultimo momento arrivato. Solo allora si ricarica ogni 15 s (una sessione passata presa da api/live no).
         const endAt = endOf(target);
-        const ongoing = liveNow && isLatest && (!isFinite(endAt) || nowMs() < endAt);
+        // 7/11 sera (Interlagos, Q1 rossa): con una rossa la sessione va oltre l'orario di fine: finché nei dati non c'è la
+        // bandiera a scacchi finale (sim.ended) resta in diretta fino a OF1_OVERTIME_MS dopo la fine prevista.
+        const ongoing = liveNow && isLatest && (!isFinite(endAt) || nowMs() < endAt || (!sim.ended && nowMs() < endAt + OF1_OVERTIME_MS));
         // 1/11 sera (Edoardo: "la mappa va a scatti, i punti si teletrasportano"): in diretta si guarda LIVE_LAG_S secondi
         // dietro gli ultimi dati e il tempo scorre da solo (vedi l'intervallo da 250 ms): così fra un aggiornamento e
         // l'altro (15 s) le auto si muovono di continuo invece di stare ferme e poi saltare.
@@ -11894,6 +12035,7 @@ function App() {
   function tabBodyFor(tab) {
     let body = null;
     if (tab === "home") body = <HomeScreen holidayTop={holiday ? <HolidayCard id={holiday} onOpen={holidayOpen(holiday)} /> : null}
+      social={socialPosts} onOpenSocial={p => { fx.buzz("select"); setSocialOpen(p); }}
       pitSwipe={<>
         {onboardShow && <OnboardCard steps={onboardSteps} onHide={() => setSwipe(s => ({ ...s, onb: "off" }))} />}
         {pitSwipeOn && <PitSwipeCard info={{ total: psCards.length, i: psDeck ? psDeck.i : 0, done: !!(psDeck && psDeck.done), streak: psStreak, level: psLevel, missions: psMissions, nextText: psNextText }} onOpen={openPitSwipe} />}
@@ -11986,6 +12128,7 @@ function App() {
           options={DRIVERS.map(d => ({ id: d.id, label: d.full, color: d.color, sub: d.team, driver: d }))} />}
         <ChatShare.Provider value={chatShareCtx}>{shareArticle && view === "article" && <ShareSheet article={shareArticle} locked={!!shareArticle.premium && !(isPaid || adNews.includes(shareArticle.id))} handle={ig.handle} onClose={() => setShareId(null)} onToast={showToast} />}</ChatShare.Provider>
         {linkShare && <ChatRoomPicker onPick={id => { setPendingLink(linkShare); setLinkShare(null); openChat(id); }} onClose={() => setLinkShare(null)} />}
+        {socialOpen && <SocialSheet post={socialOpen} onClose={() => setSocialOpen(null)} />}
         {tourOn && guest && view === "tab" && tab === "home" && <GuestTour useBack={useBack} onDone={tourEnd} onRegister={() => { tourEnd(); setLoginReason(null); setLoginMode("register"); setLoginOpen(true); }} />}
         {termsAccepted && termsOpen && <TermsSheet review onClose={() => setTermsOpen(false)} />}
         {feedbackOpen && <FeedbackModal onClose={() => setFeedbackOpen(false)} onSend={sendFeedback} />}

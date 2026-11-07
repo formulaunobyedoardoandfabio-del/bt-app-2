@@ -670,3 +670,25 @@ Da fare:
 - Font: src/fonts/Manrope-var-latin.woff2 (OFL, src/fonts/OFL-Manrope.txt), citato nelle info dell'app.
 - Prove: helpers.open di serie mette bt-entry "form" (chi non è entrato vede Accedi come prima); opzione welcome:true
   per il telefono nuovo. Le prove vecchie con il loro newContext hanno la stessa riga. run89-accesso nuova (8 prove).
+
+## 7/11 sera: bandiera rossa in qualifica e post ufficiali di Instagram e X
+- Bug (Edoardo, qualifiche di Interlagos in diretta: "con la bandiera rossa si ferma come fossero finite"). Causa nei
+  dati veri (test/fixtures/openf1-interlagos-q1-redflag.json): RED FLAG al minuto 2, poi TRACK CLEAR. TRACK CLEAR
+  toglieva la rossa; poi i dati fermi davano finished (at >= duration) e lo sfondo a scacchi, e closeSession poteva dare
+  i punti FantaF1 delle qualifiche a metà. Ora (src/services/openf1.js): la rossa la tolgono solo il verde, le scacchi o
+  SESSION RESUMED/STARTED (SESSION ABORTED = rossa); in qualifica e Sprint Qualifying conta solo la bandiera a scacchi
+  di Q3 (qualifying_phase); in diretta senza scacchi finali non è finita; sim.ended dice se ci sono. In App la diretta
+  resta "ongoing" fino a OF1_OVERTIME_MS (3 ore) oltre la fine prevista finché non c'è sim.ended. Prove: 3 in
+  test/unit/openf1.test.js.
+- Post ufficiali (Edoardo ha scelto B: link a mano + Instagram automatico; X automatico no, è a pagamento):
+  src/logic/social.js (parseSocial, cleanPosts, mergePosts), src/services/social.js (scarica
+  bt-app-2.vercel.app/data/social.json ogni 15 minuti al massimo), SocialEmbed/SocialStrip/SocialSheet in App.jsx.
+  Admin NEWS: campo "POST UFFICIALE" (#adSocial), si salva social: link pulito. Il post si carica solo dopo il tocco
+  (privacy, sentenza Fashion ID); "Mostra sempre i post dei social" lo ricorda (local bt-social-auto). Instagram:
+  iframe /p/CODICE/embed/; X: widgets.js e twttr.widgets.createTweet.
+- Automatico: .github/workflows/social.yml (ogni 2 ore, anche su main) lancia tools/social_sync.js, che con i segreti
+  IG_USER_ID e IG_TOKEN (Business Discovery della Graph API di Meta) scrive public/data/social.json; X solo con
+  X_BEARER e profili in tools/social-accounts.json (oggi vuoto). Senza segreti non fa niente. Il token di Instagram
+  scade (circa 60 giorni): il lavoro fallisce e GitHub manda un'email.
+- Privacy aggiornata nel sito (bt-app-flutter/docs/privacy.html, 7 novembre 2026). Prove: test/unit/social.test.js
+  (10), test/e2e/run90-social.js (5).

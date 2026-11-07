@@ -1,0 +1,62 @@
+# Post dei profili ufficiali di F1 e scuderie (7/11). Ogni 2 ore tools/social_sync.js legge i post nuovi e, se è
+# cambiato qualcosa, fa il commit di public/data/social.json su tappa-3; Vercel lo pubblica e l'app lo scarica da sola
+# (src/services/social.js). Si salvano solo link, profilo e data: foto e testi si vedono coi widget ufficiali.
+# Segreti (GitHub → Settings → Secrets and variables → Actions), li mette Edoardo:
+#   IG_USER_ID, IG_TOKEN  → Instagram (gratis, Business Discovery della Graph API di Meta)
+#   X_BEARER              → X (a pagamento: circa 0,005 dollari per ogni post letto)
+# Senza segreti il lavoro finisce subito senza fare niente. A mano: Actions → "Post dei social" → Run workflow.
+# I workflow a orario partono solo dal ramo principale (main): questo file deve stare anche lì.
+name: Post dei social (Instagram e X)
+
+on:
+  schedule:
+    - cron: '17 */2 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: social
+  cancel-in-progress: false
+
+jobs:
+  social:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Ci sono le chiavi?
+        id: keys
+        env:
+          IG_TOKEN: ${{ secrets.IG_TOKEN }}
+          X_BEARER: ${{ secrets.X_BEARER }}
+        run: |
+          if [ -n "$IG_TOKEN$X_BEARER" ]; then echo "ok=1" >> "$GITHUB_OUTPUT"; else echo "Nessuna chiave (IG_TOKEN o X_BEARER): niente da fare."; fi
+      - uses: actions/checkout@v4
+        if: steps.keys.outputs.ok == '1'
+        with:
+          ref: tappa-3
+      - uses: actions/setup-node@v4
+        if: steps.keys.outputs.ok == '1'
+        with:
+          node-version: 20
+      - name: Post nuovi (tools/social_sync.js)
+        if: steps.keys.outputs.ok == '1'
+        env:
+          IG_USER_ID: ${{ secrets.IG_USER_ID }}
+          IG_TOKEN: ${{ secrets.IG_TOKEN }}
+          X_BEARER: ${{ secrets.X_BEARER }}
+        run: node tools/social_sync.js
+      - name: Commit su tappa-3 se è cambiato qualcosa
+        if: steps.keys.outputs.ok == '1'
+        run: |
+          git add public/data/social.json
+          if git diff --cached --quiet; then echo "Niente di nuovo"; exit 0; fi
+          git config user.name 'B&T'
+          git config user.email '259185044+formulaunobyedoardoandfabio-del@users.noreply.github.com'
+          git commit -q -m "Post dei social aggiornati"
+          for i in 1 2 3; do
+            if git pull -q --rebase origin tappa-3 && git push -q origin HEAD:tappa-3; then exit 0; fi
+            sleep 10
+          done
+          exit 1

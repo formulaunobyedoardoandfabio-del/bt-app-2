@@ -331,6 +331,41 @@ t('sessionShort: sigle corte per i tasti', () => {
     ['PL1', 'PL2', 'PL3', 'Q SPRINT', 'SPRINT', 'QUALIFICHE', 'GARA']);
 });
 
+// 7/11 sera (Edoardo, qualifiche di Interlagos in diretta: "appena c'è una bandiera rossa si ferma come fossero
+// finite"): dati veri della Q1 (fixture openf1-interlagos-q1-redflag.json: rossa al minuto 2, poi TRACK CLEAR, ferma).
+const QRF = require('../fixtures/openf1-interlagos-q1-redflag.json');
+const trackBR = LiveSim.buildTrack(CIRCUITS['br-1940']);
+t('qualifiche in diretta con la bandiera rossa: resta rossa dopo TRACK CLEAR e non è finita', () => {
+  const r = buildReplay(QRF, trackBR, { ...ctx, live: true });
+  r.jumpTo(r.duration + 90);
+  const s = r.state();
+  assert.strictEqual(s.type, 'QUALI');
+  assert.deepStrictEqual([s.flag, s.bg, s.finished], ['red', 'red', false]);
+  assert.strictEqual(r.ended, false);
+});
+t('qualifiche: la bandiera a scacchi di Q1 o Q2 non chiude la sessione, solo quella di Q3', () => {
+  const at = min => new Date(Date.parse(QRF.session.date_start) + min * 60000).toISOString();
+  const msg = (min, phase, flag, message) => ({ date: at(min), category: 'Flag', flag, scope: 'Track', qualifying_phase: phase, message, lap_number: null, sector: null, driver_number: null });
+  // (i giri della fixture finiscono al minuto 2 e la sessione arriva fino a 45 minuti dopo: tempi compressi)
+  const rc = [...QRF.race_control, msg(10, 1, 'GREEN', 'GREEN LIGHT - PIT EXIT OPEN'), msg(14, 1, 'CHEQUERED', 'CHEQUERED FLAG'), msg(18, 2, 'GREEN', 'GREEN LIGHT - PIT EXIT OPEN'), msg(24, 2, 'CHEQUERED', 'CHEQUERED FLAG')];
+  const q2 = buildReplay({ ...QRF, race_control: rc }, trackBR, { ...ctx, live: true });
+  q2.jumpTo(q2.duration);
+  assert.deepStrictEqual([q2.state().finished, q2.state().bg, q2.ended], [false, 'green', false]);
+  const q3 = buildReplay({ ...QRF, race_control: [...rc, msg(28, 3, 'GREEN', 'GREEN LIGHT - PIT EXIT OPEN'), msg(36, 3, 'CHEQUERED', 'CHEQUERED FLAG')] }, trackBR, { ...ctx, live: true });
+  q3.jumpTo(q3.duration);
+  assert.deepStrictEqual([q3.state().finished, q3.state().bg, q3.ended], [true, 'chequered', true]);
+  q3.jumpTo(35 * 60);
+  assert.strictEqual(q3.state().finished, false);
+});
+t('bandiera rossa: la toglie solo il verde (o la ripresa), non TRACK CLEAR; la Safety Car invece sì', () => {
+  const at = s => new Date(Date.parse(QRF.session.date_start) + s * 1000).toISOString();
+  const m = (s, category, flag, message, scope = 'Track') => ({ date: at(s), category, flag, scope, message, qualifying_phase: 1, lap_number: null, sector: null, driver_number: null });
+  const rc = [m(0, 'Flag', 'GREEN', 'GREEN LIGHT - PIT EXIT OPEN'), m(100, 'Flag', 'RED', 'RED FLAG'), m(200, 'Flag', 'CLEAR', 'TRACK CLEAR'), m(400, 'SessionStatus', null, 'SESSION RESUMED', null), m(401, 'Flag', 'GREEN', 'GREEN LIGHT - PIT EXIT OPEN')];
+  const r = buildReplay({ ...QRF, race_control: rc }, trackBR, { ...ctx, live: true });
+  const fl = s => { r.jumpTo(s); return r.state().flag; };
+  assert.deepStrictEqual([fl(50), fl(150), fl(300), fl(402)], ['green', 'red', 'red', 'green']);
+});
+
 (async () => {
   const filter = process.argv[2] ? new RegExp(process.argv[2], 'i') : null;
   for (const [name, fn] of tests) {

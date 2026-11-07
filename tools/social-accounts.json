@@ -1,0 +1,5 @@
+{
+  "_nota": "Profili ufficiali da cui prendere i post (tools/social_sync.js). Instagram: gratis. X: spento (scelta B del 7/11, si paga ogni post letto); per accenderlo servono il segreto X_BEARER e qui i profili, per esempio [\"F1\", \"ScuderiaFerrari\"].",
+  "instagram": ["f1", "scuderiaferrari", "mclaren", "mercedesamgf1", "redbullracing", "astonmartinf1", "williamsracing", "alpinef1team", "haasf1team", "visacashapprb"],
+  "x": []
+}
