@@ -1,0 +1,5 @@
+/* 8/11: B&T Trophies (src/gara/Trophies.jsx). Tasti con risposta al tocco (solo transform). */
+.tr-btn { cursor: pointer; transition: transform 140ms ease-out; }
+.tr-btn:active { transform: scale(.98); }
+.tr-btn:focus-visible { outline: 2px solid #F4F2EF; outline-offset: 2px; }
+@media (prefers-reduced-motion: reduce) { .tr-btn { transition: none; } .tr-btn:active { transform: none; } }

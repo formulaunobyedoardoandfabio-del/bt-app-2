@@ -750,5 +750,10 @@ Da fare:
   Re del bagnato, La Fenice, Partenza razzo, Ripartenza fulminea, Il Mastino, Metronomo, Gomma eterna, Pit crew d'oro,
   Missile, Re dei minisettori, Pittore di cordoli, L'Eremita; qualifica: Giro della vita + Missile, minisettori,
   cordoli. Senza il dato vero il trofeo non c'è (griglia solo da posizioni prima del via, pit crew solo con
-  stop_duration). t = secondi dalla partenza della sessione (come sim.jumpTo). UI ancora da fare.
-- Prove: test/unit/gp-trophies.test.js (12).
+  stop_duration). t = secondi dalla partenza della sessione (come sim.jumpTo).
+- UI (src/gara/Trophies.jsx e .css, dal design "B&T Trophies e pause di gara"): in RACE a sessione finita la scheda
+  [data-tr-card] col trofeo della sessione → pagina [data-tr-screen] (trofeo grande + "Gli altri trofei") →
+  dettaglio [data-tr-detail] con numeri, grafico, "Come si vince". "Rivedi sulla mappa" = replayAt(t) in App (salta
+  in quel punto e fa partire la sessione rivista); "Manda in chat" = link "race" del circuito col nome del trofeo.
+  gpTrophies (useMemo in App) sta PRIMA delle pagine di accesso (che fanno return prima): non spostarlo sotto.
+- Prove: test/unit/gp-trophies.test.js (12), test/e2e/run95-trophies.js (1).
