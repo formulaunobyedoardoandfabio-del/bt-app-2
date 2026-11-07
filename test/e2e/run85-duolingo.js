@@ -86,6 +86,19 @@ run({
     assert(!errs.length, errs.join(' | '));
   },
 
+  // 8/11 (Edoardo: "le notifiche chiedile solo prima che servano, non appena installata l'app"): reinstallando, con
+  // tanti giri vecchi nell'account, all'accesso non si chiede niente; si chiede quando finisci un giro adesso.
+  async 'promemoria dopo una reinstallazione: giri vecchi nell\'account, all\'accesso nessuna richiesta; si chiede finito il giro'(b) {
+    const { ctx, p, errs } = await open(b, { capacitor: NOTIF, seed: { addDocs: { ...NEWS, ...user({ favDriver: 'leclerc', swipe: { tot: { decks: 12, box: 30 } } }) } } }); await login(p); await w(p, 1200);
+    const before = await p.evaluate(() => window.__notif.slice());
+    await playDeck(p); await w(p, 600);
+    const after = await p.evaluate(() => window.__notif.slice());
+    await ctx.close();
+    assert(!before.some(x => x[0] === 'ask'), 'all\'accesso non si chiede il permesso: ' + JSON.stringify(before));
+    assert(after.some(x => x[0] === 'ask'), 'finito il giro si chiede: ' + JSON.stringify(after));
+    assert(!errs.length, errs.join(' | '));
+  },
+
   async 'sfida 1 contro 1: Marco ti sfida al Pit Stop, rispondi con un tentativo; il risultato in Home'(b) {
     const sfide = { 'fanta/pitswipe-sfide': { __arr: [{ t: 'c', id: 's1', from: 'marco', fromName: 'Marco', to: ME, toName: 'Tester', game: 'pit', time: 9.99, at: Date.parse('2026-10-06T10:00:00Z') }] } };
     const { ctx, p, errs } = await open(b, { seed: { addDocs: { ...NEWS, ...user({ favDriver: 'leclerc' }), ...sfide } } }); await login(p); await w(p, 800);

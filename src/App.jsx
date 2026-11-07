@@ -12137,12 +12137,19 @@ function App() {
   }, [userLoaded, userEmail]);
   // Promemoria sul telefono: si rifanno quando cambiano mazzo, serie o preferenza; il permesso solo dopo il primo giro.
   const remSig = [psKey, !!(psDoneDeck), psStreak.n, psStreak.danger, notifPrefs.reminders !== false, ((swipe.tot || {}).decks || 0) > 0, psRace ? psRace.id : ""].join("|");
+  // 8/11 (Edoardo: "le notifiche chiedile solo prima che servano, non appena installata l'app"): il permesso si chiede
+  // solo dopo un gesto che le rende utili in QUESTO avvio (finire un giro di Pit Swipe adesso, oppure accendere
+  // "Promemoria sul telefono"); prima bastava avere giri vecchi nell'account e, reinstallando, la domanda arrivava
+  // subito all'accesso. Senza permesso i promemoria si programmano solo se c'è già (checkPermissions non chiede nulla).
+  const remAskRef = useRef(false), deckWasDone = useRef(null);
   useEffect(() => {
     const plugin = capPlugin("LocalNotifications");
     if (!plugin || guest || userLoaded !== userEmail) return;
+    if (psDoneDeck && deckWasDone.current === false) remAskRef.current = true;
+    deckWasDone.current = !!psDoneDeck;
+    if (!((swipe.tot || {}).decks || 0) && !remAskRef.current) return;   // prima del primo giro niente
     const list = Reminders.plan({ now: nowMs(), race: psRace, sessions: psSessions, deckDone: !!psDoneDeck, streak: psStreak, prefs: { reminders: notifPrefs.reminders } });
-    const ask = ((swipe.tot || {}).decks || 0) > 0 && !local.get("bt-rem-asked");
-    if (!ask && !((swipe.tot || {}).decks || 0)) return;   // prima del primo giro niente (nemmeno il permesso)
+    const ask = remAskRef.current && notifPrefs.reminders !== false && !local.get("bt-rem-asked");
     Reminders.apply(plugin, list, { ask }).then(() => { if (ask) local.set("bt-rem-asked", true); });
   }, [remSig, userLoaded]);
   const psEndInfo = psDoneDeck ? {
@@ -12195,7 +12202,8 @@ function App() {
   // 2/11: campione del mondo (champOf) e la sua schermata, una volta per telefono (bt-champ-<anno>-<pilota>).
   const champion = champOf(shownStandings, races, nowMs());
   const champKey = champion ? "bt-champ-" + champion.year + "-" + champion.id : null;
-  const champShow = !!champion && !champSeen && local.get(champKey) !== true;
+  // 8/11 (Edoardo): la schermata del campione del mondo solo quando si apre il profilo del campione (non da sola).
+  const champShow = !!champion && !champSeen && local.get(champKey) !== true && !!selectedDriver && selectedDriver.id === champion.id;
   // Fine dell'ultimo GP già corso (partenza della gara + 4 ore): da lì ripartono le stanze della gara.
   const lastGpEnd = (races || []).map(r => raceStartMs(r) + 4 * 3600e3).filter(t => isFinite(t) && t < nowMs()).sort((a, b) => b - a)[0] || 0;
   const chatSince = id => (!id || id === "generale" || id === "fanta" ? 0 : lastGpEnd);
@@ -12284,7 +12292,7 @@ function App() {
     holidays={holidaysOn} onHolidays={v => { if (userDataWait()) return; setHolidaysOn(v); local.set("bt-holidays-on", v); fx.play("tick"); }}
     miniPit={miniPitOn} onMiniPit={v => { setMiniPitOn(v); local.set("bt-minipit-on", v); fx.play("tick"); }}
     fanLevel={guest ? null : { level: psLevel, xp: BtSwipe.xpOf(swipe.tot || {}, psTrophies), missions: psMissions }}
-    reminders={notifPrefs.reminders !== false} onReminders={guest ? null : v => { if (userDataWait()) return; setNotifPrefs(x => ({ ...x, reminders: v })); fx.play("tick"); }} />;
+    reminders={notifPrefs.reminders !== false} onReminders={guest ? null : v => { if (userDataWait()) return; if (v) remAskRef.current = true; setNotifPrefs(x => ({ ...x, reminders: v })); fx.play("tick"); }} />;
   else if (view === "notifiche") body = <NotificheScreen offline={offline} onBack={viewBack.notifiche} onAction={a => { if (a === "feedback") { if (feedbackAsk && !feedbackAsk.read) saveAsk({ ...feedbackAsk, read: true }); setFeedbackOpen(true); } }} notifs={notifs} onReadAll={readAll} isPremium={isPremium} onPremium={() => setPremiumOpen(true)} favTeam={favTeam} favDriver={favDriver} prefs={notifPrefs} onPrefs={v => { if (!userDataWait()) setNotifPrefs(v); }} onGoProfilo={() => setView("profilo")} />;
   else body = tabBodyFor(tab);
   // 7/11: il contenuto di una scheda della barra (anche di quella accanto, che si vede durante lo swipe come su WhatsApp).

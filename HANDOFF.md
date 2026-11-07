@@ -757,3 +757,12 @@ Da fare:
   in quel punto e fa partire la sessione rivista); "Manda in chat" = link "race" del circuito col nome del trofeo.
   gpTrophies (useMemo in App) sta PRIMA delle pagine di accesso (che fanno return prima): non spostarlo sotto.
 - Prove: test/unit/gp-trophies.test.js (12), test/e2e/run95-trophies.js (1).
+
+## 8/11 notte: notifiche e schermata del campione
+- Permesso delle notifiche (promemoria) solo dopo un gesto in questo avvio: finire un giro di Pit Swipe adesso o
+  accendere "Promemoria sul telefono" (remAskRef). Prima, reinstallando con giri vecchi nell'account, si chiedeva
+  subito all'accesso. Prova nuova in run85 ("dopo una reinstallazione").
+- ChampionTakeover solo quando si apre il profilo del campione (selectedDriver = campione), sempre una volta sola.
+  run87 aggiornata (apre il profilo dal podio del Mondiale).
+- Da sapere [Guessing]: se Android chiedesse le notifiche all'installazione per un altro motivo (non dal codice dei
+  promemoria) va visto sul telefono: nel codice non c'è altra richiesta.
