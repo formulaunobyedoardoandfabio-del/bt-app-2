@@ -47,6 +47,8 @@ import { createBilling, BUY_MSG } from "./services/billing";
 import { createF1Data, apply as applyF1Data } from "./services/f1data";
 import { createSocial } from "./services/social";
 import { parseSocial } from "./logic/social";
+import { cutWords, fixCut } from "./logic/words";
+import { RainGlass } from "./pioggia/Pioggia";
 import FantaSeason from "./logic/fanta-season";
 import { createFantaLeague } from "./services/fantaleague";
 import { createProfiles } from "./services/profiles";
@@ -1373,6 +1375,43 @@ function PickerModal({ title, options, selected, onPick, onClose }) {
   );
 }
 
+// 7/11 sera (Edoardo: "nel preview del testo i tre puntini dopo l'ultima parola, se se ne taglia una dopo la penultima"):
+// al posto di -webkit-line-clamp (che taglia anche a metà parola), al massimo `lines` righe di parole intere e "…".
+// Si misura su una copia nascosta della stessa larghezza; il testo mostrato lo tiene React.
+function WordClamp({ text, lines = 2, as: Tag = "span", style, ...rest }) {
+  const ref = useRef(null);
+  const [shown, setShown] = useState(text);
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el || !el.parentNode || !text) { setShown(text); return undefined; }
+    const fit = () => {
+      if (!el.clientWidth) { setShown(text); return; }   // ancora nascosto: niente misure (si rifà al prossimo resize)
+      const m = el.cloneNode(false);
+      m.removeAttribute("data-word-clamp");
+      Object.assign(m.style, { position: "absolute", visibility: "hidden", pointerEvents: "none", left: "0", top: "0", width: el.clientWidth + "px", maxHeight: "none", height: "auto", overflow: "visible" });
+      el.parentNode.appendChild(m);
+      const cs = getComputedStyle(m);
+      const lh = parseFloat(cs.lineHeight) || (parseFloat(cs.fontSize) || 14) * 1.25;
+      const maxH = lh * lines + 1;
+      const fits = s => { m.textContent = s; return m.scrollHeight <= maxH; };
+      let out = text;
+      if (!fits(text)) {
+        const words = String(text).split(/\s+/);
+        let lo = 1, hi = words.length - 1, best = 1;
+        const at = n => words.slice(0, n).join(" ").replace(/[\s,;:\-–(«"“]+$/, "") + "…";
+        while (lo <= hi) { const mid = (lo + hi) >> 1; if (fits(at(mid))) { best = mid; lo = mid + 1; } else hi = mid - 1; }
+        out = at(best);
+      }
+      m.remove();
+      setShown(out);
+    };
+    fit();
+    window.addEventListener("resize", fit);
+    return () => window.removeEventListener("resize", fit);
+  }, [text, lines]);
+  return <Tag ref={ref} data-word-clamp={lines} {...rest} style={{ display: "block", overflow: "hidden", ...style }}>{shown}</Tag>;
+}
+
 function SectionLabel({ icon, children }) {
   return (
     <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 16px 12px" }}>
@@ -1897,6 +1936,9 @@ function PollCard({ poll, vote, onVote, title = "SONDAGGIO" }) {
 // (fuorigiri) al rilascio la cambiata (suono e vibrazione) e onRefresh rilegge le notizie da Firebase. Col dito si usano
 // gli eventi touch (touchmove non passivo: mentre si tira la pagina non rimbalza), col mouse i pointer events.
 const PULL_MAX = 96;   // px di tirata (dopo la resistenza) per arrivare al fuorigiri
+// 7/11 sera (Edoardo: "non rendere invisibile la parte del tachimetro nell'aggiornamento"): durante l'aggiornamento le
+// notizie scendono di PULL_BUSY px, abbastanza per il contagiri intero e la scritta (prima 56: la cima si tagliava).
+const PULL_BUSY = 78;
 function usePullRefresh(ref, onRefresh) {
   const [pull, setPull] = useState(0);
   const [busy, setBusy] = useState(false);
@@ -1915,13 +1957,15 @@ function usePullRefresh(ref, onRefresh) {
     if (e && e.cancelable) e.preventDefault();
     setPull(Math.max(0, Math.min(PULL_MAX * 1.35, (dy - 8) * 0.6)));
   };
+  const pulledAt = useRef(0);   // fine di una tirata: il clic che segue (mouse) non apre la notizia sotto il dito
   const end = () => {
     const s = st.current; st.current = null; setDragging(false);
     if (!s || !s.active) return;
+    pulledAt.current = Date.now();
     if (pullRef.current >= PULL_MAX) {
       fx.play("shift"); fx.buzz("medium");
-      setBusy(true); setPull(56);
-      Promise.resolve(onRefresh && onRefresh()).catch(() => {}).then(() => { setBusy(false); setPull(0); });
+      setBusy(true); setPull(PULL_BUSY);
+      Promise.resolve(onRefresh && onRefresh()).catch(() => {}).then(() => { setBusy(false); setPull(0); });   // (setPull(PULL_BUSY) qui sopra)
     } else setPull(0);
   };
   const fns = useRef({});
@@ -1944,15 +1988,18 @@ function usePullRefresh(ref, onRefresh) {
       onPointerMove: e => { if (mouse(e)) move(e.clientX, e.clientY, e); },
       onPointerUp: e => { if (mouse(e)) end(); },
       onPointerCancel: e => { if (mouse(e)) end(); },
+      onClickCapture: e => { if (Date.now() - pulledAt.current < 400) { e.preventDefault(); e.stopPropagation(); } },
     },
   };
 }
 // Il contagiri di "tira giù per aggiornare": la lancetta sale con la tirata (rev da 0 a 1), l'ultimo tratto è rosso.
-function PullGauge({ rev, busy, pull }) {
+// overlay (RACE, 7/11 sera): lì la pagina non scende con la tirata, quindi il contagiri sta sopra a tutto (anche alla
+// striscia della bandiera rossa) con un fondo scuro, così non sparisce sotto i riquadri durante l'aggiornamento.
+function PullGauge({ rev, busy, pull, overlay = false }) {
   const ang = -120 + 240 * rev, red = rev >= 1;
   const arc = (a0, a1) => { const p = a => [24 + 18 * Math.sin(a * Math.PI / 180), 26 - 18 * Math.cos(a * Math.PI / 180)]; const [x0, y0] = p(a0), [x1, y1] = p(a1); return `M${x0.toFixed(2)} ${y0.toFixed(2)}A18 18 0 ${a1 - a0 > 180 ? 1 : 0} 1 ${x1.toFixed(2)} ${y1.toFixed(2)}`; };
   return (
-    <div data-rev={rev.toFixed(2)} role="status" aria-live="polite" style={{ position: "absolute", left: 0, right: 0, top: 0, height: Math.max(pull, 56), display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "flex-end", gap: 2, paddingBottom: 4, pointerEvents: "none", opacity: busy ? 1 : Math.min(1, .35 + rev) }}>
+    <div data-rev={rev.toFixed(2)} role="status" aria-live="polite" style={{ position: "absolute", left: 0, right: 0, top: 0, height: busy ? Math.max(pull, PULL_BUSY) : Math.max(pull, 56), display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "flex-end", gap: 2, paddingBottom: 4, pointerEvents: "none", opacity: busy ? 1 : Math.min(1, .35 + rev), ...(overlay ? { zIndex: 8, background: "linear-gradient(to bottom, rgba(0,0,0,.92) 70%, rgba(0,0,0,0))" } : {}) }}>
       <svg viewBox="0 0 48 44" width="52" height="48" aria-hidden="true" className={busy ? "gauge-busy" : undefined}>
         <path d={arc(-120, 72)} fill="none" stroke="rgba(255,255,255,.22)" strokeWidth="4" strokeLinecap="round" />
         <path d={arc(72, 120)} fill="none" stroke={C.red} strokeWidth="4" strokeLinecap="round" />
@@ -2127,7 +2174,19 @@ function HomeScreen({ holidayTop = null, pitSwipe = null, social = [], onOpenSoc
     if (first) focus(first);
     const io = new IntersectionObserver(es => { const hit = es.filter(e => e.isIntersecting).pop(); if (hit) focus(hit.target); }, { root, rootMargin: "-48% 0px -48% 0px", threshold: 0 });
     root.querySelectorAll("[data-news-item], [data-featured]").forEach(el => io.observe(el));
-    return () => { io.disconnect(); if (lit) lit.classList.remove("news-center"); };
+    // 7/11 sera (Edoardo: "torno su e anche all'inizio l'ultima notizia resta buia"): in cima la prima notizia e in fondo
+    // l'ultima non passano mai per la riga a metà schermo: lì il fuoco va a loro (un controllo per fotogramma al massimo).
+    let raf = 0;
+    const ends = () => {
+      raf = 0;
+      const items = root.querySelectorAll("[data-featured], [data-news-item]");
+      if (!items.length) return;
+      if (root.scrollTop <= 24) focus(items[0]);
+      else if (root.scrollTop + root.clientHeight >= root.scrollHeight - 24) focus(items[items.length - 1]);
+    };
+    const onScroll = () => { if (!raf) raf = requestAnimationFrame(ends); };
+    root.addEventListener("scroll", onScroll, { passive: true });
+    return () => { io.disconnect(); root.removeEventListener("scroll", onScroll); if (raf) cancelAnimationFrame(raf); if (lit) lit.classList.remove("news-center"); };
   }, [newsKey]);
   const [tyre, setTyre] = useState(null);     // filtro a gomma (G09): soft | medium | hard | inter
   const [lane, setLane] = useState("all");    // Pit Lane (G10): all | teams | drivers | tech
@@ -2164,7 +2223,7 @@ function HomeScreen({ holidayTop = null, pitSwipe = null, social = [], onOpenSoc
     <div aria-hidden="true" data-news-ambient={amb[amb.on] || ""} style={{ position: "absolute", inset: 0, overflow: "hidden", pointerEvents: "none" }}>
       {["a", "b"].map(k => <div key={k} className="news-amb" style={{ position: "absolute", inset: 0, opacity: amb.on === k && amb[k] ? 1 : 0, background: amb[k] ? `radial-gradient(120% 50% at 50% -10%, ${alpha(amb[k], .3)}, transparent 62%), radial-gradient(120% 34% at 50% 112%, ${alpha(amb[k], .2)}, transparent 62%)` : "none" }} />)}
     </div>
-    <div ref={homeRef} data-home="" className="scrollcol" {...pullRev.handlers} style={{ height: "100%", position: "relative", scrollSnapType: "y proximity", overflowX: "hidden", overscrollBehaviorY: "contain", userSelect: pullRev.dragging ? "none" : undefined, WebkitUserSelect: pullRev.dragging ? "none" : undefined }}>
+    <div ref={homeRef} data-home="" className="scrollcol" {...pullRev.handlers} style={{ height: "100%", position: "relative", scrollSnapType: pullRev.pull > 0 || pullRev.busy ? "none" : "y proximity", overflowX: "hidden", overscrollBehaviorY: "contain", userSelect: pullRev.dragging ? "none" : undefined, WebkitUserSelect: pullRev.dragging ? "none" : undefined }}>
       {(pullRev.pull > 0 || pullRev.busy) && <PullGauge rev={pullRev.rev} busy={pullRev.busy} pull={pullRev.pull} />}
       <div style={{ transform: pullRev.pull ? `translateY(${pullRev.pull}px)` : undefined, transition: pullRev.dragging ? "none" : "transform .25s ease" }}>
       <div data-snap-head="" style={{ scrollSnapAlign: "start" }}>
@@ -2181,8 +2240,7 @@ function HomeScreen({ holidayTop = null, pitSwipe = null, social = [], onOpenSoc
           <input id="newsSearch" type="search" placeholder="Cerca articoli, piloti, scuderie…" value={q} onChange={e => setQ(e.target.value)} style={{ flex: 1, minWidth: 0, border: "none", background: "none", outline: "none", fontFamily: F_BODY, fontSize: 13, color: C.text }} />
         </div>
       </div>
-      <PitLane value={lane} onChange={v => { if (v === lane) return; setLane(v); fx.play("shift"); fx.buzz("light"); }} />
-      <TyreFilter value={tyre} onChange={v => { setTyre(v); fx.play("tick"); fx.buzz("select"); }} />
+      {/* 7/11 sera (Edoardo): tolti dalla Home la Pit Lane e le gomme (filtri G09 e G10); i filtri restano spenti. */}
       <div style={{ display: "flex", gap: 8, margin: "0 16px 14px" }}>
         <button className="press" aria-pressed={savedOnly ? "true" : "false"} onClick={() => setSavedOnly && setSavedOnly(!savedOnly)} style={aChip(savedOnly, C.gold)}><Icon name={savedOnly ? "bookmark-fill" : "bookmark"} size={12} color={savedOnly ? C.gold : C.muted} /> Salvati{saved.length ? ` · ${saved.length}` : ""}</button>
       </div>
@@ -2240,7 +2298,7 @@ function HomeScreen({ holidayTop = null, pitSwipe = null, social = [], onOpenSoc
           <div style={{ padding: 16 }}>
             {BtLogic.newsAge(featured) <= 180 && <div data-breaking="" style={{ display: "flex", alignItems: "center", gap: 7, marginBottom: 8, fontFamily: F_HEAD, fontWeight: 900, fontStyle: "italic", fontSize: 11, letterSpacing: 1.2, color: C.accentInk }}><span aria-hidden="true" className="brk-dot" style={{ width: 8, height: 8, borderRadius: "50%", background: C.accent }} />ULTIM'ORA</div>}
             <h3 style={{ fontFamily: F_HEAD, fontWeight: 800, fontSize: 17, color: C.text, lineHeight: 1.28, margin: "0 0 8px" }}>{featured.title}</h3>
-            <p style={{ fontFamily: F_BODY, fontSize: 13, color: C.muted, lineHeight: 1.5, margin: "0 0 10px" }}>{featured.excerpt}</p>
+            <p style={{ fontFamily: F_BODY, fontSize: 13, color: C.muted, lineHeight: 1.5, margin: "0 0 10px" }}>{fixCut(featured.excerpt)}</p>
             {articleTags(featured).length > 0 && <div style={{ marginBottom: 10 }}><HashtagChips tags={articleTags(featured)} onTag={onTag} size="sm" /></div>}
             <span style={{ fontFamily: F_BODY, fontSize: 11, color: C.dim }}>{featured.time}</span>
           </div>
@@ -3959,55 +4017,103 @@ const TYRES_EMPTY = "Le gomme compaiono quando arrivano i dati della sessione.";
 // 1/11 sera (Edoardo: "rendi i team radio più facili da ascoltare, ci mettono un po' a caricare"): un tasto grande per
 // radio, un solo audio alla volta; le 3 più recenti si caricano in anticipo (preload auto), le altre al tocco; con
 // "Ascolta i team radio" acceso ogni radio nuova parte da sola (scelta sul telefono, bt-radio-auto).
-let radioNow = null;   // l'audio che sta suonando (uno alla volta in tutta l'app)
-function RadioPlay({ url, label, preload = "none", auto = false }) {
-  const ref = useRef(null);
-  const [st, setSt] = useState("idle");   // idle, loading, playing
-  const play = () => {
-    const a = ref.current;
-    if (!a) return;
-    if (st === "playing") { a.pause(); return; }
-    if (radioNow && radioNow !== a) { try { radioNow.pause(); } catch (e) {} }
-    radioNow = a; setSt("loading");
-    const pr = a.play();
-    if (pr && typeof pr.catch === "function") pr.catch(() => setSt("idle"));
+// 7/11 sera (Edoardo: "la funzione che se arrivano i team radio partono da soli non funziona"): prima partivano solo
+// con l'elenco delle radio aperto. Ora un solo lettore per tutta l'app (RadioBus): l'App guarda le radio nuove della
+// sessione ovunque tu sia (RadioAuto) e, con "Ascolta i team radio" acceso, le mette in coda una dopo l'altra.
+// Il tocco sull'interruttore sblocca l'audio del telefono (un suono muto), così le prossime partono da sole.
+const RADIO_AUTO_KEY = "bt-radio-auto";
+const SILENT_WAV = "data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQAAAAA=";
+const RadioBus = (() => {
+  let audio = null, cur = null, st = "idle", queue = [];
+  const subs = new Set();
+  const emit = () => subs.forEach(f => { try { f({ url: cur, st }); } catch (e) {} });
+  const set = (u, s) => { cur = u; st = s; emit(); };
+  const next = () => { const u = queue.shift(); if (u) start(u); else set(null, "idle"); };
+  const el = () => {
+    if (audio || typeof Audio === "undefined") return audio;
+    audio = new Audio();
+    audio.preload = "auto";
+    audio.addEventListener("playing", () => { if (cur) set(cur, "playing"); });
+    audio.addEventListener("pause", () => { if (cur && st === "playing" && !audio.ended) set(cur, "idle"); });
+    audio.addEventListener("ended", next);
+    audio.addEventListener("error", () => { if (cur) next(); });
+    return audio;
   };
-  useEffect(() => { if (auto) play(); }, []);   // radio nuova con l'ascolto automatico acceso
+  function start(u) {
+    const a = el(); if (!a) return;
+    set(u, "loading");
+    a.src = u;
+    const pr = a.play();
+    if (pr && typeof pr.catch === "function") pr.catch(() => { if (cur === u) set(u, "idle"); });
+  }
+  return {
+    state: () => ({ url: cur, st }),
+    subscribe(f) { subs.add(f); return () => subs.delete(f); },
+    toggle(u) { const a = el(); if (!a) return; if (cur === u && st === "playing") { queue = []; a.pause(); return; } queue = []; start(u); },
+    enqueue(list) { list.forEach(u => { if (u !== cur && !queue.includes(u)) queue.push(u); }); queue = queue.slice(-3); if (st === "idle" || !cur) next(); },
+    unlock() { const a = el(); if (!a || cur) return; try { a.src = SILENT_WAV; const pr = a.play(); if (pr && pr.then) pr.then(() => a.pause(), () => {}); } catch (e) {} },
+    stop() { queue = []; if (audio) audio.pause(); set(null, "idle"); },
+  };
+})();
+function RadioPlay({ url, label, preload = "none" }) {
+  const [bus, setBus] = useState(RadioBus.state());
+  useEffect(() => RadioBus.subscribe(setBus), []);
+  const st = bus.url === url ? bus.st : "idle";
   return (
     <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 6 }}>
-      <button className="press" data-radio-play={st} onClick={play} aria-label={(st === "playing" ? "Pausa: " : "Ascolta: ") + label}
+      <button className="press" data-radio-play={st} onClick={() => RadioBus.toggle(url)} aria-label={(st === "playing" ? "Pausa: " : "Ascolta: ") + label}
         style={{ width: 44, height: 44, borderRadius: "50%", flexShrink: 0, background: st === "playing" ? C.accent : alpha(C.accentInk, .16), border: `1.5px solid ${C.accentInk}`, display: "flex", alignItems: "center", justifyContent: "center" }}>
         {st === "loading" ? <ShiftLight size={3} label="Carico la radio" /> : st === "playing"
           ? <svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true"><rect x="2" y="1" width="3.5" height="12" rx="1" fill="#fff" /><rect x="8.5" y="1" width="3.5" height="12" rx="1" fill="#fff" /></svg>
           : <svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true"><path d="M3 1.5v11l9.5-5.5z" fill={C.text} /></svg>}
       </button>
       <span style={{ fontFamily: F_BODY, fontSize: 11.5, color: C.muted }}>{st === "loading" ? "Carico…" : st === "playing" ? "In ascolto" : "Tocca per ascoltare"}</span>
-      <audio ref={ref} preload={preload} src={url} onPlaying={() => setSt("playing")} onPause={() => setSt("idle")} onEnded={() => setSt("idle")} onError={() => setSt("idle")} style={{ display: "none" }} />
+      {/* scarica prima le 3 più recenti (preload auto); suona il lettore unico (RadioBus) */}
+      <audio preload={preload} src={url} muted style={{ display: "none" }} />
+
     </div>
   );
 }
+// Radio nuove della sessione (anche con l'elenco chiuso o in un'altra scheda): con l'ascolto automatico in coda.
+// Quelle che c'erano già quando si apre la sessione (o dopo un salto nel tempo) partono solo al tocco.
+function useRadioAuto(live) {
+  const seen = useRef({ key: null, set: new Set() });
+  useEffect(() => {
+    if (!isOf1Live(live)) return undefined;
+    const key = live.sessionKey;
+    const check = () => {
+      const rs = of1RadiosAt(live, live.sim.state());
+      const S = seen.current;
+      if (S.key !== key) { seen.current = { key, set: new Set(rs.map(r => r.url)) }; return; }
+      const fresh = rs.filter(r => !S.set.has(r.url));
+      S.set = new Set(rs.map(r => r.url));   // tornando indietro nella sessione rivista, le radio dopo ripartono da sole
+      if (fresh.length && fresh.length <= 3 && local.get(RADIO_AUTO_KEY) === true) RadioBus.enqueue(fresh.map(r => r.url).reverse());
+    };
+    check();
+    const iv = setInterval(check, 1500);
+    return () => clearInterval(iv);
+  }, [live]);
+}
 function RadioList({ live, st }) {
   const rs = of1RadiosAt(live, st);
-  const [auto, setAuto] = useState(() => local.get("bt-radio-auto") === true);
-  const seen = useRef(null);   // radio già in elenco all'apertura: quelle partono solo al tocco
-  if (seen.current === null) seen.current = new Set(rs.map(r => r.url));
+  const [auto, setAuto] = useState(() => local.get(RADIO_AUTO_KEY) === true);
   const note = (k, t) => <p data-radio-empty={k} style={{ margin: 0, padding: 16, fontFamily: F_BODY, fontSize: 12.5, color: C.dim, lineHeight: 1.5 }}>{t}</p>;
   const autoRow = (
     <div data-radio-auto={auto ? "on" : "off"} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, padding: "10px 14px", borderBottom: `1px solid ${C.divider}` }}>
       <span style={{ fontFamily: F_BODY, fontWeight: 700, fontSize: 12.5, color: C.text }}>Ascolta i team radio <span style={{ fontWeight: 400, color: C.dim }}>(partono da soli appena arrivano)</span></span>
-      <PushToggle on={auto} onChange={v => { setAuto(v); local.set("bt-radio-auto", v); }} label="Ascolta i team radio" />
+      <PushToggle on={auto} onChange={v => { setAuto(v); local.set(RADIO_AUTO_KEY, v); if (v) RadioBus.unlock(); else RadioBus.stop(); }} label="Ascolta i team radio" />
     </div>);
   if (!live.sim.radios().length) return <>{autoRow}{note("none", RADIO_NONE)}</>;
   if (!rs.length) return <>{autoRow}{note("later", "Ancora nessuna radio a questo punto della sessione.")}</>;
   const newest = rs[0] && rs[rs.length - 1] && rs[0].t < rs[rs.length - 1].t ? rs.slice(-3) : rs.slice(0, 3);   // le 3 più recenti
   return <>
     {autoRow}
-    {rs.map((r, i) => { const d = driverById(r.id), fresh = !seen.current.has(r.url); if (fresh) seen.current.add(r.url); return (
+    {rs.map((r, i) => { const d = driverById(r.id); return (
     <div key={r.url} data-radio-row={r.id} style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 14px", borderBottom: i < rs.length - 1 ? `1px solid ${C.divider}` : "none" }}>
       {d && <Headshot driver={d} size={36} />}
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ fontFamily: F_BODY, fontWeight: 600, fontSize: 12.5, color: C.text }}>{d ? d.full : r.code}{r.lap ? <span style={{ color: C.dim, fontWeight: 400 }}> · Giro {r.lap}</span> : null}</div>
-        <RadioPlay url={r.url} preload={newest.includes(r) ? "auto" : "none"} auto={auto && fresh} label={`team radio di ${d ? d.full : r.code}${r.lap ? ", giro " + r.lap : ""}`} />
+        <RadioPlay url={r.url} preload={newest.includes(r) ? "auto" : "none"} label={`team radio di ${d ? d.full : r.code}${r.lap ? ", giro " + r.lap : ""}`} />
       </div>
     </div>
   ); })}
@@ -6353,7 +6459,7 @@ function RaceScreen({ champion = null, proUnlocked = [], proHint = null, proOk =
   useEffect(checkBoard, [curTab, !!st]);
   return (
     <div className="scrollcol" ref={scRef} onScroll={checkBoard} {...pullRace.handlers} data-race-pull="" data-red-screen={st && st.flag === "red" ? "on" : undefined} style={{ height: "100%", position: "relative", overscrollBehaviorY: "contain", ...(st && st.flag === "red" ? { background: RED_SCREEN_BG } : {}) }}>
-      {(pullRace.pull > 0 || pullRace.busy) && <PullGauge rev={pullRace.rev} busy={pullRace.busy} pull={pullRace.pull} />}
+      {(pullRace.pull > 0 || pullRace.busy) && <PullGauge overlay rev={pullRace.rev} busy={pullRace.busy} pull={pullRace.pull} />}
       {st && st.flag === "red" && <div role="status" data-red-banner="" style={{ position: "sticky", top: 0, zIndex: 6, margin: "0 0 10px", padding: "10px 12px", background: FLAG_UI.red.color, fontFamily: F_HEAD, fontWeight: 900, fontStyle: "italic", fontSize: 15, letterSpacing: .8, color: "#fff", textAlign: "center", overflow: "hidden" }}><WarnPulse />BANDIERA ROSSA · SESSIONE SOSPESA</div>}
       {st && curTab === "classifica" && <PitBoard st={st} driverId={favDriver} visible={board} />}
       {st && liveRace && st.finished && isRaceType(st.type) && <FinishPodium st={st} race={liveRace} onSelectDriver={onSelectDriver} />}
@@ -6562,7 +6668,7 @@ function IgRow({ v, pos = null, line, onOpen }) {
         {!v.thumb && <IgPlay size={14} color={C.dim} />}
       </StoredBg>
       <span style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: 3 }}>
-        <span style={{ fontFamily: F_BODY, fontWeight: 600, fontSize: 13.5, lineHeight: 1.3, color: C.text, overflow: "hidden", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical" }}>{v.title || "Reel senza titolo"}</span>
+        <WordClamp lines={2} text={v.title || "Reel senza titolo"} style={{ fontFamily: F_BODY, fontWeight: 600, fontSize: 13.5, lineHeight: 1.3, color: C.text }} />
         {views && <span style={{ fontFamily: F_BODY, fontSize: 11.5, color: C.dim }}>{views} visualizzazioni</span>}
       </span>
       <Icon name="external" size={16} color={C.dim} />
@@ -6789,8 +6895,8 @@ function ChatLinkCard({ k, prof = null, onOpen = null }) {
       <ChatLinkThumb k={k} prof={prof} />
       <span style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: 2 }}>
         <span style={{ fontFamily: F_HEAD, fontWeight: 900, fontSize: 9.5, letterSpacing: 1, color: C.gold }}>{LINK_LABEL[k.t]}</span>
-        <span style={{ fontFamily: F_HEAD, fontWeight: 800, fontSize: 13.5, lineHeight: 1.2, color: "#fff", ...clamp(2) }}>{k.ti}</span>
-        {k.su && <span style={{ fontFamily: F_BODY, fontSize: 11.5, lineHeight: 1.3, color: "rgba(255,255,255,.72)", ...clamp(2) }}>{k.su}</span>}
+        <WordClamp lines={2} text={k.ti} style={{ fontFamily: F_HEAD, fontWeight: 800, fontSize: 13.5, lineHeight: 1.2, color: "#fff" }} />
+        {k.su && <WordClamp lines={2} text={fixCut(k.su)} style={{ fontFamily: F_BODY, fontSize: 11.5, lineHeight: 1.3, color: "rgba(255,255,255,.72)" }} />}
       </span>
       {onOpen && <Icon name="chevron" size={14} color="rgba(255,255,255,.6)" />}
     </Tag>
@@ -8462,7 +8568,7 @@ function AdminNewsTab({ articles, setArticles, onPublish, onToast }) {
     if (f.social.trim() && !social) { setError("Il link del post non va: serve quello di un post di Instagram (instagram.com/p/…) o di X (x.com/…/status/…)."); return; }
     const poll = pollOn ? { q: pollQ.trim(), answer: null, options: opts.map((label, k) => ({ id: "o" + (k + 1), label, base: 0 })) } : undefined;
     // Il modulo si svuota solo se la notizia è salvata su Firebase; altrimenti resta per riprovare.
-    Promise.resolve(onPublish({ title: f.title.trim(), excerpt: (f.summary.trim() || body.split("\n")[0]).slice(0, 140), cat: f.cat.trim().toUpperCase(), premium: customCat || !!f.premium, author: f.author.trim(), image: f.image, body, published: f.published, teams, drivers, circuits, ...(poll ? { poll } : {}), ...(social ? { social: social.url } : {}) })).then(ok => {
+    Promise.resolve(onPublish({ title: f.title.trim(), excerpt: cutWords(f.summary.trim() || body.split("\n")[0], 140), cat: f.cat.trim().toUpperCase(), premium: customCat || !!f.premium, author: f.author.trim(), image: f.image, body, published: f.published, teams, drivers, circuits, ...(poll ? { poll } : {}), ...(social ? { social: social.url } : {}) })).then(ok => {
       if (ok === false) return;
       setF(empty); setCustomCat(false); setTeams([]); setDrivers([]); setCircuits([]); setPollOn(false); setPollQ(""); setPollOpts(["", "", "", ""]);
     });
@@ -9955,7 +10061,7 @@ function PsFace({ card, result }) {
         </div>
         <div style={{ padding: "14px 15px 52px", flexShrink: 0 }}>
           <h3 style={{ margin: 0, fontFamily: F_HEAD, fontWeight: 800, fontSize: 19, lineHeight: 1.2, color: C.text }}>{card.title}</h3>
-          {card.excerpt && <p style={{ margin: "8px 0 0", fontFamily: F_BODY, fontSize: 13, lineHeight: 1.45, color: C.muted, display: "-webkit-box", WebkitLineClamp: 4, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{card.excerpt}</p>}
+          {card.excerpt && <WordClamp as="p" lines={4} text={fixCut(card.excerpt)} style={{ margin: "8px 0 0", fontFamily: F_BODY, fontSize: 13, lineHeight: 1.45, color: C.muted }} />}
           {card.time && <span style={{ display: "block", marginTop: 8, fontFamily: F_BODY, fontSize: 11, color: C.dim }}>{card.time}</span>}
         </div>
       </div>
@@ -10521,6 +10627,24 @@ function App() {
     const iv = setInterval(() => { if (live.sim.state().finished && closeSessionRef.current) closeSessionRef.current(live); }, 1000);
     return () => clearInterval(iv);
   }, [live]);
+  useRadioAuto(live);   // 7/11 sera: team radio nuove in automatico ovunque nell'app (se acceso)
+  // 7/11 sera: piove al circuito? In diretta decide il meteo di OpenF1 della sessione (rainfall); se no, nel weekend del
+  // GP (da 3 ore prima della prima sessione a 3 ore dopo l'ultima) il meteo vero di MET Norway adesso. Allora le gocce.
+  const [rainOn, setRainOn] = useState(false);
+  useEffect(() => {
+    let alive = true;
+    const check = () => {
+      if (isOf1Live(live) && live.ongoing) { const w = live.sim.weather(); if (w) { setRainOn(!!w.rain); return; } }
+      const race = weekendRace(racesRef.current || []);
+      const ws = race && CIRCUIT_INFO[race.circuitId] ? (CIRCUIT_INFO[race.circuitId].weekend || []).map(s => Date.parse(s.utc)).filter(isFinite) : [];
+      const now = nowMs();
+      if (!ws.length || now < Math.min(...ws) - 3 * 3600000 || now > Math.max(...ws) + 3 * 3600000) { setRainOn(false); return; }
+      Meteo.forecast(race.circuitId).then(fc => { if (alive) setRainOn(BtSwipe.rainingNow(fc, nowMs())); }, () => {});
+    };
+    check();
+    const iv = setInterval(check, 60000);
+    return () => { alive = false; clearInterval(iv); };
+  }, [live]);
   const liveShown = useRef(false);
   // Avvisi della diretta, come le notifiche di un'app, sopra a tutto (anche nel Second Screen):
   // il giro più veloce in gara e i ritiri. Uno alla volta per qualche secondo; i ritiri passano davanti.
@@ -10566,6 +10690,7 @@ function App() {
       lap: (id, lapNo) => live.sim.laps(id).find(l => l.lapNo === lapNo) || null,
       retire: (id, cause) => { const ok = live.sim.retire(id, cause); setLiveTick(n => n + 1); pollNotices(live); return ok; },
       jumpTo: t => { if (!live.sim.jumpTo) return; live.sim.jumpTo(t); syncNotices(live); setLiveTick(n => n + 1); },   // sessione rivista
+      radios: () => (live.sim.radios ? live.sim.radios() : []),
     };
     // La prova DEMO va avanti da sola; la sessione rivista solo dopo "Rivedi dall'inizio", fino alla fine.
     const iv = setInterval(() => {
@@ -12129,6 +12254,7 @@ function App() {
         <ChatShare.Provider value={chatShareCtx}>{shareArticle && view === "article" && <ShareSheet article={shareArticle} locked={!!shareArticle.premium && !(isPaid || adNews.includes(shareArticle.id))} handle={ig.handle} onClose={() => setShareId(null)} onToast={showToast} />}</ChatShare.Provider>
         {linkShare && <ChatRoomPicker onPick={id => { setPendingLink(linkShare); setLinkShare(null); openChat(id); }} onClose={() => setLinkShare(null)} />}
         {socialOpen && <SocialSheet post={socialOpen} onClose={() => setSocialOpen(null)} />}
+        <RainGlass on={rainOn} />
         {tourOn && guest && view === "tab" && tab === "home" && <GuestTour useBack={useBack} onDone={tourEnd} onRegister={() => { tourEnd(); setLoginReason(null); setLoginMode("register"); setLoginOpen(true); }} />}
         {termsAccepted && termsOpen && <TermsSheet review onClose={() => setTermsOpen(false)} />}
         {feedbackOpen && <FeedbackModal onClose={() => setFeedbackOpen(false)} onSend={sendFeedback} />}

@@ -692,3 +692,20 @@ Da fare:
   scade (circa 60 giorni): il lavoro fallisce e GitHub manda un'email.
 - Privacy aggiornata nel sito (bt-app-flutter/docs/privacy.html, 7 novembre 2026). Prove: test/unit/social.test.js
   (10), test/e2e/run90-social.js (5).
+
+## 7/11 notte: Home pulita, anteprime, contagiri, team radio automatiche, pioggia a vetro liquido
+- Home: tolte la Pit Lane e le gomme (filtri G09/G10: componenti e filterNews restano, di serie non filtrano). run55
+  aggiornata (le due prove ora controllano che non ci siano). Prima scheda di benvenuto e giro guidato non parlano più
+  del filtro a gomma (testo cambiato in Benvenuto.jsx, non nel file generato).
+- Fuoco delle notizie: in cima la prima e in fondo l'ultima prendono il fuoco (prima, tornando su, restava spenta).
+- Anteprime: src/logic/words.js (cutWords, fixCut) e WordClamp in App.jsx: tre puntini dopo l'ultima parola intera.
+  L'admin salva il riassunto con cutWords (prima slice(0, 140) a metà parola); quelli vecchi si sistemano con fixCut.
+- Tira per aggiornare: durante l'aggiornamento niente scatto della pagina (scrollSnapType none: prima la pagina
+  saltava giù e il contagiri spariva), le notizie scendono di PULL_BUSY (78 px) e il contagiri si vede intero; in RACE
+  sta sopra a tutto (overlay). Il clic col mouse dopo una tirata non apre la notizia.
+- Team radio automatiche: lettore unico RadioBus e useRadioAuto nell'App: partono anche con l'elenco chiuso e da altre
+  schede; tornando indietro nella sessione rivista ripartono; il tocco sull'interruttore sblocca l'audio.
+- Pioggia: src/pioggia/ (RainGlass, lente con backdrop-filter e filtro SVG feDisplacementMap) e src/logic/rain.js
+  (al massimo 15, da zero, punto a caso, vicine solo nell'8% dei casi, ferme 1,8-6 s, poi giù a ~1100 px/s).
+  Piove se: in diretta il meteo di OpenF1 (rainfall); se no, nel weekend del GP, MET Norway adesso (rainingNow).
+  Con "Rimuovi animazioni" niente gocce. Prove: test/unit/rain.test.js, words.test.js, run91-pioggia (6), run40 (radio).

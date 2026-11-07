@@ -1,0 +1,34 @@
+/* 7/11 sera: gocce di pioggia a vetro liquido (src/pioggia/Pioggia.jsx). Solo transform e opacity. */
+.rain-root{ position: absolute; inset: 0; overflow: hidden; pointer-events: none; z-index: 850; }
+.rain-drop{
+  position: absolute; display: block; box-sizing: border-box;
+  border-radius: 50% 50% 50% 50% / 46% 46% 54% 54%;
+  /* riflesso in alto a sinistra, luce che passa in basso, bordo appena chiaro */
+  /* riflesso piccolo in alto a sinistra, la luce che si concentra in basso (come in una goccia vera), vetro quasi
+     trasparente: si vede quello che c'è sotto, piegato dalla lente */
+  background:
+    radial-gradient(26% 19% at 31% 24%, rgba(255,255,255,.95) 0 30%, rgba(255,255,255,0) 100%),
+    radial-gradient(52% 30% at 52% 86%, rgba(255,255,255,.42), rgba(255,255,255,0) 72%),
+    rgba(255,255,255,.03);
+  box-shadow:
+    inset 0 0 0 .5px rgba(255,255,255,.34),
+    inset 0 1.4px 1.6px rgba(0,0,0,.3),
+    0 1px 2px rgba(0,0,0,.32);
+  -webkit-backdrop-filter: blur(.4px) saturate(1.4) brightness(1.15);
+  backdrop-filter: blur(.4px) saturate(1.4) brightness(1.15);
+  transform-origin: 50% 35%;
+  animation: rain-in .24s cubic-bezier(.2,.9,.3,1.25) both, rain-fall var(--dur, 700ms) cubic-bezier(.55,0,.95,.35) var(--hold, 3000ms) forwards;
+  will-change: transform;
+}
+/* la lente vera (Chromium: WebView di Android, Chrome) */
+.rain-10{ backdrop-filter: url(#bt-lens-10) saturate(1.4) brightness(1.15); }
+.rain-13{ backdrop-filter: url(#bt-lens-13) saturate(1.4) brightness(1.15); }
+.rain-16{ backdrop-filter: url(#bt-lens-16) saturate(1.4) brightness(1.15); }
+.rain-19{ backdrop-filter: url(#bt-lens-19) saturate(1.4) brightness(1.15); }
+@keyframes rain-in{ from{ opacity: 0; transform: scale(.35); } to{ opacity: 1; transform: scale(1); } }
+@keyframes rain-fall{
+  0%{ transform: translate3d(0, 0, 0) scale(1, 1); }
+  10%{ transform: translate3d(0, 3px, 0) scale(.93, 1.12); }
+  100%{ transform: translate3d(0, var(--fall, 900px), 0) scale(.84, 1.34); }
+}
+@media (prefers-reduced-motion: reduce){ .rain-root{ display: none; } }

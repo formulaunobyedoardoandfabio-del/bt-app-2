@@ -140,6 +140,30 @@ run({
     assert(!/Passo buono|quanto manca alla sosta/.test(all), 'ci sono ancora le radio d\'esempio');
     assert(!errs.length, errs.join(' | '));
   },
+  // 7/11 sera (Edoardo: "la funzione che se arrivano i team radio partono da soli non funziona"): ora partono anche con
+  // l'elenco chiuso e in un'altra scheda, dal lettore unico (RadioBus); si spia play() degli audio.
+  async 'radio automatiche: acceso "Ascolta i team radio", la radio nuova parte da sola anche dalla Home'(b) {
+    const of1 = of1Route();
+    const { ctx, p, errs } = await open(b, { seed: { addDocs: BAKU_LIVE, pro: true }, routes: of1.routes }); await login(p);
+    await p.evaluate(() => { window.__plays = []; HTMLMediaElement.prototype.play = function () { window.__plays.push(this.src); setTimeout(() => this.dispatchEvent(new Event('playing')), 10); return Promise.resolve(); }; });
+    await goTab(p, 'RACE'); await waitReplay(p); await w(p, 300);
+    await raceTab(p, 'radio');
+    await tapSel(p, '[data-radio-auto] [role="switch"]'); await w(p, 300);
+    const on = await p.evaluate(() => document.querySelector('[data-radio-auto]').getAttribute('data-radio-auto'));
+    const r0 = await p.evaluate(() => window.__btLive.radios()[0]);
+    await p.evaluate(t => window.__btLive.jumpTo(t - 5), r0.t); await w(p, 2200);
+    await p.evaluate(() => { window.__plays = window.__plays.filter(s => !/^data:/.test(s)); });
+    const before = await p.evaluate(() => window.__plays.length);
+    await goTab(p, 'HOME'); await w(p, 300);
+    await p.evaluate(t => window.__btLive.jumpTo(t + 1), r0.t); await w(p, 2500);
+    const plays = await p.evaluate(() => window.__plays.filter(s => !/^data:/.test(s)));
+    await ctx.close();
+    assert(on === 'on', 'interruttore: ' + on);
+    assert(before === 0, 'prima della radio è partito qualcosa: ' + before);
+    assert(plays.length === 1 && plays[0] === r0.url, 'la radio nuova non è partita da sola in Home: ' + JSON.stringify({ plays, url: r0.url }));
+    assert(!errs.length, errs.join(' | '));
+  },
+
   async 'elenchi vuoti: "Dati non ancora disponibili", nessun errore JS'(b) {
     const of1 = of1Route('empty');
     const { ctx, p, errs } = await open(b, { seed: { addDocs: BAKU_LIVE, pro: true }, routes: of1.routes }); await login(p);   // 1/11: funzioni Pro

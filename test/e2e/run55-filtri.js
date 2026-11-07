@@ -16,53 +16,23 @@ const tyre = (p, id) => p.evaluate(k => { const e = document.querySelector(`[dat
 const spyFx = p => p.evaluate(() => { const fx = window.__btFx; window.__played = []; const play = fx.play; fx.play = n => { window.__played.push(n); return play(n); }; });
 
 run({
-  async "la gomma scelta ruota e lascia l'impronta (data-tyre-on), un altro tocco la toglie"(b) {
+  // 7/11 sera (Edoardo: "togli dalla home la sezione pitline e le ruote"): le gomme e la Pit Lane non ci sono più in
+  // Home; le regole dei filtri restano (filterNews, prove in test/unit) e di serie non filtrano niente.
+  async "Home senza le gomme: si vedono tutte le notizie e nessun filtro a gomma"(b) {
     const { ctx, p, errs } = await open(b, { seed: { addDocs: NEWS } }); await login(p);
-    const all = await shown(p);
-    const before = await tyre(p, 'hard');
-    await tapSel(p, '[data-tyre="hard"]'); await w(p, 400);
-    const on = await tyre(p, 'hard'), hard = await shown(p);
-    await tapSel(p, '[data-tyre="soft"]'); await w(p, 400);
-    const soft = await shown(p), hardAfter = await tyre(p, 'hard');
-    await tapSel(p, '[data-tyre="medium"]'); await w(p, 300); const medium = await shown(p);
-    await tapSel(p, '[data-tyre="inter"]'); await w(p, 300); const inter = await shown(p);
-    await tapSel(p, '[data-tyre="inter"]'); await w(p, 300);
-    const off = await tyre(p, 'inter'), back = await shown(p);
+    const all = await shown(p), tyres = await p.evaluate(() => document.querySelectorAll('[data-tyres], [data-tyre]').length);
     await ctx.close();
-    assert(all === 'analisi,gara,meteo,piloti,scuderie,tecnica', 'notizie all\'inizio: ' + all);
-    assert(before && before.on !== '1' && !before.print && /Hard/.test(before.label) && /approfondimenti/i.test(before.label), 'gomma Hard prima: ' + JSON.stringify(before));
-    assert(on && on.on === '1' && on.print && on.spin, 'gomma Hard scelta: ' + JSON.stringify(on));
-    assert(hard === 'analisi', 'Hard (approfondimenti): ' + hard);
-    assert(soft === 'gara,meteo,tecnica' && hardAfter.on !== '1', 'Soft (ultime 24 ore) al posto della Hard: ' + soft);
-    assert(medium === 'gara,piloti,scuderie,tecnica', 'Medium (generali): ' + medium);
-    assert(inter === 'meteo', 'Intermedia (meteo): ' + inter);
-    assert(off && off.on !== '1' && back === all, 'toccata di nuovo la gomma non si toglie: ' + JSON.stringify(off) + ' ' + back);
+    assert(all === 'analisi,gara,meteo,piloti,scuderie,tecnica', 'notizie in Home: ' + all);
+    assert(tyres === 0, 'in Home ci sono ancora le gomme: ' + tyres);
     assert(!errs.length, errs.join(' | '));
   },
 
-  async 'Pit Lane: la monoposto scivola sulla voce, il suono della cambiata'(b) {
+  async 'Home senza la Pit Lane: niente monoposto né voci della corsia'(b) {
     const { ctx, p, errs } = await open(b, { seed: { addDocs: NEWS } }); await login(p);
-    await spyFx(p);
-    const car0 = await p.evaluate(() => { const c = document.querySelector('[data-lane-car]'); return c ? { at: c.getAttribute('data-lane-car'), tf: c.style.transform } : null; });
-    await tapSel(p, '[data-lane="drivers"]'); await w(p, 500);
-    const car1 = await p.evaluate(() => { const c = document.querySelector('[data-lane-car]'); return c ? { at: c.getAttribute('data-lane-car'), tf: c.style.transform } : null; });
-    const drivers = await shown(p), played = await p.evaluate(() => window.__played);
-    await tapSel(p, '[data-tyre="soft"]'); await w(p, 300);
-    const both = await shown(p);
-    await tapSel(p, '[data-lane="tech"]'); await w(p, 300);
-    const techSoft = await shown(p);
-    await tapSel(p, '[data-lane="all"]'); await w(p, 300);
-    const allSoft = await shown(p);
-    const pressed = await p.evaluate(() => [...document.querySelectorAll('[data-lane]')].map(e => e.getAttribute('data-lane') + ':' + e.getAttribute('aria-pressed')).join(' '));
+    const lane = await p.evaluate(() => document.querySelectorAll('[data-pit-lane], [data-lane], [data-lane-car]').length), all = await shown(p);
     await ctx.close();
-    assert(car0 && car0.at === 'all', 'monoposto all\'inizio: ' + JSON.stringify(car0));
-    assert(car1 && car1.at === 'drivers' && car1.tf !== car0.tf, 'la monoposto non si sposta su Piloti: ' + JSON.stringify(car1));
-    assert(drivers === 'piloti', 'Piloti: ' + drivers);
-    assert(played.includes('shift'), 'niente suono della cambiata: ' + JSON.stringify(played));
-    assert(both === '', 'Piloti con la Soft (nessuna notizia di piloti nelle ultime 24 ore): ' + both);
-    assert(techSoft === 'tecnica', 'Tecnica con la Soft: ' + techSoft);
-    assert(allSoft === 'gara,meteo,tecnica', 'Tutte con la Soft: ' + allSoft);
-    assert(pressed === 'all:true teams:false drivers:false tech:false', 'voci della corsia: ' + pressed);
+    assert(lane === 0, 'in Home c\'è ancora la Pit Lane: ' + lane);
+    assert(all === 'analisi,gara,meteo,piloti,scuderie,tecnica', 'notizie in Home: ' + all);
     assert(!errs.length, errs.join(' | '));
   },
 

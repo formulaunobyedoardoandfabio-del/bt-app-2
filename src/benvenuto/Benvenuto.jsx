@@ -9,7 +9,10 @@
 import React, { useState, useEffect, useLayoutEffect, useRef } from "react";
 import "./disegni.css";
 import "./Benvenuto.css";
-import { SLIDE_TEXT, SLIDE_ART, DoorArt, OrbitArt } from "./disegni";
+import { SLIDE_TEXT as DESIGN_TEXT, SLIDE_ART, DoorArt, OrbitArt } from "./disegni";
+
+// 7/11 sera: in Home non c'è più il filtro a gomma (Edoardo l'ha tolto): la prima scheda non lo promette più.
+const SLIDE_TEXT = DESIGN_TEXT.map((s, i) => (i === 0 ? { ...s, text: "Cerca, salva con uno swipe e leggi senza rumore." } : s));
 
 export const WT = { bg: "#0B0B0C", ink: "#F4F4F5", muted: "#A1A1AA", line: "#2A2A2E", card: "#151517", edge: "#232327", out: "#3A3A40", red: "#FF1801", font: "'Manrope', 'Work Sans', system-ui, sans-serif" };
 export const ENTRY_KEY = "bt-entry";        // "door": schede già viste; "form": su questo telefono si è già entrati con un account
@@ -89,7 +92,7 @@ export function WelcomeFlow({ logo, startAt = 0, onSeen, onGuest, onRegister, on
 
 // Il giro guidato: i riquadri si accendono sulle parti vere dell'app (si misurano), il cartello si sposta sopra o sotto.
 const TOUR = [
-  { sel: "[data-home]", inset: 8, maxH: 380, r: 22, title: "Qui trovi le notizie", text: "Scorri, filtra con le gomme e salva quelle che ti interessano." },
+  { sel: "[data-home]", inset: 8, maxH: 380, r: 22, title: "Qui trovi le notizie", text: "Scorri, cerca e salva quelle che ti interessano." },
   { sel: '[data-nav-tab="race"]', pad: 4, r: 18, title: "La gara in diretta", text: "Tempi, gomme, pit stop e Team Radio, con la chat dei tifosi mentre si corre." },
   { sel: '[data-nav-tab="fanta"]', pad: 4, r: 18, title: "Il tuo FantaF1", text: "Scegli i piloti entro il budget e sfida gli amici in classifica." },
   { sel: '[data-nav-tab="garage"]', pad: 4, r: 18, title: "Il Garage", text: "Giochi e strumenti da box, per sfidarti anche tra una gara e l'altra." },
