@@ -111,7 +111,25 @@ function createOpenF1({ fetchImpl, now = Date.now, sleep = ms => new Promise(r =
   // telemetria "ci metteva un po' e poi diceva che non può" (Edoardo).
   const carData = (sessionKey, driverNumber, fromIso, toIso, { live = false } = {}) =>
     get("car_data", `${keyQ(sessionKey)}&driver_number=${encodeURIComponent(driverNumber)}&date>=${fromIso}&date<=${toIso}`, { live });
-  return { get, latestSession, weekendSessions, loadSession, weatherOf, carData };
+  // 8/11: griglia di partenza ufficiale (starting_grid, con le penalità) della gara (o della Sprint, dopo la Sprint
+  // Qualifying) dello stesso weekend; se lì è vuota si prova con la chiave della qualifica. [] se non c'è ancora.
+  // Prima il sito pubblico di OpenF1; se durante un'altra sessione risponde "bloccato", la nostra funzione su Vercel.
+  async function startingGrid(meetingKey, qualiKey, { sprint = false } = {}) {
+    const any = (p, q) => get(p, q).catch(e => { if (e.locked && liveBase) return get(p, q, { live: true }); throw e; });
+    const keys = [];
+    try {
+      const list = (await any("sessions", "meeting_key=" + encodeURIComponent(meetingKey))).sort((a, b) => Date.parse(a.date_start) - Date.parse(b.date_start));
+      const race = list.find(x => (sprint ? /sprint/i.test(x.session_name || "") && !/qualif|shootout/i.test(x.session_name || "") : /^race$/i.test(x.session_name || "")));
+      if (race) keys.push(race.session_key);
+    } catch (e) { if (e.locked) throw e; }
+    if (qualiKey != null) keys.push(qualiKey);
+    for (const k of keys) {
+      const rows = await any("starting_grid", keyQ(k)).catch(() => []);
+      if (rows.length) return rows;
+    }
+    return [];
+  }
+  return { get, latestSession, weekendSessions, loadSession, weatherOf, carData, startingGrid };
 }
 
 // ── Sessione rivista ────────────────────────────────────────────────────

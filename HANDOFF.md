@@ -766,3 +766,12 @@ Da fare:
   run87 aggiornata (apre il profilo dal podio del Mondiale).
 - Da sapere [Guessing]: se Android chiedesse le notifiche all'installazione per un altro motivo (non dal codice dei
   promemoria) va visto sul telefono: nel codice non c'è altra richiesta.
+
+## 8/11 notte: griglia di partenza dopo la qualifica
+- StartGrid in RACE (qualifica o Sprint Qualifying finita): auto due a due sfalsate come la griglia della rossa.
+  Prima l'ordine della qualifica (+ etichette delle penalità scritte dalla direzione gara: posti, in fondo, pit lane);
+  quando OpenF1 ha starting_grid la griglia ufficiale con ▲▼ e il tasto per tornare all'ordine della qualifica.
+- OF1.startingGrid(meeting, qualiKey, { sprint }): chiave della gara (o Sprint) del weekend, poi quella della
+  qualifica; sito pubblico e, se "bloccato", api/live (che già permette starting_grid). Riletta ogni 10 minuti.
+- Logica: src/logic/start-grid.js. Prove: test/unit/start-grid.test.js (5), test/e2e/run96-griglia-qualifica.js (2).
+- [Guessing] Non so con quale session_key OpenF1 pubblica starting_grid (gara o qualifica): si provano tutte e due.

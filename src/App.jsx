@@ -52,6 +52,7 @@ import { RainGlass } from "./pioggia/Pioggia";
 import ClassificaLega from "./fanta/ClassificaLega";
 import TrophiesScreen, { TrophiesCard } from "./gara/Trophies";
 import { computeGpTrophies } from "./logic/gp-trophies";
+import { buildStartGrid } from "./logic/start-grid";
 import TrofeiPage from "./profilo/TrofeiPage";
 import FantaSeason from "./logic/fanta-season";
 import { createFantaLeague } from "./services/fantaleague";
@@ -3096,6 +3097,52 @@ function RedFlagGrid({ st, now = null }) {
         <div key={i} style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 8 }}>
           {r[0] && slot(r[0])}
           {r[1] && <div style={{ marginTop: 22 }}>{slot(r[1])}</div>}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// 8/11 (Edoardo: "dopo la qualifica mostra la griglia di partenza come durante una rossa, poi anche le posizioni
+// aggiornate alle penalità"): finita la qualifica, la griglia vista dall'alto come nella rossa (auto due a due
+// sfalsate). Prima l'ordine della qualifica; quando OpenF1 ha la griglia ufficiale (starting_grid) si vede quella con
+// ▲▼ i posti guadagnati o persi per le penalità, e si può tornare all'ordine della qualifica. Penalità scritte dalla
+// direzione gara: etichetta sul pilota (src/logic/start-grid.js). Solo dati veri.
+function StartGrid({ st, official = null, rc = [] }) {
+  const [view, setView] = useState("grid");
+  const g = buildStartGrid({ quali: st.cars.filter(c => !c.dnf && c.pos > 0).map(c => ({ number: c.number, code: c.code, color: c.color, id: c.id, pos: c.pos })), official: official || [], rc });
+  if (!g.rows.length) return null;
+  const off = g.official && view === "grid";
+  const rows = off ? g.rows : g.rows.slice().sort((a, b) => a.quali - b.quali);
+  const pairs = [];
+  for (let i = 0; i < rows.length; i += 2) pairs.push(rows.slice(i, i + 2));
+  const slot = r => {
+    const d = off ? r.delta : null;
+    return (
+      <div key={r.number} data-start-slot={r.code} data-start-pos={off ? r.grid : r.quali} data-start-delta={d == null ? "" : String(d)} style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 8px", borderRadius: 10, background: "rgba(0,0,0,.45)", border: "1px solid rgba(255,255,255,.12)" }}>
+        <span style={{ width: 22, fontFamily: F_HEAD, fontWeight: 900, fontSize: 14, color: "#fff", textAlign: "right" }}>{off ? r.grid : r.quali}</span>
+        <GridCar color={r.color} />
+        <span style={{ flex: 1, minWidth: 0 }}>
+          <b style={{ display: "block", fontFamily: F_HEAD, fontWeight: 800, fontSize: 13, color: "#fff" }}>{r.code}</b>
+          {off ? <span style={{ fontFamily: F_BODY, fontWeight: 700, fontSize: 11, color: d > 0 ? C.green : d < 0 ? "#FF5A5F" : C.muted }}>{d == null ? "–" : d > 0 ? "▲ " + d : d < 0 ? "▼ " + -d : "= 0"}</span>
+            : r.tag ? <span data-start-tag="" style={{ display: "block", fontFamily: F_BODY, fontWeight: 700, fontSize: 10.5, color: C.gold, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{r.tag}</span> : null}
+        </span>
+      </div>
+    );
+  };
+  const segBtn = (id, label) => <button key={id} type="button" className="press" data-start-view={id} aria-pressed={view === id} onClick={() => setView(id)} style={{ flex: 1, padding: "7px 0", borderRadius: 8, background: view === id ? "rgba(255,255,255,.14)" : "transparent", fontFamily: F_HEAD, fontWeight: 800, fontSize: 12, color: view === id ? "#fff" : C.muted }}>{label}</button>;
+  return (
+    <div data-start-grid={g.official ? "ufficiale" : "qualifica"} style={{ margin: "0 16px 14px", padding: 12, borderRadius: 16, background: C.card, border: `1px solid ${C.border}` }}>
+      <div style={{ fontFamily: F_HEAD, fontWeight: 900, fontStyle: "italic", fontSize: 13, letterSpacing: .6, color: "#fff", marginBottom: 4 }}>GRIGLIA DI PARTENZA</div>
+      {g.official && <div role="group" aria-label="Quale griglia" style={{ display: "flex", gap: 4, padding: 3, margin: "6px 0 8px", borderRadius: 10, background: "rgba(255,255,255,.05)" }}>{segBtn("grid", "Con le penalità")}{segBtn("quali", "Ordine della qualifica")}</div>}
+      <div data-start-note="" style={{ fontFamily: F_BODY, fontSize: 11, color: C.muted, marginBottom: 10 }}>
+        {off ? (g.changed ? "Griglia ufficiale con le penalità · ▲▼ posti rispetto alla qualifica" : "Griglia ufficiale: uguale all'ordine della qualifica")
+          : g.official ? "Ordine d'arrivo della qualifica" : "Ordine della qualifica · la griglia ufficiale con le penalità arriva quando la pubblica la FIA"}
+      </div>
+      {pairs.map((p, i) => (
+        <div key={i} style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 8 }}>
+          {p[0] && slot(p[0])}
+          {p[1] && <div style={{ marginTop: 22 }}>{slot(p[1])}</div>}
         </div>
       ))}
     </div>
@@ -6543,7 +6590,7 @@ function EndSpy({ onEnd }) {
   }, []);
   return <div ref={ref} data-end-spy="" aria-hidden="true" style={{ height: 1 }} />;
 }
-function RaceScreen({ champion = null, proUnlocked = [], proHint = null, proOk = true, onProAd = null, proBusy = false, onStandingsEnd = null, isPremium, onPremium, onSelectDriver, races, standings, live, liveSt, onExpandMap, onTelemetry, onOpenCircuit, wxGuess, wxResult, onGuessWeather, onLapTimes, onSecondScreen, lastRace, dotdVote, onDotdVote, ratings = {}, onRate, onOpenChats, onOpenGhost, of1 = null, onOf1Refresh, replay = null, favDriver = null, of1Sessions = null, onOf1Pick = null, sessionNote = null, trophies = null, onReplayAt = null, onShareTrophy = null }) {
+function RaceScreen({ champion = null, proUnlocked = [], proHint = null, proOk = true, onProAd = null, proBusy = false, onStandingsEnd = null, isPremium, onPremium, onSelectDriver, races, standings, live, liveSt, onExpandMap, onTelemetry, onOpenCircuit, wxGuess, wxResult, onGuessWeather, onLapTimes, onSecondScreen, lastRace, dotdVote, onDotdVote, ratings = {}, onRate, onOpenChats, onOpenGhost, of1 = null, onOf1Refresh, replay = null, favDriver = null, of1Sessions = null, onOf1Pick = null, sessionNote = null, trophies = null, onReplayAt = null, onShareTrophy = null, startGrid = null }) {
   const [pitOpen, setPitOpen] = useState(null);   // 1/11 notte: pilota con le gomme dei pit aperte (scheda Gomme)
   const [trophyPage, setTrophyPage] = useState(false);   // 8/11: pagina dei B&T Trophies
   useBack(trophyPage, () => setTrophyPage(false));
@@ -6581,6 +6628,7 @@ function RaceScreen({ champion = null, proUnlocked = [], proHint = null, proOk =
       {st && curTab === "classifica" && <PitBoard st={st} driverId={favDriver} visible={board} />}
       {st && liveRace && st.finished && isRaceType(st.type) && <FinishPodium st={st} race={liveRace} onSelectDriver={onSelectDriver} />}
       {st && st.finished && trophies && trophies.headline && <TrophiesCard data={trophies} onOpen={() => setTrophyPage(true)} />}
+      {st && st.finished && /^(QUALI|SQ)$/.test(String(st.type)) && <StartGrid st={st} official={startGrid} rc={live && live.raw ? live.raw.race_control : []} />}
       {realLive && (!live || live.source === "openf1") && <SessionPicker sessions={of1Sessions} onPick={onOf1Pick} note={st ? sessionNote : null} />}
       {st && liveRace ? <LiveCard race={liveRace} st={st} track={live.track} source={live.source} onExpand={onExpandMap} replay={replay} /> : (
       <div style={{ position: "relative", margin: "4px 16px 14px", borderRadius: 18, overflow: "hidden", background: C.card, border: `1px solid ${C.border}` }}>
@@ -10840,6 +10888,19 @@ function App() {
   const simDone = isOf1Live(live) && !!live.raw && !!live.sim && !live.ongoing && live.sim.t >= live.sim.duration - 1;
   const trophyKey = simDone ? live.sessionKey + ":" + live.type : null;
   const gpTrophies = React.useMemo(() => (trophyKey && live && live.raw ? computeGpTrophies(live.raw, { type: live.type }) : null), [trophyKey]);   // eslint-disable-line react-hooks/exhaustive-deps
+  // 8/11: finita la qualifica (o la Sprint Qualifying) la griglia ufficiale di OpenF1 con le penalità (starting_grid),
+  // riletta ogni 10 minuti finché la FIA non la pubblica; StartGrid in RACE mostra prima l'ordine della qualifica.
+  const [startGrid, setStartGrid] = useState(null);   // { key, rows }
+  const gridKey = simDone && /^(QUALI|SQ)$/.test(String(live.type)) ? live.sessionKey : null;
+  useEffect(() => {
+    if (!gridKey || !live || !live.raw || !live.raw.session) return undefined;
+    let off = false;
+    const meeting = live.raw.session.meeting_key, sprint = live.type === "SQ";
+    const load = () => OF1.startingGrid(meeting, gridKey, { sprint }).then(rows => { if (!off) setStartGrid(g => (g && g.key === gridKey && sameJson(g.rows, rows) ? g : { key: gridKey, rows })); }).catch(() => {});
+    load();
+    const iv = setInterval(load, 10 * 60e3);
+    return () => { off = true; clearInterval(iv); };
+  }, [gridKey]);   // eslint-disable-line react-hooks/exhaustive-deps
   const replayAt = t => { if (!isOf1Live(live) || !live.sim) return; live.sim.jumpTo(Math.max(0, t || 0)); syncNotices(live); setReplay(r => ({ ...r, playing: true })); setLiveTick(n => n + 1); };
   // ── Contenuti condivisi su Firebase (src/services/appdata.js) ──────────
   // Un nuovo valore uguale a quello che c'è già non cambia lo stato (niente ridisegni inutili a ogni rilettura).
@@ -12310,7 +12371,7 @@ function App() {
     else if (tab === "race") body = <RaceScreen champion={champion} proOk={isPremium} proHint={proHintOf} onProAd={Ads.canReward() ? () => watchAdPro() : null} proBusy={adBusy} onStandingsEnd={isPaid ? null : Ads.standingsEnd} favDriver={favDriver} dotdVote={live ? votesNow.dotd[live.raceId] : null} onDotdVote={(k, id) => live && voteDotd(live.raceId, k, id)} ratings={votesNow.ratings} onRate={rateDriver} onOpenChats={() => setView("chats")} onOpenGhost={() => setView("ghost")} races={races} standings={shownStandings} isPremium={isPremium} onPremium={() => setPremiumOpen(true)} onSelectDriver={setSelectedDriver} live={live} liveSt={liveSt} onExpandMap={() => setLiveTrackOpen(true)} onTelemetry={(carId, lapNo, sector) => proGate("telemetry", () => setTelemetry({ carId, lapNo, sector }))} onOpenCircuit={openCircuit} wxGuess={wxGuess} wxResult={wxResult} onGuessWeather={guessWeather} onLapTimes={id => proGate("laps", () => setLapList(id))} onSecondScreen={() => proGate("ss", () => setSsOpen(true))} lastRace={lastRace} of1={of1} onOf1Refresh={() => of1TickRef.current && of1TickRef.current(true)} of1Sessions={of1Sessions}
       onOf1Pick={key => { of1PickRef.current = key === of1Sessions.latest ? null : key; setOf1Sessions(x => ({ ...x, shown: key })); if (of1TickRef.current) of1TickRef.current(true); }}
       sessionNote={of1Live && of1Live.raw && !of1Live.raw.laps.length && of1Live.raw.session_result.length ? "I tempi giro per giro non sono ancora su OpenF1 (arrivano qualche ora dopo la fine): intanto la classifica con il miglior giro di ognuno." : null} replay={replayCtl}
-      trophies={gpTrophies} onReplayAt={replayAt} onShareTrophy={(it, raceName, circuitId) => shareToChat({ t: "race", id: circuitId || undefined, ti: `B&T Trophy: ${it.name}`, su: `${it.who} · ${it.stat}`, ln: [it.text] })} />;
+      trophies={gpTrophies} startGrid={startGrid && startGrid.key === gridKey ? startGrid.rows : null} onReplayAt={replayAt} onShareTrophy={(it, raceName, circuitId) => shareToChat({ t: "race", id: circuitId || undefined, ti: `B&T Trophy: ${it.name}`, su: `${it.who} · ${it.stat}`, ln: [it.text] })} />;
     else if (tab === "garage") body = <GarageScreen openGame={garageGame} onGameOpened={() => setGarageGame(null)} races={races} pitBest={pitBest} onPitResult={t => {
       if (activeDuel && myAid) { const id = activeDuel; setActiveDuel(null); Duels.reply({ id, aid: myAid, time: t }).then(item => { setDuelsArr(a => [...a, item]); showToast("Sfida giocata: risultato in Home"); }, () => showToast("Risposta alla sfida non inviata")); }
       if (!userDataWait()) { setPitBest(b => b == null || t < b ? t : b); psBump("pit"); } }} sillyPreds={sillyPreds} onPredict={predictSeat} sillyOfficial={sillyOfficial} live={live} stratPreds={stratPreds} onStrat={(id, st) => { if (!userDataWait()) setStratPreds(x => ({ ...x, [id]: { stints: st, at: nowMs() } })); }} bluffTags={bluffNow} onBluffRefresh={loadBluffTags} />;
