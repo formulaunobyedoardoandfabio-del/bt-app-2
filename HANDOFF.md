@@ -615,3 +615,8 @@ Da fare:
 - Verificato il 7/11: check/sem, unit elo, trophypro, billing, payments-api, appdata; run71 (10/10), run88 (notizie e
   le altre), run20/83/84/85 col Pit Swipe acceso. Il giro completo (all.sh) è stato fermato da Edoardo a 77 file su 104:
   fino lì falliva solo run60 (aggiornata dopo, non rigirata). Da rifare: JOBS=2 bash test/all.sh.
+- 7/11 tarda mattinata (prompt "vertical snap" di Edoardo, come funzione dell'app): la Home scorre a scatti
+  (scroll-snap-type y mandatory su [data-home]); punti di arresto: testa con ricerca e filtri (start), notizia in evidenza
+  e ogni notizia (center), coda dei contenuti Premium (start). La scheda al centro è a fuoco, quelle sopra e sotto si
+  vedono più piccole e spente ai bordi (paintFocus: scale e opacity sulla riga, il transform resta dello swipe). Luce del
+  colore della notizia al centro. Schede orizzontali di sempre, barra in basso ferma. Prove: run88 (notizie), run77.

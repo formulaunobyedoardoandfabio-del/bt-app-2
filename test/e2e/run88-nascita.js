@@ -63,10 +63,19 @@ run({
     const seen = new Set([first.amb]);
     for (let i = 1; i <= 8; i++) { await p.evaluate(i => { const h = document.querySelector('[data-home]'); h.scrollTop = i * 260; h.dispatchEvent(new Event('scroll')); }, i); await w(p, 250); seen.add(await p.evaluate(() => document.querySelector('[data-news-ambient]').getAttribute('data-news-ambient'))); }
     const rows = await p.evaluate(() => { const all = [...document.querySelectorAll('[data-news-row]')]; return { n: all.length, shown: all.filter(e => e.classList.contains('news-in')).length }; });
+    // scroll-snap: ogni scheda si ferma al centro; quella al centro è a fuoco, le altre più spente
+    await p.evaluate(() => { const r = document.querySelectorAll('[data-news-row]')[3]; r.scrollIntoView({ block: 'center' }); });
+    await w(p, 500);
+    const snap = await p.evaluate(() => {
+      const h = document.querySelector('[data-home]'), mid = h.getBoundingClientRect().top + h.clientHeight / 2;
+      const rows = [...document.querySelectorAll('[data-news-row]')].map(e => { const r = e.getBoundingClientRect(); return { d: Math.abs((r.top + r.bottom) / 2 - mid), op: +getComputedStyle(e).opacity }; }).sort((a, b) => a.d - b.d);
+      return { type: getComputedStyle(h).scrollSnapType, align: getComputedStyle(document.querySelector('[data-news-item]')).scrollSnapAlign, near: rows[0] && rows[0].op, far: rows.length > 3 ? rows[rows.length - 1].op : null };
+    });
     await ctx.close();
     assert(first.amb && !first.grid && first.list === 'list' && first.rowImgLeft === 'flex', 'elenco di sempre con la luce dietro: ' + JSON.stringify(first));
     assert(seen.size >= 2, 'scorrendo la luce non cambia colore: ' + JSON.stringify([...seen]));
     assert(rows.shown >= 3, 'le schede non entrano scorrendo: ' + JSON.stringify(rows));
+    assert(/y/.test(snap.type) && /mandatory/.test(snap.type) && /center/.test(snap.align) && snap.near > .9 && snap.far < snap.near, 'scorrimento a scatti con la scheda al centro a fuoco: ' + JSON.stringify(snap));
     assert(!errs.length, errs.join(' | '));
   },
 

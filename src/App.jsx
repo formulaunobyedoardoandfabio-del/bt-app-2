@@ -2090,7 +2090,7 @@ function HomeScreen({ holidayTop = null, pitSwipe = null, ig, onOpenIg, highligh
   const ambCur = useRef(null), ambRaf = useRef(0);
   const pickAmb = el => {
     if (!el) return;
-    const mid = el.getBoundingClientRect().top + el.clientHeight * 0.38;
+    const mid = el.getBoundingClientRect().top + el.clientHeight * 0.5;
     let best = null, bd = Infinity;
     el.querySelectorAll("[data-news-item], [data-featured]").forEach(it => { const r = it.getBoundingClientRect(), d = Math.abs((r.top + r.bottom) / 2 - mid); if (d < bd) { bd = d; best = it; } });
     const id = best && (best.getAttribute("data-news-item") || best.getAttribute("data-featured"));
@@ -2100,8 +2100,26 @@ function HomeScreen({ holidayTop = null, pitSwipe = null, ig, onOpenIg, highligh
     ambCur.current = col;
     setAmb(st => (st.on === "a" ? { ...st, b: col, on: "b" } : { ...st, a: col, on: "a" }));
   };
-  const onHomeScroll = e => { const el = e.currentTarget; if (ambRaf.current) return; ambRaf.current = requestAnimationFrame(() => { ambRaf.current = 0; pickAmb(el); }); };
-  useEffect(() => { pickAmb(homeRef.current); return () => cancelAnimationFrame(ambRaf.current); }, [articles.length]);
+  // 7/11 (prompt di Edoardo, "vertical snap"): ogni scheda si ferma al centro dello schermo (scroll-snap), quella al
+  // centro è a fuoco e quelle sopra e sotto si vedono più piccole e spente ai bordi, come in un tunnel (scale e opacity,
+  // il transform resta dello swipe della riga).
+  const paintFocus = el => {
+    if (!el) return;
+    const mid = el.getBoundingClientRect().top + el.clientHeight / 2, half = Math.max(1, el.clientHeight / 2);
+    el.querySelectorAll("[data-news-item], [data-featured]").forEach(it => {
+      const box = it.closest("[data-news-row]") || it.parentElement, r = it.getBoundingClientRect();
+      const f = 1 - Math.min(1, Math.abs((r.top + r.bottom) / 2 - mid) / half);
+      box.style.scale = String(0.955 + 0.045 * f);
+      box.style.opacity = String(0.6 + 0.4 * Math.min(1, f * 1.7));
+    });
+  };
+  const onHomeScroll = e => { const el = e.currentTarget; if (ambRaf.current) return; ambRaf.current = requestAnimationFrame(() => { ambRaf.current = 0; pickAmb(el); paintFocus(el); }); };
+  useEffect(() => {
+    const el = homeRef.current; pickAmb(el); paintFocus(el);
+    const onR = () => paintFocus(homeRef.current);
+    window.addEventListener("resize", onR);
+    return () => { cancelAnimationFrame(ambRaf.current); window.removeEventListener("resize", onR); };
+  });
   // Scorrimento come nel video: le schede entrano salendo piano mentre arrivano dal basso (una volta sola), con
   // translate/scale e opacità (il transform resta dello swipe della riga).
   const revealKey = articles.map(a => a.id).join(",");
@@ -2147,9 +2165,10 @@ function HomeScreen({ holidayTop = null, pitSwipe = null, ig, onOpenIg, highligh
     <div aria-hidden="true" data-news-ambient={amb[amb.on] || ""} style={{ position: "absolute", inset: 0, overflow: "hidden", pointerEvents: "none" }}>
       {["a", "b"].map(k => <div key={k} className="news-amb" style={{ position: "absolute", inset: 0, opacity: amb.on === k && amb[k] ? 1 : 0, background: amb[k] ? `radial-gradient(120% 50% at 50% -10%, ${alpha(amb[k], .3)}, transparent 62%), radial-gradient(120% 34% at 50% 112%, ${alpha(amb[k], .2)}, transparent 62%)` : "none" }} />)}
     </div>
-    <div ref={homeRef} data-home="" className="scrollcol" onScroll={onHomeScroll} {...pullRev.handlers} style={{ height: "100%", position: "relative", overscrollBehaviorY: "contain", userSelect: pullRev.dragging ? "none" : undefined, WebkitUserSelect: pullRev.dragging ? "none" : undefined }}>
+    <div ref={homeRef} data-home="" className="scrollcol" onScroll={onHomeScroll} {...pullRev.handlers} style={{ height: "100%", position: "relative", scrollSnapType: "y mandatory", overscrollBehaviorY: "contain", userSelect: pullRev.dragging ? "none" : undefined, WebkitUserSelect: pullRev.dragging ? "none" : undefined }}>
       {(pullRev.pull > 0 || pullRev.busy) && <PullGauge rev={pullRev.rev} busy={pullRev.busy} pull={pullRev.pull} />}
       <div style={{ transform: pullRev.pull ? `translateY(${pullRev.pull}px)` : undefined, transition: pullRev.dragging ? "none" : "transform .25s ease" }}>
+      <div data-snap-head="" style={{ scrollSnapAlign: "start" }}>
       {holidayTop}
 
       {/* 24/10: tolto il riquadro finto "ADV · Spazio pubblicitario": nell'APK c'è il banner vero di AdMob in fondo
@@ -2203,8 +2222,9 @@ function HomeScreen({ holidayTop = null, pitSwipe = null, ig, onOpenIg, highligh
         <p style={{ margin: "0 16px 16px", fontFamily: F_BODY, fontSize: 12.5, color: C.dim }}>Nessuna notizia con questo hashtag, per ora.</p>
       )}
 
+      </div>
       {featured && (
-        <div style={{ position: "relative" }}>
+        <div style={{ position: "relative", scrollSnapAlign: "center" }}>
         <SaveBtn a={featured} saved={saved.includes(featured.id)} onToggle={onToggleSave} style={{ top: 12, right: 28 }} />
         <button className="press" data-featured={featured.id} onClick={() => onOpenArticle(featured.id)} style={{ display: "block", textAlign: "left", width: "calc(100% - 32px)", margin: "0 16px 14px", borderRadius: 18, overflow: "hidden", background: C.card, border: `1px solid ${C.border}` }}>
           {/* La foto si vede intera, con le sue proporzioni: niente ritagli. */}
@@ -2233,7 +2253,7 @@ function HomeScreen({ holidayTop = null, pitSwipe = null, ig, onOpenIg, highligh
       {rest.map(a => (
         <SwipeRow key={a.id} id={a.id} onSave={onSwipeSave} onHide={onHide}>
         <SaveBtn a={a} saved={saved.includes(a.id)} onToggle={onToggleSave} style={{ top: 8, right: 24 }} />
-        <button className="press" data-news-item={a.id} data-age={String(BtLogic.newsAge(a))} onClick={() => onOpenArticle(a.id)} style={{ display: "flex", textAlign: "left", width: "calc(100% - 32px)", margin: "0 16px 12px", borderRadius: 16, overflow: "hidden", background: C.card, border: `1px solid ${C.border}` }}>
+        <button className="press" data-news-item={a.id} data-age={String(BtLogic.newsAge(a))} onClick={() => onOpenArticle(a.id)} style={{ scrollSnapAlign: "center", display: "flex", textAlign: "left", width: "calc(100% - 32px)", margin: "0 16px 12px", borderRadius: 16, overflow: "hidden", background: C.card, border: `1px solid ${C.border}` }}>
           <div style={{ width: 92, minHeight: 92, flexShrink: 0, position: "relative", background: a.image ? "#111" : "linear-gradient(155deg,#1a1a2e 0%,#0f0f12 70%)" }}>
             {a.image && <StoredImg data-news-img="" src={a.image} style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "contain" }} />}
             <span style={{ position: "absolute", top: 8, left: 8, padding: "3px 8px", borderRadius: 6, background: a.premium ? "rgba(231,179,76,.2)" : "rgba(255,255,255,.12)", fontFamily: F_HEAD, fontWeight: 800, fontSize: 8, letterSpacing: .8, color: a.premium ? C.gold : "#fff" }}>{a.cat}</span>
@@ -2253,6 +2273,7 @@ function HomeScreen({ holidayTop = null, pitSwipe = null, ig, onOpenIg, highligh
         </p>
       )}
 
+      <div data-snap-tail="" style={{ scrollSnapAlign: "start" }}>
       <SectionLabel icon="star">CONTENUTI PREMIUM</SectionLabel>
       <div style={{ display: "flex", flexDirection: "column", gap: 10, padding: "0 16px 20px" }}>
         {homePoll && <PollCard poll={homePoll} vote={homeVote} onVote={onVote} title="SONDAGGIO DELLA REDAZIONE" />}
@@ -2291,6 +2312,7 @@ function HomeScreen({ holidayTop = null, pitSwipe = null, ig, onOpenIg, highligh
       </div>
       <p style={{ fontFamily: F_BODY, fontSize: 10, color: C.dim, lineHeight: 1.55, textAlign: "center", margin: "18px 24px 6px" }}>{F1_DISCLAIMER}</p>
       <div style={{ height: 8 }} />
+      </div>
       </div>
     </div>
     </div>
