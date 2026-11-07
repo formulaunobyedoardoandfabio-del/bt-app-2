@@ -652,3 +652,21 @@ Da fare:
     l'IntersectionObserver mette news-center alla notizia che passa per il centro e focus-on su [data-home]; CSS con
     transizione (scale .93 / opacity .5 le altre). Mai tutto spento: senza focus-on niente effetto.
   - Verificato: screenshot della Home (in cima e con una notizia al centro), run88, run77, run71, run66 verdi.
+
+## 8/11 sera: nuovo accesso (design "Accesso e Registrazione") e orbita per la rete lenta
+- Disegni di Claude Design mandati da Edoardo: tools/disegni2jsx.py li converte in src/benvenuto/disegni.jsx e
+  disegni.css (generati: per cambiarli si rigenera, non si toccano a mano). Componenti in src/benvenuto/Benvenuto.jsx.
+- Prima dell'accesso (App, entryView): "slides" = 6 schede (barre come le storie, Salta, Avanti, swipe) e poi
+  l'Entrata ("Il paddock è aperto": Entra come ospite, Crea il tuo account, Ho già un account); "door" = l'Entrata;
+  "form" = LoginScreen. local bt-entry lo ricorda: "door" dopo le schede, "form" dopo un accesso (anche con la sessione
+  salvata). LoginScreen rifatta col design (Manrope, fondo #0B0B0C, tasto bianco), stessi campi e stesse funzioni;
+  initialMode "register", onDoor = freccia e tasto indietro verso l'Entrata. "ENTRA SENZA ACCOUNT" ora "ENTRA COME OSPITE".
+- Ospite dall'Entrata: GuestTour, 5 passi sulle parti vere (notizie, RACE, FANTA, GARAGE, Profilo) misurate con
+  getBoundingClientRect; una volta per telefono (local bt-guest-tour). Il testo del design parlava di tab Live e Chat che
+  l'app non ha: adattato alle schede vere (la chat dei tifosi è in RACE).
+- Rete lenta: OrbitLoader (icone F1 in orbita) con SlowSwap dopo SLOW_LOAD_MS (2,5 s) al posto dei LED nel
+  caricamento d'avvio e nell'attesa di Authentication, dello scheletro nella scheda della sessione (RACE) e nella
+  telemetria. Le feste restano col loro caricamento.
+- Font: src/fonts/Manrope-var-latin.woff2 (OFL, src/fonts/OFL-Manrope.txt), citato nelle info dell'app.
+- Prove: helpers.open di serie mette bt-entry "form" (chi non è entrato vede Accedi come prima); opzione welcome:true
+  per il telefono nuovo. Le prove vecchie con il loro newContext hanno la stessa riga. run89-accesso nuova (8 prove).

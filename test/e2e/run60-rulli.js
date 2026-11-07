@@ -28,7 +28,8 @@ run({
     const b4 = await odo(p);
     await tapSel(p, '[aria-label="Un anno in meno"]'); await w(p, 120);
     const c = await odo(p);
-    const box = await p.evaluate(() => { const r = document.querySelector('[data-odometer]').getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; });
+    // 8/11: col nuovo accesso (design) il rullo sta più in basso: prima si porta a metà schermo, poi si trascina.
+    const box = await p.evaluate(() => { const o = document.querySelector('[data-odometer]'); o.scrollIntoView({ block: 'center' }); const r = o.getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; });
     await p.mouse.move(box.x, box.y); await p.mouse.down();
     for (let i = 1; i <= 6; i++) { await p.mouse.move(box.x, box.y - i * 9); await w(p, 30); }
     await p.mouse.up(); await w(p, 200);

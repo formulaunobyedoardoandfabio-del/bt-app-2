@@ -10,6 +10,7 @@ const EXE = require('fs').existsSync('/opt/pw-browsers/chromium-1194/chrome-linu
 // fresh: primo avvio dell'app (Termini ancora da accettare, Task 9); di serie il Firebase finto li dà già accettati.
 async function open(b, { fresh = false } = {}) {
   const ctx = await b.newContext({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true });
+  await ctx.addInitScript(() => { try { if (!localStorage.getItem('bt_bt-entry')) localStorage.setItem('bt_bt-entry', JSON.stringify('form')); } catch (e) {} });   // 7/11: benvenuto già visto (come helpers.js)
   await ctx.route('https://api.jolpi.ca/**', r => r.abort());               // 24/10: classifiche di Jolpica e previsioni
   await ctx.route('https://bt-app-2.vercel.app/**', r => r.abort());   // meteo di serie non rispondono (come helpers.js)
   await ctx.addInitScript(() => { window.__btNow = window.__btNow || Date.parse('2026-10-07T10:00:00Z'); });   // ora fissa (come helpers.js)
@@ -126,15 +127,15 @@ const tests = {
     assert(/Eliminare l'account\?/.test(t1), 'nessuna richiesta di conferma');
     await p.fill('#delPw', 'x'); await tapText(p, 'ELIMINA DEFINITIVAMENTE'); await w(p, 600);   // Task 7: la password conferma l'eliminazione
     const t2 = await text(p);
-    assert(/ENTRA SENZA ACCOUNT/.test(t2), 'dopo l\'eliminazione non torna alla schermata di accesso');
-    await tapText(p, 'ENTRA SENZA ACCOUNT'); await w(p, 700);   // i Termini restano accettati su questo telefono, come oggi
+    assert(/ENTRA COME OSPITE/.test(t2), 'dopo l\'eliminazione non torna alla schermata di accesso');
+    await tapText(p, 'ENTRA COME OSPITE'); await w(p, 700);   // i Termini restano accettati su questo telefono, come oggi
     await openChat(p);
     const t3 = await text(p); await ctx.close();
     assert(!/messaggio da cancellare/.test(t3), 'i miei messaggi restano in chat dopo l\'eliminazione');
   },
   async 'privacy: link nel profilo (anche da ospite) e nei Termini'(b) {
     const { ctx, p } = await open(b);
-    await w(p, 2600); await tapText(p, 'ENTRA SENZA ACCOUNT'); await w(p, 700);
+    await w(p, 2600); await tapText(p, 'ENTRA COME OSPITE'); await w(p, 700);
     await tapSel(p, '[aria-label="Profilo"]'); await w(p);
     await tapText(p, 'Privacy Policy'); await w(p);
     let op = await p.evaluate(() => window.__opened.slice());

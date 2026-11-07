@@ -144,8 +144,8 @@ run({
       Object.defineProperty(window, 'firebase', { configurable: true, get: () => fb, set: v => { fb = v; if (v && v.__fake) v.__fake.holdReads = true; } });
     });
     await p.reload();
-    await p.waitForFunction(() => !document.querySelector('[data-splash]') && /ENTRA SENZA ACCOUNT/.test(document.body.innerText), null, { timeout: 30000 });
-    await tapText(p, 'ENTRA SENZA ACCOUNT'); await w(p, 500);
+    await p.waitForFunction(() => !document.querySelector('[data-splash]') && /ENTRA COME OSPITE/.test(document.body.innerText), null, { timeout: 30000 });
+    await tapText(p, 'ENTRA COME OSPITE'); await w(p, 500);
     await p.evaluate(() => { window.firebase.__fake.holdReads = false; }); await w(p, 2000);   // la sessione arriva
     await tapSel(p, '[aria-label="Profilo"]'); await w(p, 400);
     const prof = norm(await text(p));
@@ -198,8 +198,8 @@ run({
   async 'minore 10: rete lentissima all\'avvio: finito lo splash coi contenuti di serie c\'è la riga "Sei offline"; poi sparisce'(b) {
     const { ctx, p, errs } = await open(b); await login(p);
     await reopenOffline(ctx, p, 'holdReads');                 // dopo 15 secondi lo splash se ne va: si entra da ospite
-    await p.waitForFunction(() => /ENTRA SENZA ACCOUNT/.test(document.body.innerText), null, { timeout: 20000 });
-    await tapText(p, 'ENTRA SENZA ACCOUNT'); await w(p, 500);
+    await p.waitForFunction(() => /ENTRA COME OSPITE/.test(document.body.innerText), null, { timeout: 20000 });
+    await tapText(p, 'ENTRA COME OSPITE'); await w(p, 500);
     const t1 = norm(await text(p));
     await back(p); await w(p, 800);
     const t2 = norm(await text(p)); await ctx.close();

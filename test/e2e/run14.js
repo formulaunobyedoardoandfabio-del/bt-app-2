@@ -14,6 +14,7 @@ const EXE = require('fs').existsSync('/opt/pw-browsers/chromium-1194/chrome-linu
 const NOW = '2026-09-30T11:48:00Z';
 async function open(b, { width = 390, height = 844, now = NOW, seed = null } = {}) {
   const ctx = await b.newContext({ viewport: { width, height }, hasTouch: true, isMobile: true });
+  await ctx.addInitScript(() => { try { if (!localStorage.getItem('bt_bt-entry')) localStorage.setItem('bt_bt-entry', JSON.stringify('form')); } catch (e) {} });   // 7/11: benvenuto già visto (come helpers.js)
   await ctx.route('https://api.jolpi.ca/**', r => r.abort());               // 24/10: classifiche di Jolpica e previsioni
   await ctx.route('https://bt-app-2.vercel.app/**', r => r.abort());   // meteo di serie non rispondono (come helpers.js)
   await ctx.addInitScript(seed => { window.__btSeed = seed; }, seed ? { ...SEED_20, ...(seed.pro ? { pro: true } : {}), addDocs: { ...(SEED_20.addDocs || {}), ...(seed.addDocs || {}) } } : SEED_20);   // 1/11: pro = tester Premium

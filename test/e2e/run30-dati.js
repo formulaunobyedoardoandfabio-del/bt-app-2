@@ -94,7 +94,7 @@ run({
   async 'offline: l\'app si apre con le notizie di serie e "Sei offline"'(b) {
     const { ctx, p, errs } = await open(b, { query: '?nofake', routes: { 'https://www.gstatic.com/**': r => r.abort() } });
     // Senza rete non si può accedere (Task 7: "Errore di connessione"), ma da ospite si legge.
-    await tapText(p, 'ENTRA SENZA ACCOUNT'); await w(p, 600);
+    await tapText(p, 'ENTRA COME OSPITE'); await w(p, 600);
     const t = await text(p);
     await goTab(p, 'RACE');
     const race = await text(p); await ctx.close();

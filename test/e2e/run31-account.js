@@ -99,7 +99,7 @@ run({
     await login(p, { email: 'fabio@b.it', pw: 'abcdef12' });
     const again = await text(p); await ctx.close();
     assert(/Per eliminare l'account scrivi la tua password/.test(ask), 'senza password non deve cancellare: ' + ask.slice(0, 200));
-    assert(/ENTRA SENZA ACCOUNT/.test(after), 'dopo l\'eliminazione non torna alla schermata di accesso');
+    assert(/ENTRA COME OSPITE/.test(after), 'dopo l\'eliminazione non torna alla schermata di accesso');
     assert(user === undefined && !auth.users['fabio@b.it'], 'account ancora presente');
     assert(/Account non trovato/.test(again), 'accesso dopo l\'eliminazione: ' + again.slice(0, 200));
     assert(!errs.length, errs.join(' | '));
@@ -121,7 +121,7 @@ run({
 
   async 'ospite: legge le notizie; per scrivere in chat gli si chiede l\'account'(b) {
     const { ctx, p, errs } = await open(b);
-    await tapText(p, 'ENTRA SENZA ACCOUNT'); await w(p, 500);
+    await tapText(p, 'ENTRA COME OSPITE'); await w(p, 500);
     const home = await text(p);
     await goTab(p, 'RACE'); await tapSel(p, '[data-race-chat]'); await w(p); await tapText(p, 'Chat Generale'); await w(p, 500);
     await p.fill('input[placeholder="Scrivi un messaggio…"]', 'ciao'); await w(p, 100);
@@ -138,7 +138,7 @@ run({
     const t = await text(p);
     await tapSel(p, '[aria-label="Profilo"]'); await w(p, 400);
     const prof = await text(p); await ctx.close();
-    assert(!/ENTRA SENZA ACCOUNT/.test(t), 'dopo aver riaperto l\'app chiede di nuovo l\'accesso');
+    assert(!/ENTRA COME OSPITE/.test(t), 'dopo aver riaperto l\'app chiede di nuovo l\'accesso');
     assert(/a@b\.it/.test(prof), 'dopo aver riaperto l\'app il profilo non è quello dell\'account');
     assert(!errs.length, errs.join(' | '));
   },
@@ -172,7 +172,7 @@ run({
     await login(p);
     const t = await text(p); await ctx.close();
     assert(/Errore di connessione, riprova tra poco/.test(t), 'senza rete manca "Errore di connessione, riprova tra poco"');
-    assert(/ENTRA SENZA ACCOUNT/.test(t), 'senza rete non deve entrare');
+    assert(/ENTRA COME OSPITE/.test(t), 'senza rete non deve entrare');
     assert(!errs.length, errs.join(' | '));
   },
 });

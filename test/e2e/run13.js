@@ -9,6 +9,7 @@ const EXE = require('fs').existsSync('/opt/pw-browsers/chromium-1194/chrome-linu
 
 async function open(b) {
   const ctx = await b.newContext({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true });
+  await ctx.addInitScript(() => { try { if (!localStorage.getItem('bt_bt-entry')) localStorage.setItem('bt_bt-entry', JSON.stringify('form')); } catch (e) {} });   // 7/11: benvenuto già visto (come helpers.js)
   await ctx.route('https://api.jolpi.ca/**', r => r.abort());               // 24/10: classifiche di Jolpica e previsioni
   await ctx.route('https://bt-app-2.vercel.app/**', r => r.abort());   // meteo di serie non rispondono (come helpers.js)
   await ctx.addInitScript(() => { window.__btNow = window.__btNow || Date.parse('2026-09-30T11:48:00Z'); });   // ora fissa: mercoledì prima del GP in Malesia (come run14-23)

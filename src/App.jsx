@@ -48,6 +48,7 @@ import { createF1Data, apply as applyF1Data } from "./services/f1data";
 import FantaSeason from "./logic/fanta-season";
 import { createFantaLeague } from "./services/fantaleague";
 import { createProfiles } from "./services/profiles";
+import { WelcomeFlow, GuestTour, OrbitLoader, SlowSwap, ENTRY_KEY, TOUR_KEY, WT, btnWhite, btnOutline } from "./benvenuto/Benvenuto";
 
 /* ── DESIGN TOKENS (matches the B&T concept style) ─────────────────── */
 // Tappa 3 (G01-G02): sfondo nero puro (schermi OLED) e il colore dei tasti scelto da chi usa l'app. applyTheme cambia
@@ -1690,8 +1691,10 @@ function PwEye({ on, onToggle }) {
     </button>
   );
 }
-function LoginScreen({ auth, onDone, onGuest, onBack, reason, onHold }) {
-  const [mode, setMode] = useState("login");
+// 7/11: stile del design "Accesso e Registrazione" (Manrope, fondo #0B0B0C, tasto bianco). onDoor: aperto
+// dall'Entrata (la freccia e il tasto indietro tornano lì); initialMode "register": si apre su REGISTRATI.
+function LoginScreen({ auth, onDone, onGuest, onBack, onDoor, reason, onHold, initialMode = "login" }) {
+  const [mode, setMode] = useState(initialMode === "register" ? "register" : "login");
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [pw, setPw] = useState("");
@@ -1707,7 +1710,8 @@ function LoginScreen({ auth, onDone, onGuest, onBack, reason, onHold }) {
   const [aborts, setAborts] = useState(0);      // password sbagliata (G07): ogni volta ripartono semafori e tremolio
   const [kerbTried, setKerbTried] = useState(false);   // CREA ACCOUNT toccato con le password diverse
   const isLogin = mode === "login";
-  useBack(!isLogin, () => setMode("login"));   // da REGISTRATI il tasto indietro torna ad ACCEDI
+  // Tasto indietro: da REGISTRATI torna ad ACCEDI; aperto dall'Entrata (o su REGISTRATI dall'Entrata) torna all'Entrata.
+  useBack(!isLogin || !!onDoor, () => { if (!isLogin && !(onDoor && initialMode === "register")) setMode("login"); else if (onDoor) onDoor(); });
   // Password diverse (G08): fuori pista quando la conferma è lunga almeno quanto la password (o dopo CREA ACCOUNT).
   const offTrack = !isLogin && pw2 !== "" && pw !== pw2 && (pw2.length >= pw.length || kerbTried);
   const typePw = v => { setPw(v); if (aborts) setAborts(0); };
@@ -1742,95 +1746,103 @@ function LoginScreen({ auth, onDone, onGuest, onBack, reason, onHold }) {
     setBusy(false);
   };
 
-  const fieldStyle = { display: "flex", alignItems: "center", gap: 10, padding: "13px 14px", borderRadius: 14, background: C.card, border: `1px solid ${C.border}` };
-  const inputStyle = { flex: 1, minWidth: 0, border: "none", background: "none", outline: "none", fontFamily: F_BODY, fontSize: 14, color: C.text };
-  const labelStyle = { display: "block", fontFamily: F_BODY, fontWeight: 600, fontSize: 12, color: C.muted, marginBottom: 6 };
+  const fieldStyle = { display: "flex", alignItems: "center", gap: 10, minHeight: 52, boxSizing: "border-box", padding: "0 14px", borderRadius: 14, background: WT.card, border: `1px solid ${WT.line}` };
+  const inputStyle = { flex: 1, minWidth: 0, padding: "14px 0", border: "none", background: "none", outline: "none", fontFamily: WT.font, fontWeight: 600, fontSize: 15, color: WT.ink };
+  const labelStyle = { display: "block", fontFamily: WT.font, fontWeight: 700, fontSize: 13, color: WT.muted, marginBottom: 8 };
+  const linkStyle = { display: "inline", padding: 0, border: "none", background: "none", fontFamily: WT.font, fontWeight: 800, fontSize: 13.5, color: C.accentInk, cursor: "pointer" };
+  const segBtn = on => ({ flex: 1, height: 44, borderRadius: 12, border: "none", background: on ? WT.ink : "transparent", fontFamily: WT.font, fontWeight: 800, fontSize: 13, color: on ? WT.bg : WT.muted, letterSpacing: .4, textAlign: "center", cursor: "pointer", transition: "background-color .18s ease, color .18s ease" });
 
   return (
-    <div className="scrollcol" style={{ height: "100%", display: "flex", flexDirection: "column", position: "relative" }}>
+    <div className="scrollcol" data-login={isLogin ? "login" : "register"} style={{ height: "100%", display: "flex", flexDirection: "column", position: "relative", background: WT.bg, color: WT.ink, fontFamily: WT.font }}>
       {onBack && (
-        <button className="press" aria-label="Torna all'app" onClick={onBack} style={{ position: "absolute", top: 18, left: 16, display: "flex", alignItems: "center", gap: 6, padding: "8px 12px 8px 8px", borderRadius: 999, background: C.card, border: `1px solid ${C.border}`, fontFamily: F_BODY, fontWeight: 600, fontSize: 12, color: C.muted, zIndex: 2 }}>
-          <Icon name="back" size={15} color={C.muted} /> Torna all'app
+        <button className="press" aria-label="Torna all'app" onClick={onBack} style={{ position: "absolute", top: 16, left: 16, display: "flex", alignItems: "center", gap: 6, height: 40, padding: "0 14px 0 10px", borderRadius: 999, background: WT.card, border: `1px solid ${WT.edge}`, fontFamily: WT.font, fontWeight: 700, fontSize: 13, color: WT.muted, zIndex: 2 }}>
+          <Icon name="back" size={15} color={WT.muted} /> Torna all'app
         </button>
       )}
-      <div style={{ display: "flex", flexDirection: "column", alignItems: "center", padding: "56px 32px 26px", flexShrink: 0 }}>
-        <div style={{ width: 72, height: 72, borderRadius: 19, background: C.accent, display: "flex", alignItems: "center", justifyContent: "center", boxShadow: `0 14px 28px -12px ${C.accent}` }}>
-          <span style={{ fontFamily: F_HEAD, fontWeight: 900, fontStyle: "italic", fontSize: 24, color: "#fff" }}>B&amp;T</span>
+      {onDoor && !onBack && (
+        <button className="press" aria-label="Torna all'entrata" data-login-door="" onClick={onDoor} style={{ position: "absolute", top: 14, left: 16, width: 44, height: 44, borderRadius: "50%", background: WT.card, border: `1px solid ${WT.edge}`, display: "flex", alignItems: "center", justifyContent: "center", zIndex: 2 }}>
+          <Icon name="back" size={18} color={WT.ink} />
+        </button>
+      )}
+      <div style={{ padding: "72px 24px 22px", flexShrink: 0 }}>
+        {/* Il colore dell'app (rosso LED di serie, come nel design) resta sul segno B&T e sui link. */}
+        <div data-login-badge="" style={{ width: 64, height: 64, borderRadius: 18, background: C.accent, display: "flex", alignItems: "center", justifyContent: "center" }}>
+          <img src={BT_LOGO} alt="B&T" style={{ width: 42, height: 42, objectFit: "contain" }} />
         </div>
-        <h1 style={{ fontFamily: F_HEAD, fontWeight: 900, fontStyle: "italic", fontSize: 21, color: C.text, margin: "18px 0 6px", textAlign: "center" }}>
+        <h1 style={{ fontFamily: WT.font, fontWeight: 800, fontSize: 30, lineHeight: 1.1, letterSpacing: -0.5, color: WT.ink, margin: "20px 0 8px" }}>
           {isLogin ? `Bentornato su ${APP_NAME}` : "Crea il tuo account"}
         </h1>
-        <p style={{ fontFamily: F_BODY, fontSize: 13, color: C.muted, textAlign: "center", lineHeight: 1.5, margin: 0 }}>
-          Notizie, classifiche live, FantaF1 e la community B&amp;T, tutto in un'app.
+        <p style={{ fontFamily: WT.font, fontWeight: 500, fontSize: 15, lineHeight: "22px", color: WT.muted, margin: 0 }}>
+          {isLogin ? "Notizie, classifiche live, FantaF1 e la community B&T, tutto in un'app." : "Salvi squadra, chat e casco, e ritrovi tutto su ogni telefono."}
         </p>
-        {reason && <div role="status" style={{ marginTop: 14, padding: "10px 14px", borderRadius: 12, background: alpha(C.accentInk, .1), border: `1px solid ${alpha(C.accentInk, .35)}`, fontFamily: F_BODY, fontSize: 12.5, color: C.text, textAlign: "center", lineHeight: 1.45 }}>{reason}</div>}
+        {reason && <div role="status" style={{ marginTop: 14, padding: "12px 14px", borderRadius: 14, background: "rgba(255,24,1,.10)", border: "1px solid rgba(255,24,1,.35)", fontFamily: WT.font, fontWeight: 600, fontSize: 13, color: WT.ink, lineHeight: 1.45 }}>{reason}</div>}
       </div>
 
-      <div style={{ display: "flex", margin: "0 24px 22px", padding: 4, borderRadius: 14, background: C.card, border: `1px solid ${C.border}`, flexShrink: 0 }}>
-        <button className="press" onClick={() => setMode("login")} style={{ flex: 1, padding: "11px 0", borderRadius: 11, background: isLogin ? C.accent : "transparent", fontFamily: F_HEAD, fontWeight: 800, fontSize: 13, color: isLogin ? "#fff" : C.muted, letterSpacing: .3, textAlign: "center" }}>ACCEDI</button>
-        <button className="press" onClick={() => setMode("register")} style={{ flex: 1, padding: "11px 0", borderRadius: 11, background: !isLogin ? C.accent : "transparent", fontFamily: F_HEAD, fontWeight: 800, fontSize: 13, color: !isLogin ? "#fff" : C.muted, letterSpacing: .3, textAlign: "center" }}>REGISTRATI</button>
+      <div role="tablist" aria-label="Accedi o registrati" style={{ display: "flex", gap: 4, margin: "0 24px 22px", padding: 4, borderRadius: 16, background: WT.card, border: `1px solid ${WT.edge}`, flexShrink: 0 }}>
+        <button className="press" role="tab" aria-selected={isLogin} onClick={() => setMode("login")} style={segBtn(isLogin)}>ACCEDI</button>
+        <button className="press" role="tab" aria-selected={!isLogin} onClick={() => setMode("register")} style={segBtn(!isLogin)}>REGISTRATI</button>
       </div>
 
       <div style={{ padding: "0 24px" }}>
         {!isLogin && (
           <div style={{ marginBottom: 14 }}>
             <label style={labelStyle} htmlFor="regName">Nome</label>
-            <div style={fieldStyle}><Icon name="person" size={15} color={C.dim} /><input id="regName" style={inputStyle} placeholder="Il tuo nome" value={name} onChange={e => setName(e.target.value)} /></div>
+            <div style={fieldStyle}><Icon name="person" size={16} color={WT.muted} /><input id="regName" style={inputStyle} placeholder="Il tuo nome" value={name} onChange={e => setName(e.target.value)} /></div>
           </div>
         )}
         <div style={{ marginBottom: 14 }}>
           <label style={labelStyle} htmlFor="authEmail">Email</label>
-          <div style={fieldStyle}><Icon name="mail" size={15} color={C.dim} /><input id="authEmail" type="email" style={inputStyle} placeholder="nome@email.com" value={email} onChange={e => setEmail(e.target.value)} /></div>
+          <div style={fieldStyle}><Icon name="mail" size={16} color={WT.muted} /><input id="authEmail" type="email" style={inputStyle} placeholder="nome@email.com" value={email} onChange={e => setEmail(e.target.value)} /></div>
         </div>
         <div style={{ marginBottom: 14 }}>
           <label style={labelStyle} htmlFor="authPw">Password</label>
-          <div style={fieldStyle}><Icon name="lock" size={15} color={C.dim} /><input id="authPw" type={showPw ? "text" : "password"} style={showPw ? { ...inputStyle, ...PW_SHOWN } : inputStyle} placeholder="••••••••" value={pw} onChange={e => typePw(e.target.value)} /><PwEye on={showPw} onToggle={setShowPw} /></div>
+          <div style={fieldStyle}><Icon name="lock" size={16} color={WT.muted} /><input id="authPw" type={showPw ? "text" : "password"} style={showPw ? { ...inputStyle, ...PW_SHOWN } : inputStyle} placeholder="••••••••" value={pw} onChange={e => typePw(e.target.value)} /><PwEye on={showPw} onToggle={setShowPw} /></div>
           {!isLogin && pw && <PwMeter level={pwStrength(pw)} />}
         </div>
         {!isLogin && (
           <div style={{ marginBottom: 14 }}>
             <label style={labelStyle} htmlFor="regPw2">Conferma password</label>
             {/* Fuori pista: il bordo diventa un cordolo bianco e rosso (stesso campo, così chi scrive non perde il punto). */}
-            <div data-kerb={offTrack ? "" : undefined} style={offTrack ? { ...fieldStyle, padding: "12px 13px", border: "2px solid transparent", background: `linear-gradient(${C.card}, ${C.card}) padding-box, repeating-linear-gradient(135deg, #FFFFFF 0 9px, ${C.red} 9px 18px) border-box` } : fieldStyle}><Icon name="lock" size={15} color={C.dim} /><input id="regPw2" type={showPw ? "text" : "password"} style={showPw ? { ...inputStyle, ...PW_SHOWN } : inputStyle} placeholder="••••••••" value={pw2} onChange={e => setPw2(e.target.value)} aria-invalid={offTrack ? "true" : undefined} aria-describedby={offTrack ? "regPw2Err" : undefined} /></div>
-            {offTrack && <p id="regPw2Err" role="alert" style={{ margin: "7px 2px 0", fontFamily: F_BODY, fontSize: 12, fontWeight: 600, color: "#ff6b6b" }}><b style={{ fontFamily: F_HEAD, fontWeight: 900, fontStyle: "italic" }}>Track Limits Exceeded:</b> le password non coincidono</p>}
+            <div data-kerb={offTrack ? "" : undefined} style={offTrack ? { ...fieldStyle, padding: "0 13px", border: "2px solid transparent", background: `linear-gradient(${WT.card}, ${WT.card}) padding-box, repeating-linear-gradient(135deg, #FFFFFF 0 9px, ${C.red} 9px 18px) border-box` } : fieldStyle}><Icon name="lock" size={16} color={WT.muted} /><input id="regPw2" type={showPw ? "text" : "password"} style={showPw ? { ...inputStyle, ...PW_SHOWN } : inputStyle} placeholder="••••••••" value={pw2} onChange={e => setPw2(e.target.value)} aria-invalid={offTrack ? "true" : undefined} aria-describedby={offTrack ? "regPw2Err" : undefined} /></div>
+            {offTrack && <p id="regPw2Err" role="alert" style={{ margin: "8px 2px 0", fontFamily: WT.font, fontSize: 13, fontWeight: 600, color: "#ff6b6b" }}><b style={{ fontWeight: 800 }}>Track Limits Exceeded:</b> le password non coincidono</p>}
           </div>
         )}
         {!isLogin && (
-          <div style={{ marginBottom: 16, padding: 14, borderRadius: 14, background: "rgba(255,255,255,.03)", border: `1px solid ${C.border}` }}>
-            <div style={{ fontFamily: F_HEAD, fontWeight: 800, fontSize: 13.5, color: C.text, marginBottom: 12 }}>Su di te</div>
-            <div style={labelStyle}>Data di nascita <span style={{ fontWeight: 400, color: C.dim }}>· serve per controllare che tu abbia almeno 14 anni</span></div>
+          <div style={{ marginBottom: 18, padding: 16, borderRadius: 18, background: "#111113", border: `1px solid ${WT.edge}` }}>
+            <div style={{ fontFamily: WT.font, fontWeight: 800, fontSize: 15, color: WT.ink, marginBottom: 14 }}>Su di te</div>
+            <div style={labelStyle}>Data di nascita <span style={{ fontWeight: 500, color: "#71717A" }}>· serve per controllare che tu abbia almeno 14 anni</span></div>
             <div style={{ marginBottom: 16 }}><BirthDateField id="regBirth" value={birth} minYear={BIRTH_YEARS[BIRTH_YEARS.length - 1]} maxYear={BIRTH_YEARS[0]} onChange={setBirth} /></div>
             <OdometerYears id="regFollow" value={years} onChange={setYears} />
-            <div style={{ ...labelStyle, marginTop: 16, marginBottom: 8 }}>Che tifoso sei?</div>
+            <div style={{ ...labelStyle, marginTop: 16 }}>Che tifoso sei?</div>
             <FanTypePicker value={fan} onChange={setFan} />
           </div>
         )}
-        {isLogin && <div style={{ textAlign: "right", marginBottom: 18 }}><button className="press" onClick={forgot} style={{ fontFamily: F_BODY, fontWeight: 600, fontSize: 12, color: C.accentInk, padding: "6px 0" }}>Password dimenticata?</button></div>}
-        {info && <p style={{ background: "rgba(255,255,255,.05)", border: `1px solid ${C.border}`, borderRadius: 10, padding: "9px 14px", marginTop: 0, marginBottom: 14, color: C.text, fontSize: 12, lineHeight: 1.5 }}>{info}</p>}
+        {isLogin && <div style={{ textAlign: "right", marginBottom: 18 }}><button className="press" onClick={forgot} style={{ minHeight: 44, padding: "0 2px", border: "none", background: "none", fontFamily: WT.font, fontWeight: 700, fontSize: 13.5, color: C.accentInk }}>Password dimenticata?</button></div>}
+        {info && <p style={{ background: "rgba(255,255,255,.05)", border: `1px solid ${WT.edge}`, borderRadius: 12, padding: "10px 14px", marginTop: 0, marginBottom: 14, fontFamily: WT.font, fontWeight: 500, color: WT.ink, fontSize: 13, lineHeight: 1.5 }}>{info}</p>}
         {isLogin && aborts > 0 && <AbortLights key={aborts} />}
-        {err && <p style={{ background: "#E1060018", border: `1px solid ${C.red}`, borderRadius: 10, padding: "9px 14px", marginTop: 0, marginBottom: 14, color: "#ff6b6b", fontSize: 12, lineHeight: 1.5 }}>{err}</p>}
-        <button key={"go-" + aborts} className={aborts && isLogin ? "press abort-shake" : "press"} data-shake={aborts && isLogin ? "1" : undefined} onClick={submit} disabled={busy} style={{ display: "block", width: "100%", padding: busy ? "14px 0" : "15px 0", borderRadius: 14, background: busy ? "#0E0E12" : C.accent, border: busy ? `1px solid ${C.border}` : "none", boxShadow: busy ? "none" : `0 10px 22px -10px ${C.accent}`, fontFamily: F_HEAD, fontWeight: 900, fontStyle: "italic", fontSize: 14, color: "#fff", letterSpacing: .3, textAlign: "center", marginBottom: 16 }}>
+        {err && <p style={{ background: "rgba(225,6,0,.10)", border: `1px solid ${C.red}`, borderRadius: 12, padding: "10px 14px", marginTop: 0, marginBottom: 14, fontFamily: WT.font, fontWeight: 600, color: "#ff6b6b", fontSize: 13, lineHeight: 1.5 }}>{err}</p>}
+        <button key={"go-" + aborts} className={aborts && isLogin ? "press abort-shake" : "press"} data-login-submit="" data-shake={aborts && isLogin ? "1" : undefined} onClick={submit} disabled={busy} style={busy ? { ...btnWhite, background: "#0E0E12", border: `1px solid ${WT.edge}`, color: WT.ink, marginBottom: 16 } : { ...btnWhite, fontSize: 16, letterSpacing: .4, marginBottom: 16 }}>
           {busy ? <ShiftLight state={shiftDone ? "done" : "run"} label={shiftDone ? "Accesso riuscito" : isLogin ? "Accesso in corso" : "Creazione dell'account in corso"} /> : isLogin ? "ACCEDI" : "CREA ACCOUNT"}
         </button>
-        <p style={{ textAlign: "center", fontFamily: F_BODY, fontSize: 12, color: C.muted, margin: 0 }}>
-          {isLogin ? <>Non hai un account? <button className="press" onClick={() => setMode("register")} style={{ display: "inline", fontFamily: F_BODY, fontWeight: 700, fontSize: 12, color: C.accentInk }}>Registrati</button></>
-                   : <>Hai già un account? <button className="press" onClick={() => setMode("login")} style={{ display: "inline", fontFamily: F_BODY, fontWeight: 700, fontSize: 12, color: C.accentInk }}>Accedi</button></>}
+        <p style={{ textAlign: "center", fontFamily: WT.font, fontWeight: 500, fontSize: 13.5, color: WT.muted, margin: 0 }}>
+          {isLogin ? <>Non hai un account? <button className="press" onClick={() => setMode("register")} style={linkStyle}>Registrati</button></>
+                   : <>Hai già un account? <button className="press" onClick={() => setMode("login")} style={linkStyle}>Accedi</button></>}
         </p>
         {onGuest && (
           <>
             <div style={{ display: "flex", alignItems: "center", gap: 12, margin: "22px 0 16px" }}>
-              <span style={{ flex: 1, height: 1, background: C.border }} />
-              <span style={{ fontFamily: F_BODY, fontSize: 11, color: C.dim }}>oppure</span>
-              <span style={{ flex: 1, height: 1, background: C.border }} />
+              <span style={{ flex: 1, height: 1, background: WT.edge }} />
+              <span style={{ fontFamily: WT.font, fontWeight: 600, fontSize: 12, color: "#71717A" }}>oppure</span>
+              <span style={{ flex: 1, height: 1, background: WT.edge }} />
             </div>
-            <button className="press" onClick={onGuest} style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8, width: "100%", padding: "14px 0", borderRadius: 14, background: "transparent", border: `1.5px solid ${C.border}`, fontFamily: F_HEAD, fontWeight: 800, fontStyle: "italic", fontSize: 13.5, color: C.text, letterSpacing: .3 }}>
-              <Icon name="person" size={16} /> ENTRA SENZA ACCOUNT
+            <button className="press" data-login-guest="" onClick={onGuest} style={{ ...btnOutline, height: 52, gap: 8, fontSize: 15, letterSpacing: .4 }}>
+              <Icon name="person" size={16} color={WT.ink} /> ENTRA COME OSPITE
             </button>
-            <p style={{ textAlign: "center", fontFamily: F_BODY, fontSize: 11, color: C.dim, lineHeight: 1.45, margin: "8px 8px 0" }}>Puoi leggere news, seguire la gara e le classifiche. Per chat, FantaF1 e preferiti serve un account.</p>
+            <p style={{ textAlign: "center", fontFamily: WT.font, fontWeight: 500, fontSize: 12.5, color: "#71717A", lineHeight: 1.45, margin: "10px 8px 0" }}>Puoi leggere news, seguire la gara e le classifiche. Per chat, FantaF1 e preferiti serve un account.</p>
           </>
         )}
       </div>
-      <div style={{ flexGrow: 1, minHeight: 24 }} />
+      <div style={{ flexGrow: 1, minHeight: 28 }} />
     </div>
   );
 }
@@ -3420,7 +3432,7 @@ function TelemetryModal({ live, st, carId, lapNo, sector, onClose }) {
           {closeBtn}
         </div>
         <p role="status" data-tel-state={T.loading ? "loading" : "missing"} style={{ display: "flex", alignItems: "center", gap: 9, margin: "16px 2px 4px", fontFamily: F_BODY, fontSize: 13, color: C.muted }}>{T.loading && <LedGrid mode="seq" size={4} />}{T.loading ? TEL_LOADING : TEL_MISSING}</p>
-        {T.loading && <div data-skeleton="" aria-hidden="true" style={{ display: "grid", gap: 8, margin: "10px 2px 0" }}><span className="skel" style={{ height: 120, borderRadius: 10 }} /><span className="skel" style={{ height: 56, borderRadius: 10 }} /><span className="skel" style={{ height: 56, borderRadius: 10 }} /></div>}
+        {T.loading && <SlowSwap after={SLOW_LOAD_MS} slow={<OrbitLoader scale={0.7} style={{ marginTop: 8 }} />} fast={<div data-skeleton="" aria-hidden="true" style={{ display: "grid", gap: 8, margin: "10px 2px 0" }}><span className="skel" style={{ height: 120, borderRadius: 10 }} /><span className="skel" style={{ height: 56, borderRadius: 10 }} /><span className="skel" style={{ height: 56, borderRadius: 10 }} /></div>} />}
       </div>
     </div>
   );
@@ -6164,8 +6176,10 @@ function Of1Status({ of1, standings, onRefresh }) {
   const text = of1.status === "error" ? "Impossibile raggiungere il servizio dati. Riprova tra poco." : of1.status === "empty" ? "Dati non ancora disponibili" : "Caricamento dei dati della sessione…";
   return (
     <div data-of1-status={of1.status} role="status" style={card}>
-      <div style={{ display: "flex", alignItems: "center", gap: 9, fontFamily: F_HEAD, fontWeight: 800, fontSize: 13.5, color: C.text }}>{of1.status === "loading" && <LedGrid mode="seq" size={4} />}{text}</div>
-      {of1.status === "loading" && <Skeleton />}
+      {of1.status === "loading" ? <SlowSwap after={SLOW_LOAD_MS} slow={<OrbitLoader scale={0.8} text={SLOW_RACE_TEXT} style={{ padding: "6px 0 4px" }} />} fast={<>
+        <div style={{ display: "flex", alignItems: "center", gap: 9, fontFamily: F_HEAD, fontWeight: 800, fontSize: 13.5, color: C.text }}><LedGrid mode="seq" size={4} />{text}</div>
+        <Skeleton />
+      </>} /> : <div style={{ display: "flex", alignItems: "center", gap: 9, fontFamily: F_HEAD, fontWeight: 800, fontSize: 13.5, color: C.text }}>{text}</div>}
       {of1.status === "empty" && <p style={{ margin: "4px 0 0", fontFamily: F_BODY, fontSize: 12, color: C.muted, lineHeight: 1.5 }}>I dati veri della sessione arrivano da OpenF1 circa 30 minuti dopo la fine.</p>}
       {of1.status !== "loading" && refresh}
     </div>
@@ -9334,6 +9348,8 @@ function LedGrid({ mode = "idle", size = 10 }) {
 // Resta almeno LOAD_MIN_MS (un giro dei LED), così coi dati già pronti non lampeggia. Con "Rimuovi animazioni": LED
 // accesi fermi. Prima, coi dati pronti, c'era il Pit Exit Launch (15 LED del volante, "PIT EXIT OPEN" e lo zoom).
 const LOAD_MIN_MS = 840, LOAD_FADE_MS = 200;
+// 7/11: oltre SLOW_LOAD_MS di caricamento la rete è lenta e compare l'orbita (src/benvenuto/Benvenuto.jsx).
+const SLOW_LOAD_MS = 2500, SLOW_TEXT = "La rete è lenta: i dati stanno arrivando.", SLOW_RACE_TEXT = "La rete è lenta: i dati della gara stanno arrivando.";
 // 31/10: temi delle feste (src/logic/holidays.js, design in docs/design/temi-feste.html). Disegni nostri: zucca, fiocco,
 // scopa, tricolore. HolidayMark: il segno piccolo sul bottone B&T; HolidayLoader: il caricamento a tema.
 const HOL = BtHolidays.HOLIDAYS;
@@ -9440,10 +9456,20 @@ function LoadingScreen({ ready, onDone, holiday = null }) {
   return (
     <div data-splash="" data-splash-phase="loading" data-reduced={reduce ? "1" : undefined}
       style={{ position: "fixed", inset: 0, background: "#000", zIndex: 9999, display: "flex", alignItems: "center", justifyContent: "center", opacity: out ? 0 : 1, transition: reduce ? "none" : `opacity ${LOAD_FADE_MS}ms ease`, pointerEvents: out ? "none" : "auto" }}>
-      <div role="status" style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 18 }}>
-        {holiday && HOL[holiday] ? <HolidayLoader id={holiday} /> : <LedGrid mode={reduce ? "idle" : "seq"} size={14} />}
-        <p style={{ fontFamily: holiday ? F_HEAD : F_BODY, fontWeight: holiday ? 900 : 400, fontStyle: holiday ? "italic" : "normal", fontSize: holiday ? 15 : 13, color: holiday ? HOL[holiday].color : C.dim, margin: 0 }}>{holiday && HOL[holiday] ? HOL[holiday].title : "Caricamento…"}</p>
-      </div>
+      {/* 7/11: rete lenta (ancora qui dopo SLOW_LOAD_MS): le icone F1 in orbita al posto dei LED. Le feste restano. */}
+      {holiday && HOL[holiday] ? (
+        <div role="status" style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 18 }}>
+          <HolidayLoader id={holiday} />
+          <p style={{ fontFamily: F_HEAD, fontWeight: 900, fontStyle: "italic", fontSize: 15, color: HOL[holiday].color, margin: 0 }}>{HOL[holiday].title}</p>
+        </div>
+      ) : (
+        <SlowSwap after={SLOW_LOAD_MS} slow={<OrbitLoader text={SLOW_TEXT} />} fast={
+          <div role="status" style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 18 }}>
+            <LedGrid mode={reduce ? "idle" : "seq"} size={14} />
+            <p style={{ fontFamily: F_BODY, fontWeight: 400, fontSize: 13, color: C.dim, margin: 0 }}>Caricamento…</p>
+          </div>
+        } />
+      )}
     </div>
   );
 }
@@ -10255,7 +10281,17 @@ function App() {
   const [guest, setGuest] = useState(false);
   const [loginOpen, setLoginOpen] = useState(false);
   const [loginReason, setLoginReason] = useState(null);
-  const needLogin = (reason) => { setLoginReason(reason); setLoginOpen(true); };
+  const [loginMode, setLoginMode] = useState("login");   // 7/11: dal giro guidato si apre già su REGISTRATI
+  const needLogin = (reason) => { setLoginReason(reason); setLoginMode("login"); setLoginOpen(true); };
+  // 7/11: prima dell'accesso. "slides": le sei schede di benvenuto, poi l'Entrata; "door": l'Entrata; "form": accedi o
+  // registrati (su questo telefono si è già entrati con un account: dopo l'uscita si torna qui). ENTRY_KEY lo ricorda.
+  const [entryView, setEntryView] = useState(() => { const v = local.get(ENTRY_KEY); return v === "form" || v === "door" ? v : "slides"; });
+  const [entryMode, setEntryMode] = useState("login");
+  const [tourOn, setTourOn] = useState(false);   // giro guidato dell'ospite entrato dall'Entrata (una volta per telefono)
+  const entryDone = () => { local.set(ENTRY_KEY, "form"); setEntryView("form"); setEntryMode("login"); };
+  const tourEnd = () => { local.set(TOUR_KEY, { ts: Date.now() }); setTourOn(false); };
+  // Un account entrato su questo telefono (anche con la sessione salvata, da prima del 7/11): uscendo si torna ad Accedi.
+  useEffect(() => { if (authed && local.get(ENTRY_KEY) !== "form") { local.set(ENTRY_KEY, "form"); setEntryView("form"); } }, [authed]);
   const [adminTab, setAdminTab] = useState("NEWS");
   const [fantaStats, setFantaStats] = useState(shared0.fantaStats);
   const [standings, setStandings] = useState(shared0.standings);   // { note, drivers, teams, guests }
@@ -10918,7 +10954,7 @@ function App() {
     });
   };
 
-  const ABOUT_TEXT = APP_NAME + " è l'app di B&T, nata dalla passione di un gruppo di amici per la Formula 1: un posto solo nostro per seguire le gare, parlarne insieme e tenere traccia di come va la nostra lega FantaF1.\n\nQui trovi le news, la diretta gara, la nostra chat e il nostro Instagram, tutto in un'unica app.\n\nTracciati dei circuiti: f1-circuits di Tomislav Bacinger, licenza MIT.\nCaratteri: Titillium Web (Accademia di Belle Arti di Urbino) e Work Sans, licenza SIL Open Font License 1.1.\n\nIcone: Tabler Icons, licenza MIT.\nDati delle sessioni e della diretta: OpenF1 (openf1.org). Classifiche: Jolpica F1. Dati dei weekend e Ghost Lap: TracingInsights. Meteo: MET Norway.\n\nVersione 2.0, 2026.";
+  const ABOUT_TEXT = APP_NAME + " è l'app di B&T, nata dalla passione di un gruppo di amici per la Formula 1: un posto solo nostro per seguire le gare, parlarne insieme e tenere traccia di come va la nostra lega FantaF1.\n\nQui trovi le news, la diretta gara, la nostra chat e il nostro Instagram, tutto in un'unica app.\n\nTracciati dei circuiti: f1-circuits di Tomislav Bacinger, licenza MIT.\nCaratteri: Titillium Web (Accademia di Belle Arti di Urbino), Work Sans e Manrope, licenza SIL Open Font License 1.1.\n\nIcone: Tabler Icons, licenza MIT.\nDati delle sessioni e della diretta: OpenF1 (openf1.org). Classifiche: Jolpica F1. Dati dei weekend e Ghost Lap: TracingInsights. Meteo: MET Norway.\n\nVersione 2.0, 2026.";
   const HELP_TEXT = "Hai domande o hai trovato un problema nell'app? Scrivici, ti rispondiamo il prima possibile.\n\nEmail: bt.formula1@gmail.com\n\nOppure passa dalla Chat Generale: la community è sempre pronta a dare una mano.";
 
   const showToast = (msg) => {
@@ -11334,7 +11370,7 @@ function App() {
     profilo: () => setView("tab"), notifiche: () => setView("tab"), instagram: () => setView(igFrom),
     adminLock: () => setView("profilo"), admin: () => setView("profilo"), chatThread: () => goTab("race"), pitswipe: () => setView("tab"),
   };
-  const closeLogin = () => { setLoginOpen(false); setLoginReason(null); };
+  const closeLogin = () => { setLoginOpen(false); setLoginReason(null); setLoginMode("login"); };
   const inApp = authed || guest;
   useEffect(() => { if (inApp && payMsg) { const t = setTimeout(() => { showToast(payMsg); setPayMsg(null); }, 600); return () => clearTimeout(t); } }, [inApp, payMsg]);
   // 30/10 (Edoardo): mentre una notizia è aperta niente screenshot, registrazioni né "Cerchia e cerca" (FLAG_SECURE col
@@ -11726,19 +11762,29 @@ function App() {
   };
   if (account === undefined && !guest) {   // si aspetta Authentication: forse c'è già una sessione
     return shell(
-      <div data-auth-wait="" style={{ height: "100%", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 12, fontFamily: F_BODY, fontSize: 13, color: C.muted }}><LedGrid mode="seq" size={7} />Caricamento…</div>
+      <div data-auth-wait="" style={{ height: "100%", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 12, fontFamily: F_BODY, fontSize: 13, color: C.muted }}>
+        <SlowSwap after={SLOW_LOAD_MS} slow={<OrbitLoader text={SLOW_TEXT} />} fast={<><LedGrid mode="seq" size={7} />Caricamento…</>} />
+      </div>
     );
   }
   if ((!authed || loginHold) && !guest) {
+    const guestIn = fromDoor => { setGuest(true); if (fromDoor && !local.get(TOUR_KEY)) setTourOn(true); else showToast("Stai navigando come ospite"); };
+    if (entryView !== "form" && !loginHold) return shell(
+      <WelcomeFlow logo={BT_LOGO} startAt={entryView === "door" ? 99 : 0} useBack={useBack}
+        onSeen={() => { if (!local.get(ENTRY_KEY)) local.set(ENTRY_KEY, "door"); }}
+        onGuest={() => guestIn(true)}
+        onRegister={() => { fx.buzz("select"); setEntryMode("register"); setEntryView("form"); }}
+        onLogin={() => { fx.buzz("select"); setEntryMode("login"); setEntryView("form"); }} />
+    );
     return shell(
-      <LoginScreen auth={Account} onHold={setLoginHold} onGuest={() => { setGuest(true); showToast("Stai navigando come ospite"); }} />
+      <LoginScreen key={entryMode} initialMode={entryMode} auth={Account} onHold={setLoginHold} onDoor={() => setEntryView("door")} onDone={entryDone} onGuest={() => guestIn(false)} />
     );
   }
   if (loginOpen && (!authed || loginHold)) {
     return shell(
       <>
-        <LoginScreen auth={Account} onHold={setLoginHold} reason={loginReason} onBack={closeLogin}
-          onDone={r => { setGuest(false); setLoginOpen(false); setLoginReason(null); showToast(r && r.created ? "Account creato" : "Accesso effettuato"); }} />
+        <LoginScreen key={loginMode} initialMode={loginMode} auth={Account} onHold={setLoginHold} reason={loginReason} onBack={closeLogin}
+          onDone={r => { entryDone(); setGuest(false); setLoginOpen(false); setLoginReason(null); setLoginMode("login"); showToast(r && r.created ? "Account creato" : "Accesso effettuato"); }} />
         {toast && <div className="toast">{toast}</div>}
       </>
     );
@@ -11940,6 +11986,7 @@ function App() {
           options={DRIVERS.map(d => ({ id: d.id, label: d.full, color: d.color, sub: d.team, driver: d }))} />}
         <ChatShare.Provider value={chatShareCtx}>{shareArticle && view === "article" && <ShareSheet article={shareArticle} locked={!!shareArticle.premium && !(isPaid || adNews.includes(shareArticle.id))} handle={ig.handle} onClose={() => setShareId(null)} onToast={showToast} />}</ChatShare.Provider>
         {linkShare && <ChatRoomPicker onPick={id => { setPendingLink(linkShare); setLinkShare(null); openChat(id); }} onClose={() => setLinkShare(null)} />}
+        {tourOn && guest && view === "tab" && tab === "home" && <GuestTour useBack={useBack} onDone={tourEnd} onRegister={() => { tourEnd(); setLoginReason(null); setLoginMode("register"); setLoginOpen(true); }} />}
         {termsAccepted && termsOpen && <TermsSheet review onClose={() => setTermsOpen(false)} />}
         {feedbackOpen && <FeedbackModal onClose={() => setFeedbackOpen(false)} onSend={sendFeedback} />}
         {toast && <div className="toast" style={showBottomNav && adH > 0 ? { bottom: 104 + adH + AD_GAP } : undefined}>{toast}</div>}

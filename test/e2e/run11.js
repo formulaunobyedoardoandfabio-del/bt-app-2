@@ -13,6 +13,7 @@ const SITE = 'https://formulaunobyedoardoandfabio-del.github.io/bt-app-flutter';
 // share (il telefono ha la condivisione di sistema), clipboard: 'fail' (la copia non riesce).
 async function open(b, opts = {}) {
   const ctx = await b.newContext({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true });
+  await ctx.addInitScript(() => { try { if (!localStorage.getItem('bt_bt-entry')) localStorage.setItem('bt_bt-entry', JSON.stringify('form')); } catch (e) {} });   // 7/11: benvenuto già visto (come helpers.js)
   await ctx.route('https://api.jolpi.ca/**', r => r.abort());               // 24/10: classifiche di Jolpica e previsioni
   await ctx.route('https://bt-app-2.vercel.app/**', r => r.abort());   // meteo di serie non rispondono (come helpers.js)
   await ctx.addInitScript(() => { window.__btNow = window.__btNow || Date.parse('2026-10-07T10:00:00Z'); });   // ora fissa (come helpers.js)
@@ -179,7 +180,7 @@ const tests = {
   },
   async 'condividi: anche da ospite, dal fondo dell\'articolo'(b) {
     const { ctx, p } = await open(b);
-    await tapText(p, 'ENTRA SENZA ACCOUNT'); await w(p, 700);   // Task 9: i Termini sono già accettati (primo avvio)
+    await tapText(p, 'ENTRA COME OSPITE'); await w(p, 700);   // Task 9: i Termini sono già accettati (primo avvio)
     await openArticle(p, HADJAR);
     await tapText(p, 'CONDIVIDI', { exact: true }); await w(p, 400);
     const t = await text(p); await ctx.close();
@@ -188,6 +189,7 @@ const tests = {
   },
   async 'scarica: dentro una cornice senza la funzione "scarica" il bottone non compare'(b) {
     const ctx = await b.newContext({ viewport: { width: 390, height: 844 } });
+    await ctx.addInitScript(() => { try { if (!localStorage.getItem('bt_bt-entry')) localStorage.setItem('bt_bt-entry', JSON.stringify('form')); } catch (e) {} });   // 7/11: benvenuto già visto (come helpers.js)
     await ctx.addInitScript(seed => { window.__btSeed = seed; }, SEED_20);
     await ctx.addInitScript(() => { delete Navigator.prototype.share; });
     const pg = await ctx.newPage(); const errs = []; pg.on('pageerror', e => errs.push(e.message));

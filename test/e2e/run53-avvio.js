@@ -67,14 +67,19 @@ run({
     assert(!errs.length, errs.join(' | '));
   },
 
-  async 'dati lenti: la luce a LED in sequenza e "Caricamento…" fino ai dati'(b) {
+  // 8/11 (Edoardo: "il secondo file per la schermata di caricamento se internet è molto lento"): oltre 2,5 secondi al
+  // posto dei LED le icone F1 in orbita, sempre fino ai dati.
+  async 'dati lenti: la luce a LED in sequenza e "Caricamento…", poi le icone in orbita fino ai dati'(b) {
     const { ctx, p, errs } = await open(b, { waitSplash: false, seed: { holdReads: true }, init: SEEN });
-    await w(p, 2600);
+    await w(p, 1500);
     const mid = await p.evaluate(() => { const e = document.querySelector('[data-splash]'), g = e && e.querySelector('[data-led-grid]'); return e ? { text: e.innerText, phase: e.dataset.splashPhase, grid: g ? g.getAttribute('data-mode') : null, leds: g ? g.querySelectorAll('[data-led]').length : 0, status: !!e.querySelector('[role="status"]') } : null; });
+    await w(p, 1700);
+    const slow = await p.evaluate(() => { const e = document.querySelector('[data-splash]'), o = e && e.querySelector('[data-orbit-loader]'); return e ? { phase: e.dataset.splashPhase, orbit: o ? o.innerText : null, leds: !!e.querySelector('[data-led-grid]') } : null; });
     await p.evaluate(() => { window.firebase.__fake.holdReads = false; });
     const gone = await goneSplash(p, 3000);
     await ctx.close();
     assert(mid && mid.phase === 'loading', 'con i dati lenti lo splash se ne va prima dei dati: ' + JSON.stringify(mid));
+    assert(slow && slow.phase === 'loading' && !slow.leds && /rete è lenta/.test(slow.orbit || ''), 'oltre 2,5 secondi le icone in orbita: ' + JSON.stringify(slow));
     assert(mid.grid === 'seq' && mid.leds === 8, 'luce a LED: ' + JSON.stringify(mid));
     assert(/Caricamento…/.test(mid.text) && mid.status, 'manca "Caricamento…": ' + JSON.stringify(mid));
     assert(gone, 'arrivati i dati lo splash non se ne va');

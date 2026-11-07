@@ -1,0 +1,12 @@
+/* 7/11: benvenuto, entrata, giro guidato e orbita (src/benvenuto/Benvenuto.jsx). Solo transform e opacity. */
+.wt-btn{ transition: transform 120ms ease-out; }
+.wt-btn:active{ transform: translateY(1px); }
+.wt-root button:focus-visible{ outline: 2px solid #F4F4F5; outline-offset: 2px; }
+.wt-in{ animation: wt-in .28s cubic-bezier(.22,.8,.3,1) both; }
+.wt-in.wt-back{ animation-name: wt-in-back; }
+@keyframes wt-in{ from{ opacity: 0; transform: translateX(22px); } to{ opacity: 1; transform: none; } }
+@keyframes wt-in-back{ from{ opacity: 0; transform: translateX(-22px); } to{ opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce){
+  .wt-root *, .wto-root *{ animation: none !important; transition: none !important; }
+  .wt-in{ animation: none !important; }
+}

@@ -41,7 +41,7 @@ run({
     await ctx.close();
     // App aperta senza rete (Firebase non si carica): da ospite, la riga dice subito che il Pit Wall non risponde.
     const c = await open(b, { query: '?nofake', routes: { 'https://www.gstatic.com/**': r => r.abort() } });
-    await tapText(c.p, 'ENTRA SENZA ACCOUNT'); await w(c.p, 600);
+    await tapText(c.p, 'ENTRA COME OSPITE'); await w(c.p, 600);
     await openNotif(c.p);
     const guest = await status(c.p);
     await c.ctx.close();
@@ -56,6 +56,7 @@ run({
     await tapSel(p, '[aria-label="Profilo"]'); await w(p, 400);
     await p.evaluate(() => { const fx = window.__btFx; window.__played = []; const play = fx.play; fx.play = n => { window.__played.push(n); return play(n); }; });
     const S = '[role="switch"][aria-label="Suoni"]';
+    await p.evaluate(() => { const g = document.querySelector('[data-settings-group][aria-expanded="false"]'); if (g) g.click(); }); await w(p, 400);   // 8/11: Suoni sta in "Personalizza l'app"
     const a = await pill(p, S);
     await tapSel(p, S); await w(p, 700);
     const off = await pill(p, S);

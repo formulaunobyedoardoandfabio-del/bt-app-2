@@ -10,6 +10,7 @@ const FERRARI = 'Ferrari: Leclerc e Hamilton, la coppia del Cavallino';
 
 async function open(b) {
   const ctx = await b.newContext({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true });
+  await ctx.addInitScript(() => { try { if (!localStorage.getItem('bt_bt-entry')) localStorage.setItem('bt_bt-entry', JSON.stringify('form')); } catch (e) {} });   // 7/11: benvenuto già visto (come helpers.js)
   await ctx.route('https://api.jolpi.ca/**', r => r.abort());               // 24/10: classifiche di Jolpica e previsioni
   await ctx.route('https://bt-app-2.vercel.app/**', r => r.abort());   // meteo di serie non rispondono (come helpers.js)
   await ctx.addInitScript(() => { window.__btNow = window.__btNow || Date.parse('2026-10-07T10:00:00Z'); });   // ora fissa (come helpers.js)
@@ -105,7 +106,7 @@ const tests = {
   },
   async 'preferiti: da ospite serve un account'(b) {
     const { ctx, p } = await open(b);
-    await tapText(p, 'ENTRA SENZA ACCOUNT'); await w(p, 700);   // Task 9: i Termini sono già accettati (primo avvio)
+    await tapText(p, 'ENTRA COME OSPITE'); await w(p, 700);   // Task 9: i Termini sono già accettati (primo avvio)
     await tapSel(p, saveBtn(HADJAR)); await w(p, 400);
     const t = await text(p); await ctx.close();
     assert(/serve un account/i.test(t) && /preferiti/i.test(t), 'da ospite non chiede di accedere');

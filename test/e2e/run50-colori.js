@@ -49,15 +49,18 @@ run({
   async 'di serie: sfondo #000000 e tasti rosso LED #FF1801'(b) {
     const { ctx, p, errs } = await open(b);
     const shell = await p.evaluate(() => getComputedStyle(document.getElementById('phone-shell')).backgroundColor);
-    const acc = await look(p, { sel: 'button', text: 'ACCEDI' });
+    // 8/11 (design "Accesso e Registrazione"): il tasto ACCEDI è bianco; il colore dei tasti sta sul segno B&T e sui link.
+    const acc = await look(p, { sel: '[data-login-badge]' });
+    const go = await look(p, { sel: '[data-login-submit]' });
     const link = await look(p, { sel: 'button', text: 'Password dimenticata?' });
     const old1 = await oldReds(p);
     await login(p);
     const pill = await navPill(p), nav = await look(p, { sel: '[data-nav-tab]' }), old2 = await oldReds(p);
     await ctx.close();
     assert(shell === 'rgb(0, 0, 0)', 'fondo dell\'app: ' + shell);
-    assert(acc && acc.own === css(K.LED_RED) && hexOf(acc.fg) === '#FFFFFF', 'tasto ACCEDI: ' + JSON.stringify(acc));
-    assert(link && hexOf(link.fg) === K.LED_RED && hexOf(link.bg) === '#000000', '"Password dimenticata?": ' + JSON.stringify(link));
+    assert(acc && acc.own === css(K.LED_RED), 'segno B&T dell\'accesso: ' + JSON.stringify(acc));
+    assert(go && hexOf(go.bg) === '#F4F4F5' && hexOf(go.fg) === '#0B0B0C', 'tasto ACCEDI bianco del design: ' + JSON.stringify(go));
+    assert(link && hexOf(link.fg) === K.LED_RED && hexOf(link.bg) === '#0B0B0C', '"Password dimenticata?": ' + JSON.stringify(link));
     assert(pill === css(K.LED_RED), 'scheda attiva nella barra in basso: ' + pill);
     assert(nav && hexOf(nav.bg) === '#000000', 'fondo della barra in basso: ' + JSON.stringify(nav));
     assert(!old1.length && !old2.length, 'resta il rosso di prima: ' + [...old1, ...old2].slice(0, 6).join(' | '));
@@ -89,14 +92,15 @@ run({
 
   async 'colore scelto dalla ruota (#FFFF00): tasto ACCEDI e testi colorati leggibili'(b) {
     const { ctx, p, errs } = await open(b);
-    await tapText(p, 'ENTRA SENZA ACCOUNT'); await w(p, 600);
+    await tapText(p, 'ENTRA COME OSPITE'); await w(p, 600);
     await openColors(p);
     await setWheel(p, '#ffff00'); await w(p, 300);
     const sheet = norm(await inner(p, '[data-theme-sheet]'));
     const prev = await look(p, { sel: '[data-theme-preview] [data-theme-sample="tasto"]' });
     await tapSel(p, '[data-theme-sheet] [aria-label="Chiudi"]'); await w(p);
     await tapText(p, 'ACCEDI O REGISTRATI'); await w(p, 500);
-    const acc = await look(p, { sel: 'button', text: 'ACCEDI' });
+    const acc = await look(p, { sel: '[data-login-badge]' });   // 8/11: il colore scelto sul segno B&T (ACCEDI è bianco)
+    const go = await look(p, { sel: '[data-login-submit]' });
     const texts = [];
     for (const text of ['Password dimenticata?', 'Registrati']) texts.push([text, await look(p, { sel: 'button', text })]);
     const stored = await p.evaluate(() => localStorage.getItem('bt_bt-theme'));
@@ -104,8 +108,8 @@ run({
     const t = K.accentTones('#FFFF00');
     assert(/Scegli tu/.test(sheet) && /#FFFF00/.test(sheet), 'nella scheda dei colori manca la scelta fatta: ' + sheet.slice(0, 300));
     assert(prev && hexOf(prev.bg) === t.accent, 'anteprima del tasto: ' + JSON.stringify(prev));
-    assert(acc && hexOf(acc.bg) === t.accent, `tasto ACCEDI: ${JSON.stringify(acc)} invece di ${t.accent}`);
-    const cAcc = K.contrast(hexOf(acc.fg), hexOf(acc.bg));
+    assert(acc && hexOf(acc.bg) === t.accent, `segno B&T dell'accesso: ${JSON.stringify(acc)} invece di ${t.accent}`);
+    const cAcc = K.contrast(hexOf(go.fg), hexOf(go.bg));
     assert(cAcc >= 3, `testo del tasto ACCEDI poco leggibile: ${cAcc.toFixed(2)}:1`);
     for (const [text, x] of texts) {
       assert(x && hexOf(x.fg) === '#FFFF00', `"${text}": ${JSON.stringify(x)}`);
@@ -139,7 +143,7 @@ run({
 
   async "colore scelto da ospite: entrando, l'account senza colore prende quello del telefono"(b) {
     const { ctx, p, errs } = await open(b);
-    await tapText(p, 'ENTRA SENZA ACCOUNT'); await w(p, 600);
+    await tapText(p, 'ENTRA COME OSPITE'); await w(p, 600);
     await openColors(p);
     await tapSel(p, '[data-theme-color="#FF8000"]'); await w(p, 300);
     await tapSel(p, '[data-theme-sheet] [aria-label="Chiudi"]'); await w(p);
@@ -157,7 +161,7 @@ run({
   async "colore dell'account su un telefono nuovo: arriva con l'accesso"(b) {
     const me = { name: 'Tester', nick: 'Tester', email: 'a@b.it', about: { birth: null, follow: 2, fan: 'vivo' }, app2: { theme: { mode: 'custom', color: '#6692FF' } } };
     const { ctx, p, errs } = await open(b, { seed: { addDocs: { 'users/a@b.it': me } } });
-    const before = await look(p, { sel: 'button', text: 'ACCEDI' });
+    const before = await look(p, { sel: '[data-login-badge]' });   // 8/11: il colore dei tasti sul segno B&T
     await login(p); await w(p, 400);
     const pill = await navPill(p);
     const stored = await p.evaluate(() => JSON.parse(localStorage.getItem('bt_bt-theme')));
