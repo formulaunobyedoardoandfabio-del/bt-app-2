@@ -68,8 +68,9 @@
     .ss-stage.ss-flip{ transform:translate(-50%,-50%) rotate(-90deg); }
   }
   @keyframes trackmove{ from{ offset-distance:0%; } to{ offset-distance:100%; } }
-  .live-notice{ animation:noticein .28s cubic-bezier(.2,.9,.3,1.2); }
-  @keyframes noticein{ from{ opacity:0; translate:0 -16px; } to{ opacity:1; translate:0 0; } }
+  /* 7/11 (video di Edoardo, "Flip Down"): l'avviso scende ruotando dal bordo alto come un cartello appeso, in 3D. */
+  .live-notice{ transform-origin:50% 0; animation:noticein .7s cubic-bezier(.25,.8,.3,1) both; }
+  @keyframes noticein{ 0%{ opacity:0; transform:perspective(700px) rotateX(-92deg); } 40%{ opacity:1; transform:perspective(700px) rotateX(16deg); } 62%{ transform:perspective(700px) rotateX(-7deg); } 80%{ transform:perspective(700px) rotateX(3deg); } 100%{ opacity:1; transform:perspective(700px) rotateX(0deg); } }
   /* Invito "Esplora il circuito": un riflesso di luce che passa ogni tanto. */
   .cta-shine::after{ content:""; position:absolute; top:0; bottom:0; left:-45%; width:32%; background:linear-gradient(100deg, rgba(255,255,255,0), rgba(255,255,255,.26), rgba(255,255,255,0)); transform:skewX(-18deg); animation:ctashine 3.4s ease-in-out infinite; pointer-events:none; }
   @keyframes ctashine{ 0%{ left:-45%; } 55%,100%{ left:135%; } }
@@ -179,12 +180,12 @@
      scivolata niente transform (backwards, non both): con transform le finestre aperte dentro la scheda non coprirebbero
      lo schermo. Col dito la pagina segue lo swipe (stile in linea dal codice, src/logic/gesture.js: dragFollow); se lo
      swipe è corto torna a posto con .tab-back. */
-  .tab-enter-left{ animation:tabinleft .24s cubic-bezier(.25,.1,.25,1) backwards; will-change:transform; }
-  .tab-enter-right{ animation:tabinright .24s cubic-bezier(.25,.1,.25,1) backwards; will-change:transform; }
+  .tab-enter-left{ animation:tabinleft .28s cubic-bezier(.22,.8,.3,1) backwards; will-change:transform; }   /* 7/11: entrata e uscita con lo stesso passo, come un nastro (WhatsApp) */
+  .tab-enter-right{ animation:tabinright .28s cubic-bezier(.22,.8,.3,1) backwards; will-change:transform; }
   @keyframes tabinleft{ from{ transform:translateX(var(--tab-in,100%)); } to{ transform:translateX(0); } }
   @keyframes tabinright{ from{ transform:translateX(var(--tab-in,-100%)); } to{ transform:translateX(0); } }
-  .tab-leave{ position:absolute; inset:0; pointer-events:none; animation:tabout .3s cubic-bezier(.2,.8,.2,1) forwards; }
-  @keyframes tabout{ from{ transform:translateX(var(--tab-from,0px)); opacity:var(--tab-from-op,1); } to{ transform:translateX(var(--tab-to,-100%)); opacity:.55; } }
+  .tab-leave{ position:absolute; inset:0; pointer-events:none; animation:tabout .28s cubic-bezier(.22,.8,.3,1) forwards; will-change:transform; }
+  @keyframes tabout{ from{ transform:translateX(var(--tab-from,0px)); opacity:var(--tab-from-op,1); } to{ transform:translateX(var(--tab-to,-100%)); opacity:1; } }
   .tab-back{ transition:transform .3s cubic-bezier(.3,1.25,.5,1), opacity .2s ease; }
   /* Ai lati, durante lo swipe, la scheda accanto: prende il colore dei tasti (--peek-on = C.accent, di serie il rosso
      LED, con la scuderia del cuore il suo colore) quando lasciando il dito si cambia. */
@@ -289,3 +290,23 @@
 @keyframes calDrop{from{opacity:0;transform:translateY(-6px) scale(.98)}}
 .year-wheel{scrollbar-width:none}
 .year-wheel::-webkit-scrollbar{display:none}
+
+/* 7/11 (video di Edoardo, "Gooey Drop"): la goccia cade, si schiaccia e si allarga nella pillola della notifica. */
+.gd-dot{animation:gdDrop .6s cubic-bezier(.3,.7,.4,1) both}
+@keyframes gdDrop{0%{transform:translateY(-70px) scale(.75,1.15);opacity:0}50%{transform:translateY(0) scale(.75,1.15);opacity:1}68%{transform:scale(1.18,.82)}86%{transform:scale(.96,1.04)}100%{transform:none;opacity:1}}
+.gd-bg{animation:gdSpread .55s .4s cubic-bezier(.3,1.25,.5,1) both}
+@keyframes gdSpread{0%{transform:scaleX(.14);opacity:0}20%{opacity:1}100%{transform:none;opacity:1}}
+.gd-txt{animation:gdFade .3s .75s ease both}
+@keyframes gdFade{from{opacity:0;transform:translateX(-6px)}}
+@media (prefers-reduced-motion: reduce){ .gd-dot,.gd-bg,.gd-txt{animation:none} }
+
+/* 7/11: notizie. Luce del colore della notizia che cambia piano (due strati, solo opacity), ULTIM'ORA che pulsa,
+   articolo che entra salendo. */
+.news-amb{transition:opacity .7s ease}
+.news-in{animation:newsIn .42s cubic-bezier(.2,.85,.25,1) backwards}
+@keyframes newsIn{from{opacity:0;translate:0 18px;scale:.97}}
+.brk-dot{animation:brkPulse 1.4s ease-in-out infinite}
+@keyframes brkPulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.35;transform:scale(.7)}}
+.article-in{animation:articleIn .3s cubic-bezier(.2,.8,.2,1)}
+@keyframes articleIn{from{opacity:0;transform:translateY(22px)}}
+@media (prefers-reduced-motion: reduce){ .brk-dot,.article-in,.news-in{animation:none} .news-amb{transition:none} }

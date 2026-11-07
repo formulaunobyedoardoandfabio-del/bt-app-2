@@ -72,6 +72,23 @@ t('checkout: Premium con email apre un abbonamento di Stripe e torna al sito', a
   assert.strictEqual(res.headers['access-control-allow-origin'], 'https://bt-app-2.vercel.app');
 });
 
+t('7/11 checkout Mensile: prezzo STRIPE_PRICE_PREMIUM_MONTH, niente sconto della festa; senza prezzo = config', async () => {
+  const calls = [];
+  const fetchImpl = async (url, opt) => { calls.push({ url, opt }); return { ok: true, status: 200, json: async () => ({ url: 'https://checkout.stripe.com/c/pay/cs_test_2' }) }; };
+  const env = { STRIPE_SECRET_KEY: 'sk_test_x', STRIPE_PRICE_PREMIUM: 'price_premium', STRIPE_PRICE_PREMIUM_MONTH: 'price_mese', STRIPE_COUPON_NATALE: 'cp_natale' };
+  const res = fakeRes();
+  await createCheckout({ fetchImpl, env })({ method: 'POST', body: { kind: 'premium', email: 'a@b.it', plan: 'month', sale: 'natale' } }, res);
+  const q = new URLSearchParams(calls[0].opt.body);
+  assert.strictEqual(res.statusCode, 200);
+  assert.strictEqual(q.get('line_items[0][price]'), 'price_mese');
+  assert.strictEqual(q.get('discounts[0][coupon]'), null, 'lo sconto della festa è solo per la Stagione');
+  assert.strictEqual(q.get('metadata[plan]'), 'mese');
+  const res2 = fakeRes();
+  await createCheckout({ fetchImpl, env: { STRIPE_SECRET_KEY: 'sk_test_x', STRIPE_PRICE_PREMIUM: 'price_premium' } })({ method: 'POST', body: { kind: 'premium', email: 'a@b.it', plan: 'month' } }, res2);
+  assert.strictEqual(res2.statusCode, 503);
+  assert.strictEqual(res2.json().reason, 'config');
+});
+
 t('checkout: caffè anche senza email (offerta), Premium senza email no, chiavi mancanti = config', async () => {
   const calls = [];
   const fetchImpl = async (url, opt) => { calls.push(opt.body); return { ok: true, status: 200, json: async () => ({ url: 'https://checkout.stripe.com/c/pay/cs_2' }) }; };

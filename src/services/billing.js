@@ -10,7 +10,7 @@
 // Nessuna funzione lancia errori: rispondono { ok: false, reason } (cancelled, pending, unsupported, product, config,
 // offline, failed).
 const PRODUCTS = {
-  premium: { id: "premium_stagione", plan: "stagione", type: "subs" },
+  premium: { id: "premium_stagione", plan: "stagione", month: "mese", type: "subs" },   // 7/11: + piano base "mese" (Mensile)
   coffee: { id: "caffe", type: "inapp" },
 };
 const API = "https://bt-app-2.vercel.app/api/";
@@ -35,12 +35,16 @@ function createBilling({ plugin = () => null, native = () => false, fetchImpl = 
   // Il piano base dell'abbonamento (senza offerte), altrimenti il primo con quel piano.
   const basePlan = list => list.find(x => x.planIdentifier === PRODUCTS.premium.plan && !x.offerId) || list.find(x => x.planIdentifier === PRODUCTS.premium.plan) || list[0] || null;
   // 1/11 sera: offerta della festa (Black Friday, Natale, Befana, Monza) creata nella Play Console con lo stesso nome.
+  // 7/11: il piano Mensile solo se esiste davvero nella Play Console (piano base "mese"), mai al posto della Stagione.
+  const monthPlan = list => list.find(x => x.planIdentifier === PRODUCTS.premium.month && !x.offerId) || list.find(x => x.planIdentifier === PRODUCTS.premium.month) || null;
   const saleOffer = (list, sale) => (sale ? list.find(x => x.planIdentifier === PRODUCTS.premium.plan && x.offerId === sale) || null : null);
   // Prezzi veri di Google Play (con la valuta del telefono); sul sito {}.
   async function prices(sale = null) {
     const out = {};
     const list = await products("premium"), pr = basePlan(list), so = saleOffer(list, sale), co = (await products("coffee"))[0];
     if (pr && pr.priceString) out.premium = pr.priceString;
+    const pm = monthPlan(list);
+    if (pm && pm.priceString) out.premiumMonth = pm.priceString;
     if (so && so.priceString) out.sale = { id: sale, price: so.priceString };
     if (co && co.priceString) out.coffee = co.priceString;
     return out;
@@ -54,9 +58,10 @@ function createBilling({ plugin = () => null, native = () => false, fetchImpl = 
       if (!(await supported())) return { ok: false, reason: "unsupported" };
       let extra = { isConsumable: true };
       if (kind === "premium") {
-        const list = await products("premium"), p = saleOffer(list, who.sale) || basePlan(list);
+        const month = who.plan === "month";
+        const list = await products("premium"), p = month ? monthPlan(list) : saleOffer(list, who.sale) || basePlan(list);
         if (!p) return { ok: false, reason: "product" };
-        extra = { planIdentifier: k.plan, ...(p.offerToken ? { offerToken: p.offerToken } : {}) };
+        extra = { planIdentifier: month ? k.month : k.plan, ...(p.offerToken ? { offerToken: p.offerToken } : {}) };
       }
       try {
         const tx = await A.purchaseProduct({ productIdentifier: k.id, productType: k.type, ...extra, ...(who.token ? { appAccountToken: String(who.token).slice(0, 64) } : {}) });
@@ -71,7 +76,7 @@ function createBilling({ plugin = () => null, native = () => false, fetchImpl = 
     }
     if (isNative()) return { ok: false, reason: "unsupported" };   // APK senza Google Play: mai Stripe nell'app
     try {
-      const r = await fetchImpl(api + "stripe-checkout", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ kind, email: who.email || null, ...(who.sale ? { sale: who.sale } : {}) }) });
+      const r = await fetchImpl(api + "stripe-checkout", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ kind, email: who.email || null, ...(kind === "premium" && who.plan === "month" ? { plan: "month" } : {}), ...(who.sale ? { sale: who.sale } : {}) }) });
       let j = null;
       try { j = await r.json(); } catch (e) { j = null; }
       if (!r.ok || !j || !j.url) return { ok: false, reason: (j && j.reason) || "failed" };

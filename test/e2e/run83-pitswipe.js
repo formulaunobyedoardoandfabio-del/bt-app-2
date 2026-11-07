@@ -2,7 +2,9 @@
 // docs/design/pit-swipe.html): mazzo del giorno con i gesti BOX BOX / STAY OUT / RADIO / GIRO VELOCE / BANDIERA ROSSA,
 // opinioni con voti veri (fanta/pitswipe-voti), vero o falso, carta del pilota, fine giro, perché la vedo, admin OPINIONI.
 // Uso: node test/build-test.js && node test/e2e/run83-pitswipe.js [filtro]
-const { open, w, norm, inner, count, has, tapText, tapSel, goTab, login, openAdmin, assert, run } = require('./helpers');
+const { open: open0, w, norm, inner, count, has, tapText, tapSel, goTab, login, openAdmin, assert, run } = require('./helpers');
+// 7/11: Pit Swipe è spento di serie e si accende dall'admin (shared/bt-flags): queste prove lo accendono.
+const open = (b, o = {}) => open0(b, { ...o, seed: { ...(o.seed || {}), addDocs: { 'shared/bt-flags': { pitSwipe: true }, ...((o.seed || {}).addDocs || {}) } } });
 
 const art = (id, date, extra = {}) => ({ id, title: 'Notizia ' + id, summary: 'Riassunto ' + id, category: 'GARA', author: 'Team B&T', image: '', published: true, date, content: 'Testo ' + id, ...extra });
 const NEWS = { 'shared/bt-news': { __arr: [

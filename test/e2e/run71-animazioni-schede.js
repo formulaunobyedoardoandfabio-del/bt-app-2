@@ -1,7 +1,8 @@
 // 25/10: animazioni tra le schede della barra in basso e tra le sottoschede della pagina RACE.
 // - Tocco o swipe: la scheda vecchia esce dalla parte del movimento e svanisce, la nuova entra dall'altra parte
 //   (data-tab-leave / data-tab-enter); finito il passaggio resta montata una scheda sola, senza transform.
-// - Col dito la pagina segue lo swipe; se è corto torna a posto. Ai lati compare la scheda accanto (data-tab-peek).
+// - Col dito la pagina segue lo swipe; se è corto torna a posto. 7/11 (come WhatsApp): segue il dito uno a uno e accanto
+//   entra la scheda vera (data-tab-neighbor), attaccata; lasciando il dito diventa lei la scheda attiva, senza rimontarla.
 // - La pillola rossa della barra scivola sotto la scheda attiva.
 // - Con "Rimuovi animazioni" (prefers-reduced-motion) niente scivolate: si cambia scheda e basta.
 // Uso: node test/build-test.js && node test/e2e/run71-animazioni-schede.js [filtro]
@@ -24,8 +25,9 @@ const pageNow = p => p.evaluate(() => {
   const e = [...document.querySelectorAll('[data-tab-page]')].find(x => !x.hasAttribute('data-tab-leave'));
   if (!e) return null;
   const tr = getComputedStyle(e).transform;
-  const peek = s => { const k = document.querySelector(`[data-tab-peek="${s}"]`); return k ? +getComputedStyle(k).opacity : null; };
-  return { tr, x: tr === 'none' ? 0 : new DOMMatrix(tr).m41, peekRight: peek('right'), peekLeft: peek('left') };
+  const n = document.querySelector('[data-tab-neighbor]');
+  const a = e.getBoundingClientRect(), c = n && n.getBoundingClientRect();
+  return { tr, x: tr === 'none' ? 0 : Math.round(a.left), nb: n && n.getAttribute('data-tab-page'), side: n && n.getAttribute('data-tab-neighbor'), gap: n ? Math.round(c.left - a.right) : null };
 });
 // Un punto della pagina senza gesti propri (come in run66).
 const freeSpot = p => p.evaluate(() => {
@@ -89,12 +91,12 @@ run({
     const tap = await gapOf();
     await w(p, 600);
     await press(p, await freeSpot(p), -200, 240, 8);
-    await p.mouse.up(); await w(p, 40);
-    const drag = await gapOf();
+    const drag = await pageNow(p);   // 7/11: durante lo swipe pagina e scheda accanto (data-tab-neighbor)
+    await p.mouse.up(); await w(p, 600);
     await ctx.close();
     assert(tap && Math.abs(tap.gap) <= 2 && tap.x > 5 && tap.x < 385, 'col tocco le schede non sono attaccate: ' + JSON.stringify(tap));
     assert(tap.opL > .5 && tap.opE === 1, 'a metà passaggio le schede non si vedono: ' + JSON.stringify(tap));
-    assert(drag && Math.abs(drag.gap) <= 2, 'dopo lo swipe le schede non sono attaccate: ' + JSON.stringify(drag));
+    assert(drag && drag.nb && Math.abs(drag.gap) <= 2, 'durante lo swipe le schede non sono attaccate: ' + JSON.stringify(drag));
     assert(!errs.length, errs.join(' | '));
   },
 
@@ -120,10 +122,10 @@ run({
     await p.mouse.up(); await w(p, 600);
     const end = await pageNow(p), tab = await activeTab(p);
     await ctx.close();
-    assert(mid && mid.x < -20 && mid.x > -60, 'la pagina non segue il dito: ' + JSON.stringify(mid));
-    assert(mid.peekRight > .3, 'non si vede la scheda accanto: ' + JSON.stringify(mid));
+    assert(mid && mid.x <= -50 && mid.x >= -62, 'la pagina non segue il dito uno a uno: ' + JSON.stringify(mid));
+    assert(mid.nb === 'garage' && mid.side === 'right' && Math.abs(mid.gap) <= 1, 'accanto non c\'è la scheda GARAGE attaccata: ' + JSON.stringify(mid));
     assert(tab === 'home', 'uno swipe corto non deve cambiare scheda: ' + tab);
-    assert(end.tr === 'none' && end.peekRight === 0, 'la pagina non torna a posto: ' + JSON.stringify(end));
+    assert(end.tr === 'none' && !end.nb, 'la pagina non torna a posto: ' + JSON.stringify(end));
     assert(!errs.length, errs.join(' | '));
   },
 
@@ -138,38 +140,33 @@ run({
     const mid = await pageNow(p);
     for (let i = 7; i <= 14; i++) { await touch('touchMove', from.x - 15 * i, from.y); await w(p, 20); }
     await w(p, 40);
-    // Lungo abbastanza: la scheda accanto è tutta nello spazio lasciato dalla pagina (mai sopra) ed è rossa.
-    const ready = await p.evaluate(() => {
-      const k = document.querySelector('[data-tab-peek="right"]'), pg = document.querySelector('[data-tab-page]');
-      const ico = k && k.querySelector('.tab-peek-ico');
-      return k && { over: Math.round(pg.getBoundingClientRect().right - k.getBoundingClientRect().left), bg: getComputedStyle(ico).backgroundColor };
-    });
+    // Lungo abbastanza: la scheda accanto è attaccata alla pagina (mai sopra) ed è la scheda vera.
+    const ready = await pageNow(p);
+    await p.evaluate(() => { const n = document.querySelector('[data-tab-neighbor]'); if (n) n.__bt = 1; });
     await touch('touchEnd');
-    const out = await layers(p);
     await w(p, 600);
-    const tab = await activeTab(p);
+    const tab = await activeTab(p), after = await layers(p);
+    const same = await p.evaluate(() => { const e = document.querySelector('[data-tab-page="garage"]'); return !!(e && e.__bt === 1); });
     await ctx.close();
-    assert(mid && mid.x < -30 && mid.peekRight > .5, 'col dito vero la pagina non segue: ' + JSON.stringify(mid));
-    assert(ready && ready.over <= 0, 'la scheda accanto copre la pagina: ' + JSON.stringify(ready));
-    assert(ready.bg === 'rgb(255, 24, 1)', 'lasciando il dito si cambia scheda ma la scheda accanto non è rossa: ' + JSON.stringify(ready));
-    assert(out.leave === 'left' && parseFloat(out.from) < -60, 'la scheda vecchia non parte dal dito: ' + JSON.stringify(out));
-    assert(tab === 'garage', 'col dito vero non cambia scheda: ' + tab);
+    assert(mid && mid.x < -30 && mid.nb === 'garage', 'col dito vero la pagina non segue o non c\'è la scheda accanto: ' + JSON.stringify(mid));
+    assert(ready && Math.abs(ready.gap) <= 1, 'la scheda accanto non è attaccata alla pagina: ' + JSON.stringify(ready));
+    assert(tab === 'garage' && after.pages === 1, 'col dito vero non cambia scheda: ' + JSON.stringify([tab, after]));
+    assert(same, 'la scheda accanto è stata rimontata invece di diventare quella attiva');
     assert(!errs.length, errs.join(' | '));
   },
 
-  async 'swipe lungo: la vecchia esce dal punto dove la lascia il dito'(b) {
+  async 'swipe lungo: le due schede finiscono la corsa insieme e resta montata solo quella nuova'(b) {
     const { ctx, p, errs } = await open(b); await login(p);
     await press(p, await freeSpot(p), -200, 240, 8);
     const mid = await pageNow(p);
-    await p.mouse.up();
-    const out = await layers(p);
+    await p.mouse.up(); await w(p, 60);
+    const run = await pageNow(p);
     await w(p, 600);
-    const tab = await activeTab(p), after = await layers(p);
+    const tab = await activeTab(p), after = await layers(p), still = await pageNow(p);
     await ctx.close();
-    assert(mid && mid.x <= -100, 'col dito la pagina non si sposta: ' + JSON.stringify(mid));
-    assert(out.leave === 'left' && Math.abs(parseFloat(out.from) - mid.x) <= 2, 'la scheda vecchia non parte dal dito: ' + JSON.stringify([mid, out]));
-    assert(out.leaveX <= mid.x + 2, 'la scheda vecchia torna indietro prima di uscire: ' + JSON.stringify([mid, out]));
-    assert(tab === 'garage' && after.pages === 1, 'dopo lo swipe: ' + JSON.stringify([tab, after]));
+    assert(mid && mid.x <= -190 && mid.nb === 'garage', 'col dito la pagina non si sposta con la scheda accanto: ' + JSON.stringify(mid));
+    assert(run && run.x < mid.x && Math.abs(run.gap) <= 1, 'lasciato il dito le due schede non continuano insieme: ' + JSON.stringify([mid, run]));
+    assert(tab === 'garage' && after.pages === 1 && still.tr === 'none', 'dopo lo swipe: ' + JSON.stringify([tab, after, still]));
     assert(!errs.length, errs.join(' | '));
   },
 

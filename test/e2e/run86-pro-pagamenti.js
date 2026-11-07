@@ -88,7 +88,7 @@ run({
     assert(!after.open && after.gate === 'ss', 'senza premio resta bloccato: ' + JSON.stringify(after));
     assert(/Guarda il video fino in fondo/.test(page), 'manca l\'avviso');
     assert(site.gate === 'ss' && !site.video, 'sul sito: ' + JSON.stringify(site));
-    assert(/B&T PREMIUM/.test(prem), '"Passa a Premium" apre il Premium');
+    assert(/Ogni GP vissuto dal muretto box/.test(prem), '"Passa a Premium" apre il Premium');   // 7/11: titolo sul risultato, non sul nome del piano
     assert(!web.errs.length && !apk.errs.length, web.errs.concat(apk.errs).join(' | '));
   },
 

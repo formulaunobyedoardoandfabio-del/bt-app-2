@@ -1,6 +1,7 @@
 // Funzione su Vercel (1/11): apre la pagina di pagamento di Stripe per il sito (mai per l'APK: lì Google Play).
 // POST /api/stripe-checkout  { kind: "premium" | "coffee", email }  →  { ok, url } (o { ok: false, reason })
-// - premium: abbonamento con il prezzo STRIPE_PRICE_PREMIUM (a stagione); l'email serve per trovare l'account.
+// - premium: abbonamento con il prezzo STRIPE_PRICE_PREMIUM (a stagione) o, con plan "month", STRIPE_PRICE_PREMIUM_MONTH
+//   (Mensile, 7/11); l'email serve per trovare l'account.
 // - coffee: pagamento singolo con il prezzo STRIPE_PRICE_COFFEE ("Offrici un caffè"); l'email è facoltativa.
 // Si torna sempre al sito (SITE_URL o https://bt-app-2.vercel.app): mai a indirizzi mandati da fuori.
 const { SITE, EMAIL, send, jsonBody, form } = require("./_lib/pay");
@@ -20,10 +21,11 @@ function createCheckout({ fetchImpl = (...a) => fetch(...a), env = process.env }
     const email = typeof b.email === "string" ? b.email.trim().toLowerCase() : "";
     const okEmail = EMAIL.test(email);
     if (kind === "premium" && !okEmail) return send(res, 400, { ok: false, reason: "email" });
-    const key = env.STRIPE_SECRET_KEY, price = kind === "premium" ? env.STRIPE_PRICE_PREMIUM : env.STRIPE_PRICE_COFFEE;
+    const month = kind === "premium" && b.plan === "month";
+    const key = env.STRIPE_SECRET_KEY, price = kind === "premium" ? (month ? env.STRIPE_PRICE_PREMIUM_MONTH : env.STRIPE_PRICE_PREMIUM) : env.STRIPE_PRICE_COFFEE;
     if (!key || !price) return send(res, 503, { ok: false, reason: "config" });
     // 1/11 sera: sconto della festa, solo se Edoardo ha creato il coupon in Stripe (STRIPE_COUPON_BLACKFRIDAY, …).
-    const sale = kind === "premium" && /^(blackfriday|natale|befana|monza)$/.test(String(b.sale || "")) ? String(b.sale) : null;
+    const sale = kind === "premium" && !month && /^(blackfriday|natale|befana|monza)$/.test(String(b.sale || "")) ? String(b.sale) : null;
     const coupon = sale ? env["STRIPE_COUPON_" + sale.toUpperCase()] : null;
     const params = {
       mode: kind === "premium" ? "subscription" : "payment",
@@ -32,7 +34,7 @@ function createCheckout({ fetchImpl = (...a) => fetch(...a), env = process.env }
       cancel_url: site + "/?pagamento=annullato",
       locale: "it",
       ...(okEmail ? { customer_email: email, client_reference_id: email } : {}),
-      metadata: { kind, ...(okEmail ? { email } : {}) },
+      metadata: { kind, ...(month ? { plan: "mese" } : {}), ...(okEmail ? { email } : {}) },
       ...(kind === "premium" ? { subscription_data: { metadata: { email } } } : { submit_type: "donate" }),
       ...(coupon ? { discounts: [{ coupon }] } : {}),
     };

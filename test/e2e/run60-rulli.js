@@ -1,6 +1,7 @@
 // Tappa 3, Task 11 (G16, G17): in registrazione e in "Su di te" gli anni da tifoso sono un contachilometri a rulli (le
 // cifre girano; + e −, trascinando i rulli o con le frecce) e l'anno di nascita è un manettino rotante, uno scatto per
-// anno con il tic e la vibrazione. Il controllo dei 14 anni resta.
+// anno con il tic e la vibrazione. Il controllo dei 14 anni resta. 7/11: in registrazione la data di nascita si scrive
+// GG/MM/AAAA (o col calendario, run88-nascita.js); il manettino resta in "Su di te" del profilo, provato qui.
 // Uso: node test/build-test.js && node test/e2e/run60-rulli.js [filtro]
 const { open, w, text, tapText, tapSel, login, assert, run } = require('./helpers');
 
@@ -46,14 +47,15 @@ run({
     assert(!errs.length, errs.join(' | '));
   },
 
-  async 'anno di nascita: manettino (role="slider"), uno scatto per anno con il tic, frecce della tastiera'(b) {
-    const { ctx, p, errs } = await open(b);
-    await tapText(p, 'REGISTRATI', { exact: true }); await w(p, 300);
+  async 'anno di nascita in "Su di te": manettino (role="slider"), uno scatto per anno con il tic, frecce della tastiera'(b) {
+    const { ctx, p, errs } = await open(b); await login(p);
+    await tapSel(p, '[aria-label="Profilo"]'); await w(p, 400);
+    await tapSel(p, '[aria-label="Modifica Su di te"]'); await w(p, 300);
     await spyFx(p);
-    const a = await knob(p, '#regBirth');
-    await keys(p, '#regBirth', ['ArrowUp']); const b1 = await knob(p, '#regBirth');
-    await keys(p, '#regBirth', ['ArrowUp', 'ArrowUp', 'ArrowDown']); const b2 = await knob(p, '#regBirth');
-    await tapSel(p, '[aria-label="Anno dopo"]'); await w(p, 100); const b3 = await knob(p, '#regBirth');
+    const a = await knob(p, '#aboutBirth');
+    await keys(p, '#aboutBirth', ['ArrowUp']); const b1 = await knob(p, '#aboutBirth');
+    await keys(p, '#aboutBirth', ['ArrowUp', 'ArrowUp', 'ArrowDown']); const b2 = await knob(p, '#aboutBirth');
+    await tapSel(p, '[aria-label="Anno dopo"]'); await w(p, 100); const b3 = await knob(p, '#aboutBirth');
     const played = await p.evaluate(() => window.__played.slice());
     const t = await text(p);
     await ctx.close();
@@ -70,8 +72,8 @@ run({
     const { ctx, p, errs } = await open(b);
     await tapText(p, 'REGISTRATI', { exact: true }); await w(p, 300);
     await p.fill('#regName', 'Piccolo'); await p.fill('#authEmail', 'piccolo@b.it'); await p.fill('#authPw', 'abcdef12'); await p.fill('#regPw2', 'abcdef12');
-    await keys(p, '#regBirth', ['End', 'ArrowDown']);   // 2015
-    const k = await knob(p, '#regBirth');
+    await p.fill('#regBirth', '15/06/2015');   // 7/11: la data si scrive (prima il manettino a 2015)
+    const k = await p.evaluate(() => document.querySelector('#regBirth').value);
     await tapSel(p, '[data-fan-option="vivo"]'); await p.check('#regAdult');
     await tapText(p, 'CREA ACCOUNT', { exact: true }); await w(p, 1500);
     const t = await text(p), user = await p.evaluate(() => window.firebase.__fake.doc('users/piccolo@b.it'));
@@ -81,7 +83,7 @@ run({
     await tapSel(c.p, '[aria-label="Modifica Su di te"]'); await w(c.p, 300);
     const k2 = await knob(c.p, '#aboutBirth');
     await c.ctx.close();
-    assert(k.now === '2015', 'manettino a 2015: ' + JSON.stringify(k));
+    assert(k === '15/06/2015', 'data di nascita: ' + JSON.stringify(k));
     assert(/Per iscriverti a Sector 4 devi avere almeno 14 anni\./.test(t) && !user, 'con meno di 14 anni l\'account si crea (o manca l\'avviso)');
     assert(k2 && k2.max === '2012', 'in "Su di te" il manettino arriva a ' + (k2 && k2.max) + ' invece del 2012');
     assert(!errs.length && !c.errs.length, [...errs, ...c.errs].join(' | '));

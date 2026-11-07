@@ -1,7 +1,9 @@
 // Stile Duolingo (1/11, Edoardo): livello del tifoso nel Profilo, primi passi per chi è nuovo, "Bentornato" dopo 7
 // giorni, promemoria programmati sul telefono (plugin finto), sfide 1 contro 1 al Pit Stop con gli amici della lega.
 // Uso: node test/build-test.js && node test/e2e/run85-duolingo.js [filtro]
-const { open, w, norm, inner, has, tapText, tapSel, goTab, login, assert, run } = require('./helpers');
+const { open: open0, w, norm, inner, has, tapText, tapSel, goTab, login, assert, run } = require('./helpers');
+// 7/11: Pit Swipe è spento di serie e si accende dall'admin (shared/bt-flags): queste prove lo accendono.
+const open = (b, o = {}) => open0(b, { ...o, seed: { ...(o.seed || {}), addDocs: { 'shared/bt-flags': { pitSwipe: true }, ...((o.seed || {}).addDocs || {}) } } });
 const { authorId } = require('../../src/services/compat');
 
 const ME = authorId('a@b.it');

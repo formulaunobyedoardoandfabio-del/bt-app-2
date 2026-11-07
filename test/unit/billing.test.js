@@ -37,6 +37,23 @@ let pass = 0, fail = 0;
 const tests = [];
 const t = (name, fn) => tests.push([name, fn]);
 
+t('7/11 Mensile: solo se nella Play Console c\'è il piano base "mese"; si compra quello, sul sito plan "month"', async () => {
+  const P = fakePlay();
+  const get = P.getProducts;
+  P.getProducts = async o => { const r = await get(o); return o.productType === 'subs' ? { products: [...r.products, { identifier: 'premium_stagione', planIdentifier: 'mese', priceString: '0,99 €' }] } : r; };
+  const B = createBilling({ plugin: () => P, native: () => true });
+  assert.strictEqual((await B.prices()).premiumMonth, '0,99 €');
+  await B.buy('premium', { token: 'aid-1', plan: 'month' });
+  const buy = P.calls.find(c => c[0] === 'purchaseProduct')[1];
+  assert.strictEqual(buy.planIdentifier, 'mese');
+  const none = createBilling({ plugin: () => fakePlay(), native: () => true });
+  assert.strictEqual((await none.prices()).premiumMonth, undefined, 'senza piano "mese" niente Mensile');
+  assert.strictEqual((await none.buy('premium', { plan: 'month' })).reason, 'product', 'senza piano "mese" non si compra la Stagione al suo posto');
+  const api = fakeApi(), W = createBilling({ fetchImpl: api.fetchImpl, go: () => {} });
+  await W.buy('premium', { email: 'a@b.it', plan: 'month' });
+  assert.strictEqual(api.calls[0].body.plan, 'month');
+});
+
 t('APK: Premium con Google Play, piano base "stagione" (non l\'offerta), token dell\'account mai l\'email', async () => {
   const P = fakePlay(), api = fakeApi();
   const B = createBilling({ plugin: () => P, native: () => true, fetchImpl: api.fetchImpl });

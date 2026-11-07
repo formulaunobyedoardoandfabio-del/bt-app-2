@@ -1,6 +1,6 @@
 // Sector 4 (la B&T App 2.0). Generato una volta da tools/port-2.0.js (anteprima 2.0, app-preview/index.html, versione 25);
 // da qui in avanti è il sorgente vero e si modifica a mano.
-import React, { useState, useRef, useEffect } from "react";
+import React, { useState, useRef, useEffect, useLayoutEffect } from "react";
 import "./App.css";
 import CIRCUITS from "./data/circuits.json";
 import CIRCUIT_INFO from "./data/circuit-info.json";
@@ -17,6 +17,8 @@ import BtGhost from "./logic/bt-ghost";
 import BtWk from "./logic/bt-weekend";
 import BtHolidays from "./logic/holidays";
 import BtSwipe from "./logic/pitswipe";
+import BtElo from "./logic/elo";
+import BtTrophyPro from "./logic/trophypro";
 import { createSwipeVotes } from "./services/swipevotes";
 import Reminders from "./services/reminders";
 import { createDuels, duelState } from "./services/duels";
@@ -113,6 +115,7 @@ const trialEndFor = (races, now) => {
 };
 // Premium a stagione (18/10): 6 € la prima, ogni stagione dopo 1 € in meno, fino a 1 €.
 const SEASON_PRICE = 6;
+const MONTH_PRICE = 0.99;   // 7/11: piano Mensile (piano base "mese" di Google Play, STRIPE_PRICE_PREMIUM_MONTH sul sito)
 // "Offrici un caffè" (1/11): nell'APK con Google Play (prodotto "caffe"), sul sito con Stripe (src/services/billing.js).
 const premiumOffer = ({ trialUsed, isPremium }) => isPremium ? "premium" : trialUsed ? "subscribe" : "trial";
 const trialDaysLeft = trial => trial ? Math.max(0, Math.ceil((trial.end - nowMs()) / 86400000)) : 0;
@@ -811,7 +814,7 @@ function FeatureRow({ icon, title, starIcon }) {
 // tutte insieme con un video con premio, finché non chiude l'app (adPro); sul sito, dove non ci sono video, solo Premium.
 const PRO_WHAT = { ss: "il Second Screen", telemetry: "la telemetria", laps: "i tempi sul giro", radio: "la radio", gomme: "le gomme" };
 const PRO_LINE = "Second Screen, telemetria, tempi sul giro, radio e gomme";
-function ProLockCard({ what, onAd, onPremium, busy = false }) {
+function ProLockCard({ what, onAd, onPremium, busy = false, hint = null }) {
   return (
     <div data-pro-lock={what} style={{ margin: "0 16px 16px", padding: 18, borderRadius: 16, background: "rgba(231,179,76,.08)", border: "1px solid rgba(231,179,76,.3)", textAlign: "center" }}>
       <Icon name="lock" size={22} color={C.gold} />
@@ -819,6 +822,7 @@ function ProLockCard({ what, onAd, onPremium, busy = false }) {
       <p style={{ fontFamily: F_BODY, fontSize: 12.5, color: C.muted, lineHeight: 1.5, margin: "0 0 14px" }}>
         {onAd ? `Per vedere ${PRO_WHAT[what] || "questa funzione"} guarda un video: sblocchi ${PRO_LINE} finché non chiudi l'app. Con Premium sono sempre tue.` : `${PRO_LINE} sono per gli abbonati B&T Premium.`}
       </p>
+      {hint && <p data-pro-hint="" style={{ fontFamily: F_BODY, fontSize: 11.5, color: C.muted, lineHeight: 1.5, margin: "-6px 0 14px" }}>{hint}</p>}
       {onAd && <button className="press" data-pro-ad="" disabled={busy} onClick={() => onAd()} style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8, width: "100%", padding: "13px 0", marginBottom: 8, borderRadius: 12, border: `1.5px solid ${C.gold}`, fontFamily: F_HEAD, fontWeight: 900, fontStyle: "italic", fontSize: 13.5, color: C.gold }}>
         {busy ? <ShiftLight label="Carico la pubblicità" /> : <><Icon name="play" size={14} color={C.gold} />GUARDA UN VIDEO</>}
       </button>}
@@ -826,14 +830,14 @@ function ProLockCard({ what, onAd, onPremium, busy = false }) {
     </div>
   );
 }
-function ProGateSheet({ what, onAd, onPremium, onClose, busy }) {
+function ProGateSheet({ what, onAd, onPremium, onClose, busy, hint = null }) {
   return (
     <div role="dialog" aria-modal="true" aria-label="Funzione Pro" style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,.75)", zIndex: 640, display: "flex", alignItems: "flex-end" }} onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
       <div data-pro-gate={what} style={{ background: C.card, borderRadius: "24px 24px 0 0", width: "100%", padding: "18px 0 22px" }}>
         <div style={{ display: "flex", justifyContent: "flex-end", padding: "0 16px 4px" }}>
           <button className="press" aria-label="Chiudi" onClick={onClose} style={{ width: 32, height: 32, borderRadius: "50%", background: "rgba(255,255,255,.08)", display: "flex", alignItems: "center", justifyContent: "center" }}><Icon name="close" size={12} color="#fff" sw={2.4} /></button>
         </div>
-        <ProLockCard what={what} onAd={onAd} onPremium={onPremium} busy={busy} />
+        <ProLockCard what={what} onAd={onAd} onPremium={onPremium} busy={busy} hint={hint} />
       </div>
     </div>
   );
@@ -2079,6 +2083,35 @@ function HomeScreen({ holidayTop = null, pitSwipe = null, ig, onOpenIg, highligh
   const [q, setQ] = useState("");
   const homeRef = useRef(null);
   const pullRev = usePullRefresh(homeRef, onRefresh);
+  // 7/11 (Edoardo, video di riferimento): elenco verticale pulito. Dietro alle notizie una luce del colore della notizia
+  // che stai guardando (il colore del suo primo hashtag: scuderia, pilota, circuito; altrimenti il rosso dell'app), in
+  // alto e in basso, che cambia piano mentre scorri. Due strati che si danno il cambio solo con l'opacità.
+  const [amb, setAmb] = useState({ a: null, b: null, on: "a" });
+  const ambCur = useRef(null), ambRaf = useRef(0);
+  const pickAmb = el => {
+    if (!el) return;
+    const mid = el.getBoundingClientRect().top + el.clientHeight * 0.38;
+    let best = null, bd = Infinity;
+    el.querySelectorAll("[data-news-item], [data-featured]").forEach(it => { const r = it.getBoundingClientRect(), d = Math.abs((r.top + r.bottom) / 2 - mid); if (d < bd) { bd = d; best = it; } });
+    const id = best && (best.getAttribute("data-news-item") || best.getAttribute("data-featured"));
+    const art = id ? published.find(x => String(x.id) === id) : null, tag = art ? articleTags(art)[0] : null;
+    const col = (tag && tag.color) || C.accent;
+    if (col === ambCur.current) return;
+    ambCur.current = col;
+    setAmb(st => (st.on === "a" ? { ...st, b: col, on: "b" } : { ...st, a: col, on: "a" }));
+  };
+  const onHomeScroll = e => { const el = e.currentTarget; if (ambRaf.current) return; ambRaf.current = requestAnimationFrame(() => { ambRaf.current = 0; pickAmb(el); }); };
+  useEffect(() => { pickAmb(homeRef.current); return () => cancelAnimationFrame(ambRaf.current); }, [articles.length]);
+  // Scorrimento come nel video: le schede entrano salendo piano mentre arrivano dal basso (una volta sola), con
+  // translate/scale e opacità (il transform resta dello swipe della riga).
+  const revealKey = articles.map(a => a.id).join(",");
+  useEffect(() => {
+    const root = homeRef.current;
+    if (!root || typeof IntersectionObserver === "undefined") return undefined;
+    const io = new IntersectionObserver(es => es.forEach(e => { if (e.isIntersecting) { e.target.classList.add("news-in"); io.unobserve(e.target); } }), { root, threshold: 0.12, rootMargin: "0px 0px -4% 0px" });
+    root.querySelectorAll("[data-news-row]:not(.news-in), [data-featured]:not(.news-in)").forEach(el => io.observe(el));
+    return () => io.disconnect();
+  }, [revealKey]);
   const [tyre, setTyre] = useState(null);     // filtro a gomma (G09): soft | medium | hard | inter
   const [lane, setLane] = useState("all");    // Pit Lane (G10): all | teams | drivers | tech
   const published = articles.filter(a => a.published !== false);
@@ -2110,7 +2143,11 @@ function HomeScreen({ holidayTop = null, pitSwipe = null, ig, onOpenIg, highligh
     { name: "GP del Bahrain 2025", winner: "O. Piastri" },
   ];
   return (
-    <div ref={homeRef} data-home="" className="scrollcol" {...pullRev.handlers} style={{ height: "100%", position: "relative", overscrollBehaviorY: "contain", userSelect: pullRev.dragging ? "none" : undefined, WebkitUserSelect: pullRev.dragging ? "none" : undefined }}>
+    <div data-news-look="" style={{ position: "relative", height: "100%", overflow: "hidden" }}>
+    <div aria-hidden="true" data-news-ambient={amb[amb.on] || ""} style={{ position: "absolute", inset: 0, overflow: "hidden", pointerEvents: "none" }}>
+      {["a", "b"].map(k => <div key={k} className="news-amb" style={{ position: "absolute", inset: 0, opacity: amb.on === k && amb[k] ? 1 : 0, background: amb[k] ? `radial-gradient(120% 50% at 50% -10%, ${alpha(amb[k], .3)}, transparent 62%), radial-gradient(120% 34% at 50% 112%, ${alpha(amb[k], .2)}, transparent 62%)` : "none" }} />)}
+    </div>
+    <div ref={homeRef} data-home="" className="scrollcol" onScroll={onHomeScroll} {...pullRev.handlers} style={{ height: "100%", position: "relative", overscrollBehaviorY: "contain", userSelect: pullRev.dragging ? "none" : undefined, WebkitUserSelect: pullRev.dragging ? "none" : undefined }}>
       {(pullRev.pull > 0 || pullRev.busy) && <PullGauge rev={pullRev.rev} busy={pullRev.busy} pull={pullRev.pull} />}
       <div style={{ transform: pullRev.pull ? `translateY(${pullRev.pull}px)` : undefined, transition: pullRev.dragging ? "none" : "transform .25s ease" }}>
       {holidayTop}
@@ -2181,6 +2218,7 @@ function HomeScreen({ holidayTop = null, pitSwipe = null, ig, onOpenIg, highligh
             )}
           </div>
           <div style={{ padding: 16 }}>
+            {BtLogic.newsAge(featured) <= 180 && <div data-breaking="" style={{ display: "flex", alignItems: "center", gap: 7, marginBottom: 8, fontFamily: F_HEAD, fontWeight: 900, fontStyle: "italic", fontSize: 11, letterSpacing: 1.2, color: C.accentInk }}><span aria-hidden="true" className="brk-dot" style={{ width: 8, height: 8, borderRadius: "50%", background: C.accent }} />ULTIM'ORA</div>}
             <h3 style={{ fontFamily: F_HEAD, fontWeight: 800, fontSize: 17, color: C.text, lineHeight: 1.28, margin: "0 0 8px" }}>{featured.title}</h3>
             <p style={{ fontFamily: F_BODY, fontSize: 13, color: C.muted, lineHeight: 1.5, margin: "0 0 10px" }}>{featured.excerpt}</p>
             {articleTags(featured).length > 0 && <div style={{ marginBottom: 10 }}><HashtagChips tags={articleTags(featured)} onTag={onTag} size="sm" /></div>}
@@ -2191,6 +2229,7 @@ function HomeScreen({ holidayTop = null, pitSwipe = null, ig, onOpenIg, highligh
       )}
       {pitSwipe /* 1/11: al posto del riquadro di Instagram (che resta nel Profilo) */}
 
+      <div data-news-list="list">
       {rest.map(a => (
         <SwipeRow key={a.id} id={a.id} onSave={onSwipeSave} onHide={onHide}>
         <SaveBtn a={a} saved={saved.includes(a.id)} onToggle={onToggleSave} style={{ top: 8, right: 24 }} />
@@ -2207,6 +2246,7 @@ function HomeScreen({ holidayTop = null, pitSwipe = null, ig, onOpenIg, highligh
         </button>
         </SwipeRow>
       ))}
+      </div>
       {hiddenCount > 0 && (
         <p data-hidden-footer="" style={{ margin: "0 16px 18px", fontFamily: F_BODY, fontSize: 12, color: C.dim, textAlign: "center" }}>
           Notizie nascoste: {hiddenCount} · <button className="press" onClick={() => onUnhideAll && onUnhideAll()} style={{ display: "inline", fontFamily: F_BODY, fontWeight: 700, fontSize: 12, color: C.accentInk, textDecoration: "underline" }}>Mostra</button>
@@ -2253,6 +2293,7 @@ function HomeScreen({ holidayTop = null, pitSwipe = null, ig, onOpenIg, highligh
       <div style={{ height: 8 }} />
       </div>
     </div>
+    </div>
   );
 }
 
@@ -2271,7 +2312,7 @@ function ArticleScreen({ article, onBack, isPremium, onPremium, onAdUnlock = nul
   const onScroll = () => { if (ersRaf.current) return; ersRaf.current = requestAnimationFrame(() => { ersRaf.current = 0; measureErs(); }); };
   useEffect(() => { measureErs(); const t = setTimeout(measureErs, 450); return () => { clearTimeout(t); cancelAnimationFrame(ersRaf.current); ersRaf.current = 0; }; }, [article.id, photo, locked]);
   return (
-    <div ref={scRef} onScroll={onScroll} className="scrollcol" style={{ height: "100%" }}>
+    <div ref={scRef} onScroll={onScroll} className="scrollcol article-in" style={{ height: "100%" }}>
       <SubHeader title="ARTICOLO" onBack={onBack} right={
         <div style={{ display: "flex", gap: 8 }}>
           <button className="press" aria-label="Condividi articolo" onClick={onShare} style={round}><Icon name="share" size={16} /></button>
@@ -2914,7 +2955,7 @@ function LiveNotice({ n, onClose, inStage = false }) {
   if (!n) return null;
   const d = driverById(n.id), t = d ? teamById(d.teamId) : null;
   const place = inStage
-    ? { position: "absolute", top: 8, left: "50%", transform: "translateX(-50%)", width: "min(470px, 72%)", zIndex: 60 }
+    ? { position: "absolute", top: 8, left: "50%", translate: "-50% 0", width: "min(470px, 72%)", zIndex: 60 }   // translate: il transform è dell'animazione
     : { position: "absolute", top: 10, left: 10, right: 10, zIndex: 900 };
   const close = <button className="press" aria-label="Chiudi avviso" onClick={onClose} style={{ width: 26, height: 26, borderRadius: "50%", background: "rgba(0,0,0,.25)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}><Icon name="close" size={11} color="#fff" sw={2.4} /></button>;
   if (n.kind === "fastest") return (
@@ -6132,7 +6173,7 @@ function EndSpy({ onEnd }) {
   }, []);
   return <div ref={ref} data-end-spy="" aria-hidden="true" style={{ height: 1 }} />;
 }
-function RaceScreen({ champion = null, proOk = true, onProAd = null, proBusy = false, onStandingsEnd = null, isPremium, onPremium, onSelectDriver, races, standings, live, liveSt, onExpandMap, onTelemetry, onOpenCircuit, wxGuess, wxResult, onGuessWeather, onLapTimes, onSecondScreen, lastRace, dotdVote, onDotdVote, ratings = {}, onRate, onOpenChats, onOpenGhost, of1 = null, onOf1Refresh, replay = null, favDriver = null, of1Sessions = null, onOf1Pick = null, sessionNote = null }) {
+function RaceScreen({ champion = null, proUnlocked = [], proHint = null, proOk = true, onProAd = null, proBusy = false, onStandingsEnd = null, isPremium, onPremium, onSelectDriver, races, standings, live, liveSt, onExpandMap, onTelemetry, onOpenCircuit, wxGuess, wxResult, onGuessWeather, onLapTimes, onSecondScreen, lastRace, dotdVote, onDotdVote, ratings = {}, onRate, onOpenChats, onOpenGhost, of1 = null, onOf1Refresh, replay = null, favDriver = null, of1Sessions = null, onOf1Pick = null, sessionNote = null }) {
   const [pitOpen, setPitOpen] = useState(null);   // 1/11 notte: pilota con le gomme dei pit aperte (scheda Gomme)
   const [tab, setTab] = useState(null);
   // Pit Board (G27): si vede quando la tabella dei tempi arriva in cima alla pagina (stato cambiato solo al passaggio).
@@ -6228,8 +6269,8 @@ function RaceScreen({ champion = null, proOk = true, onProAd = null, proBusy = f
       ); })()}
 
       {/* 1/11: gomme e radio della diretta sono funzioni Pro (video con premio o Premium) */}
-      {curTab === "gomme" && st && !proOk && <ProLockCard what="gomme" onAd={onProAd} onPremium={onPremium} busy={proBusy} />}
-      {curTab === "gomme" && (!st || proOk) && (
+      {curTab === "gomme" && st && !(proOk || proUnlocked.includes("gomme")) && <ProLockCard what="gomme" hint={proHint && proHint("gomme")} onAd={onProAd} onPremium={onPremium} busy={proBusy} />}
+      {curTab === "gomme" && (!st || proOk || proUnlocked.includes("gomme")) && (
         <div data-tyres="" style={{ ...card, padding: "4px 0" }}>
           {!st && <p data-tyres-empty="" style={{ margin: 0, padding: 16, fontFamily: F_BODY, fontSize: 12.5, color: C.dim, lineHeight: 1.5 }}>{TYRES_EMPTY}</p>}
           {st && st.cars.map((c, i) => { const d = driverById(c.id), laps = c.tyreAge != null ? `${c.tyreAge} ${c.tyreAge === 1 ? "giro" : "giri"}` : "–"; return (
@@ -6311,8 +6352,8 @@ function RaceScreen({ champion = null, proOk = true, onProAd = null, proBusy = f
         </div>
       )}
 
-      {curTab === "radio" && st && !proOk && <ProLockCard what="radio" onAd={onProAd} onPremium={onPremium} busy={proBusy} />}
-      {curTab === "radio" && (!st || proOk) && (
+      {curTab === "radio" && st && !(proOk || proUnlocked.includes("radio")) && <ProLockCard what="radio" hint={proHint && proHint("radio")} onAd={onProAd} onPremium={onPremium} busy={proBusy} />}
+      {curTab === "radio" && (!st || proOk || proUnlocked.includes("radio")) && (
         <div data-radios="" style={card}>
           {isOf1Live(live) && st ? <RadioList live={live} st={st} />
             : st ? radioFeed(st, 6).map((r, i, all) => (
@@ -7424,6 +7465,44 @@ function PredictionCard({ q, answer, lock, onAnswer }) {
   );
 }
 
+// 7/11 (Edoardo): l'ELO del FantaF1, come negli scacchi (regole in src/logic/elo.js). Numero a tamburo, fascia,
+// variazione dell'ultimo GP, andamento GP per GP e posto tra quelli delle mie leghe; "Come si calcola" spiega la regola.
+function FantaEloCard({ elo, meAid, people = [] }) {
+  const [open, setOpen] = useState(false);
+  const me = elo && meAid ? elo.ratings[meAid] : null, on = !!(me && me.games > 0);
+  const ranked = elo ? people.map(u => ({ u, r: elo.ratings[u.aid] })).filter(x => x.r && x.r.games > 0).sort((a, b) => b.r.rating - a.r.rating) : [];
+  const pos = on ? ranked.findIndex(x => x.u.aid === meAid) + 1 : 0;
+  const hist = on ? [{ rating: BtElo.START }, ...me.history] : [];
+  const lo = Math.min(...hist.map(h => h.rating)), hi = Math.max(...hist.map(h => h.rating)), span = Math.max(1, hi - lo);
+  const pts = hist.map((h, i) => `${(i / Math.max(1, hist.length - 1)) * 100},${26 - ((h.rating - lo) / span) * 22}`).join(" ");
+  return (
+    <div data-fanta-elo={on ? me.rating : "none"} style={{ margin: "0 16px 16px", padding: 16, borderRadius: 18, background: C.card, border: `1px solid ${C.border}` }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
+        <span style={{ fontFamily: F_BODY, fontWeight: 700, fontSize: 11, color: C.dim, letterSpacing: 1 }}>IL TUO ELO</span>
+        {on && <span data-elo-tier={me.tier} style={{ padding: "4px 10px", borderRadius: 8, background: alpha(C.accentInk, .14), fontFamily: F_HEAD, fontWeight: 800, fontSize: 11, color: C.accentInk }}>{me.tier}</span>}
+      </div>
+      {on ? (
+        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
+              <span style={{ fontFamily: F_HEAD, fontWeight: 900, fontSize: 30, color: C.text }}><RollNumber value={me.rating} /></span>
+              {me.last !== 0 && <span data-elo-last={me.last} style={{ fontFamily: F_HEAD, fontWeight: 800, fontSize: 13, color: me.last > 0 ? TIMING.green : "#FF5A5F" }}>{me.last > 0 ? "▲ +" + me.last : "▼ " + me.last}</span>}
+            </div>
+            <span style={{ fontFamily: F_BODY, fontSize: 11.5, color: C.muted }}>dopo {me.games} GP{pos > 0 && ranked.length > 1 ? ` · ${pos}° di ${ranked.length} nelle tue leghe` : ""}</span>
+          </div>
+          {hist.length > 1 && <svg aria-hidden="true" width="96" height="30" viewBox="0 0 100 30" preserveAspectRatio="none" style={{ flexShrink: 0 }}><polyline points={pts} fill="none" stroke={C.accent} strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" vectorEffect="non-scaling-stroke" /></svg>}
+        </div>
+      ) : (
+        <p style={{ margin: 0, fontFamily: F_BODY, fontSize: 12.5, color: C.muted, lineHeight: 1.5 }}>Parti da {BtElo.START}. Il tuo ELO si muove dopo ogni GP giocato con la squadra completa, contro gli amici delle tue leghe: entra in una lega con almeno un altro tifoso.</p>
+      )}
+      <button className="press" data-elo-how="" aria-expanded={open} onClick={() => setOpen(o => !o)} style={{ marginTop: 10, padding: 0, fontFamily: F_BODY, fontWeight: 700, fontSize: 12, color: C.accentInk }}>{open ? "Chiudi" : "Come si calcola"}</button>
+      {open && <p data-elo-rule="" style={{ margin: "8px 0 0", fontFamily: F_BODY, fontSize: 11.5, color: C.muted, lineHeight: 1.55 }}>
+        Come negli scacchi: tutti partono da {BtElo.START}. Dopo ogni GP il tuo punteggio FantaF1 si confronta con quello di ognuno degli altri delle tue leghe che hanno giocato: vincere vale 1, pareggiare ½, perdere 0. Battere chi ha l'ELO più alto fa guadagnare di più, perdere con chi ce l'ha più basso fa perdere di più. Il guadagno del GP è K × (risultato − atteso), in media sui confronti; atteso = 1 / (1 + 10^((ELO avversario − tuo ELO) / 400)). K vale 40 nei primi 3 GP, poi 24, e 16 da 1600 in su. Contano gara, qualifiche, Sprint e penalità dei cambi; i bonus dei pronostici no. Fasce: Esordiente, Pilota titolare (1150), Prima guida (1300), Campione (1450), Leggenda (1600).
+      </p>}
+    </div>
+  );
+}
+
 // Regole e punti, come nel gioco ufficiale F1 Fantasy, più i bonus B&T.
 function FantaRules() {
   const [open, setOpen] = useState(false);
@@ -7468,7 +7547,7 @@ const LEAGUE_ZONES = {
   q1: { label: "ZONA Q1", bg: "rgba(255,24,1,.13)", line: "rgba(255,90,95,.45)", ink: "#FF5A5F" },
   q2: { label: "ZONA Q2", bg: "rgba(255,210,31,.11)", line: "rgba(255,210,31,.45)", ink: "#FFD23F" },
 };
-function FantaScreen({ squad, setSquad, base, freeTransfers, budget, stats, race, lock, weekends = [], isPremium, onPremium, onToast, bonus = [], leagues = [], seasonPts = 0, realWeek = null, meAid = null, onCreateLeague, onJoinLeague, onLeaveLeague, onRenameLeague, needAccount, predictions = [], predAnswers = {}, predLockOf, onAnswerPrediction, standings }) {
+function FantaScreen({ elo = null, squad, setSquad, base, freeTransfers, budget, stats, race, lock, weekends = [], isPremium, onPremium, onToast, bonus = [], leagues = [], seasonPts = 0, realWeek = null, meAid = null, onCreateLeague, onJoinLeague, onLeaveLeague, onRenameLeague, needAccount, predictions = [], predAnswers = {}, predLockOf, onAnswerPrediction, standings }) {
   const [, setTick] = useState(0);
   useEffect(() => { const iv = setInterval(() => setTick(n => n + 1), 30000); return () => clearInterval(iv); }, []);
   const bonusPts = bonus.reduce((a, b) => a + b.pts, 0);
@@ -7556,6 +7635,8 @@ function FantaScreen({ squad, setSquad, base, freeTransfers, budget, stats, race
         )) : <p style={{ margin: 0, fontFamily: F_BODY, fontSize: 11.5, color: C.dim, lineHeight: 1.45 }}>Meteo delle sessioni (pagina Race → Meteo) e sondaggi indovinati valgono +2 punti; ogni previsione avanzata giusta +1.</p>}
       </div>
 
+      <FantaEloCard elo={elo} meAid={meAid} people={everyone} />
+
       {everyone.length >= 2 && <>
         {heading("trophy", "I MIGLIORI DI TUTTE LE LEGHE")}
         <div data-fanta-podium="" style={{ margin: "0 16px 16px", padding: "14px 12px 0", borderRadius: 18, background: C.card, border: `1px solid ${C.border}`, overflow: "hidden" }}>
@@ -7611,7 +7692,7 @@ function FantaScreen({ squad, setSquad, base, freeTransfers, budget, stats, race
                   <span style={{ fontFamily: F_BODY, fontWeight: u.me ? 700 : 600, fontSize: 13, color: C.text }}>{u.name}</span>
                   {u.me && <span style={{ padding: "1px 6px", borderRadius: 5, background: C.accent, fontFamily: F_HEAD, fontWeight: 800, fontSize: 9, color: "#fff" }}>TU</span>}
                 </div>
-                <div style={{ fontFamily: F_BODY, fontSize: 10, color: C.dim }}>{u.team || "Squadra senza nome"}</div>
+                <div style={{ fontFamily: F_BODY, fontSize: 10, color: C.dim }}>{u.team || "Squadra senza nome"}{elo && elo.ratings[u.aid] && elo.ratings[u.aid].games > 0 && <span data-elo={elo.ratings[u.aid].rating}> · ELO {elo.ratings[u.aid].rating}</span>}</div>
               </div>
               <span style={{ fontFamily: F_BODY, fontWeight: u.me ? 700 : 600, fontSize: 12, color: u.me ? C.text : C.dim, flexShrink: 0 }}>{fmtPts(u.pts)}</span>
             </div>
@@ -7666,6 +7747,24 @@ function Medal({ medal, size = 14, style }) {
       <circle cx="12" cy="15" r="6.3" fill={m.c1} />
       {size >= 18 && <path d="M12 11.4L12.88 13.79L15.42 13.89L13.43 15.46L14.12 17.91L12 16.5L9.88 17.91L10.57 15.46L8.58 13.89L11.12 13.79Z" fill={m.c0} />}
     </svg>
+  );
+}
+// 7/11 (video di Edoardo, "Gooey Drop"): una notifica nuova arrivata ad app aperta. Una goccia cade dall'alto, si
+// schiaccia e si allarga nella pillola con titolo e testo; toccandola si aprono le Notifiche. Solo transform e opacity.
+function DropNotice({ n, onOpen, onClose }) {
+  useEffect(() => { fx.play("radio"); fx.buzz("select"); const t = setTimeout(onClose, 5200); return () => clearTimeout(t); }, [n.id]);
+  return (
+    <div data-drop-notice={n.id} role="status" style={{ position: "absolute", top: 10, left: 12, right: 12, height: 58, zIndex: 905 }}>
+      <span aria-hidden="true" className="gd-bg" style={{ position: "absolute", inset: 0, borderRadius: 29, background: C.accent, transformOrigin: "29px 50%", boxShadow: "0 14px 30px -12px rgba(0,0,0,.75)" }} />
+      <button className="press" onClick={onOpen} style={{ position: "relative", display: "flex", alignItems: "center", gap: 10, width: "100%", height: "100%", padding: "0 46px 0 9px", textAlign: "left", background: "none" }}>
+        <span className="gd-dot" style={{ width: 40, height: 40, borderRadius: "50%", background: "#fff", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}><Icon name={n.icon || "bell"} size={18} color={C.accent} /></span>
+        <span className="gd-txt" style={{ flex: 1, minWidth: 0 }}>
+          <span style={{ display: "block", fontFamily: F_HEAD, fontWeight: 800, fontSize: 13.5, color: "#fff", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{n.title}</span>
+          {n.body && <span style={{ display: "block", fontFamily: F_BODY, fontSize: 11.5, color: "rgba(255,255,255,.88)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", marginTop: 1 }}>{n.body}</span>}
+        </span>
+      </button>
+      <button className="press gd-txt" aria-label="Chiudi la notifica" onClick={onClose} style={{ position: "absolute", right: 10, top: 15, width: 28, height: 28, borderRadius: "50%", background: "rgba(0,0,0,.22)", display: "flex", alignItems: "center", justifyContent: "center" }}><Icon name="close" size={11} color="#fff" sw={2.4} /></button>
+    </div>
   );
 }
 // Avviso "Trofeo sbloccato: <nome>" in alto (3,6 s): non copre i tocchi; più trofei insieme in un avviso solo.
@@ -7737,6 +7836,19 @@ function TrophyCase({ trophies = {}, progress = {}, helmet = null, defs = TROPHI
         {open && won.map((t, i) => row(t, true, i))}
         {open && todo.length > 0 && <div style={group}>DA VINCERE</div>}
         {open && todo.map((t, i) => row(t, false, i))}
+      </div>
+      <div style={{ padding: "0 24px 10px" }}><span style={{ fontFamily: F_BODY, fontWeight: 700, fontSize: 11, color: C.dim, letterSpacing: 1 }}>FUNZIONI PRO COI TROFEI</span></div>
+      <div data-pro-unlocks="" style={{ margin: "0 20px 22px", borderRadius: 18, background: C.card, border: `1px solid ${C.border}`, overflow: "hidden" }}>
+        {BtTrophyPro.proUnlocks(won.map(t => t.id)).map((u, i) => (
+          <div key={u.what} data-pro-unlock={u.what} data-done={u.done ? "1" : "0"} style={{ display: "flex", alignItems: "center", gap: 12, padding: "11px 14px", borderTop: i ? `1px solid ${C.divider}` : "none" }}>
+            <span style={{ width: 30, height: 30, borderRadius: 9, background: u.done ? alpha(C.accent, .16) : "transparent", border: u.done ? `1px solid ${alpha(C.accent, .5)}` : `1px dashed ${C.border}`, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}><Icon name={u.done ? "unlock" : "lock"} size={14} color={u.done ? C.accentInk : C.dim} /></span>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontFamily: F_HEAD, fontWeight: 800, fontSize: 13.5, color: u.done ? C.text : C.muted }}>{u.label}</div>
+              <div style={{ fontFamily: F_BODY, fontSize: 11.5, color: C.dim, lineHeight: 1.35, marginTop: 1 }}>{u.done ? "Sbloccata per sempre" : `${u.count} trofei, tra cui «${(defs.find(d => d.id === u.key) || { name: u.key }).name}»`}</div>
+            </div>
+            {!u.done && <span style={{ fontFamily: F_HEAD, fontWeight: 800, fontSize: 12, color: u.keyOk ? C.accentInk : C.muted, flexShrink: 0, fontVariantNumeric: "tabular-nums" }}>{Math.min(u.have, u.count)}/{u.count}</span>}
+          </div>
+        ))}
       </div>
     </>
   );
@@ -8059,9 +8171,25 @@ function AdminKeypad({ onOk, onCancel }) {
 }
 
 /* ── PANNELLO ADMIN (stesse sezioni della versione vecchia) ─────────── */
-const ADMIN_TABS = ["NEWS", "SONDAGGI", "OPINIONI", "FANTA F1", "PREVISIONI", "CLASSIFICHE", "GARA LIVE", "MERCATO", "INSTAGRAM", "VIDEO", "NOTIFICHE", "CHAT", "TEMI"];
+const ADMIN_TABS = ["NEWS", "SONDAGGI", "OPINIONI", "FANTA F1", "PREVISIONI", "CLASSIFICHE", "GARA LIVE", "MERCATO", "INSTAGRAM", "VIDEO", "NOTIFICHE", "CHAT", "TEMI", "FUNZIONI"];
 // 31/10: temi delle feste dal Pannello Admin (shared/bt-holidays): di serie seguono le date; si può accenderne uno
 // sempre (per provarlo o per un evento) o spegnerne uno.
+// 7/11 (Edoardo): funzioni che si accendono solo da qui. Pit Swipe (le notizie come carte da scorrere) è spento di
+// serie: acceso, tornano la scheda in Home, il passo dei primi passi e il "Bentornato" col giro di oggi.
+function AdminFlagsTab({ flags, onSave }) {
+  const f = flags || { pitSwipe: false };
+  return (
+    <div data-admin-flags="" style={{ padding: "0 16px 20px" }}>
+      <div data-admin-flag="pitSwipe" style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 0", borderBottom: `1px solid ${C.divider}` }}>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontFamily: F_HEAD, fontWeight: 800, fontSize: 14, color: C.text }}>Pit Swipe</div>
+          <div style={{ fontFamily: F_BODY, fontSize: 12, color: C.muted, lineHeight: 1.45, marginTop: 2 }}>Le notizie come carte da scorrere a destra e a sinistra. Spento, non compare da nessuna parte nell'app.</div>
+        </div>
+        <Toggle on={!!f.pitSwipe} onChange={v => onSave && onSave({ ...f, pitSwipe: v })} label="Pit Swipe" />
+      </div>
+    </div>
+  );
+}
 function AdminHolidaysTab({ cfg, onSave, active }) {
   const c = BtHolidays.cleanConfig(cfg);
   const set = next => onSave(BtHolidays.cleanConfig(next));
@@ -8884,7 +9012,7 @@ function AdminChatTab({ chats, reports, banned, onDeleteMsg, onSuspend, onUnsusp
 // Impronta di un valore: le schede con la bozza (classifiche, prezzi FantaF1, Instagram) si rifanno da capo quando i
 // dati sotto cambiano (riletti da Firebase o appena salvati), così SALVA non riscrive valori vecchi (revisione Fase B, C2).
 const versionOf = v => { const s = JSON.stringify(v) || ""; let h = 5381; for (let i = 0; i < s.length; i++) h = (Math.imul(h, 33) + s.charCodeAt(i)) | 0; return (h >>> 0).toString(36) + "." + s.length; };
-function AdminScreen({ takes = [], onTakes = null, photos, setPhotos, silly = {}, onSilly, highlights = [], setHighlights, onBack, onPublish, articles, setArticles, fantaStats, setFantaStats, standings, setStandings, races, setRaces, extraRaces = [], setExtraRaces, ig, setIg, sentNotifs, onSendNotif, onDeleteNotif, onToast, tab, setTab, chats, reports, banned, onDeleteMsg, onSuspend, onUnsuspend, onIgnoreReport, liveProps = {}, polls = [], votes = {}, onPollAnswer, predictions = [], setPredictions, predAnswers = {}, holidayCfg = null, onHolidays = null, holiday = null }) {
+function AdminScreen({ flags = null, onFlags = null, takes = [], onTakes = null, photos, setPhotos, silly = {}, onSilly, highlights = [], setHighlights, onBack, onPublish, articles, setArticles, fantaStats, setFantaStats, standings, setStandings, races, setRaces, extraRaces = [], setExtraRaces, ig, setIg, sentNotifs, onSendNotif, onDeleteNotif, onToast, tab, setTab, chats, reports, banned, onDeleteMsg, onSuspend, onUnsuspend, onIgnoreReport, liveProps = {}, polls = [], votes = {}, onPollAnswer, predictions = [], setPredictions, predAnswers = {}, holidayCfg = null, onHolidays = null, holiday = null }) {
   return (
     <div className="scrollcol" style={{ height: "100%" }}>
       <SubHeader title="PANNELLO ADMIN" onBack={onBack} />
@@ -8895,6 +9023,7 @@ function AdminScreen({ takes = [], onTakes = null, photos, setPhotos, silly = {}
         {tab === "NEWS" && <AdminNewsTab articles={articles} setArticles={setArticles} onPublish={onPublish} onToast={onToast} />}
         {tab === "SONDAGGI" && <AdminPollsTab polls={polls} votes={votes} onAnswer={onPollAnswer} />}
         {tab === "FANTA F1" && <AdminFantaTab key={"fs:" + versionOf(fantaStats)} fantaStats={fantaStats} setFantaStats={setFantaStats} onToast={onToast} />}
+        {tab === "FUNZIONI" && <AdminFlagsTab flags={flags} onSave={onFlags} />}
         {tab === "TEMI" && <AdminHolidaysTab cfg={holidayCfg} active={holiday} onSave={v => onHolidays && onHolidays(v)} />}
         {tab === "OPINIONI" && <AdminTakesTab takes={takes} onSave={v => onTakes && onTakes(v)} />}
         {tab === "PREVISIONI" && <AdminPredictionsTab predictions={predictions} setPredictions={setPredictions} answers={predAnswers} races={races} onToast={onToast} />}
@@ -8911,20 +9040,49 @@ function AdminScreen({ takes = [], onTakes = null, photos, setPhotos, silly = {}
   );
 }
 
-function PremiumModal({ onClose, isPremium, plan, setPlan, onSubscribe, subscribing, subscribed, trialUsed, onTrial, trial, onAdPro = null, adBusy = false, playPrice = null, sale = null }) {
+// Schermata Premium (rifatta il 7/11 con le regole di Edoardo): il titolo dice cosa ottieni, non il nome del piano;
+// al posto della stellina la griglia della stagione che si riempie GP dopo GP (la promessa: tutta la stagione); tre
+// icone con due parole invece della lista da leggere; Stagione già scelta col risparmio e il prezzo al mese, Mensile
+// come alternativa; sotto al tasto cosa succede dopo la prova. Un solo colore (quello dell'app), fondo calmo, più aria.
+const priceNum = s => { const m = /(\d+(?:[.,]\d{1,2})?)/.exec(String(s || "").replace(/\s/g, "")); return m ? parseFloat(m[1].replace(",", ".")) : NaN; };
+const moneyOf = (n, like) => { const cur = String(like || "€").replace(/[\d.,\s]/g, "") || "€"; return (Number.isInteger(n) ? String(n) : n.toFixed(2).replace(".", ",")) + " " + cur; };
+function SeasonGrid({ races = [] }) {
+  const now = nowMs(), list = races.filter(r => isFinite(raceStartMs(r))).sort((a, b) => raceStartMs(a) - raceStartMs(b));
+  const nextI = list.findIndex(r => raceStartMs(r) + 3 * 3600e3 > now);
+  const left = nextI < 0 ? 0 : list.length - nextI;
+  if (!list.length) return null;
+  return (
+    <div data-season-grid={list.length} style={{ marginTop: 22 }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(8, 1fr)", gap: 6 }}>
+        {list.map((r, i) => {
+          const done = nextI < 0 || i < nextI, next = i === nextI;
+          return <span key={r.id || i} data-gp-cell={done ? "done" : next ? "next" : "todo"} title={r.name} className={next ? "gp-next" : undefined}
+            style={{ aspectRatio: "1 / 1", borderRadius: 7, display: "flex", alignItems: "center", justifyContent: "center", fontFamily: F_HEAD, fontWeight: 800, fontSize: 10, background: done ? C.accent : "rgba(255,255,255,.05)", border: next ? `2px solid ${C.accent}` : "2px solid transparent", color: done ? "#fff" : next ? C.text : C.dim }}>{i + 1}</span>;
+        })}
+      </div>
+      <div style={{ marginTop: 8, fontFamily: F_BODY, fontSize: 11.5, color: C.muted, textAlign: "right" }}>{left ? `${left} GP ancora da vivere` : "Stagione finita: si riparte dalla prossima"}</div>
+    </div>
+  );
+}
+function PremiumModal({ onClose, isPremium, plan, setPlan, onSubscribe, subscribing, subscribed, trialUsed, onTrial, trial, onAdPro = null, adBusy = false, playPrice = null, playMonth = null, monthOk = true, races = [], sale = null }) {
   const offer = premiumOffer({ trialUsed, isPremium });
-  const price = (playPrice || SEASON_PRICE + " €") + " a stagione";   // 1/11: nell'APK il prezzo vero di Google Play
-  const heroGradient = `linear-gradient(135deg, ${shade(C.accent, .11)}, ${alpha(C.accentInk, .27)}, ${shade(C.accent, .11)})`;
+  const seasonStr = playPrice || moneyOf(SEASON_PRICE, "€");   // 1/11: nell'APK i prezzi veri di Google Play
+  const monthStr = playMonth || (monthOk ? moneyOf(MONTH_PRICE, seasonStr) : null);
+  const sN = priceNum(seasonStr), mN = monthStr ? priceNum(monthStr) : NaN;
+  const perMonth = isFinite(sN) ? moneyOf(sN / 12, seasonStr) : null;
+  const saving = isFinite(sN) && isFinite(mN) && mN > 0 && sN < mN * 12 ? Math.round((1 - sN / (mN * 12)) * 100) : null;
+  const month = plan === "month" && !!monthStr;
+  const price = month ? monthStr + " al mese" : seasonStr + " a stagione";
+  const sheet = "#121215";
   if (subscribed) {
     return (
       <div style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,.9)", zIndex: 500, display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}>
-        <div style={{ background: C.card, borderRadius: 20, padding: "32px 24px", textAlign: "center", maxWidth: 320, width: "100%" }}>
-          <Icon name="star" size={50} color={C.gold} />
+        <div style={{ background: sheet, border: `1px solid ${C.border}`, borderRadius: 20, padding: "30px 24px", textAlign: "center", maxWidth: 320, width: "100%" }}>
           {subscribed === "trial" && trial ? (<>
-            <h2 style={{ fontFamily: F_HEAD, fontWeight: 900, fontStyle: "italic", fontSize: 22, color: C.text, margin: "16px 0 8px" }}>Prova gratuita attiva!</h2>
-            <p style={{ color: C.muted, fontSize: 14, lineHeight: 1.6, margin: "0 0 24px" }}>Hai B&amp;T Premium gratis per il prossimo GP, fino al {fmtDay(trial.end)}. Poi {price}: puoi disdire quando vuoi.</p>
+            <h2 style={{ fontFamily: F_HEAD, fontWeight: 900, fontStyle: "italic", fontSize: 22, color: C.text, margin: "0 0 10px" }}>Prova gratuita attiva!</h2>
+            <p style={{ color: C.muted, fontSize: 14, lineHeight: 1.6, margin: "0 0 24px" }}>Hai B&amp;T Premium gratis per il prossimo GP, fino al {fmtDay(trial.end)}. Poi la prova finisce da sola, senza addebiti.</p>
           </>) : (<>
-            <h2 style={{ fontFamily: F_HEAD, fontWeight: 900, fontStyle: "italic", fontSize: 22, color: C.text, margin: "16px 0 8px" }}>Sei Premium!</h2>
+            <h2 style={{ fontFamily: F_HEAD, fontWeight: 900, fontStyle: "italic", fontSize: 22, color: C.text, margin: "0 0 10px" }}>Sei Premium!</h2>
             <p style={{ color: C.muted, fontSize: 14, lineHeight: 1.6, margin: "0 0 24px" }}>Tutte le funzioni avanzate sono ora sbloccate. Buona gara!</p>
           </>)}
           <button className="press" onClick={onClose} style={{ display: "block", width: "100%", padding: "15px 0", borderRadius: 14, background: C.accent, fontFamily: F_HEAD, fontWeight: 900, fontStyle: "italic", fontSize: 14, color: "#fff" }}>INIZIA A USARE B&amp;T PREMIUM</button>
@@ -8932,76 +9090,82 @@ function PremiumModal({ onClose, isPremium, plan, setPlan, onSubscribe, subscrib
       </div>
     );
   }
+  const planCard = (id, name, big, small, badge) => {
+    const on = id === "month" ? month : !month;
+    return (
+      <button key={id} className="press" data-plan={id} data-season-plan={id === "annual" ? "" : undefined} role="radio" aria-checked={on} onClick={() => setPlan && setPlan(id)}
+        style={{ position: "relative", display: "flex", alignItems: "center", gap: 12, width: "100%", marginTop: 10, padding: "14px 16px", borderRadius: 16, textAlign: "left", background: on ? alpha(C.accent, .1) : "rgba(255,255,255,.03)", border: `1.5px solid ${on ? C.accent : C.border}` }}>
+        <span aria-hidden="true" style={{ width: 20, height: 20, borderRadius: "50%", border: `2px solid ${on ? C.accent : C.dim}`, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>{on && <span style={{ width: 10, height: 10, borderRadius: "50%", background: C.accent }} />}</span>
+        <span style={{ flex: 1, minWidth: 0 }}>
+          <span style={{ display: "flex", alignItems: "center", gap: 8, fontFamily: F_HEAD, fontWeight: 800, fontSize: 15, color: C.text }}>{name}{badge && <span data-saving={badge} style={{ padding: "2px 7px", borderRadius: 6, background: C.accent, fontFamily: F_HEAD, fontWeight: 900, fontSize: 9.5, letterSpacing: .6, color: "#fff" }}>{badge}</span>}</span>
+          {small && <span style={{ display: "block", fontFamily: F_BODY, fontSize: 12, color: C.muted, marginTop: 2 }}>{small}</span>}
+        </span>
+        <span style={{ fontFamily: F_HEAD, fontWeight: 900, fontSize: 18, color: C.text, flexShrink: 0 }}>{big}</span>
+      </button>
+    );
+  };
   return (
     <div style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,.75)", zIndex: 500, display: "flex", alignItems: "flex-end" }} onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
-      <div className="scrollcol" style={{ background: C.card, borderRadius: "24px 24px 0 0", width: "100%", maxHeight: "94%", position: "relative" }}>
-        <div style={{ background: heroGradient, padding: "26px 24px 20px", textAlign: "center", position: "relative" }}>
-          <button className="press" aria-label="Chiudi" onClick={onClose} style={{ position: "absolute", top: 16, right: 16, width: 32, height: 32, borderRadius: "50%", background: "rgba(255,255,255,.12)", display: "flex", alignItems: "center", justifyContent: "center" }}>
-            <Icon name="close" size={14} color="#fff" sw={2.4} />
-          </button>
-          <Icon name="star" size={34} color={C.gold} />
-          <h2 style={{ fontFamily: F_HEAD, fontWeight: 900, fontStyle: "italic", fontSize: 22, color: "#fff", margin: "8px 0 4px" }}>B&amp;T PREMIUM</h2>
-          <p style={{ fontFamily: F_BODY, fontSize: 13, color: "rgba(255,255,255,.7)", margin: 0 }}>Il massimo dell'esperienza F1</p>
+      <div className="scrollcol" data-premium-sheet="" style={{ background: sheet, borderTop: `1px solid ${C.border}`, borderRadius: "24px 24px 0 0", width: "100%", maxHeight: "94%", position: "relative", padding: "26px 22px 28px", boxSizing: "border-box" }}>
+        <button className="press" aria-label="Chiudi" onClick={onClose} style={{ position: "absolute", top: 16, right: 16, width: 32, height: 32, borderRadius: "50%", background: "rgba(255,255,255,.07)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+          <Icon name="close" size={14} color="#fff" sw={2.4} />
+        </button>
+        <h2 data-premium-title="" style={{ fontFamily: F_HEAD, fontWeight: 900, fontStyle: "italic", fontSize: 26, lineHeight: 1.1, color: C.text, margin: "6px 44px 0 0" }}>Ogni GP vissuto dal muretto box</h2>
+        <SeasonGrid races={races} />
+        <div data-premium-perks="" style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 8, marginTop: 26 }}>
+          {[["gauge", "Telemetria live"], ["radio", "Team radio"], ["no", "Zero pubblicità"]].map(([ic, l]) => (
+            <div key={l} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 8, textAlign: "center" }}>
+              <span style={{ width: 46, height: 46, borderRadius: 14, background: alpha(C.accent, .12), display: "flex", alignItems: "center", justifyContent: "center" }}><Icon name={ic} size={20} color={C.accentInk} /></span>
+              <span style={{ fontFamily: F_HEAD, fontWeight: 800, fontSize: 12, color: C.text }}>{l}</span>
+            </div>
+          ))}
         </div>
 
-        <div style={{ padding: "16px 22px 24px" }}>
-          {isPremium ? (
-            <p style={{ textAlign: "center", fontFamily: F_BODY, fontSize: 13, color: C.green, padding: "20px 0" }}>Sei già Premium: grazie per il supporto!</p>
-          ) : (
-            <>
-              {PREMIUM_CATEGORIES.map(cat => (
-                <React.Fragment key={cat.name}>
-                  <Eyebrow color={C.accentInk}>{cat.name.toUpperCase()}</Eyebrow>
-                  <div>{cat.items.map(it => <FeatureRow key={it.title} icon={it.icon} title={it.title} starIcon={it.starIcon} />)}</div>
-                </React.Fragment>
-              ))}
+        {isPremium ? (
+          <p style={{ textAlign: "center", fontFamily: F_BODY, fontSize: 13, color: C.green, padding: "26px 0 0" }}>Sei già Premium: grazie per il supporto!</p>
+        ) : (
+          <div style={{ marginTop: 28 }}>
+            {/* 1/11 sera: sconto della festa, mostrato solo col prezzo vero dell'offerta di Google Play (solo Stagione) */}
+            {sale && <div data-sale={sale.id} style={{ marginBottom: 4, padding: "10px 14px", borderRadius: 14, background: alpha(sale.color, .12), border: `1px solid ${sale.color}`, textAlign: "center" }}>
+              <span style={{ display: "block", fontFamily: F_HEAD, fontWeight: 900, fontStyle: "italic", fontSize: 13.5, letterSpacing: .6, color: sale.color }}>SCONTO {sale.name.toUpperCase()} −{sale.pct}%</span>
+              <span style={{ display: "block", fontFamily: F_BODY, fontSize: 12, color: C.text, marginTop: 3 }}>La prima stagione a {sale.price}</span>
+            </div>}
+            {planCard("annual", "Stagione", seasonStr, perMonth ? `${perMonth} al mese` : null, saving ? `RISPARMI ${saving}%` : null)}
+            {monthStr && planCard("month", "Mensile", monthStr, "al mese", null)}
 
-              {/* 1/11 sera: sconto della festa, mostrato solo col prezzo vero dell'offerta di Google Play */}
-              {sale && <div data-sale={sale.id} style={{ margin: "18px 0 0", padding: "12px 14px", borderRadius: 14, background: alpha(sale.color, .16), border: `1.5px solid ${sale.color}`, textAlign: "center" }}>
-                <span style={{ display: "block", fontFamily: F_HEAD, fontWeight: 900, fontStyle: "italic", fontSize: 14, letterSpacing: .6, color: sale.color }}>SCONTO {sale.name.toUpperCase()} −{sale.pct}%</span>
-                <span style={{ display: "block", fontFamily: F_BODY, fontSize: 12, color: C.text, marginTop: 4 }}>La prima stagione a {sale.price}</span>
-              </div>}
-              <div data-season-plan="" style={{ margin: "18px 0 0", padding: "14px 16px", borderRadius: 14, background: "rgba(231,179,76,.12)", border: `1.5px solid ${C.gold}`, textAlign: "center" }}>
-                <span style={{ display: "block", fontFamily: F_BODY, fontWeight: 700, fontSize: 10, color: C.muted, letterSpacing: .6, marginBottom: 6 }}>STAGIONE</span>
-                <span style={{ display: "block", fontFamily: F_HEAD, fontWeight: 900, fontSize: 22, color: C.text }}>{SEASON_PRICE} €</span>
-                <span style={{ display: "block", fontFamily: F_BODY, fontSize: 11, color: C.dim, marginTop: 2 }}>per tutta la stagione</span>
-                <span style={{ display: "block", fontFamily: F_BODY, fontSize: 11.5, color: C.gold, marginTop: 8, lineHeight: 1.4 }}>Ogni stagione dopo costa 1 € in meno, fino a 1 €</span>
+            {!PREMIUM_DEMO ? (
+              <>
+                <button className="press" disabled style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8, width: "100%", marginTop: 20, padding: "16px 0", borderRadius: 14, background: "rgba(255,255,255,.08)", fontFamily: F_HEAD, fontWeight: 900, fontStyle: "italic", fontSize: 15, color: C.text }}>IN ARRIVO</button>
+                <p style={{ textAlign: "center", fontFamily: F_BODY, fontSize: 10.5, color: C.dim, lineHeight: 1.7, margin: "14px 0 0" }}>Gli abbonamenti arriveranno presto, tramite Google Play.</p>
+              </>
+            ) : <>
+            {offer === "trial" ? (<>
+              <button className="press" disabled={subscribing} onClick={onTrial} style={{ display: "block", width: "100%", marginTop: 20, padding: "16px 0", borderRadius: 14, background: subscribing ? "#555" : C.accent, fontFamily: F_HEAD, fontWeight: 900, fontStyle: "italic", fontSize: 15, color: "#fff", letterSpacing: .2 }}>
+                {subscribing ? <ShiftLight /> : "PROVA GRATIS PER UN GP"}
+              </button>
+              <p data-after-trial="" style={{ textAlign: "center", fontFamily: F_BODY, fontSize: 12, color: C.muted, lineHeight: 1.5, margin: "10px 0 0" }}>Gratis fino al prossimo GP, poi la prova finisce da sola: nessun addebito. Per restare Premium scegli il piano.</p>
+              <button className="press" disabled={subscribing} onClick={onSubscribe} style={{ display: "block", margin: "8px auto 0", padding: "8px 12px", fontFamily: F_BODY, fontWeight: 700, fontSize: 12.5, color: C.accentInk }}>Oppure abbonati subito: {price}</button>
+            </>) : (<>
+              <button className={subscribing ? "press" : "press cta-shine"} disabled={subscribing} onClick={onSubscribe} style={{ position: "relative", overflow: "hidden", display: "block", width: "100%", marginTop: 20, padding: "16px 0", borderRadius: 14, background: subscribing ? "#555" : C.accent, fontFamily: F_HEAD, fontWeight: 900, fontStyle: "italic", fontSize: 15, color: "#fff", letterSpacing: .2 }}>
+                {subscribing ? <ShiftLight /> : `ABBONATI · ${price}`}
+              </button>
+              <p style={{ textAlign: "center", fontFamily: F_BODY, fontSize: 12, color: C.muted, margin: "10px 0 0" }}>Si rinnova da solo ogni {month ? "mese" : "stagione"} finché non disdici. Disdici quando vuoi.</p>
+              {trialUsed && <p style={{ textAlign: "center", fontFamily: F_BODY, fontSize: 12, color: C.muted, margin: "6px 0 0" }}>Hai già usato la prova gratuita di un GP.</p>}
+            </>)}
+            {onAdPro && (
+              <div data-ad-pro="" style={{ marginTop: 22, paddingTop: 18, borderTop: `1px solid ${C.divider}` }}>
+                <button className="press" disabled={adBusy} onClick={onAdPro} style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8, width: "100%", padding: "13px 0", borderRadius: 12, border: `1.5px solid ${C.border}`, fontFamily: F_HEAD, fontWeight: 900, fontStyle: "italic", fontSize: 13.5, color: C.text }}>
+                  {adBusy ? <ShiftLight label="Carico la pubblicità" /> : <><Icon name="play" size={14} color={C.text} />GUARDA UN VIDEO: FUNZIONI PRO GRATIS</>}
+                </button>
+                <p style={{ textAlign: "center", fontFamily: F_BODY, fontSize: 11, color: C.muted, margin: "8px 0 0", lineHeight: 1.45 }}>{PRO_LINE}: sbloccati finché non chiudi l'app o spegni lo schermo. Pubblicità e notizie Premium restano.</p>
               </div>
-
-              {!PREMIUM_DEMO ? (
-                <>
-                  <button className="press" disabled style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8, width: "100%", marginTop: 16, padding: "16px 0", borderRadius: 14, background: "rgba(255,255,255,.08)", fontFamily: F_HEAD, fontWeight: 900, fontStyle: "italic", fontSize: 15, color: C.text, letterSpacing: .3 }}><Icon name="stopwatch" size={16} /> PREMIUM IN ARRIVO</button>
-                  <p style={{ textAlign: "center", fontFamily: F_BODY, fontSize: 10.5, color: C.dim, lineHeight: 1.7, margin: "14px 0 0" }}>Gli abbonamenti arriveranno presto, tramite Google Play.</p>
-                </>
-              ) : <>
-              {offer === "trial" ? (<>
-                <button className="press" disabled={subscribing} onClick={onTrial} style={{ display: "block", width: "100%", marginTop: 16, padding: "16px 0", borderRadius: 14, background: subscribing ? "#555" : C.accent, boxShadow: subscribing ? "none" : `0 10px 22px -10px ${C.accent}`, fontFamily: F_HEAD, fontWeight: 900, fontStyle: "italic", fontSize: 14.5, color: "#fff", letterSpacing: .2, textAlign: "center" }}>
-                  {subscribing ? <ShiftLight /> : "PROVA GRATIS PER UN GP"}
-                </button>
-                <p style={{ textAlign: "center", fontFamily: F_BODY, fontSize: 11.5, color: C.muted, margin: "10px 0 0" }}>Poi {price}: si rinnova da solo a ogni stagione finché non disdici. Disdici quando vuoi, anche durante la prova.</p>
-                <button className="press" disabled={subscribing} onClick={onSubscribe} style={{ display: "block", margin: "8px auto 0", padding: "8px 12px", fontFamily: F_BODY, fontWeight: 700, fontSize: 12, color: C.gold }}>Oppure abbonati subito: {price}</button>
-              </>) : (<>
-                <button className={subscribing ? "press" : "press cta-shine"} disabled={subscribing} onClick={onSubscribe} style={{ position: "relative", overflow: "hidden", display: "block", width: "100%", marginTop: 16, padding: "16px 0", borderRadius: 14, background: subscribing ? "#555" : C.accent, boxShadow: subscribing ? "none" : `0 10px 22px -10px ${C.accent}`, fontFamily: F_HEAD, fontWeight: 900, fontStyle: "italic", fontSize: 14.5, color: "#fff", letterSpacing: .2, textAlign: "center" }}>
-                  {subscribing ? <ShiftLight /> : `ABBONATI · ${price}`}
-                </button>
-                <p style={{ textAlign: "center", fontFamily: F_BODY, fontSize: 11.5, color: C.muted, margin: "10px 0 0" }}>Si rinnova da solo a ogni stagione finché non disdici. Disdici quando vuoi.</p>
-                {trialUsed && <p style={{ textAlign: "center", fontFamily: F_BODY, fontSize: 11.5, color: C.muted, margin: "10px 0 0" }}>Hai già usato la prova gratuita di un GP.</p>}
-              </>)}
-              {onAdPro && (
-                <div data-ad-pro="" style={{ marginTop: 14, padding: "12px 12px 10px", borderRadius: 14, background: "rgba(255,255,255,.04)", border: `1px solid ${C.border}` }}>
-                  <button className="press" disabled={adBusy} onClick={onAdPro} style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8, width: "100%", padding: "13px 0", borderRadius: 12, border: `1.5px solid ${C.gold}`, fontFamily: F_HEAD, fontWeight: 900, fontStyle: "italic", fontSize: 13.5, color: C.gold }}>
-                    {adBusy ? <ShiftLight label="Carico la pubblicità" /> : <><Icon name="play" size={14} color={C.gold} />GUARDA UN VIDEO: FUNZIONI PRO GRATIS</>}
-                  </button>
-                  <p style={{ textAlign: "center", fontFamily: F_BODY, fontSize: 11, color: C.muted, margin: "8px 0 0", lineHeight: 1.45 }}>{PRO_LINE}: sbloccati finché non chiudi l'app o spegni lo schermo. Pubblicità e notizie Premium restano.</p>
-                </div>
-              )}
-              <p style={{ textAlign: "center", fontFamily: F_BODY, fontSize: 10.5, color: C.dim, lineHeight: 1.7, margin: "14px 0 0" }}>
-                Rinnovo automatico a ogni stagione al prezzo di quella stagione ({SEASON_PRICE} €, poi 1 € in meno ogni anno, fino a 1 €) finché non disdici. Si disdice quando vuoi da Google Play → Abbonamenti.<br /><span style={{ color: C.accentInk }}>Anteprima demo: nessun pagamento reale</span>
-              </p>
-              </>}
-            </>
-          )}
-        </div>
+            )}
+            <p style={{ textAlign: "center", fontFamily: F_BODY, fontSize: 10.5, color: C.dim, lineHeight: 1.7, margin: "18px 0 0" }}>
+              Stagione: rinnovo automatico a ogni stagione al prezzo di quella stagione ({SEASON_PRICE} €, poi 1 € in meno ogni anno, fino a 1 €). Mensile: rinnovo ogni mese. Si disdice quando vuoi da Google Play → Abbonamenti.<br /><span style={{ color: C.accentInk }}>Anteprima demo: nessun pagamento reale</span>
+            </p>
+            </>}
+          </div>
+        )}
       </div>
     </div>
   );
@@ -9894,8 +10058,8 @@ function WelcomeBack({ info, onGo, onClose }) {
       <div data-welcome-back="" onClick={e => e.stopPropagation()} style={{ width: "100%", borderRadius: "22px 22px 0 0", background: "#16161A", borderTop: "1px solid rgba(255,255,255,.12)", padding: "20px 18px 26px" }}>
         <div style={{ display: "flex", gap: 6, marginBottom: 10 }}>{[0, 1, 2, 3, 4].map(k => <span key={k} style={{ width: 16, height: 16, borderRadius: "50%", background: C.accent, boxShadow: "0 0 10px rgba(255,24,1,.6)" }} />)}</div>
         <h2 style={{ margin: "0 0 6px", fontFamily: F_HEAD, fontWeight: 900, fontStyle: "italic", fontSize: 24, color: C.text }}>Bentornato!</h2>
-        <p style={{ margin: 0, fontFamily: F_BODY, fontSize: 13.5, color: C.muted, lineHeight: 1.5 }}>Sei stato via {info.days} giorni: {info.news === 1 ? "1 notizia nuova" : `${info.news} notizie nuove`}{info.races ? `, ${info.races === 1 ? "1 GP corso" : `${info.races} GP corsi`}` : ""}. Il giro di oggi ti aspetta.</p>
-        <button className="press" onClick={onGo} style={{ display: "block", width: "100%", marginTop: 16, padding: "13px 0", borderRadius: 13, background: C.accent, fontFamily: F_HEAD, fontWeight: 900, fontStyle: "italic", fontSize: 15, color: "#fff" }}>Fai il giro di oggi</button>
+        <p style={{ margin: 0, fontFamily: F_BODY, fontSize: 13.5, color: C.muted, lineHeight: 1.5 }}>Sei stato via {info.days} giorni: {info.news === 1 ? "1 notizia nuova" : `${info.news} notizie nuove`}{info.races ? `, ${info.races === 1 ? "1 GP corso" : `${info.races} GP corsi`}` : ""}.{info.ps ? " Il giro di oggi ti aspetta." : ""}</p>
+        <button className="press" onClick={onGo} style={{ display: "block", width: "100%", marginTop: 16, padding: "13px 0", borderRadius: 13, background: C.accent, fontFamily: F_HEAD, fontWeight: 900, fontStyle: "italic", fontSize: 15, color: "#fff" }}>{info.ps ? "Fai il giro di oggi" : "Vedi le notizie"}</button>
         <button className="press" onClick={onClose} style={{ display: "block", width: "100%", marginTop: 8, padding: "11px 0", fontFamily: F_BODY, fontWeight: 700, fontSize: 13, color: C.muted }}>Chiudi</button>
       </div>
     </div>
@@ -9995,6 +10159,7 @@ function App() {
   const [fantaRounds, setFantaRounds] = useState([]);
   const [homePoll, setHomePoll] = useState(shared0.homePoll);    // sondaggio della Home (Premium); null = nessuno
   // 31/10: temi delle feste: comando dell'admin (shared/bt-holidays) e scelta dell'utente (Profilo; sul telefono per l'avvio).
+  const [flags, setFlags] = useState(() => shared0.flags || local.get("bt-flags-cfg") || { pitSwipe: false });   // 7/11: funzioni accese dall'admin
   const [holidayCfg, setHolidayCfg] = useState(() => shared0.holidays || local.get("bt-holidays-cfg") || { force: null, off: [] });
   const [holidaysOn, setHolidaysOn] = useState(() => local.get("bt-holidays-on") !== false);
   // Pit Swipe (1/11): dati dell'account (gusti, mazzo, serie, missioni, easter egg), opinioni dell'admin, voti veri.
@@ -10042,7 +10207,7 @@ function App() {
   const [proAsk, setProAsk] = useState(null);   // foglio "Funzione Pro": { what, then }
   const [champSeen, setChampSeen] = useState(false);
   const [payFail, setPayFail] = useState(false);   // 4/11: carta che si gira se il pagamento non va   // 2/11: schermata del campione chiusa in questa apertura
-  const proGate = (what, then) => { if (isPremium) then(); else setProAsk({ what, then }); };
+  const proGate = (what, then) => { if (proHas(what)) then(); else setProAsk({ what, then }); };   // 7/11: anche coi trofei
   // Notizie Premium sbloccate col video: restano sbloccate su questo telefono (le ultime 200).
   const [adNews, setAdNews] = useState(() => { const v = local.get("bt-ad-news"); return Array.isArray(v) ? v : []; });
   const [plan, setPlan] = useState("annual");
@@ -10253,6 +10418,7 @@ function App() {
     homePoll: keep(setHomePoll), fantaStats: keep(setFantaStats), driverPhotos: keep(setDriverPhotos), commonsPhotos: keep(setCommonsPhotos),
     trophies: keep(setTrophyCfg), holidays: v => { keep(setHolidayCfg)(v); local.set("bt-holidays-cfg", v); },
     takes: keep(setTakes),
+    flags: v => { keep(setFlags)(v); local.set("bt-flags-cfg", v); },
   };
   // Rilegge i contenuti indicati (tutti, all'avvio) e mette nello stato quelli letti davvero.
   const refreshShared = kinds => AppData.loadShared(nowMs(), kinds ? { kinds } : undefined).then(r => {
@@ -10680,6 +10846,17 @@ function App() {
     ...localNotifs,
     ...Compat.notifsFromStore(notifsRaw, notifSeenAt, nowMs()).map(n => ({ icon: "bell", bg: C.accent, stroke: "#fff", ...n })),
   ];
+  // 7/11: notifica nuova (arrivata dopo l'apertura dell'app) → goccia in alto (DropNotice), una alla volta.
+  const appOpenedAt = useRef(nowMs());
+  const dropSeenIds = useRef(new Set());
+  const [dropN, setDropN] = useState(null);
+  const dropKey = notifs.map(n => n.id + (n.unread ? "*" : "")).join("|");
+  useEffect(() => {
+    const fresh = notifs.find(n => n.unread && n.date && Date.parse(n.date) > appOpenedAt.current && !dropSeenIds.current.has(String(n.id)));
+    if (!fresh) return;
+    dropSeenIds.current.add(String(fresh.id));
+    if (view !== "notifiche") setDropN(fresh);
+  }, [dropKey]);
   const sentNotifs = Compat.notifsFromStore(notifsRaw, 0, nowMs()).map(n => ({ id: n.id, title: n.title, body: n.body, sentAt: fmtSent(n.date) }));
   const sendNotif = (title, body) => AppData.appendNotif({ title, body }, nowMs())
     .then(n => { setNotifsRaw(l => [...l, n]); return true; }, () => { showToast(NOT_SAVED); return false; });
@@ -10770,38 +10947,56 @@ function App() {
     setTabLeave(still || !last || last.id !== tab ? null : { id: tab, body: last.body, dir, from, op: drag ? drag.op : 1, to: leaveTo(from, dir, width) });
     goTab(next);
   };
-  const peeks = () => ["left", "right"].map(side => peekRef.current[side]).filter(Boolean);
+  // 7/11 (Edoardo, video di WhatsApp): la pagina segue il dito uno a uno e accanto entra la scheda vera (nb, montata
+  // appena si capisce la direzione), attaccata al bordo; la pillola rossa scorre insieme. Lasciato il dito, le due
+  // pagine finiscono la corsa insieme (più veloce se il dito era veloce) e la scheda accanto diventa quella attiva
+  // senza rimontarla (stessa key), oppure tornano a posto. Ai bordi (niente scheda accanto) resta l'elastico.
+  const [nb, setNb] = useState(null);   // { id, side: "left" | "right" }
+  const nbNow = useRef(null), nbPageRef = useRef(null), settleTimer = useRef(0);
+  useLayoutEffect(() => {
+    const box = swipeBoxRef.current, page = tabPageRef.current, pill = navPillRef.current;
+    if (box) box.style.removeProperty("--drag-x");
+    if (page) { page.style.transition = ""; page.style.transform = ""; }
+    if (pill) pill.style.removeProperty("--nav-drag");
+  }, [tab]);
+  useEffect(() => () => clearTimeout(settleTimer.current), []);
   const dragPaint = (s, dx) => {
-    const page = tabPageRef.current;
-    if (!page) return;
+    const page = tabPageRef.current, box = swipeBoxRef.current;
+    if (!page || !box) return;
     const i = TAB_IDS.indexOf(tab), j = dx < 0 ? i + 1 : i - 1, can = j >= 0 && j < TAB_IDS.length;
-    const width = page.clientWidth || 390, off = dragFollow(dx, width, can), pr = can ? dragProgress(dx, width) : 0, op = 1 - pr * 0.25;
-    s.off = off; s.op = op;
+    const width = box.clientWidth || 390, off = can ? Math.max(-width, Math.min(width, dx)) : dragFollow(dx, width, false);
+    s.off = off; s.width = width;
+    if (can && (!nbNow.current || nbNow.current.id !== TAB_IDS[j])) { nbNow.current = { id: TAB_IDS[j], side: dx < 0 ? "right" : "left" }; setNb(nbNow.current); }
     if (page.btBack) { clearTimeout(page.btBack); page.btBack = 0; }
-    page.classList.remove("tab-back");
-    page.style.transform = `translateX(${off}px)`; page.style.opacity = String(op);
-    peeks().forEach(k => {
-      const side = k.getAttribute("data-tab-peek"), show = can && (side === "right") === (dx < 0);
-      k.classList.add("dragging");
-      k.style.opacity = show ? String(Math.min(1, 0.3 + pr)) : "0";
-      k.style.transform = show ? `translateX(${off}px)` : "";
-      k.setAttribute("data-ready", show && pr >= 1 ? "1" : "");
-    });
+    page.classList.remove("tab-back", "tab-enter-left", "tab-enter-right");
+    page.style.transition = "none"; page.style.opacity = "";
+    box.style.setProperty("--drag-x", off + "px");
+    page.style.transform = "translate3d(var(--drag-x, 0px), 0, 0)";
+    if (nbPageRef.current) nbPageRef.current.style.transition = "none";
     const pill = navPillRef.current;
-    if (pill) { pill.classList.add("dragging"); pill.style.setProperty("--nav-drag", String(can ? (dx < 0 ? pr : -pr) * 0.5 : 0)); }
+    if (pill) { pill.classList.add("dragging"); pill.style.setProperty("--nav-drag", String(can ? -off / width : 0)); }
   };
-  // Fine del gesto: se non si cambia scheda la pagina torna a posto (back); la scheda accanto e la pillola sempre.
-  const dragReset = back => {
-    const page = tabPageRef.current;
-    if (page && back) {
-      page.classList.add("tab-back");
-      page.style.transform = "translateX(0px)"; page.style.opacity = "1";
-      clearTimeout(page.btBack);
-      page.btBack = setTimeout(() => { page.btBack = 0; page.classList.remove("tab-back"); page.style.transform = ""; page.style.opacity = ""; }, 320);
-    }
-    peeks().forEach(k => { k.classList.remove("dragging"); k.style.opacity = "0"; k.style.transform = ""; k.setAttribute("data-ready", ""); });
-    const pill = navPillRef.current;
-    if (pill) { pill.classList.remove("dragging"); pill.style.removeProperty("--nav-drag"); }
+  // Fine del trascinamento: fino in fondo verso next (e poi next è la scheda attiva) o di nuovo a posto (next null).
+  const dragSettle = (next, s) => {
+    const page = tabPageRef.current, box = swipeBoxRef.current, nbEl = nbPageRef.current, pill = navPillRef.current;
+    const width = (box && box.clientWidth) || s.width || 390, side = nbNow.current ? nbNow.current.side : null;
+    const target = next ? (side === "right" ? -width : width) : 0;
+    const rest = Math.abs(target - (s.off || 0)), v = Math.abs(s.vx || 0);
+    const ms = Math.round(Math.max(140, Math.min(320, v > 0.35 ? rest / v : (rest / width) * 320)));
+    const ease = `transform ${ms}ms cubic-bezier(.22,.8,.3,1)`;
+    if (page) page.style.transition = ease;
+    if (nbEl) nbEl.style.transition = ease;
+    if (box) box.style.setProperty("--drag-x", target + "px");
+    if (pill) { pill.classList.remove("dragging"); pill.style.setProperty("--nav-drag", String(next ? (side === "right" ? 1 : -1) : 0)); }
+    clearTimeout(settleTimer.current);
+    settleTimer.current = setTimeout(() => {
+      nbNow.current = null;
+      if (next) { setTabEnter(null); setTabLeave(null); setTabIn(null); setNb(null); goTab(next); return; }
+      if (page) { page.style.transition = ""; page.style.transform = ""; }
+      if (box) box.style.removeProperty("--drag-x");
+      if (pill) pill.style.removeProperty("--nav-drag");
+      setNb(null);
+    }, ms + 20);
   };
   const swipeStart = (x, y, t, target, root) => { tabSwipe.current = ownGesture(target, root) ? null : { x, y, t, still: prefersReduced(), on: false, off: 0, op: 1 }; };
   const swipeMove = (x, y) => {
@@ -10813,22 +11008,24 @@ function App() {
       if (ax < 10 || ay >= ax * SWIPE.ratio) return;
       s.on = true;
     }
-    s.dx = dx;
+    const now = performance.now();
+    if (s.pt) { const dt = now - s.pt; if (dt > 0) s.vx = 0.6 * ((x - s.px) / dt) + 0.4 * (s.vx || 0); }   // velocità del dito (px/ms)
+    s.px = x; s.pt = now; s.dx = dx;
     if (!s.raf) s.raf = requestAnimationFrame(() => { s.raf = 0; if (tabSwipe.current === s) dragPaint(s, s.dx); });
   };
   const swipeEnd = (x, y, t, width, mouse) => {
     const s = tabSwipe.current; tabSwipe.current = null;
     if (!s) return;
-    if (s.raf) { cancelAnimationFrame(s.raf); s.raf = 0; }
+    if (s.raf) { cancelAnimationFrame(s.raf); s.raf = 0; dragPaint(s, x - s.x); }
     const dir = classifySwipe({ dx: x - s.x, dy: y - s.y, dt: t - s.t, width });
     const i = TAB_IDS.indexOf(tab), j = dir === "left" ? i + 1 : i - 1, go = !!dir && j >= 0 && j < TAB_IDS.length;
-    if (s.on) dragReset(!go);
     if (mouse && (dir || s.on)) swipeClick.current = performance.now();   // il click che segue il trascinamento col mouse non apre niente
-    if (!go) return;
+    if (!go) { if (s.on) dragSettle(null, s); return; }
     fx.play("drs"); fx.buzz("drs");
-    switchTab(TAB_IDS[j], s.on ? { off: s.off, op: s.op } : null);
+    if (s.on && nbNow.current && nbNow.current.id === TAB_IDS[j]) dragSettle(TAB_IDS[j], s);
+    else { if (s.on) dragSettle(null, s); switchTab(TAB_IDS[j], null); }   // colpo veloce senza trascinare: come il tocco sulla barra
   };
-  const swipeCancel = () => { const s = tabSwipe.current; tabSwipe.current = null; if (s && s.raf) cancelAnimationFrame(s.raf); if (s && s.on) dragReset(true); };
+  const swipeCancel = () => { const s = tabSwipe.current; tabSwipe.current = null; if (s && s.raf) cancelAnimationFrame(s.raf); if (s && s.on) dragSettle(null, s); };
   const unreadCount = notifs.filter(n => n.unread).length;
 
   const castVote = (pollId, optionId) => {
@@ -11060,7 +11257,8 @@ function App() {
     if (userDataWait()) { setPremiumOpen(false); return; }
     if (subscribing) return;
     setSubscribing(true);
-    Billing.buy("premium", { email: account && account.email, token: account && account.aid, sale: holidaySale ? holidaySale.id : null }).then(r => {
+    const monthly = plan === "month";   // 7/11: Mensile o Stagione (lo sconto della festa vale solo per la Stagione)
+    Billing.buy("premium", { email: account && account.email, token: account && account.aid, plan: monthly ? "month" : "season", sale: holidaySale && !monthly ? holidaySale.id : null }).then(r => {
       if (r.ok && r.via === "play") {
         setSubscribing(false); setSubscribed(true); fx.play("done"); fx.buzz("success");
         setPremium(p => ({ ...p, sub: true, src: "play", at: nowMs(), trial: p.trial ? { ...p.trial, converted: true } : null }));
@@ -11344,7 +11542,9 @@ function App() {
   const psTrophies = trophyList.filter(t => trophies[t.id]).length;
   const psLevel = BtSwipe.levelOf(BtSwipe.xpOf(swipe.tot || {}, psTrophies));
   const psNextText = (() => { const h = Number(new Intl.DateTimeFormat("en-GB", { timeZone: "Europe/Rome", hour: "2-digit", hourCycle: "h23" }).format(new Date(nowMs()))); return h < 8 ? "oggi alle 8:00" : "domani alle 8:00, o dopo la prossima sessione"; })();
+  const pitSwipeOn = !!(flags && flags.pitSwipe);   // 7/11 (Edoardo): Pit Swipe c'è solo se l'admin lo accende
   const openPitSwipe = () => {
+    if (!pitSwipeOn) return;
     if (!psDeck) setSwipe(s => ({ ...s, deck: { key: psKey, cards: psFresh.map(c => ({ k: c.kind, id: c.id })), i: 0, acts: {}, hist: [], seen: [], fast: null, done: false, ok: 0 } }));
     setPsRes(null); setView("pitswipe");
   };
@@ -11464,7 +11664,7 @@ function App() {
   const onboardSteps = [
     { id: "pilota", text: "Scegli il tuo pilota del cuore", done: !!favDriver, go: () => setPicker("driver") },
     { id: "squadra", text: "Fai la tua squadra del FantaF1", done: !!(trophyProg.griglia && trophyProg.griglia.done), go: () => goTab("fanta") },
-    { id: "giro", text: "Fai il primo giro di Pit Swipe", done: ((swipe.tot || {}).decks || 0) > 0, go: () => openPitSwipe() },
+    ...(pitSwipeOn ? [{ id: "giro", text: "Fai il primo giro di Pit Swipe", done: ((swipe.tot || {}).decks || 0) > 0, go: () => openPitSwipe() }] : []),
   ];
   const onboardShow = !guest && userLoaded === userEmail && swipe.onb !== "off" && onboardSteps.some(x => !x.done);
   // Bentornato: via da più di 7 giorni (ultima apertura sul telefono, bt-last-seen).
@@ -11559,7 +11759,18 @@ function App() {
   const fantaSeason = FantaSeason.seasonPoints({ log: squadLog, rounds: fantaRounds, lockOf: fantaLockOf });
   const fantaReal = new Set(fantaRounds.map(r => r.round));
   const fantaLive = fantaWeekends.filter(w => { const r = races.find(x => x.id === w.raceId); return !(r && fantaReal.has(r.round)); });
+  // 7/11: funzioni Pro sbloccate per sempre coi trofei (src/logic/trophypro.js), oltre a Premium e al video.
+  const trophyEarned = trophyList.filter(t => trophies[t.id]).map(t => t.id);
+  const trophyPro = BtTrophyPro.proUnlocked(trophyEarned);
+  const proHas = what => isPremium || trophyPro.includes(what);
+  const proHintOf = what => (isPremium ? null : BtTrophyPro.proHint(what, trophyEarned, id => (trophyList.find(t => t.id === id) || { name: id }).name));
   const leagueRows = leagues.map(l => ({ ...l, members: FantaL.standings(l, fantaRounds, fantaLockOf) }));
+  // 7/11: ELO del FantaF1 (src/logic/elo.js) di tutti quelli delle mie leghe, coi punti veri GP per GP.
+  const fantaElo = (() => {
+    const seen = new Map();
+    leagues.forEach(l => (l.members || []).forEach(m => { if (!seen.has(m.aid)) seen.set(m.aid, { id: m.aid, rounds: FantaSeason.seasonPoints({ log: m.log, rounds: fantaRounds, lockOf: fantaLockOf }).rounds }); }));
+    return BtElo.fantaElo([...seen.values()]);
+  })();
   const fantaSessions = fantaRace && CIRCUIT_INFO[fantaRace.circuitId] ? CIRCUIT_INFO[fantaRace.circuitId].weekend || [] : [];
   const teamLockInfo = BtLogic.teamLock({ sessions: fantaSessions, now: nowMs() });   // solo l'ora vera: la prova DEMO non blocca (D23)
   // Previsioni sul weekend: si chiudono all'inizio della sessione a cui si riferiscono (o quando l'admin segna la risposta).
@@ -11594,7 +11805,7 @@ function App() {
   if (view === "article" && activeArticle) body = <ArticleScreen article={activeArticle} onBack={viewBack.article} isPremium={isPaid || adNews.includes(activeArticle.id)} onAdUnlock={Ads.canReward() ? () => watchAdNews(activeArticle.id) : null} adBusy={adBusy} onPremium={() => setPremiumOpen(true)} onTag={filterByTag} saved={saved.includes(activeArticle.id)} onToggleSave={() => toggleSave(activeArticle.id)} onShare={() => setShareId(activeArticle.id)} vote={votes["art-" + activeArticle.id] || null} onVote={castVote} />;
   else if (view === "circuit" && circuitId) body = <CircuitScreen circuitId={circuitId} races={races} articles={articles} onBack={viewBack.circuit} onTag={filterByTag} onOpenArticle={openArticle} />;
   else if (view === "adminLock") body = <AdminKeypad onOk={() => { setAdminUnlocked(true); setView("admin"); }} onCancel={viewBack.adminLock} />;
-  else if (view === "admin" && adminUnlocked && Account.isAdmin()) body = <AdminScreen takes={takes} onTakes={v => commitShared("takes", () => v).then(ok => { if (ok) showToast("Opinioni salvate"); })} holidayCfg={holidayCfg} holiday={holiday} onHolidays={v => commitShared("holidays", () => v).then(ok => { if (ok) showToast("Temi delle feste salvati"); })} photos={commonsPhotos} setPhotos={adminSet.commonsPhotos} silly={sillyOfficial} onSilly={officialSeat} highlights={highlights} setHighlights={adminSet.highlights} onBack={viewBack.admin} onPublish={publishArticle} articles={articles} setArticles={adminSet.articles} fantaStats={fantaStats} setFantaStats={adminSet.fantaStats} standings={standings} setStandings={adminSet.standings} races={races} setRaces={adminSet.races} extraRaces={racesDoc.extra} setExtraRaces={adminSet.extraRaces} ig={ig} setIg={adminSet.ig} sentNotifs={sentNotifs} onSendNotif={sendNotif} onDeleteNotif={deleteNotif} onToast={showToast} tab={adminTab} setTab={setAdminTab} chats={chats} reports={reports} banned={banned} onDeleteMsg={deleteChatMsg} onSuspend={suspendUser} onUnsuspend={unsuspendUser} onIgnoreReport={ignoreReport} liveProps={liveProps} polls={allPolls} votes={votes} onPollAnswer={setPollAnswer} predictions={predictions} setPredictions={adminSet.predictions} predAnswers={predAnswers} />;
+  else if (view === "admin" && adminUnlocked && Account.isAdmin()) body = <AdminScreen flags={flags} onFlags={v => commitShared("flags", () => v).then(ok => { if (ok) showToast(v.pitSwipe ? "Pit Swipe acceso per tutti" : "Pit Swipe spento per tutti"); })} takes={takes} onTakes={v => commitShared("takes", () => v).then(ok => { if (ok) showToast("Opinioni salvate"); })} holidayCfg={holidayCfg} holiday={holiday} onHolidays={v => commitShared("holidays", () => v).then(ok => { if (ok) showToast("Temi delle feste salvati"); })} photos={commonsPhotos} setPhotos={adminSet.commonsPhotos} silly={sillyOfficial} onSilly={officialSeat} highlights={highlights} setHighlights={adminSet.highlights} onBack={viewBack.admin} onPublish={publishArticle} articles={articles} setArticles={adminSet.articles} fantaStats={fantaStats} setFantaStats={adminSet.fantaStats} standings={standings} setStandings={adminSet.standings} races={races} setRaces={adminSet.races} extraRaces={racesDoc.extra} setExtraRaces={adminSet.extraRaces} ig={ig} setIg={adminSet.ig} sentNotifs={sentNotifs} onSendNotif={sendNotif} onDeleteNotif={deleteNotif} onToast={showToast} tab={adminTab} setTab={setAdminTab} chats={chats} reports={reports} banned={banned} onDeleteMsg={deleteChatMsg} onSuspend={suspendUser} onUnsuspend={unsuspendUser} onIgnoreReport={ignoreReport} liveProps={liveProps} polls={allPolls} votes={votes} onPollAnswer={setPollAnswer} predictions={predictions} setPredictions={adminSet.predictions} predAnswers={predAnswers} />;
   else if (view === "chatThread" && activeChat) body = <ChatThreadScreen since={chatSince(activeChat && activeChat.id)} chat={activeChat} onBack={viewBack.chatThread} onSend={guest ? () => needLogin("Per scrivere in chat serve un account.") : sendMessage} isPremium={isPremium} blocked={blocked} onReport={guest ? () => needLogin("Per segnalare un messaggio serve un account.") : reportMessage} onBlock={blockUser} onReact={guest ? () => needLogin("Per reagire ai messaggi serve un account.") : reactMessage} trophyList={trophyList} myWon={trophies} pendingLink={pendingLink} onPendingUsed={() => setPendingLink(null)} onOpenLink={openLink} liveRace={races.find(r => r.status === "LIVE") || null} />;
   else if (view === "instagram") body = <InstagramView ig={ig} onToast={showToast} onBack={viewBack.instagram} />;
   else if (view === "ghost") body = <GhostLap key={ghostInit ? JSON.stringify(ghostInit) : "ghost"} init={ghostInit} onBack={viewBack.ghost} />;
@@ -11612,21 +11823,26 @@ function App() {
     fanLevel={guest ? null : { level: psLevel, xp: BtSwipe.xpOf(swipe.tot || {}, psTrophies), missions: psMissions }}
     reminders={notifPrefs.reminders !== false} onReminders={guest ? null : v => { if (userDataWait()) return; setNotifPrefs(x => ({ ...x, reminders: v })); fx.play("tick"); }} />;
   else if (view === "notifiche") body = <NotificheScreen offline={offline} onBack={viewBack.notifiche} onAction={a => { if (a === "feedback") { if (feedbackAsk && !feedbackAsk.read) saveAsk({ ...feedbackAsk, read: true }); setFeedbackOpen(true); } }} notifs={notifs} onReadAll={readAll} isPremium={isPremium} onPremium={() => setPremiumOpen(true)} favTeam={favTeam} favDriver={favDriver} prefs={notifPrefs} onPrefs={v => { if (!userDataWait()) setNotifPrefs(v); }} onGoProfilo={() => setView("profilo")} />;
-  else {
+  else body = tabBodyFor(tab);
+  // 7/11: il contenuto di una scheda della barra (anche di quella accanto, che si vede durante lo swipe come su WhatsApp).
+  function tabBodyFor(tab) {
+    let body = null;
     if (tab === "home") body = <HomeScreen holidayTop={holiday ? <HolidayCard id={holiday} onOpen={holidayOpen(holiday)} /> : null}
       pitSwipe={<>
         {onboardShow && <OnboardCard steps={onboardSteps} onHide={() => setSwipe(s => ({ ...s, onb: "off" }))} />}
+        {pitSwipeOn && <PitSwipeCard info={{ total: psCards.length, i: psDeck ? psDeck.i : 0, done: !!(psDeck && psDeck.done), streak: psStreak, level: psLevel, missions: psMissions, nextText: psNextText }} onOpen={openPitSwipe} />}
         {duelList.length > 0 && <DuelsCard duels={duelList} onPlay={playDuel} />}
       </>} ig={ig} highlights={highlights} onOpenIg={() => { setIgFrom("tab"); setView("instagram"); }} articles={articles} tagFilter={tagFilter} onTag={filterByTag} onClearTag={() => setTagFilter(null)} onOpenArticle={openArticle} isPremium={isPremium} onPremium={() => setPremiumOpen(true)} onToast={showToast} onLiveTrack={() => setLiveTrackOpen(true)} onGoFanta={() => goTab("fanta")}  saved={saved} onToggleSave={toggleSave} savedOnly={savedOnly} setSavedOnly={setSavedOnly} onOpenCircuit={openCircuit} homePoll={homePoll} homeVote={votes.home || null} onVote={castVote}
       hidden={hidden} onHide={hideArticle} onUnhideAll={() => { if (!userDataWait()) setHidden([]); }} onSwipeSave={saveFromSwipe}
       onRefresh={() => refreshShared(["news", "highlights", "ig", "homePoll"]).catch(() => {})} />;
-    else if (tab === "race") body = <RaceScreen champion={champion} proOk={isPremium} onProAd={Ads.canReward() ? () => watchAdPro() : null} proBusy={adBusy} onStandingsEnd={isPaid ? null : Ads.standingsEnd} favDriver={favDriver} dotdVote={live ? votesNow.dotd[live.raceId] : null} onDotdVote={(k, id) => live && voteDotd(live.raceId, k, id)} ratings={votesNow.ratings} onRate={rateDriver} onOpenChats={() => setView("chats")} onOpenGhost={() => setView("ghost")} races={races} standings={shownStandings} isPremium={isPremium} onPremium={() => setPremiumOpen(true)} onSelectDriver={setSelectedDriver} live={live} liveSt={liveSt} onExpandMap={() => setLiveTrackOpen(true)} onTelemetry={(carId, lapNo, sector) => proGate("telemetry", () => setTelemetry({ carId, lapNo, sector }))} onOpenCircuit={openCircuit} wxGuess={wxGuess} wxResult={wxResult} onGuessWeather={guessWeather} onLapTimes={id => proGate("laps", () => setLapList(id))} onSecondScreen={() => proGate("ss", () => setSsOpen(true))} lastRace={lastRace} of1={of1} onOf1Refresh={() => of1TickRef.current && of1TickRef.current(true)} of1Sessions={of1Sessions}
+    else if (tab === "race") body = <RaceScreen champion={champion} proOk={isPremium} proUnlocked={trophyPro} proHint={proHintOf} onProAd={Ads.canReward() ? () => watchAdPro() : null} proBusy={adBusy} onStandingsEnd={isPaid ? null : Ads.standingsEnd} favDriver={favDriver} dotdVote={live ? votesNow.dotd[live.raceId] : null} onDotdVote={(k, id) => live && voteDotd(live.raceId, k, id)} ratings={votesNow.ratings} onRate={rateDriver} onOpenChats={() => setView("chats")} onOpenGhost={() => setView("ghost")} races={races} standings={shownStandings} isPremium={isPremium} onPremium={() => setPremiumOpen(true)} onSelectDriver={setSelectedDriver} live={live} liveSt={liveSt} onExpandMap={() => setLiveTrackOpen(true)} onTelemetry={(carId, lapNo, sector) => proGate("telemetry", () => setTelemetry({ carId, lapNo, sector }))} onOpenCircuit={openCircuit} wxGuess={wxGuess} wxResult={wxResult} onGuessWeather={guessWeather} onLapTimes={id => proGate("laps", () => setLapList(id))} onSecondScreen={() => proGate("ss", () => setSsOpen(true))} lastRace={lastRace} of1={of1} onOf1Refresh={() => of1TickRef.current && of1TickRef.current(true)} of1Sessions={of1Sessions}
       onOf1Pick={key => { of1PickRef.current = key === of1Sessions.latest ? null : key; setOf1Sessions(x => ({ ...x, shown: key })); if (of1TickRef.current) of1TickRef.current(true); }}
       sessionNote={of1Live && of1Live.raw && !of1Live.raw.laps.length && of1Live.raw.session_result.length ? "I tempi giro per giro non sono ancora su OpenF1 (arrivano qualche ora dopo la fine): intanto la classifica con il miglior giro di ognuno." : null} replay={replayCtl} />;
     else if (tab === "garage") body = <GarageScreen openGame={garageGame} onGameOpened={() => setGarageGame(null)} races={races} pitBest={pitBest} onPitResult={t => {
       if (activeDuel && myAid) { const id = activeDuel; setActiveDuel(null); Duels.reply({ id, aid: myAid, time: t }).then(item => { setDuelsArr(a => [...a, item]); showToast("Sfida giocata: risultato in Home"); }, () => showToast("Risposta alla sfida non inviata")); }
       if (!userDataWait()) { setPitBest(b => b == null || t < b ? t : b); psBump("pit"); } }} sillyPreds={sillyPreds} onPredict={predictSeat} sillyOfficial={sillyOfficial} live={live} stratPreds={stratPreds} onStrat={(id, st) => { if (!userDataWait()) setStratPreds(x => ({ ...x, [id]: { stints: st, at: nowMs() } })); }} bluffTags={bluffNow} onBluffRefresh={loadBluffTags} />;
-    else if (tab === "fanta") body = <FantaScreen standings={shownStandings} squad={squad} setSquad={setSquad} base={squadBase} freeTransfers={freeTransfers} budget={FANTA_BUDGET} stats={fantaStats} race={fantaRace} lock={teamLockInfo} weekends={fantaLive} isPremium={isPremium} onPremium={() => setPremiumOpen(true)} onToast={showToast} bonus={bonus} leagues={leagueRows} seasonPts={fantaSeason.total} realWeek={fantaRace ? fantaSeason.rounds.find(r => r.round === fantaRace.round) || null : null} meAid={account ? account.aid : null} onCreateLeague={createLeague} onJoinLeague={joinLeague} onLeaveLeague={leaveLeague} onRenameLeague={renameLeague} needAccount={needAccount} predictions={predictionsOpen} predAnswers={predAnswers} predLockOf={predLockOf} onAnswerPrediction={answerPrediction} />;
+    else if (tab === "fanta") body = <FantaScreen standings={shownStandings} squad={squad} setSquad={setSquad} base={squadBase} freeTransfers={freeTransfers} budget={FANTA_BUDGET} stats={fantaStats} race={fantaRace} lock={teamLockInfo} weekends={fantaLive} isPremium={isPremium} onPremium={() => setPremiumOpen(true)} onToast={showToast} bonus={bonus} leagues={leagueRows} elo={fantaElo} seasonPts={fantaSeason.total} realWeek={fantaRace ? fantaSeason.rounds.find(r => r.round === fantaRace.round) || null : null} meAid={account ? account.aid : null} onCreateLeague={createLeague} onJoinLeague={joinLeague} onLeaveLeague={leaveLeague} onRenameLeague={renameLeague} needAccount={needAccount} predictions={predictionsOpen} predAnswers={predAnswers} predLockOf={predLockOf} onAnswerPrediction={answerPrediction} />;
+    return body;
   }
 
   const showTopHeader = view === "tab";
@@ -11636,7 +11852,11 @@ function App() {
   const tabPages = () => {
     tabBody.current = { id: tab, body };
     const leave = tabLeave && tabLeave.id !== tab ? tabLeave : null;
-    return TAB_IDS.filter(id => id === tab || (leave && id === leave.id)).map(id => (id === tab
+    const near = nb && view === "tab" && nb.id !== tab && (!leave || leave.id !== nb.id) ? nb : null;
+    return TAB_IDS.filter(id => id === tab || (leave && id === leave.id) || (near && id === near.id)).map(id => (near && id === near.id
+      ? <div key={"tab-" + id} ref={nbPageRef} data-tab-page={id} data-tab-neighbor={near.side} inert="true" aria-hidden="true"
+          style={{ position: "absolute", top: 0, left: 0, width: "100%", height: "100%", transform: `translate3d(calc(${near.side === "right" ? "100%" : "-100%"} + var(--drag-x, 0px)), 0, 0)` }}>{tabBodyFor(id)}</div>
+      : id === tab
       ? <div key={"tab-" + id} ref={tabPageRef} data-tab-page={id} data-tab-enter={tabEnter || undefined} className={tabEnter ? "tab-enter-" + tabEnter : undefined} style={{ height: "100%", "--tab-in": tabEnter && tabIn != null ? tabIn + "px" : undefined }}>{body}</div>
       : <div key={"tab-" + id} data-tab-page={id} data-tab-leave={leave.dir} className="tab-leave" inert="true" aria-hidden="true"
           style={{ "--tab-from": leave.from + "px", "--tab-from-op": leave.op, "--tab-to": leave.to + "px" }}
@@ -11657,9 +11877,6 @@ function App() {
           onPointerUp={showBottomNav ? e => { if (e.pointerType === "mouse") swipeEnd(e.clientX, e.clientY, e.timeStamp, e.currentTarget.clientWidth, true); } : undefined}
           onClickCapture={e => { if (performance.now() - swipeClick.current < 400) { e.stopPropagation(); e.preventDefault(); } }}>
           <ChatShare.Provider value={chatShareCtx}>{showBottomNav ? tabPages() : <div key="view" style={{ height: "100%" }}>{body}</div>}</ChatShare.Provider>
-          {/* Una per scheda accanto (key): cambiata scheda non resta il nome di quella di prima mentre svanisce. */}
-          {showBottomNav && <TabPeek key={"peek-left-" + tab} side="left" tab={TABS[TAB_IDS.indexOf(tab) - 1]} peekRef={el => { peekRef.current.left = el; }} />}
-          {showBottomNav && <TabPeek key={"peek-right-" + tab} side="right" tab={TABS[TAB_IDS.indexOf(tab) + 1]} peekRef={el => { peekRef.current.right = el; }} />}
         </div>
         {miniPitShow && <MiniPitBoard st={liveSt} driverId={favDriver} onOpen={() => { setView("tab"); if (tab !== "race") switchTab("race"); }} onClose={() => { setMiniPitHidden(miniPitKey); fx.play("tick"); }} onEgg={psEgg} />}
         {/* 29/10: lo swipe cambia scheda anche partendo dalla barra in basso. */}
@@ -11685,13 +11902,13 @@ function App() {
           onTrick={() => { setPumpkinStep(null); setTrickOn(true); fx.play("howl"); fx.buzz("error"); setTimeout(() => setTrickOn(false), 2200); }}
           onWear={() => { if (userDataWait()) return; setHelmet({ ...PUMPKIN_HELMET, number: helmet && helmet.number != null ? helmet.number : null }); setPumpkinStep(null); showToast("Casco Zucca messo"); fx.play("clack"); }} />}
         {trickOn && <div data-trick="" role="status" className="hol-trick" style={{ position: "absolute", left: 0, right: 0, top: 0, zIndex: 770, padding: "16px 16px 14px", background: FLAG_UI.yellow.color, color: FLAG_UI.yellow.ink, textAlign: "center", fontFamily: F_HEAD, fontWeight: 900, fontStyle: "italic", fontSize: 17, letterSpacing: .6, boxShadow: "0 8px 24px rgba(0,0,0,.5)" }}>BANDIERA GIALLA… SCHERZETTO!</div>}
-        {premiumOpen && <PremiumModal sale={playPrices.sale && holidaySale && playPrices.sale.id === holidaySale.id ? { ...holidaySale, price: playPrices.sale.price, color: HOL[holidaySale.id].color } : null} playPrice={playPrices.premium || null} onClose={closePremium} isPremium={isPremium} plan={plan} setPlan={setPlan} onSubscribe={doSubscribe} subscribing={subscribing} subscribed={subscribed} trialUsed={!!trial} onTrial={doTrial} trial={trial} onAdPro={Ads.canReward() ? () => watchAdPro() : null} adBusy={adBusy} />}
+        {premiumOpen && <PremiumModal races={races} playMonth={playPrices.premiumMonth || null} monthOk={Billing.where() !== "play" || !!playPrices.premiumMonth} sale={playPrices.sale && holidaySale && playPrices.sale.id === holidaySale.id ? { ...holidaySale, price: playPrices.sale.price, color: HOL[holidaySale.id].color } : null} playPrice={playPrices.premium || null} onClose={closePremium} isPremium={isPremium} plan={plan} setPlan={setPlan} onSubscribe={doSubscribe} subscribing={subscribing} subscribed={subscribed} trialUsed={!!trial} onTrial={doTrial} trial={trial} onAdPro={Ads.canReward() ? () => watchAdPro() : null} adBusy={adBusy} />}
         {selectedDriver && <DriverDetailModal driver={selectedDriver} lastRace={lastRace} races={races} onClose={() => setSelectedDriver(null)} />}
         {liveTrackOpen && <LiveMapView race={live ? races.find(r => r.id === live.raceId) : weekendRace(races)} live={live} st={liveSt} onClose={() => setLiveTrackOpen(false)} />}
         {ssOpen && <SecondScreen chat={chats.find(c => c.id === "generale")} blocked={blocked} onChatSend={guest ? () => needLogin("Per scrivere in chat serve un account.") : t => sendMessage("generale", t)} race={live ? races.find(r => r.id === live.raceId) : weekendRace(races)} live={live} st={liveSt} standings={shownStandings} layout={ssLayout} setLayout={setSsLayout} prefs={ssPrefs} setPrefs={setSsPrefs} vote={live ? votesNow.dotd[live.raceId] || {} : {}} onVote={(k, id) => live && voteDotd(live.raceId, k, id)} notice={notice} onCloseNotice={nextNotice} onClose={() => setSsOpen(false)} />}
         {payFail && <PayFailCard onDone={() => setPayFail(false)} />}
         {champShow && <ChampionTakeover champ={champion} onClose={() => { local.set(champKey, true); setChampSeen(true); }} />}
-        {proAsk && <ProGateSheet what={proAsk.what} busy={adBusy} onAd={Ads.canReward() ? () => watchAdPro(proAsk.then) : null} onPremium={() => { setProAsk(null); setPremiumOpen(true); }} onClose={() => setProAsk(null)} />}
+        {proAsk && <ProGateSheet what={proAsk.what} hint={proHintOf(proAsk.what)} busy={adBusy} onAd={Ads.canReward() ? () => watchAdPro(proAsk.then) : null} onPremium={() => { setProAsk(null); setPremiumOpen(true); }} onClose={() => setProAsk(null)} />}
         {lapList && live && liveSt && <LapTimesModal live={live} st={liveSt} carId={lapList} onOpenLap={n => setTelemetry({ carId: lapList, lapNo: n, sector: 0 })} onClose={() => setLapList(null)} />}
         {telemetry && live && liveSt && <TelemetryModal live={live} st={liveSt} carId={telemetry.carId} lapNo={telemetry.lapNo} sector={telemetry.sector} onClose={() => setTelemetry(null)} />}
         {infoModal && <InfoModal title={infoModal.title} body={infoModal.body} extra={infoModal.credits ? <CommonsCredits /> : null} onClose={() => setInfoModal(null)} />}
@@ -11708,7 +11925,8 @@ function App() {
         {toast && <div className="toast" style={showBottomNav && adH > 0 ? { bottom: 104 + adH + AD_GAP } : undefined}>{toast}</div>}
         {notice && !ssOpen && <LiveNotice n={notice} onClose={nextNotice} />}
         {trophyNotice && <TrophyNotice n={trophyNotice} />}
-        {welcome && <WelcomeBack info={welcome} onClose={() => setWelcome(null)} onGo={() => { setWelcome(null); openPitSwipe(); }} />}
+        {dropN && view !== "notifiche" && <DropNotice key={dropN.id} n={dropN} onClose={() => setDropN(null)} onOpen={() => { setDropN(null); setView("notifiche"); }} />}
+        {welcome && <WelcomeBack info={{ ...welcome, ps: pitSwipeOn }} onClose={() => setWelcome(null)} onGo={() => { setWelcome(null); if (pitSwipeOn) openPitSwipe(); else goTab("home"); }} />}
       </div>
   );
 }

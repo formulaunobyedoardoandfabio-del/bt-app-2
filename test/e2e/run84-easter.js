@@ -1,7 +1,9 @@
 // Easter egg nuovi (1/11, design docs/design/pit-swipe.html): Donuts, Limiti della pista, Pioggia vera, Launch control,
 // Radio in chat, Il muretto risponde; con tutti e sei il trofeo segreto "Ingegnere di pista".
 // Uso: node test/build-test.js && node test/e2e/run84-easter.js [filtro]
-const { open, w, norm, inner, has, tapText, tapSel, goTab, login, openAdmin, assert, run } = require('./helpers');
+const { open: open0, w, norm, inner, has, tapText, tapSel, goTab, login, openAdmin, assert, run } = require('./helpers');
+// 7/11: Pit Swipe è spento di serie e si accende dall'admin (shared/bt-flags): queste prove lo accendono.
+const open = (b, o = {}) => open0(b, { ...o, seed: { ...(o.seed || {}), addDocs: { 'shared/bt-flags': { pitSwipe: true }, ...((o.seed || {}).addDocs || {}) } } });
 
 const art = (id, date) => ({ id, title: 'Notizia ' + id, summary: 'Riassunto ' + id, category: 'GARA', author: 'Team B&T', image: '', published: true, date, content: 'Testo ' + id });
 const NEWS = { 'shared/bt-news': { __arr: ['n1', 'n2', 'n3', 'n4', 'n5', 'n6'].map((id, i) => art(id, `2026-10-0${7 - i}T09:00:00Z`)) } };

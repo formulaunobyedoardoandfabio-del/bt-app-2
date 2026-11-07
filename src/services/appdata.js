@@ -65,12 +65,16 @@ const SHARED_DOCS = {
   "bt-commons-photos": { drivers: {}, cars: {}, logos: {} },   // Tappa 3 (G30): foto di Commons scelte dall'admin
   "bt-trophies": null,                    // 25/10: trofei cambiati da Firebase (niente documento: quelli di serie)
   "bt-holidays": { force: null, off: [] }, // 31/10: temi delle feste: force = tema acceso sempre, off = temi spenti
-  "bt-takes": [],                          // 1/11: opinioni di Pit Swipe scritte dall'admin [{ id, text, on, at }]
+  "bt-takes": [],
+  "bt-flags": { pitSwipe: false },         // 7/11: funzioni accese dall'admin (Pit Swipe spento di serie)                          // 1/11: opinioni di Pit Swipe scritte dall'admin [{ id, text, on, at }]
 };
 // Opinioni di Pit Swipe: solo quelle con id e testo, al massimo 140 caratteri, le più nuove prima, al massimo 60.
 const cleanTakes = v => (Array.isArray(v) ? v : []).filter(t => isObj(t) && typeof t.id === "string" && /^[A-Za-z0-9_-]{1,40}$/.test(t.id) && typeof t.text === "string" && t.text.trim())
   .map(t => ({ id: t.id, text: t.text.trim().slice(0, 140), on: t.on !== false, at: Number(t.at) || 0 }))
   .sort((a, b) => b.at - a.at).slice(0, 60);
+
+// 7/11: funzioni accese dall'admin; ogni valore che non è true è spento.
+const cleanFlags = v => ({ pitSwipe: !!(isObj(v) && v.pitSwipe === true) });
 
 // Ogni contenuto dell'app (nome dello stato della 2.0) → i suoi documenti e le conversioni.
 // from(documenti, ora) dà il valore per l'app; to(valore) dà i documenti da scrivere (null = documento da cancellare).
@@ -100,6 +104,7 @@ const KINDS = {
   // 31/10: temi delle feste comandati dall'admin (src/logic/holidays.js).
   holidays: { docs: ["bt-holidays"], from: d => H.cleanConfig(d["bt-holidays"]), to: v => ({ "bt-holidays": H.cleanConfig(v) }) },
   takes: { docs: ["bt-takes"], from: d => cleanTakes(d["bt-takes"]), to: v => ({ "bt-takes": cleanTakes(v) }) },
+  flags: { docs: ["bt-flags"], from: d => cleanFlags(d["bt-flags"]), to: v => ({ "bt-flags": cleanFlags(v) }) },
 };
 
 // Dati personali dell'account (users/<email>.app2): ognuno vede e modifica solo i suoi.

@@ -582,3 +582,36 @@ Da fare:
   data; se si cambia l'anno col manettino del profilo la data intera diventa null.
 - Prove: run88-nascita (nuova), run31 aggiornata (la data si scrive), unit account/compat con casi nuovi.
   Verificato: check/sem, unit account e compat, run31, run88, run87, run14, run69, run40, run86, run16, run15 verdi.
+
+## 7/11 pomeriggio: notifiche, notizie, ELO, swipe come WhatsApp, Premium e trofei, Pit Swipe dall'admin
+- Notifiche (video del 4/11): "Flip Down" sugli avvisi in alto (.live-notice: giro veloce, ritiro, trofeo; in Diretta il
+  posto usa translate, il transform è dell'animazione) e "Gooey Drop" (DropNotice) per una notifica nuova arrivata dopo
+  l'apertura dell'app (data > appOpenedAt): goccia → pillola in alto, tocco = Notifiche, sparisce in 5,2 s.
+- Notizie (Home), rifatte su richiesta di Edoardo (prompt corretto + video di riferimento): elenco verticale con le
+  schede orizzontali di sempre (niente griglia, niente pizzico: tolti), "ULTIM'ORA" sulla notizia in evidenza se ha meno
+  di 3 ore, dietro al feed una luce del colore della notizia che stai guardando (colore del primo hashtag, due strati
+  .news-amb che si danno il cambio con l'opacità, data-news-ambient), schede che entrano salendo mentre arrivano dal basso
+  (IntersectionObserver → .news-in, con translate/scale così il transform resta dello swipe della riga), articolo che
+  entra salendo (.article-in).
+- FantaF1: ELO come negli scacchi (src/logic/elo.js, regola nel commento e nell'app con "Come si calcola"): parte da 1200,
+  ogni GP confronti a coppie coi membri delle mie leghe, K 40/24/16, fasce Esordiente → Leggenda. FantaEloCard nel Fanta,
+  "ELO n" nella classifica della lega. Solo punti veri dei GP (Jolpica), niente bonus dei pronostici.
+- Swipe tra le schede come WhatsApp: la pagina segue il dito 1:1, accanto la scheda vera (data-tab-neighbor, montata
+  quando si capisce la direzione, stessa key: lasciato il dito diventa la scheda attiva senza rimontarla), pillola che
+  scorre insieme, fine corsa con la velocità del dito; elastico ai bordi. Tocco sulla barra: entrata e uscita con lo
+  stesso passo (.28s). Via le icone ai lati (TabPeek resta nel codice, non usata). tabBodyFor(tab) dà il corpo di una scheda.
+- Funzioni Pro coi trofei (src/logic/trophypro.js): tempi sul giro 3 trofei + "Pit crew", gomme 5 + "Griglia completa",
+  radio 8 + "Radio aperta", telemetria 11 + "Oracolo", Second Screen 14 + "Pit stop perfetto". proGate e RaceScreen
+  (proUnlocked) le aprono; il lucchetto dice cosa manca (proHint); nel Profilo "FUNZIONI PRO COI TROFEI".
+- Premium rifatto (regole di Edoardo): titolo sul risultato, griglia della stagione (SeasonGrid), 3 icone con 2 parole,
+  Stagione già scelta con "RISPARMI x%" e prezzo al mese, Mensile come alternativa (MONTH_PRICE 0,99 €), cosa succede
+  dopo la prova, un solo colore. Mensile vero: piano base "mese" dell'abbonamento premium_stagione nella Play Console
+  (se manca, nell'APK il Mensile non si vede) e STRIPE_PRICE_PREMIUM_MONTH su Vercel per il sito (se manca: "config").
+- Pit Swipe spento di serie: interruttore in Admin → FUNZIONI (shared/bt-flags { pitSwipe }); spento non c'è la scheda
+  in Home, né il passo dei primi passi, né il giro nel "Bentornato". Prove di Pit Swipe lo accendono nel seed.
+- Prove: run88-nascita (Pit Swipe admin, goccia, notizie, ELO/trofei/Premium), run71 aggiornata allo swipe nuovo, run60
+  (manettino provato in "Su di te", la registrazione ha la data),
+  run20/83/84/85 col Pit Swipe acceso, run86 col titolo nuovo, unit elo, trophypro, billing (Mensile), payments-api.
+- Verificato il 7/11: check/sem, unit elo, trophypro, billing, payments-api, appdata; run71 (10/10), run88 (notizie e
+  le altre), run20/83/84/85 col Pit Swipe acceso. Il giro completo (all.sh) è stato fermato da Edoardo a 77 file su 104:
+  fino lì falliva solo run60 (aggiornata dopo, non rigirata). Da rifare: JOBS=2 bash test/all.sh.
