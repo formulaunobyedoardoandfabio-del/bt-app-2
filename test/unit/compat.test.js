@@ -285,6 +285,8 @@ t('account vecchio senza about: profilo con about a null e nessun errore', () =>
 t('profileFromStore: tiene gli anni da tifoso esatti (years) se ci sono', () => {
   const p = C.profileFromStore({ email: 'f@b.it', name: 'Fabio', about: { birth: 2001, follow: 2, fan: 'vroom', years: 5 } });
   assert.deepStrictEqual(p.about, { birth: 2001, follow: 2, fan: 'vroom', years: 5 });
+  const d = C.profileFromStore({ email: 'f@b.it', name: 'Fabio', about: { birth: 2001, follow: 2, fan: 'vroom', birthDate: '2001-06-15' } });   // 7/11
+  assert.deepStrictEqual(d.about, { birth: 2001, follow: 2, fan: 'vroom', birthDate: '2001-06-15' });
   const q = C.profileFromStore({ email: 'f@b.it', name: 'Fabio', about: { follow: 2, years: 'tanti' } });
   assert.deepStrictEqual(q.about, { birth: null, follow: 2, fan: null });
 });

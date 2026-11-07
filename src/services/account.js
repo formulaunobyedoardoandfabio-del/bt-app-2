@@ -70,6 +70,16 @@ const randomPw = () => {
   if (cr && cr.getRandomValues) cr.getRandomValues(a); else for (let i = 0; i < a.length; i++) a[i] = Math.floor(Math.random() * 256);
   return "Bt" + Array.from(a, b => b.toString(16).padStart(2, "0")).join("");
 };
+// 7/11: data di nascita "AAAA-MM-GG" valida, o null; età esatta in anni a una data.
+const validDate = v => {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(typeof v === "string" ? v : "");
+  if (!m) return null;
+  const d = new Date(Date.UTC(+m[1], +m[2] - 1, +m[3]));
+  return d.getUTCFullYear() === +m[1] && d.getUTCMonth() === +m[2] - 1 && d.getUTCDate() === +m[3] ? v : null;
+};
+const ageOn = (iso, now) => { const y = +iso.slice(0, 4), m = +iso.slice(5, 7), d = +iso.slice(8, 10); const n = new Date(now); return n.getFullYear() - y - ((n.getMonth() + 1 < m || (n.getMonth() + 1 === m && n.getDate() < d)) ? 1 : 0); };
+// Troppo giovane: con la data intera si guarda l'età esatta, con il solo anno la differenza degli anni (come prima).
+const tooYoung = a => { const bd = a && validDate(a.birthDate), b = a && Number(a.birth); return bd ? ageOn(bd, Date.now()) < MIN_AGE : !!b && new Date().getFullYear() - b < MIN_AGE; };
 const cleanAbout = a => {
   const x = a && typeof a === "object" ? a : {};
   const birth = Number(x.birth), follow = Number(x.follow);
@@ -77,6 +87,8 @@ const cleanAbout = a => {
   // Tappa 3 (G16): gli anni da tifoso esatti, solo se chi salva li manda (da 0 a 99). Un valore non valido diventa null:
   // con la scrittura "merge" di Firestore non resta quello di prima.
   if ("years" in x) { const y = Math.round(Number(x.years)); out.years = x.years == null || x.years === "" || !isFinite(y) || y < 0 ? null : Math.min(99, y); }
+  // 7/11: data di nascita intera, solo se chi salva la manda; l'anno viene da lì.
+  if ("birthDate" in x) { const d = validDate(x.birthDate); out.birthDate = d; if (d) out.birth = Number(d.slice(0, 4)); }
   return out;
 };
 
@@ -213,8 +225,7 @@ function createAccount({
     if (pw !== pw2) throw mkErr("mismatch");
     if (!strongPw(pw)) throw mkErr("weak");
     // Età: con l'anno di nascita si controlla quello (anno per anno); in ogni caso serve "Ho almeno 14 anni".
-    const birth = about && Number(about.birth);
-    if (birth && new Date().getFullYear() - birth < MIN_AGE) throw mkErr("too-young");
+    if (tooYoung(about)) throw mkErr("too-young");
     if (adult !== true) throw mkErr("need-age");
     const auth = await needAuth();
     const { doc, protectedDoc } = await peekUser(em);
@@ -333,7 +344,7 @@ function createAccount({
     if (!current) throw mkErr("not-found");
     if (current.loaded === false) throw mkErr("not-loaded");
     const a = cleanAbout(about);
-    if (a.birth && new Date().getFullYear() - a.birth < MIN_AGE) throw mkErr("too-young");   // come all'iscrizione
+    if (tooYoung(a)) throw mkErr("too-young");   // come all'iscrizione
     await dbSet("users", current.email, { about: a });
     current = { ...current, about: a };
     notify();

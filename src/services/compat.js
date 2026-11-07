@@ -471,6 +471,7 @@ function profileFromStore(doc) {
   const a = isObj(doc.about) ? doc.about : {};
   const about = { birth: a.birth == null ? null : a.birth, follow: a.follow == null ? null : a.follow, fan: a.fan == null ? null : a.fan };
   if (Number.isInteger(a.years) && a.years >= 0) about.years = a.years;   // Tappa 3 (G16): anni da tifoso esatti
+  if (typeof a.birthDate === "string" && /^\d{4}-\d{2}-\d{2}$/.test(a.birthDate)) about.birthDate = a.birthDate;   // 7/11: data di nascita intera
   return {
     name: doc.name || "",
     nick: doc.nick || doc.name || "",

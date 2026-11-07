@@ -256,8 +256,10 @@
 @media (prefers-reduced-motion: reduce){.bm-pop{animation:none}}
 
 /* 4/11 (video di Edoardo): micro-animazioni. Solo transform e opacity; ferme con "Rimuovi animazioni". */
-.roll-col{transition:transform .9s cubic-bezier(.2,1.15,.4,1)}
-.poll-bar{animation:pollGrow .7s cubic-bezier(.2,.8,.2,1) backwards;transition:transform .5s cubic-bezier(.2,.8,.2,1)}
+.roll-in{animation:rollIn .55s cubic-bezier(.2,.9,.3,1.25) backwards}
+@keyframes rollIn{from{transform:translateY(70%);opacity:0}70%{transform:translateY(-8%);opacity:1}to{transform:none;opacity:1}}
+.poll-fill{transition:transform .5s cubic-bezier(.2,.8,.2,1)}
+.poll-grow{animation:pollGrow .7s cubic-bezier(.2,.8,.2,1) backwards}
 @keyframes pollGrow{from{transform:scaleX(0)}}
 .knob-face{transition:transform .42s cubic-bezier(.34,1.56,.64,1)}
 .seg-move{transition:transform .45s cubic-bezier(.3,1.4,.5,1)}
@@ -265,7 +267,7 @@
 @keyframes segStretch{40%{transform:scaleX(1.18)}}
 .warn-tri{animation:warnPop .5s cubic-bezier(.3,1.6,.5,1) both}
 @keyframes warnPop{from{transform:scale(0);opacity:0}}
-.warn-ring{position:absolute;left:50%;top:55%;width:28px;height:28px;margin:-14px 0 0 -14px;border:2px solid rgba(255,255,255,.8);border-radius:50%;opacity:0;animation:warnRing 1.6s ease-out infinite}
+.warn-ring{position:absolute;left:50%;top:55%;width:28px;height:28px;margin:-14px 0 0 -14px;border:2px solid currentColor;border-radius:50%;opacity:0;animation:warnRing 1.6s ease-out infinite}
 .warn-ring2{animation-delay:.8s}
 @keyframes warnRing{0%{transform:scale(.4);opacity:.9}100%{transform:scale(1.8);opacity:0}}
 .push3d-cap{transition:transform .14s ease}
@@ -277,7 +279,13 @@
 .skel{display:block;background:rgba(255,255,255,.09);border-radius:6px;animation:skelPulse 1.6s ease-in-out infinite}
 @keyframes skelPulse{0%,100%{opacity:.5}50%{opacity:1}}
 @media (prefers-reduced-motion: reduce){
-  .roll-col,.poll-bar,.knob-face,.seg-move,.push3d-cap,.push3d-ring{transition:none}
-  .poll-bar,.seg-stretch,.warn-tri,.skel,.payfail-card{animation:none}
+  .poll-fill,.knob-face,.seg-move,.push3d-cap,.push3d-ring{transition:none}
+  .roll-in,.poll-grow,.seg-stretch,.warn-tri,.skel,.payfail-card,.cal-drop{animation:none}
   .warn-ring{display:none}
 }
+
+/* 7/11: calendario della data di nascita (si apre sotto al campo) e rotella dell'anno senza barra. */
+.cal-drop{animation:calDrop .2s ease both;transform-origin:50% 0}
+@keyframes calDrop{from{opacity:0;transform:translateY(-6px) scale(.98)}}
+.year-wheel{scrollbar-width:none}
+.year-wheel::-webkit-scrollbar{display:none}

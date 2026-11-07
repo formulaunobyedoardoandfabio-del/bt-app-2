@@ -841,7 +841,7 @@ function ProGateSheet({ what, onAd, onPremium, onClose, busy }) {
 
 function PremiumLockCard({ icon, title, desc, onPremium }) {
   return (
-    <button className="press" onClick={onPremium} style={{ display: "flex", alignItems: "center", gap: 12, width: "100%", padding: 14, borderRadius: 16, background: "rgba(231,179,76,.08)", border: "1px solid rgba(231,179,76,.25)", textAlign: "left" }}>
+    <button className="press cta-shine" onClick={onPremium} style={{ position: "relative", overflow: "hidden", display: "flex", alignItems: "center", gap: 12, width: "100%", padding: 14, borderRadius: 16, background: "rgba(231,179,76,.08)", border: "1px solid rgba(231,179,76,.25)", textAlign: "left" }}>
       <div style={{ width: 38, height: 38, borderRadius: 11, background: "rgba(231,179,76,.16)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
         <Icon name={icon} size={17} color={C.gold} />
       </div>
@@ -1482,6 +1482,96 @@ function FanTypePicker({ value, onChange }) {
     </div>
   );
 }
+// 7/11 (Edoardo): data di nascita nella registrazione. Si scrive GG/MM/AAAA (le barre si mettono da sole) oppure si
+// sceglie dal calendario che si apre sotto; nel calendario l'anno è una rotella che si scorre in su o in giù col dito
+// (o con la rotellina e le frecce) per cambiarlo in fretta. Il valore è "AAAA-MM-GG", null finché la data non è valida.
+const MONTHS_IT = ["Gennaio", "Febbraio", "Marzo", "Aprile", "Maggio", "Giugno", "Luglio", "Agosto", "Settembre", "Ottobre", "Novembre", "Dicembre"];
+const YEAR_ROW = 34;
+const isoOf = (y, m, d) => y + "-" + String(m + 1).padStart(2, "0") + "-" + String(d).padStart(2, "0");
+const fmtBirth = iso => iso ? iso.slice(8, 10) + "/" + iso.slice(5, 7) + "/" + iso.slice(0, 4) : "";
+function maskBirth(raw) {
+  const n = String(raw || "").replace(/\D/g, "").slice(0, 8);
+  return n.length > 4 ? n.slice(0, 2) + "/" + n.slice(2, 4) + "/" + n.slice(4) : n.length > 2 ? n.slice(0, 2) + "/" + n.slice(2) : n;
+}
+function parseBirth(txt, minYear, maxYear) {
+  const m = /^(\d{2})\/(\d{2})\/(\d{4})$/.exec(txt || "");
+  if (!m) return { iso: null, err: null };
+  const d = +m[1], mo = +m[2] - 1, y = +m[3], dt = new Date(Date.UTC(y, mo, d));
+  if (mo < 0 || mo > 11 || d < 1 || dt.getUTCDate() !== d || dt.getUTCMonth() !== mo) return { iso: null, err: "Data non valida" };
+  if (y < minYear || y > maxYear) return { iso: null, err: "L'anno va dal " + minYear + " al " + maxYear };
+  return { iso: isoOf(y, mo, d), err: null };
+}
+function BirthDateField({ id, value, onChange, minYear, maxYear }) {
+  const [txt, setTxt] = useState(value ? fmtBirth(value) : "");
+  const [open, setOpen] = useState(false);
+  const [view, setView] = useState(() => value ? { y: +value.slice(0, 4), m: +value.slice(5, 7) - 1 } : { y: Math.min(maxYear, 2000), m: 0 });
+  const wheel = useRef(null), fromWheel = useRef(false);
+  const { err } = parseBirth(txt, minYear, maxYear);
+  const type = raw => {
+    const t = maskBirth(raw), r = parseBirth(t, minYear, maxYear);
+    setTxt(t); onChange(r.iso);
+    if (r.iso) setView({ y: +r.iso.slice(0, 4), m: +r.iso.slice(5, 7) - 1 });
+  };
+  const pick = d => { const iso = isoOf(view.y, view.m, d); setTxt(fmtBirth(iso)); onChange(iso); setOpen(false); fx.play("tick"); fx.buzz("select"); };
+  const setYear = y => { const v = Math.max(minYear, Math.min(maxYear, y)); if (v !== view.y) { setView(st => ({ ...st, y: v })); fx.play("tick"); fx.buzz("select"); } };
+  const moveMonth = k => setView(st => { let m = st.m + k, y = st.y; if (m < 0) { m = 11; y--; } if (m > 11) { m = 0; y++; } return y < minYear || y > maxYear ? st : { y, m }; });
+  // La rotella va sull'anno scelto quando si apre o quando l'anno cambia da fuori (frecce, mesi, data scritta).
+  useEffect(() => {
+    const el = wheel.current; if (!open || !el) return;
+    if (fromWheel.current) { fromWheel.current = false; return; }
+    el.scrollTop = (view.y - minYear) * YEAR_ROW;
+  }, [open, view.y]);
+  const onWheelScroll = e => {
+    const y = minYear + Math.round(e.currentTarget.scrollTop / YEAR_ROW);
+    if (y !== view.y && y >= minYear && y <= maxYear) { fromWheel.current = true; setYear(y); }
+  };
+  const years = []; for (let y = minYear; y <= maxYear; y++) years.push(y);
+  const first = (new Date(Date.UTC(view.y, view.m, 1)).getUTCDay() + 6) % 7;   // lunedì per primo
+  const days = new Date(Date.UTC(view.y, view.m + 1, 0)).getUTCDate();
+  const sel = value && +value.slice(0, 4) === view.y && +value.slice(5, 7) - 1 === view.m ? +value.slice(8, 10) : null;
+  const nav = { width: 34, height: 34, flexShrink: 0, borderRadius: 10, background: "rgba(255,255,255,.05)", border: `1px solid ${C.border}`, fontFamily: F_HEAD, fontWeight: 900, fontSize: 18, color: C.text };
+  return (
+    <div data-birth-field="">
+      <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "6px 6px 6px 14px", borderRadius: 14, background: C.card, border: `1px solid ${err ? "#FF5A5F" : open ? C.accent : C.border}` }}>
+        <input id={id} value={txt} onChange={e => type(e.target.value)} inputMode="numeric" autoComplete="bday" placeholder="GG/MM/AAAA" maxLength={10}
+          aria-label="Data di nascita, giorno mese anno" aria-invalid={err ? "true" : undefined}
+          style={{ flex: 1, minWidth: 0, border: "none", background: "none", outline: "none", fontFamily: F_BODY, fontSize: 14, color: C.text, letterSpacing: .5, fontVariantNumeric: "tabular-nums" }} />
+        <button type="button" className="press" data-birth-cal="" aria-expanded={open} aria-label={open ? "Chiudi il calendario" : "Apri il calendario"} onClick={() => setOpen(o => !o)}
+          style={{ width: 40, height: 40, flexShrink: 0, borderRadius: 10, background: open ? alpha(C.accent, .18) : "rgba(255,255,255,.05)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={open ? C.accent : C.text} strokeWidth="2" strokeLinecap="round"><rect x="3.5" y="5" width="17" height="15.5" rx="2.5" /><path d="M3.5 10h17M8 3v4M16 3v4" /></svg>
+        </button>
+      </div>
+      {err && <div role="alert" data-birth-err="" style={{ marginTop: 6, fontFamily: F_BODY, fontSize: 11.5, color: "#FF5A5F" }}>{err}</div>}
+      {open && (
+        <div data-birth-panel="" className="cal-drop" style={{ marginTop: 8, padding: 12, borderRadius: 14, background: "#151519", border: `1px solid ${C.border}`, boxShadow: "0 14px 30px -12px rgba(0,0,0,.8)" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 10 }}>
+            <button type="button" className="press" aria-label="Mese prima" onClick={() => moveMonth(-1)} style={nav}>‹</button>
+            <div data-birth-month={view.m} style={{ flex: 1, textAlign: "center", fontFamily: F_HEAD, fontWeight: 800, fontSize: 14, color: C.text }}>{MONTHS_IT[view.m]}</div>
+            <button type="button" className="press" aria-label="Mese dopo" onClick={() => moveMonth(1)} style={nav}>›</button>
+            <div style={{ position: "relative", width: 78, height: YEAR_ROW * 3, flexShrink: 0, marginLeft: 4 }}>
+              <span aria-hidden="true" style={{ position: "absolute", left: 0, right: 0, top: YEAR_ROW, height: YEAR_ROW, borderRadius: 8, background: alpha(C.accent, .16), border: `1px solid ${alpha(C.accent, .5)}`, boxSizing: "border-box", pointerEvents: "none" }} />
+              <div ref={wheel} data-year-wheel={view.y} className="year-wheel" role="spinbutton" tabIndex={0} aria-label="Anno (scorri in su o in giù)" aria-valuemin={minYear} aria-valuemax={maxYear} aria-valuenow={view.y}
+                onScroll={onWheelScroll}
+                onKeyDown={e => { if (e.key === "ArrowUp") { e.preventDefault(); setYear(view.y - 1); } else if (e.key === "ArrowDown") { e.preventDefault(); setYear(view.y + 1); } }}
+                style={{ position: "absolute", inset: 0, overflowY: "auto", overscrollBehavior: "contain", scrollSnapType: "y mandatory", padding: YEAR_ROW + "px 0", boxSizing: "border-box", WebkitMaskImage: "linear-gradient(transparent, #000 32%, #000 68%, transparent)", maskImage: "linear-gradient(transparent, #000 32%, #000 68%, transparent)" }}>
+                {years.map(y => <div key={y} data-year={y} onClick={() => setYear(y)} style={{ height: YEAR_ROW, lineHeight: YEAR_ROW + "px", textAlign: "center", scrollSnapAlign: "center", fontFamily: F_HEAD, fontWeight: y === view.y ? 900 : 600, fontSize: y === view.y ? 16 : 13, color: y === view.y ? C.text : C.muted, cursor: "pointer" }}>{y}</div>)}
+              </div>
+            </div>
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 4 }}>
+            {["L", "M", "M", "G", "V", "S", "D"].map((w, i) => <span key={"w" + i} aria-hidden="true" style={{ textAlign: "center", fontFamily: F_BODY, fontWeight: 700, fontSize: 10.5, color: C.muted, padding: "2px 0 4px" }}>{w}</span>)}
+            {Array.from({ length: first }, (_, i) => <span key={"e" + i} />)}
+            {Array.from({ length: days }, (_, i) => i + 1).map(d => (
+              <button key={d} type="button" className="press" data-birth-day={d} aria-label={d + " " + MONTHS_IT[view.m] + " " + view.y} aria-pressed={sel === d} onClick={() => pick(d)}
+                style={{ height: 36, borderRadius: 9, background: sel === d ? C.accent : "rgba(255,255,255,.04)", fontFamily: F_BODY, fontWeight: sel === d ? 800 : 600, fontSize: 13, color: sel === d ? "#fff" : C.text }}>{d}</button>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // Scheda "Su di te" del profilo: anno di nascita (manettino), da quanti anni segui la F1 (contachilometri), tipo di tifoso.
 function AboutCard({ about, onSave }) {
   const a = about || ABOUT_INIT;
@@ -1516,12 +1606,12 @@ function AboutCard({ about, onSave }) {
             </div>
             <div style={{ display: "flex", gap: 8 }}>
               <button className="press" onClick={() => setEdit(false)} style={{ flex: 1, padding: "12px 0", borderRadius: 12, background: "rgba(255,255,255,.06)", border: `1px solid ${C.border}`, fontFamily: F_HEAD, fontWeight: 800, fontSize: 13, color: C.muted }}>Annulla</button>
-              <button className="press" onClick={() => { onSave && onSave({ birth: draft.birth || null, follow: followOf(draft.years), fan: draft.fan, years: draft.years }); setEdit(false); }} style={{ flex: 1, padding: "12px 0", borderRadius: 12, background: C.accent, fontFamily: F_HEAD, fontWeight: 800, fontSize: 13, color: "#fff" }}>Salva</button>
+              <button className="press" onClick={() => { onSave && onSave({ birth: draft.birth || null, ...(a.birthDate ? { birthDate: Number(String(a.birthDate).slice(0, 4)) === draft.birth ? a.birthDate : null } : {}), follow: followOf(draft.years), fan: draft.fan, years: draft.years }); setEdit(false); }} style={{ flex: 1, padding: "12px 0", borderRadius: 12, background: C.accent, fontFamily: F_HEAD, fontWeight: 800, fontSize: 13, color: "#fff" }}>Salva</button>
             </div>
           </div>
         ) : (
           <>
-            {row("birth", "Anno di nascita", a.birth || "Non indicato", true)}
+            {row("birth", a.birthDate ? "Data di nascita" : "Anno di nascita", a.birthDate ? fmtBirth(a.birthDate) : a.birth || "Non indicato", true)}
             {row("follow", "Segue F1", Number.isInteger(a.years) ? yearsLabel(a.years) : FOLLOW_STEPS[a.follow] || "Non indicato")}
             {row("fan", "Tipo fan", fanLabel(a.fan))}
           </>
@@ -1604,7 +1694,7 @@ function LoginScreen({ auth, onDone, onGuest, onBack, reason, onHold }) {
   const [info, setInfo] = useState("");
   const [busy, setBusy] = useState(false);
   const [shiftDone, setShiftDone] = useState(false);   // G24: accesso riuscito, i blu della Shift Light lampeggiano
-  const [birth, setBirth] = useState(null);
+  const [birth, setBirth] = useState(null);   // 7/11: data di nascita "AAAA-MM-GG" (GG/MM/AAAA scritta o dal calendario)
   const [years, setYears] = useState(ABOUT_INIT.years);   // anni da tifoso (G16); la fascia follow si ricava
   const [fan, setFan] = useState(null);
   const [adult, setAdult] = useState(false);   // "Ho almeno 14 anni" (Task 22)
@@ -1624,7 +1714,7 @@ function LoginScreen({ auth, onDone, onGuest, onBack, reason, onHold }) {
     if (onHold) onHold(true);   // l'app aspetta la fine della Shift Light prima di entrare
     try {
       if (isLogin) await auth.login(email, pw);
-      else await auth.register({ name, email, pw, pw2, about: { birth, follow: followOf(years), fan, years }, adult });
+      else await auth.register({ name, email, pw, pw2, about: { birth: birth ? Number(birth.slice(0, 4)) : null, follow: followOf(years), fan, years, ...(birth ? { birthDate: birth } : {}) }, adult });
       setShiftDone(true); fx.play("done"); fx.buzz("success");
       await new Promise(r => setTimeout(r, SHIFT_DONE_MS));
       setBusy(false); setShiftDone(false);
@@ -1702,8 +1792,8 @@ function LoginScreen({ auth, onDone, onGuest, onBack, reason, onHold }) {
         {!isLogin && (
           <div style={{ marginBottom: 16, padding: 14, borderRadius: 14, background: "rgba(255,255,255,.03)", border: `1px solid ${C.border}` }}>
             <div style={{ fontFamily: F_HEAD, fontWeight: 800, fontSize: 13.5, color: C.text, marginBottom: 12 }}>Su di te</div>
-            <div style={labelStyle}>Anno di nascita</div>
-            <div style={{ marginBottom: 16 }}><BirthKnob id="regBirth" value={birth} min={BIRTH_YEARS[BIRTH_YEARS.length - 1]} max={BIRTH_YEARS[0]} onChange={setBirth} /></div>
+            <div style={labelStyle}>Data di nascita</div>
+            <div style={{ marginBottom: 16 }}><BirthDateField id="regBirth" value={birth} minYear={BIRTH_YEARS[BIRTH_YEARS.length - 1]} maxYear={BIRTH_YEARS[0]} onChange={setBirth} /></div>
             <OdometerYears id="regFollow" value={years} onChange={setYears} />
             <div style={{ ...labelStyle, marginTop: 16, marginBottom: 8 }}>Che tifoso sei?</div>
             <FanTypePicker value={fan} onChange={setFan} />
@@ -1751,6 +1841,7 @@ function PollCard({ poll, vote, onVote, title = "SONDAGGIO" }) {
   const pct = o => total ? Math.round(((o.base || 0) + (vote === o.id ? 1 : 0)) / total * 100) : 0;
   const show = !!vote || !!poll.answer;
   const voted = poll.options.find(o => o.id === vote);
+  const [anim, setAnim] = useState(false);   // 7/11: le barre crescono (e i numeri girano) solo dopo il voto di adesso
   return (
     <div data-poll={poll.id} style={{ padding: 16, borderRadius: 16, background: C.card, border: `1px solid ${C.border}` }}>
       <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
@@ -1763,14 +1854,14 @@ function PollCard({ poll, vote, onVote, title = "SONDAGGIO" }) {
         {poll.options.map((o, i) => {
           const right = poll.answer === o.id, mine = vote === o.id;
           return (
-            <button key={o.id} data-poll-option={o.id} className="press" disabled={!!poll.answer} onClick={() => onVote && onVote(poll.id, o.id)} aria-pressed={mine ? "true" : "false"}
+            <button key={o.id} data-poll-option={o.id} className="press" disabled={!!poll.answer} onClick={() => { setAnim(true); onVote && onVote(poll.id, o.id); }} aria-pressed={mine ? "true" : "false"}
               style={{ position: "relative", width: "100%", minHeight: 38, borderRadius: 10, background: "rgba(255,255,255,.05)", border: `1px solid ${right ? TIMING.green : mine ? C.gold : C.border}`, overflow: "hidden", textAlign: "left" }}>
-              {show && <div className="poll-bar" data-poll-bar={pct(o)} style={{ position: "absolute", top: 0, bottom: 0, left: 0, width: "100%", transformOrigin: "0 50%", transform: `scaleX(${pct(o) / 100})`, animationDelay: i * 90 + "ms", background: right ? "rgba(62,214,107,.18)" : "rgba(231,179,76,.16)" }} />}
+              {show && <div className={anim ? "poll-fill poll-grow" : "poll-fill"} data-poll-bar={pct(o)} style={{ position: "absolute", top: 0, bottom: 0, left: 0, width: "100%", transformOrigin: "0 50%", transform: `scaleX(${pct(o) / 100})`, animationDelay: i * 90 + "ms", background: right ? "rgba(62,214,107,.18)" : "rgba(231,179,76,.16)" }} />}
               <span style={{ position: "relative", display: "flex", alignItems: "center", gap: 8, minHeight: 38, padding: "0 12px", fontFamily: F_BODY, fontWeight: 600, fontSize: 12.5, color: C.text }}>
                 <span style={{ flex: 1 }}>{o.label}</span>
                 {right && <span style={{ fontFamily: F_HEAD, fontWeight: 800, fontSize: 9.5, color: TIMING.green }}>RISPOSTA ESATTA</span>}
                 {mine && !right && <span style={{ fontFamily: F_HEAD, fontWeight: 800, fontSize: 9.5, color: C.gold }}>IL TUO VOTO</span>}
-                {show && <span style={{ fontWeight: 800, color: right ? TIMING.green : C.gold, fontVariantNumeric: "tabular-nums" }}>{pct(o)}%</span>}
+                {show && <span style={{ fontWeight: 800, color: right ? TIMING.green : C.gold, fontVariantNumeric: "tabular-nums" }}>{anim ? <RollNumber value={pct(o)} /> : pct(o)}%</span>}
               </span>
             </button>
           );
@@ -2218,7 +2309,7 @@ function ArticleScreen({ article, onBack, isPremium, onPremium, onAdUnlock = nul
             {onAdUnlock && <button className="press" data-article-ad="" disabled={adBusy} onClick={() => onAdUnlock()} style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8, width: "100%", padding: "12px 0", marginBottom: 8, borderRadius: 12, border: `1.5px solid ${C.gold}`, fontFamily: F_HEAD, fontWeight: 900, fontStyle: "italic", fontSize: 13, color: C.gold }}>
               {adBusy ? <ShiftLight label="Carico la pubblicità" /> : <><Icon name="play" size={14} color={C.gold} />GUARDA UN VIDEO PER LEGGERLO</>}
             </button>}
-            <button className="press" onClick={onPremium} style={{ padding: "12px 22px", borderRadius: 12, background: C.gold, fontFamily: F_HEAD, fontWeight: 800, fontStyle: "italic", fontSize: 13, color: "#141414" }}>SBLOCCA CON PREMIUM</button>
+            <button className="press cta-shine" onClick={onPremium} style={{ position: "relative", overflow: "hidden", padding: "12px 22px", borderRadius: 12, background: C.gold, fontFamily: F_HEAD, fontWeight: 800, fontStyle: "italic", fontSize: 13, color: "#141414" }}>SBLOCCA CON PREMIUM</button>
           </div>
         ) : (
           article.body.split("\n\n").map((p, i) => (
@@ -2587,30 +2678,42 @@ function champOf(standings, races, now) {
   const lead = ds[0].points - ds[1].points;
   return lead > pts ? { id: ds[0].id, points: ds[0].points, lead, second: ds[1].id, year: new Date(now).getFullYear() } : null;
 }
-// 4/11 (video di Edoardo, "Score Wheel"): ogni cifra gira su un tamburo e si ferma sul valore. Solo transform.
-const ROLL_DIGITS = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9];
+// Numeri a tamburo (video di Edoardo, "Score Wheel"; rifatto il 7/11). Le cifre salgono dal basso come su un tamburo e
+// si fermano sul valore, una dopo l'altra; quando il numero cambia girano solo le cifre cambiate (il conto alla rovescia
+// scatta, i punti si aggiornano). Il testo resta il numero vero, per i lettori di schermo e le prove.
 function RollNumber({ value }) {
   const str = String(value);
-  const [on, setOn] = useState(false);
-  useEffect(() => { const t = requestAnimationFrame(() => setOn(true)); return () => cancelAnimationFrame(t); }, []);
   return (
-    <span data-roll={str} aria-label={str} style={{ display: "inline-flex", fontVariantNumeric: "tabular-nums" }}>
-      {str.split("").map((ch, i) => /\d/.test(ch)
-        ? <span key={"d" + (str.length - i)} aria-hidden="true" style={{ display: "inline-block", height: "1.15em", lineHeight: "1.15em", overflow: "hidden" }}>
-            <span className="roll-col" style={{ display: "block", transform: `translateY(${on ? -Number(ch) * 1.15 : 0}em)`, transitionDelay: i * 80 + "ms" }}>
-              {ROLL_DIGITS.map(d => <span key={d} style={{ display: "block", height: "1.15em" }}>{d}</span>)}
-            </span>
-          </span>
-        : <span key={"c" + i} aria-hidden="true">{ch}</span>)}
+    <span data-roll={str} style={{ fontVariantNumeric: "tabular-nums" }}>
+      {str.split("").map((ch, i) => {
+        const pos = str.length - i;
+        return /\d/.test(ch)
+          ? <span key={"p" + pos + "-" + ch} className="roll-in" style={{ display: "inline-block", animationDelay: i * 70 + "ms" }}>{ch}</span>
+          : <span key={"c" + pos}>{ch}</span>;
+      })}
     </span>
   );
 }
-// 4/11 ("Warning Pulse"): triangolo che entra e manda anelli, nel banner della bandiera rossa.
-function WarnPulse() {
+// Righe grigie che pulsano al posto della pagina vuota mentre arrivano i dati (video, "Skeleton Pulse").
+function Skeleton({ rows = 3, avatar = true }) {
   return (
-    <span aria-hidden="true" data-warn-pulse="" style={{ position: "relative", display: "inline-block", width: 18, height: 16, marginRight: 8, verticalAlign: "-2px" }}>
+    <div data-skeleton="" aria-hidden="true" style={{ marginTop: 12, display: "flex", flexDirection: "column", gap: 9 }}>
+      {Array.from({ length: rows }, (_, i) => (
+        <div key={i} style={{ display: "flex", gap: 10, alignItems: "center" }}>
+          {avatar && <span className="skel" style={{ width: 28, height: 28, borderRadius: "50%", flexShrink: 0 }} />}
+          <span style={{ flex: 1, display: "flex", flexDirection: "column", gap: 5 }}><span className="skel" style={{ height: 9, width: 86 - (i % 3) * 14 + "%" }} /><span className="skel" style={{ height: 7, width: 58 - (i % 3) * 9 + "%" }} /></span>
+        </div>
+      ))}
+    </div>
+  );
+}
+// Triangolo che entra e manda anelli (video, "Warning Pulse"): negli avvisi di pericolo in pista (bandiera rossa,
+// safety car, virtual safety car). ink = colore del triangolo e degli anelli, mark = colore del punto esclamativo.
+function WarnPulse({ ink = "#fff", mark = FLAG_UI.red.color }) {
+  return (
+    <span aria-hidden="true" data-warn-pulse="" style={{ position: "relative", display: "inline-block", width: 18, height: 16, marginRight: 8, verticalAlign: "-2px", color: ink }}>
       <span className="warn-ring" /><span className="warn-ring warn-ring2" />
-      <svg className="warn-tri" viewBox="0 0 24 22" width="18" height="16" style={{ position: "relative", display: "block" }}><path d="M12 1.5 L22.8 20.5 H1.2 Z" fill="#fff" /><path d="M12 8 V13.5 M12 16.8 V17.2" stroke={FLAG_UI.red.color} strokeWidth="2.6" strokeLinecap="round" /></svg>
+      <svg className="warn-tri" viewBox="0 0 24 22" width="18" height="16" style={{ position: "relative", display: "block" }}><path d="M12 1.5 L22.8 20.5 H1.2 Z" fill={ink} /><path d="M12 8 V13.5 M12 16.8 V17.2" stroke={mark} strokeWidth="2.6" strokeLinecap="round" /></svg>
     </span>
   );
 }
@@ -2725,7 +2828,7 @@ function FlagBanner({ st, style }) {
   if (!st) return null;
   const labels = { yellow: "BANDIERA GIALLA" + (st.flagSector ? " · SETTORE " + st.flagSector : ""), sc: "SAFETY CAR", vsc: "VIRTUAL SAFETY CAR", red: "BANDIERA ROSSA" };
   const ui = FLAG_UI[st.flag];
-  if (ui) return <div role="status" style={{ padding: "9px 12px", borderRadius: 10, background: ui.color, fontFamily: F_HEAD, fontWeight: 900, fontStyle: "italic", fontSize: 13.5, letterSpacing: .6, color: ui.ink, textAlign: "center", ...style }}>{labels[st.flag]}</div>;
+  if (ui) return <div role="status" data-flag-banner={st.flag} style={{ padding: "9px 12px", borderRadius: 10, background: ui.color, fontFamily: F_HEAD, fontWeight: 900, fontStyle: "italic", fontSize: 13.5, letterSpacing: .6, color: ui.ink, textAlign: "center", overflow: "hidden", ...style }}>{["sc", "vsc", "red"].includes(st.flag) && <WarnPulse ink={ui.ink} mark={ui.color} />}{labels[st.flag]}</div>;
   if (st.bg !== "chequered") return null;
   const txt = st.finished || !isRaceType(st.type) ? "BANDIERA A SCACCHI" : st.lap === 1 ? "PRIMO GIRO" : "ULTIMO GIRO";
   return (
@@ -3272,6 +3375,7 @@ function TelemetryModal({ live, st, carId, lapNo, sector, onClose }) {
           {closeBtn}
         </div>
         <p role="status" data-tel-state={T.loading ? "loading" : "missing"} style={{ display: "flex", alignItems: "center", gap: 9, margin: "16px 2px 4px", fontFamily: F_BODY, fontSize: 13, color: C.muted }}>{T.loading && <LedGrid mode="seq" size={4} />}{T.loading ? TEL_LOADING : TEL_MISSING}</p>
+        {T.loading && <div data-skeleton="" aria-hidden="true" style={{ display: "grid", gap: 8, margin: "10px 2px 0" }}><span className="skel" style={{ height: 120, borderRadius: 10 }} /><span className="skel" style={{ height: 56, borderRadius: 10 }} /><span className="skel" style={{ height: 56, borderRadius: 10 }} /></div>}
       </div>
     </div>
   );
@@ -6009,9 +6113,7 @@ function Of1Status({ of1, standings, onRefresh }) {
   return (
     <div data-of1-status={of1.status} role="status" style={card}>
       <div style={{ display: "flex", alignItems: "center", gap: 9, fontFamily: F_HEAD, fontWeight: 800, fontSize: 13.5, color: C.text }}>{of1.status === "loading" && <LedGrid mode="seq" size={4} />}{text}</div>
-      {of1.status === "loading" && <div data-skeleton="" aria-hidden="true" style={{ marginTop: 12, display: "flex", flexDirection: "column", gap: 9 }}>
-        {[0, 1, 2].map(i => <div key={i} style={{ display: "flex", gap: 10, alignItems: "center" }}><span className="skel" style={{ width: 28, height: 28, borderRadius: "50%", flexShrink: 0 }} /><span style={{ flex: 1, display: "flex", flexDirection: "column", gap: 5 }}><span className="skel" style={{ height: 9, width: 80 - i * 14 + "%" }} /><span className="skel" style={{ height: 7, width: 55 - i * 9 + "%" }} /></span></div>)}
-      </div>}
+      {of1.status === "loading" && <Skeleton />}
       {of1.status === "empty" && <p style={{ margin: "4px 0 0", fontFamily: F_BODY, fontSize: 12, color: C.muted, lineHeight: 1.5 }}>I dati veri della sessione arrivano da OpenF1 circa 30 minuti dopo la fine.</p>}
       {of1.status !== "loading" && refresh}
     </div>
@@ -7127,7 +7229,7 @@ function FantaSquadCard({ squad, setSquad, base, freeTransfers, budget, stats, r
         ) : (
           <div data-team-lock="open" style={{ display: "flex", alignItems: "center", marginTop: 12, padding: "10px 14px", borderRadius: 14, background: "#F2F1EE", color: "#101014" }}>
             <span style={{ flex: 1, fontFamily: F_HEAD, fontWeight: 800, fontSize: 14 }}>Chiusura squadra</span>
-            {cd ? <span data-countdown="" aria-label={`Mancano ${cd.d} giorni, ${cd.h} ore e ${cd.m} minuti`} style={{ fontFamily: F_HEAD, fontWeight: 900, fontSize: 19, letterSpacing: .3 }}>{pad(cd.d)}<small style={{ fontSize: 11 }}>G</small> : {pad(cd.h)}<small style={{ fontSize: 11 }}>H</small> : {pad(cd.m)}<small style={{ fontSize: 11 }}>M</small></span>
+            {cd ? <span data-countdown="" aria-label={`Mancano ${cd.d} giorni, ${cd.h} ore e ${cd.m} minuti`} style={{ fontFamily: F_HEAD, fontWeight: 900, fontSize: 19, letterSpacing: .3 }}><RollNumber value={pad(cd.d)} /><small style={{ fontSize: 11 }}>G</small> : <RollNumber value={pad(cd.h)} /><small style={{ fontSize: 11 }}>H</small> : <RollNumber value={pad(cd.m)} /><small style={{ fontSize: 11 }}>M</small></span>
               : <span style={{ fontFamily: F_BODY, fontSize: 12 }}>all'inizio delle qualifiche</span>}
           </div>
         )}
@@ -7420,7 +7522,7 @@ function FantaScreen({ squad, setSquad, base, freeTransfers, budget, stats, race
           {myPos > 0 && <span style={{ padding: "4px 10px", borderRadius: 8, background: "rgba(231,179,76,.14)", fontFamily: F_HEAD, fontWeight: 800, fontSize: 11, color: C.gold }}>#{myPos} in lega</span>}
         </div>
         <div style={{ display: "flex", alignItems: "baseline", gap: 6 }}>
-          <span data-fanta-total="" style={{ fontFamily: F_HEAD, fontWeight: 900, fontSize: 30, color: C.accentInk }}>{total}</span>
+          <span data-fanta-total="" style={{ fontFamily: F_HEAD, fontWeight: 900, fontSize: 30, color: C.accentInk }}><RollNumber value={total} /></span>
           <span style={{ fontFamily: F_BODY, fontSize: 12, color: C.muted }}>punti totali{bonusPts ? ` · di cui ${bonusPts} bonus` : ""}</span>
         </div>
         <div style={{ marginTop: 10, paddingTop: 10, borderTop: `1px solid ${C.divider}` }}>
@@ -7741,7 +7843,7 @@ function ProfiloScreen({ onCoffee = null, coffeePrice = null, fanLevel = null, r
       {!guest && !waiting && fanLevel && <FanLevelCard info={fanLevel} />}
       {!guest && !waiting && <TrophyCase trophies={trophies} progress={trophyProg} helmet={helmet} defs={trophyList} />}
 
-      <button className="press" onClick={onPremium} style={{ display: "block", textAlign: "left", width: "calc(100% - 40px)", margin: "0 20px 22px", padding: 16, borderRadius: 18, background: "rgba(231,179,76,.1)", border: "1px solid rgba(231,179,76,.3)" }}>
+      <button className="press cta-shine" onClick={onPremium} style={{ position: "relative", overflow: "hidden", display: "block", textAlign: "left", width: "calc(100% - 40px)", margin: "0 20px 22px", padding: 16, borderRadius: 18, background: "rgba(231,179,76,.1)", border: "1px solid rgba(231,179,76,.3)" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 9, marginBottom: 6 }}>
           <Icon name="star" size={16} color={C.gold} />
           <span style={{ fontFamily: F_HEAD, fontWeight: 800, fontSize: 14, color: C.gold }}>{isPremium && trial ? "Prova gratuita Premium" : isPremium ? "Sei B&T Premium" : "Passa a Premium"}</span>
@@ -8949,7 +9051,7 @@ function TermsSheet({ review, onAccept, onClose }) {
             <div key={h}>
               <h3 style={{ fontFamily: F_HEAD, fontWeight: 800, fontStyle: "italic", fontSize: 14, color: C.accentInk, margin: "4px 0 6px" }}>{h}</h3>
               {b !== null ? <p style={pStyle}>{b}</p> : (
-                <p style={pStyle}>Raccogliamo solo i dati necessari al funzionamento del servizio (email, nome, "Su di te" cioè anno di nascita, da quanti anni segui la F1 e che tifoso sei, messaggi in chat, segnalazioni, feedback con la tua email, preferenze) e li conserviamo su Firebase (Google). Non vendiamo i dati a terzi. Puoi eliminare l'account e i tuoi dati in qualsiasi momento da Profilo → Elimina account. Tutti i dettagli sono nella <button className="press" onClick={() => openUrl(PRIVACY_URL)} aria-label="Apri la Privacy Policy" style={{ font: "inherit", color: C.accentInk, textDecoration: "underline", padding: 0 }}>Privacy Policy</button>.</p>
+                <p style={pStyle}>Raccogliamo solo i dati necessari al funzionamento del servizio (email, nome, "Su di te" cioè data o anno di nascita, da quanti anni segui la F1 e che tifoso sei, messaggi in chat, segnalazioni, feedback con la tua email, preferenze) e li conserviamo su Firebase (Google). Non vendiamo i dati a terzi. Puoi eliminare l'account e i tuoi dati in qualsiasi momento da Profilo → Elimina account. Tutti i dettagli sono nella <button className="press" onClick={() => openUrl(PRIVACY_URL)} aria-label="Apri la Privacy Policy" style={{ font: "inherit", color: C.accentInk, textDecoration: "underline", padding: 0 }}>Privacy Policy</button>.</p>
               )}
               {b2 && <p style={pStyle}>{b2}</p>}
             </div>
@@ -10962,7 +11064,7 @@ function App() {
       if (r.ok && r.via === "play") {
         setSubscribing(false); setSubscribed(true); fx.play("done"); fx.buzz("success");
         setPremium(p => ({ ...p, sub: true, src: "play", at: nowMs(), trial: p.trial ? { ...p.trial, converted: true } : null }));
-      } else if (!r.ok) { setSubscribing(false); if (r.reason !== "cancelled") setPayFail(true); showToast(BUY_MSG[r.reason] || BUY_MSG.failed); }
+      } else if (!r.ok) { setSubscribing(false); if (r.reason === "failed") setPayFail(true); showToast(BUY_MSG[r.reason] || BUY_MSG.failed); }
       // Stripe: la pagina cambia, il tasto resta in attesa
     });
   };
@@ -10973,7 +11075,7 @@ function App() {
     Billing.buy("coffee", { email: account && account.email, token: account && account.aid }).then(r => {
       if (!(r.ok && r.via === "stripe")) setCoffeeBusy(false);
       if (r.ok && r.via === "play") { fx.play("done"); fx.buzz("success"); showToast("Grazie per il caffè! Ci dai la carica per il prossimo GP"); }
-      else if (!r.ok && r.reason !== "cancelled") { setPayFail(true); showToast(BUY_MSG[r.reason] || BUY_MSG.failed); }
+      else if (!r.ok && r.reason !== "cancelled") { if (r.reason === "failed") setPayFail(true); showToast(BUY_MSG[r.reason] || BUY_MSG.failed); }
     });
   };
   const doTrial = () => {

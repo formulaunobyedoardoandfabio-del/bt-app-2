@@ -47,6 +47,21 @@ t('password sbagliata: wrong-password e nessun passaggio; email sconosciuta: not
   assert.strictEqual(MESSAGES['not-found'], 'Account non trovato');
 });
 
+t('7/11 data di nascita intera: età esatta, anno ricavato dalla data, data non valida scartata', async () => {
+  const c = ctx();
+  const A = make();
+  const y = new Date().getFullYear(), mm = String(new Date().getMonth() + 1).padStart(2, '0');
+  // 14 anni compiuti per anno ma non ancora per giorno: troppo giovane (prima bastava l'anno)
+  const later = new Date(Date.UTC(y - 14, new Date().getMonth(), new Date().getDate() + 1)).toISOString().slice(0, 10);
+  await assert.rejects(A.register({ name: 'Fabio', email: 'f@b.it', pw: 'abcdef12', pw2: 'abcdef12', about: { birth: y - 14, birthDate: later }, adult: true }), e => e.code === 'too-young');
+  await A.register({ name: 'Fabio', email: 'f@b.it', pw: 'abcdef12', pw2: 'abcdef12', about: { birth: 1990, birthDate: '2001-' + mm + '-01', follow: 1, fan: 'vivo' }, adult: true });
+  const doc = c.fs('users/f@b.it');
+  assert.strictEqual(doc.about.birthDate, '2001-' + mm + '-01');
+  assert.strictEqual(doc.about.birth, 2001, 'l\'anno viene dalla data');
+  await A.updateAbout({ birth: 2001, follow: 1, fan: 'vivo', birthDate: '2001-02-30' });
+  assert.strictEqual(c.fs('users/f@b.it').about.birthDate, null, 'il 30 febbraio non esiste');
+});
+
 t('iscrizione: senza "Ho almeno 14 anni" o con meno di 14 anni non si crea l\'account', async () => {
   const c = ctx();
   const A = make();

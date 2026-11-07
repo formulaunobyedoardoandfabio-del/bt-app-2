@@ -564,3 +564,21 @@ Da fare:
   3D Push Button (PushToggle per "Ascolta i team radio"), Card Declined (PayFailCard se il pagamento non va),
   Flip Down (toast che scende ruotando dal bordo alto). Blur-up scartato (filter).
   Verificato: check/sem, run61, run87, run15, run62, run14, run69, run40, run86 verdi.
+
+## 7/11: micro-animazioni rifatte nei posti giusti + data di nascita
+- Edoardo: "la carta parte quando scrollo nella Home". Nel browser di prova scorrendo la Home non compare nulla
+  (sonda /tmp/bt/probe_home_0711.js); resi più stretti i due candidati: la carta del pagamento rifiutato (PayFailCard)
+  ora parte solo con reason "failed" (non con Google Play assente, prodotto non configurato o annullato) e le barre
+  del sondaggio crescono solo subito dopo il voto (prima a ogni apertura della scheda). Se lo rivede: chiedere uno screenshot.
+- RollNumber rifatto: il testo resta il numero vero, le cifre salgono dal basso (.roll-in) e girano solo quelle cambiate.
+  Usato in: schermata del campione, conto alla rovescia "Chiusura squadra" del FantaF1, punti totali FantaF1,
+  percentuali del sondaggio dopo il voto.
+- WarnPulse anche in FlagBanner per safety car, virtual safety car e bandiera rossa (colori della bandiera).
+- Skeleton (componente) nei dati della sessione e nella telemetria in caricamento.
+- Luccichio (cta-shine) su tutti gli inviti "Passa a Premium" (non sul tasto piccolo dell'intestazione).
+- Data di nascita in registrazione: BirthDateField (GG/MM/AAAA con le barre automatiche, oppure calendario sotto al campo
+  con rotella dell'anno a scorrimento, frecce e mesi). Salva about.birth (anno) + about.birthDate "AAAA-MM-GG";
+  account.js controlla l'età esatta con la data (tooYoung), compat.js passa birthDate al profilo. Il profilo mostra la
+  data; se si cambia l'anno col manettino del profilo la data intera diventa null.
+- Prove: run88-nascita (nuova), run31 aggiornata (la data si scrive), unit account/compat con casi nuovi.
+  Verificato: check/sem, unit account e compat, run31, run88, run87, run14, run69, run40, run86, run16, run15 verdi.
