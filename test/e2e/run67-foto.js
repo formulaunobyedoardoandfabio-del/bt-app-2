@@ -31,19 +31,16 @@ const setCandidates = (p, kind, id, files) => p.evaluate(({ kind, id, files }) =
 const champRow = async (p, pos) => { await goTab(p, 'RACE'); await tapSel(p, '[data-race-tab="mondiale"]'); await w(p, 600); return p.evaluate(pos => { const r = document.querySelector(`[data-champ-row="${pos}"]`); const i = r && r.querySelector('[data-img]'); return i ? { kind: i.getAttribute('data-img'), bg: getComputedStyle(i).backgroundImage } : null; }, pos); };
 
 run({
-  async 'pilota con foto libera: foto e "Foto: autore, licenza"'(b) {
+  // 3/11 (Edoardo: "rimuovi definitivamente le immagini piloti, scuderie e loghi anche dalla Admin parte"): anche con
+  // una foto libera scelta su Commons si vede il disegno, nella riga del Mondiale e nella scheda del pilota.
+  async '7/11 foto libera di Commons: niente foto, il disegno (nel Mondiale e nella scheda del pilota)'(b) {
     const { ctx, p, errs } = await open(b, { routes: ROUTES, seed: { addDocs: PHOTOS({ leclerc: 'File:Leclerc Uno.jpg' }) } }); await login(p);
-    await setCandidates(p, 'drivers', 'norris', ['File:Norris Serie.jpg']);   // senza scelta dell'admin: la prima candidata
-    const lec = await champRow(p, 5);   // Leclerc è 5° nel mondiale di serie
-    const nor = await p.evaluate(() => { const r = document.querySelector('[data-champ-row="4"]'); const i = r && r.querySelector('[data-img]'); return i ? { kind: i.getAttribute('data-img'), bg: getComputedStyle(i).backgroundImage } : null; });
+    const lec = await champRow(p, 5);
     await tapSel(p, '[data-champ-row="5"] button'); await w(p, 600);
-    const modal = await p.evaluate(() => { const m = document.querySelector('[data-driver-modal="leclerc"]'); if (!m) return null; const img = m.querySelector('[data-commons-photo]'); const c = m.querySelector('[data-photo-credit]'); const h = m.querySelector('h2'); const r1 = c && c.getBoundingClientRect(), r2 = h && h.getBoundingClientRect(); const cross = !!(r1 && r2 && r1.left < r2.right && r2.left < r1.right && r1.top < r2.bottom && r2.top < r1.bottom); return { src: img ? img.getAttribute('src') : null, credit: c ? c.textContent : null, cross }; });
+    const modal = await p.evaluate(() => { const m = document.querySelector('[data-driver-modal="leclerc"]'); return m ? { photo: !!m.querySelector('[data-commons-photo]'), credit: !!m.querySelector('[data-photo-credit]'), imgs: [...m.querySelectorAll('img')].map(i => i.src).filter(x => /wikimedia/.test(x)) } : null; });
     await ctx.close();
-    assert(lec && lec.kind === 'commons' && /upload\.wikimedia\.org\/fake\/Leclerc%2520Uno\.png|Leclerc%20Uno/.test(lec.bg), 'foto tonda di Leclerc: ' + JSON.stringify(lec));
-    assert(nor && nor.kind === 'commons' && /Norris/.test(nor.bg), 'senza scelta dell\'admin si usa la prima candidata: ' + JSON.stringify(nor));
-    assert(modal && /Leclerc%20Uno/.test(modal.src || ''), 'foto grande nella scheda del pilota: ' + JSON.stringify(modal));
-    assert(modal.credit === 'Foto: Autore Leclerc Uno, CC BY-SA 4.0, Wikimedia Commons', 'crediti della foto: ' + JSON.stringify(modal));
-    assert(!modal.cross, 'i crediti della foto coprono il nome del pilota');
+    assert(lec && lec.kind !== 'commons' && !/wikimedia/.test(lec.bg || ''), 'nel Mondiale c\'è ancora la foto: ' + JSON.stringify(lec));
+    assert(modal && !modal.photo && !modal.credit && !modal.imgs.length, 'nella scheda del pilota c\'è ancora la foto: ' + JSON.stringify(modal));
     assert(!errs.length, errs.join(' | '));
   },
 
@@ -60,38 +57,14 @@ run({
     assert(!errs.length && !o.errs.length, [...errs, ...o.errs].join(' | '));
   },
 
-  async 'Admin → FOTO: candidate di Leclerc, scelta della seconda, la vedono tutti'(b) {
+  async '7/11 Admin: niente scheda FOTO (né candidate né link di Commons)'(b) {
     const { ctx, p, errs } = await open(b, { routes: ROUTES }); await login(p);
-    await setCandidates(p, 'drivers', 'leclerc', ['File:Leclerc Uno.jpg', 'File:Leclerc Due.jpg', 'File:Leclerc NonLibera.jpg']);
-    await openAdmin(p, 'FOTO');
-    await tapSel(p, '[data-photo-entry="drivers:leclerc"]'); await w(p, 800);
-    const cands = await p.evaluate(() => [...document.querySelectorAll('[data-photo-candidate]')].map(e => ({ file: e.getAttribute('data-photo-candidate'), free: e.getAttribute('data-free'), img: !!e.querySelector('img'), text: e.innerText.replace(/\s+/g, ' ').trim(), disabled: (e.querySelector('button') || {}).disabled })));
-    await tapSel(p, '[data-photo-candidate="File:Leclerc Due.jpg"] button'); await w(p, 900);
-    const stored = await doc(p, 'shared/bt-commons-photos');
-    await tapSel(p, '[aria-label="Indietro"]'); await w(p); await tapSel(p, '[aria-label="Indietro"]'); await w(p, 300);
-    const lec = await champRow(p, 5);
+    await openAdmin(p);
+    const tabs = await p.evaluate(() => [...document.querySelectorAll('button')].map(b => b.textContent.trim()).filter(t => /^[A-Z ]{3,}$/.test(t)));
+    const entry = await p.evaluate(() => !!document.querySelector('[data-photo-entry], [data-photo-link]'));
     await ctx.close();
-    assert(cands.length === 3 && cands.every(c => c.img), 'candidate di Leclerc: ' + JSON.stringify(cands));
-    assert(cands[0].free === '1' && cands[2].free === '0' && cands[2].disabled === true && /non libera/i.test(cands[2].text), 'la candidata con licenza non libera non si può usare: ' + JSON.stringify(cands[2]));
-    assert(/Autore Leclerc Due/.test(cands[1].text) && /CC BY-SA 4\.0/.test(cands[1].text), 'autore e licenza delle candidate: ' + cands[1].text);
-    assert(stored && stored.drivers && stored.drivers.leclerc === 'File:Leclerc Due.jpg', 'scelta su Firebase: ' + JSON.stringify(stored));
-    assert(lec && /Leclerc%20Due|Leclerc%2520Due/.test(lec.bg), 'nell\'app si vede la seconda: ' + JSON.stringify(lec));
-    assert(!errs.length, errs.join(' | '));
-  },
-
-  async 'link incollato da Commons'(b) {
-    const { ctx, p, errs } = await open(b, { routes: ROUTES }); await login(p);
-    await openAdmin(p, 'FOTO');
-    await tapSel(p, '[data-photo-entry="drivers:leclerc"]'); await w(p, 400);
-    const inputW = await p.evaluate(() => document.querySelector('[data-photo-link]').getBoundingClientRect().width);
-    await p.fill('[data-photo-link]', 'https://example.com/foto.jpg'); await tapText(p, 'Usa il link', { exact: true }); await w(p, 300);
-    const bad = await text(p);
-    await p.fill('[data-photo-link]', 'https://commons.wikimedia.org/wiki/File:Leclerc_Incollata.jpg'); await tapText(p, 'Usa il link', { exact: true }); await w(p, 900);
-    const stored = await doc(p, 'shared/bt-commons-photos');
-    await ctx.close();
-    assert(inputW >= 160, 'il campo del link è troppo stretto: ' + inputW + ' px');
-    assert(/Link non valido: incolla il link di un file di Wikimedia Commons/.test(bad), 'link non di Commons: manca l\'avviso');
-    assert(stored && stored.drivers && stored.drivers.leclerc === 'File:Leclerc Incollata.jpg', 'link incollato: ' + JSON.stringify(stored));
+    assert(!tabs.includes('FOTO') && tabs.includes('FUNZIONI'), 'schede dell\'admin: ' + JSON.stringify(tabs));
+    assert(!entry, 'nell\'admin si scelgono ancora le foto');
     assert(!errs.length, errs.join(' | '));
   },
 
@@ -110,35 +83,19 @@ run({
     assert(!errs.length, errs.join(' | '));
   },
 
-  async 'rete che torna: le foto arrivano senza riavviare'(b) {
-    let down = true;
-    const api = 'https://commons.wikimedia.org/w/api.php**';
-    const { ctx, p, errs } = await open(b, { routes: { ...ROUTES, [api]: route => (down ? route.abort() : ROUTES[api](route)) }, seed: { addDocs: PHOTOS({ leclerc: 'File:Leclerc Uno.jpg' }) } }); await login(p);
-    const before = await champRow(p, 5);
-    down = false;
-    await p.evaluate(() => window.dispatchEvent(new Event('online'))); await w(p, 900);
-    const after = await p.evaluate(() => { const r = document.querySelector('[data-champ-row="5"]'); const i = r && r.querySelector('[data-img]'); return i ? i.getAttribute('data-img') : null; });
+  async '7/11 rete che torna e loghi: le foto e i loghi non arrivano lo stesso'(b) {
+    const { ctx, p, errs } = await open(b, { routes: ROUTES, seed: { addDocs: PHOTOS({ leclerc: 'File:Leclerc Uno.jpg' }) } }); await login(p);
+    await setCandidates(p, 'logos', 'haas', ['File:Haas Logo.svg']);
+    await p.evaluate(() => window.dispatchEvent(new Event('online'))); await w(p, 600);
+    const lec = await champRow(p, 5);
+    await tapText(p, 'Costruttori', { exact: true }); await w(p, 800);
+    const logo = await p.evaluate(() => { const e = document.querySelector('[data-team-logo="haas"]'); return e ? e.getAttribute('src') : null; });
     await ctx.close();
-    assert(before && before.kind === 'disegno', 'senza Commons: le iniziali: ' + JSON.stringify(before));
-    assert(after === 'commons', 'tornata la rete la foto deve arrivare: ' + after);
+    assert(lec && lec.kind !== 'commons', 'tornata la rete arriva la foto: ' + JSON.stringify(lec));
+    assert(!logo, 'il logo della Haas si vede: ' + logo);
     assert(!errs.length, errs.join(' | '));
   },
 
-  async 'loghi solo con SHOW_TEAM_LOGOS'(b) {
-    const { ctx, p, errs } = await open(b, { routes: ROUTES }); await login(p);
-    await setCandidates(p, 'logos', 'haas', ['File:Haas Logo.svg']);
-    await goTab(p, 'RACE'); await tapSel(p, '[data-race-tab="mondiale"]'); await w(p, 300);
-    await tapText(p, 'Costruttori', { exact: true }); await w(p, 800);
-    const on = await p.evaluate(() => { const e = document.querySelector('[data-team-logo="haas"]'); return e ? e.getAttribute('src') : null; });
-    await p.evaluate(() => { window.__req('./data/commons-candidates').SHOW_TEAM_LOGOS = false; });
-    await tapText(p, 'Piloti', { exact: true }); await w(p, 200); await tapText(p, 'Costruttori', { exact: true }); await w(p, 500);
-    const off = await p.evaluate(() => !!document.querySelector('[data-team-logo]'));
-    await ctx.close();
-    assert(on && /Haas%20Logo/.test(on), 'con SHOW_TEAM_LOGOS il logo della Haas si vede: ' + on);
-    assert(!off, 'senza SHOW_TEAM_LOGOS i loghi si vedono');
-    assert(!errs.length, errs.join(' | '));
-  },
-  // 31/10 sera (Edoardo): di serie (senza Commons) ogni pilota è una figura stilizzata coi suoi tratti.
   async 'di serie: figure stilizzate dei piloti, diverse tra loro, con la tuta della scuderia'(b) {
     const { ctx, p, errs } = await H.open(b); await login(p);
     await goTab(p, 'RACE'); await w(p, 600);

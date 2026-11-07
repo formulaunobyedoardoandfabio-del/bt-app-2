@@ -620,3 +620,9 @@ Da fare:
   e ogni notizia (center), coda dei contenuti Premium (start). La scheda al centro è a fuoco, quelle sopra e sotto si
   vedono più piccole e spente ai bordi (paintFocus: scale e opacity sulla riga, il transform resta dello swipe). Luce del
   colore della notizia al centro. Schede orizzontali di sempre, barra in basso ferma. Prove: run88 (notizie), run77.
+- 7/11 fine mattinata, prove finite: il giro completo è stato completato a pezzi (77 file prima, 26 dopo) e poi le
+  prove delle notizie rifatte dopo la Home a scatti. Aggiornate 5 prove rimaste indietro: run66 (swipe nuovo), run67
+  (le foto di piloti/scuderie/loghi sono tolte dal 3/11: ora controlla che non tornino e che l'admin non abbia FOTO),
+  run69 (Premium con 3 icone), run70 (fra i giochi in arrivo la telecronaca AI, ora col suo disegno in GARAGE_GLYPHS),
+  run76 (usa l'ultimo weekend con prove libere nel file che si aggiorna da solo). Verdi: run60, 66, 67, 69, 70, 76,
+  run10, 14, 17, 20, 33, 34, 55, 56, 57, 58, 88.

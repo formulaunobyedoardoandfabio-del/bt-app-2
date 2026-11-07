@@ -5717,6 +5717,13 @@ const GARAGE_GLYPHS = {
     <circle cx="20" cy="8" r="1.9" fill={c.g} />
     <circle cx="28.7" cy="25" r="1.9" fill={c.g} />
   </>),
+  // 7/11: telecronaca AI (in arrivo): microfono con le onde della voce.
+  telecronaca: c => (<>
+    <rect x="15" y="6" width="10" height="17" rx="5" fill="none" stroke={c.w} strokeWidth="2.4" />
+    <path d="M11 18 A9 9 0 0 0 29 18 M20 27 V33 M15 33 H25" fill="none" stroke={c.w} strokeWidth="2.2" strokeLinecap="round" />
+    <path d="M6 13 Q4 18 6 23 M34 13 Q36 18 34 23" fill="none" stroke={c.a} strokeWidth="2.2" strokeLinecap="round" />
+    <circle cx="20" cy="12" r="1.6" fill={c.g} />
+  </>),
   attack: c => (<>
     <path d="M3 16.5 H8.5 M2 22.5 H7.5 M3 28.5 H8.5" stroke={c.g} strokeWidth="2.4" strokeLinecap="round" />
     <circle cx="23.5" cy="22.5" r="12" fill="none" stroke={c.w} strokeWidth="2.6" />

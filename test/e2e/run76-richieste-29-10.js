@@ -178,7 +178,10 @@ run({
       const f = require('path').join(F1DIR, new URL(r.request().url()).pathname.split('/').pop());
       return require('fs').existsSync(f) ? r.fulfill({ status: 200, contentType: 'application/json', headers: { 'access-control-allow-origin': '*' }, body: require('fs').readFileSync(f, 'utf8') }) : r.fulfill({ status: 404, body: '' });
     } };
-    const { ctx, p, errs } = await open(b, { now: '2026-10-31T10:00:00Z', routes }); await login(p); await w(p, 1500);
+    // 7/11: il file si aggiorna da solo a ogni weekend: la prova usa l'ultimo weekend con le prove libere e la sua data.
+    const WK = { 'mx-1962': ['2026-10-31T10:00:00Z', /Messico/], 'br-1940': ['2026-11-07T10:00:00Z', /San Paolo|Brasile|Interlagos/] };
+    const lastFp = Object.keys(require(require('path').join(F1DIR, 'weekend.json')).practice).filter(k => WK[k]).sort((a, b) => WK[b][0].localeCompare(WK[a][0]))[0];
+    const { ctx, p, errs } = await open(b, { now: WK[lastFp][0], routes }); await login(p); await w(p, 1500);
     await tapSel(p, '[data-nav-tab="garage"]'); await w(p, 500); await tapSel(p, '[data-game="deg"]'); await w(p, 600);
     const st = await p.evaluate(() => ({
       src: (document.querySelector('[data-deg-src][aria-pressed="true"]') || {}).getAttribute ? document.querySelector('[data-deg-src][aria-pressed="true"]').getAttribute('data-deg-src') : null,
@@ -188,10 +191,10 @@ run({
     }));
     await ctx.close();
     assert(st.src === 'practice', 'di serie le prove libere del weekend in corso: ' + JSON.stringify(st));
-    const fpsMx = Object.keys(require(require('path').join(F1DIR, 'weekend.json')).practice['mx-1962']);   // le attese dai file (cambiano a ogni sessione)
+    const fpsMx = Object.keys(require(require('path').join(F1DIR, 'weekend.json')).practice[lastFp]);   // le attese dai file (cambiano a ogni sessione)
     assert(st.fps.join(',') === fpsMx.map((k, i) => k + (i === fpsMx.length - 1 ? '*' : '')).join(','), 'sessioni ' + fpsMx.join(', ') + ', l\'ultima scelta: ' + st.fps.join(','));
     assert(st.rows >= 5, 'long run: ' + st.rows);
-    assert(/Messico/.test(st.text), 'manca il nome del GP: ' + st.text);
+    assert(WK[lastFp][1].test(st.text), 'manca il nome del GP: ' + st.text);
     assert(!errs.length, errs.join(' | '));
   },
 });

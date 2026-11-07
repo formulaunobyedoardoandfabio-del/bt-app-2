@@ -74,7 +74,7 @@ run({
     assert(/PROVA GRATIS PER UN GP/.test(sheet), 'prova per un GP');
     assert(!/2,99|24,99|2 SETTIMANE/.test(sheet), 'prezzi o prova vecchi');
     assert(!ss.open && ss.gate, 'il Second Screen senza Premium chiede Premium: ' + JSON.stringify(ss));
-    assert(/Second Screen in orizzontale/.test(sheet) && /Telemetria e tempi sul giro/.test(sheet) && /Radio e gomme in diretta/.test(sheet), 'nel Premium mancano le funzioni Pro della gara');
+    assert(/Telemetria live/.test(sheet) && /Team radio/.test(sheet) && /Zero pubblicità/.test(sheet), 'nel Premium mancano le funzioni Pro della gara (7/11: tre icone con due parole)');
     assert(!errs.length, errs.join(' | '));
   },
 

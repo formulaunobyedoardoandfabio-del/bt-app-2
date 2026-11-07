@@ -35,14 +35,14 @@ run({
     const t0 = await activeTab(p);
     await drag(p, await freeSpot(p), -220);
     const t1 = await activeTab(p);
-    const slide = await p.evaluate(() => { const e = document.querySelector('[data-tab-enter]'); return e ? e.getAttribute('data-tab-enter') : null; });
+    const slide = await p.evaluate(() => { const e = document.querySelector('[data-tab-page="garage"]:not([data-tab-leave])'); return e ? getComputedStyle(e).transform : null; });   // 7/11: la scheda accanto diventa quella attiva, ferma al suo posto
     await w(p, 400);
     await drag(p, await freeSpot(p), 220);
     const t2 = await activeTab(p);
     const played = await p.evaluate(() => window.__played.slice());
     await ctx.close();
     assert(t0 === 'home' && t1 === 'garage', 'da HOME a sinistra: ' + JSON.stringify([t0, t1]));
-    assert(slide === 'left', 'la pagina non scivola: ' + slide);
+    assert(slide === 'none', 'finita la scivolata GARAGE non è al suo posto: ' + slide);
     assert(t2 === 'home', 'da GARAGE a destra: ' + t2);
     assert(played.filter(x => x === 'drs').length >= 2, 'manca il DRS dello swipe (31/10, prima era il tic): ' + JSON.stringify(played));
     assert(!errs.length, errs.join(' | '));
@@ -54,7 +54,7 @@ run({
   async 'finito lo swipe la scheda non ha più transform'(b) {
     const { ctx, p, errs } = await open(b); await login(p);
     await drag(p, await freeSpot(p), -220); await w(p, 500);
-    const tr = await p.evaluate(() => { const e = document.querySelector('[data-tab-enter]'); return e ? getComputedStyle(e).transform : 'nessuna scheda'; });
+    const tr = await p.evaluate(() => { const e = document.querySelector('[data-tab-page]:not([data-tab-leave]):not([data-tab-neighbor])'); return e ? getComputedStyle(e).transform : 'nessuna scheda'; });
     await ctx.close();
     assert(tr === 'none', 'dopo lo swipe la scheda resta con transform: ' + tr);
     assert(!errs.length, errs.join(' | '));
