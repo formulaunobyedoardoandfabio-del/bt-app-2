@@ -1,6 +1,6 @@
 {
  "weekend": {
-  "h": "21919de34979",
+  "h": "be1c5b921897",
   "races": [
    1,
    2,
@@ -41,7 +41,8 @@
    16,
    17,
    18,
-   19
+   19,
+   20
   ],
   "practice": [
    "br-1940",
@@ -51,18 +52,18 @@
  },
  "ghosts": [
   {
+   "id": "br-1940-2026-q",
+   "circuitId": "br-1940",
+   "round": 20,
+   "place": "San Paolo",
+   "h": "08104a40e6ce"
+  },
+  {
    "id": "mx-1962-2026-q",
    "circuitId": "mx-1962",
    "round": 19,
    "place": "Città del Messico",
    "h": "dacd6e176c13"
-  },
-  {
-   "id": "us-2012-2026-q",
-   "circuitId": "us-2012",
-   "round": 18,
-   "place": "Austin",
-   "h": "157cc625c547"
   }
  ],
  "source": "TracingInsights (github.com/TracingInsights/2026), dati FastF1 dal live timing di Formula 1"
