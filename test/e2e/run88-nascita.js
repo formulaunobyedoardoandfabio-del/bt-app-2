@@ -62,7 +62,7 @@ run({
     const first = await p.evaluate(() => ({ amb: document.querySelector('[data-news-ambient]').getAttribute('data-news-ambient'), grid: !!document.querySelector('[data-news-grid-toggle]'), list: document.querySelector('[data-news-list]').getAttribute('data-news-list'), rowImgLeft: (() => { const r = document.querySelector('[data-news-item]'); return r ? getComputedStyle(r).display : null; })() }));
     const seen = new Set([first.amb]);
     for (let i = 1; i <= 8; i++) { await p.evaluate(i => { const h = document.querySelector('[data-home]'); h.scrollTop = i * 260; h.dispatchEvent(new Event('scroll')); }, i); await w(p, 250); seen.add(await p.evaluate(() => document.querySelector('[data-news-ambient]').getAttribute('data-news-ambient'))); }
-    const rows = await p.evaluate(() => { const all = [...document.querySelectorAll('[data-news-row]')]; const h = document.querySelector('[data-home]'); return { n: all.length, focus: all.filter(e => getComputedStyle(e).animationName === 'newsFocus').length, side: h.scrollWidth - h.clientWidth }; });
+    const rows = await p.evaluate(() => { const all = [...document.querySelectorAll('[data-news-row]')]; const h = document.querySelector('[data-home]'); return { n: all.length, on: h.classList.contains('focus-on'), centers: document.querySelectorAll('.news-center').length, side: h.scrollWidth - h.clientWidth }; });
     // scroll-snap: ogni scheda si ferma al centro; quella al centro è a fuoco, le altre più spente
     await p.evaluate(() => { const r = document.querySelectorAll('[data-news-row]')[3]; r.scrollIntoView({ block: 'center' }); });
     await w(p, 500);
@@ -74,7 +74,7 @@ run({
     await ctx.close();
     assert(first.amb && !first.grid && first.list === 'list' && first.rowImgLeft === 'flex', 'elenco di sempre con la luce dietro: ' + JSON.stringify(first));
     assert(seen.size >= 2, 'scorrendo la luce non cambia colore: ' + JSON.stringify([...seen]));
-    assert(rows.focus === rows.n && rows.n > 3 && rows.side <= 0, '8/11: fuoco fatto dal browser su ogni scheda, la Home non scorre di lato: ' + JSON.stringify(rows));
+    assert(rows.on && rows.centers === 1 && rows.n > 3 && rows.side <= 0, '8/11: una sola notizia a fuoco, la Home non scorre di lato: ' + JSON.stringify(rows));
     assert(/^y( proximity)?$/.test(snap.type) && /center/.test(snap.align) && snap.near > .85 && snap.far < snap.near, '8/11: scatto leggero (proximity) con la scheda al centro a fuoco: ' + JSON.stringify(snap));
     assert(!errs.length, errs.join(' | '));
   },
@@ -124,6 +124,33 @@ run({
     assert(saved > 300, 'la pagina GARAGE non scorre abbastanza per la prova: ' + saved);
     assert(half !== null && Math.abs(half - saved) <= 3, 'a metà swipe GARAGE riparte dall\'inizio: ' + JSON.stringify({ saved, half }));
     assert(after !== null && Math.abs(after - saved) <= 3, 'arrivati su GARAGE il punto è cambiato: ' + JSON.stringify({ saved, after }));
+    assert(!errs.length, errs.join(' | '));
+  },
+
+  // 8/11 (Edoardo): "se vado al fondo di una pagina porta al fondo anche le altre": ogni scheda ha il suo punto.
+  async 'scroll: in fondo alla Home, le altre schede restano dove erano (col tocco e con lo swipe)'(b) {
+    const { ctx, p, errs } = await open(b, { seed: require('../fixtures/seed-2.0.json') }); await login(p); await w(p, 800);
+    await p.evaluate(() => { const h = document.querySelector('[data-home]'); h.scrollTop = h.scrollHeight; h.dispatchEvent(new Event('scroll')); });
+    await w(p, 400);
+    await tapSel(p, '[data-nav-tab="garage"]'); await w(p, 700);
+    const tapG = await p.evaluate(() => document.querySelector('[data-tab-page="garage"] .scrollcol').scrollTop);
+    await tapSel(p, '[data-nav-tab="home"]'); await w(p, 700);
+    const backH = await p.evaluate(() => document.querySelector('[data-home]').scrollTop);
+    // un punto dove il dito trascina la scheda (non su una lista che scorre di lato), come freeSpot di run71
+    const y = await p.evaluate(() => {
+      const root = document.querySelector('[data-tab-swipe]'), r = root.getBoundingClientRect(), x = 300;
+      const own = e => { for (; e && e !== root; e = e.parentElement) { if (e.hasAttribute('data-swipe-own') || /INPUT|TEXTAREA|SELECT/.test(e.tagName)) return true; const cs = getComputedStyle(e); if ((cs.overflowX === 'auto' || cs.overflowX === 'scroll') && e.scrollWidth > e.clientWidth + 1) return true; } return false; };
+      for (let yy = r.top + 40; yy < r.bottom - 20; yy += 20) { const e = document.elementFromPoint(x, yy); if (e && root.contains(e) && !own(e)) return yy; }
+      return r.top + 60;
+    });
+    await p.mouse.move(300, y); await p.mouse.down(); await p.mouse.move(160, y, { steps: 6 }); await w(p, 200);
+    const half = await p.evaluate(() => { const n = document.querySelector('[data-tab-neighbor] .scrollcol'); return n ? n.scrollTop : null; });
+    await p.mouse.move(20, y, { steps: 4 }); await p.mouse.up(); await w(p, 800);
+    const swG = await p.evaluate(() => { const e = document.querySelector('[data-tab-page="garage"] .scrollcol'); return e ? e.scrollTop : 'schede: ' + [...document.querySelectorAll('[data-tab-page]')].map(x => x.getAttribute('data-tab-page')).join(','); });
+    await ctx.close();
+    assert(tapG === 0, 'col tocco GARAGE va in fondo come la Home: ' + tapG);
+    assert(backH > 300, 'tornando alla Home non è più in fondo: ' + backH);
+    assert(half === 0 && swG === 0, 'con lo swipe GARAGE va in fondo come la Home: ' + JSON.stringify({ half, swG }));
     assert(!errs.length, errs.join(' | '));
   },
 

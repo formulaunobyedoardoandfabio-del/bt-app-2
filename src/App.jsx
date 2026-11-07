@@ -2095,10 +2095,22 @@ function HomeScreen({ holidayTop = null, pitSwipe = null, ig, onOpenIg, highligh
     if (!root || typeof IntersectionObserver === "undefined") return undefined;
     const colorOf = el => { const id = el.getAttribute("data-news-item") || el.getAttribute("data-featured"); const art = articles.find(x => String(x.id) === id); const tag = art ? articleTags(art)[0] : null; return (tag && tag.color) || C.accent; };
     const first = root.querySelector("[data-featured], [data-news-item]");
-    if (first && !ambCur.current) setAmbColor(colorOf(first));
-    const io = new IntersectionObserver(es => { const hit = es.filter(e => e.isIntersecting).pop(); if (hit) setAmbColor(colorOf(hit.target)); }, { root, rootMargin: "-48% 0px -48% 0px", threshold: 0 });
+    // 8/11: la notizia che passa per il centro prende la classe news-center (a fuoco), le altre restano più piccole e spente;
+    // solo quando una notizia attraversa il centro, niente calcoli a ogni movimento. Sul telefono lo scroll-driven del
+    // browser lasciava tutte le notizie spente.
+    let lit = null;
+    const focus = el => {
+      const box = el.closest("[data-news-row]") || el.parentElement;
+      if (!box || box === lit) return;
+      if (lit) lit.classList.remove("news-center");
+      box.classList.add("news-center"); lit = box;
+      root.classList.add("focus-on");
+      setAmbColor(colorOf(el));
+    };
+    if (first) focus(first);
+    const io = new IntersectionObserver(es => { const hit = es.filter(e => e.isIntersecting).pop(); if (hit) focus(hit.target); }, { root, rootMargin: "-48% 0px -48% 0px", threshold: 0 });
     root.querySelectorAll("[data-news-item], [data-featured]").forEach(el => io.observe(el));
-    return () => io.disconnect();
+    return () => { io.disconnect(); if (lit) lit.classList.remove("news-center"); };
   }, [newsKey]);
   const [tyre, setTyre] = useState(null);     // filtro a gomma (G09): soft | medium | hard | inter
   const [lane, setLane] = useState("all");    // Pit Lane (G10): all | teams | drivers | tech
@@ -11486,7 +11498,9 @@ function App() {
     if (!scrollBase || !box || typeof MutationObserver === "undefined") return;
     const mem = scrollMem.current;
     let cur = null, key = null, raf = 0;
-    const scope = () => (view === "tab" ? box.querySelector("[data-tab-page]:not([data-tab-leave])") : box);
+    // 8/11 (Edoardo: "se vado al fondo di una pagina porta al fondo anche le altre"): solo la pagina di questa scheda,
+    // mai quella accanto dello swipe (data-tab-neighbor) né la nuova appena montata quando la chiave è ancora la vecchia.
+    const scope = () => (view === "tab" ? box.querySelector(`[data-tab-page="${tab}"]:not([data-tab-leave]):not([data-tab-neighbor])`) : box);
     // Pagina interna di una scheda (un gioco del Garage): ha il tasto Indietro col titolo accanto, subito disegnato.
     const sig = scrollSig;
     const restore = (el, want) => {

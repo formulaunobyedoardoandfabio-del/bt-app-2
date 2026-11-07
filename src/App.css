@@ -303,14 +303,12 @@
 /* 7/11: notizie. Luce del colore della notizia che cambia piano (due strati, solo opacity), ULTIM'ORA che pulsa,
    articolo che entra salendo. */
 .news-amb{transition:opacity .7s ease}
-/* 8/11: la notizia al centro a fuoco, quelle sopra e sotto più piccole e spente: lo calcola il browser mentre scorri
-   (animation-timeline: view(), niente JavaScript a ogni movimento); dove non c'è, niente effetto. */
-@supports (animation-timeline: view()) {
-  [data-home] [data-news-row], [data-home] .news-focus{ animation:newsFocus linear both; animation-timeline:view(); animation-range:cover 0% cover 100%; }
-  @keyframes newsFocus{ 0%{ opacity:.32; scale:.88; } 50%{ opacity:1; scale:1; } 100%{ opacity:.32; scale:.88; } }
-}
+/* 8/11: la notizia al centro a fuoco (news-center, messa dall'IntersectionObserver della Home), le altre più piccole e
+   spente; si accende solo quando la Home ha scelto la notizia a fuoco (focus-on), così non resta mai tutto spento. */
+[data-home].focus-on [data-news-row], [data-home].focus-on .news-focus{ scale:.93; opacity:.5; transition:scale .28s ease, opacity .28s ease; }
+[data-home].focus-on .news-center{ scale:1; opacity:1; }
 .brk-dot{animation:brkPulse 1.4s ease-in-out infinite}
 @keyframes brkPulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.35;transform:scale(.7)}}
 .article-in{animation:articleIn .3s cubic-bezier(.2,.8,.2,1)}
 @keyframes articleIn{from{opacity:0;transform:translateY(22px)}}
-@media (prefers-reduced-motion: reduce){ .brk-dot,.article-in,[data-home] [data-news-row],[data-home] .news-focus{animation:none} .news-amb{transition:none} }
+@media (prefers-reduced-motion: reduce){ .brk-dot,.article-in{animation:none} .news-amb,[data-home].focus-on [data-news-row],[data-home].focus-on .news-focus{transition:none} }

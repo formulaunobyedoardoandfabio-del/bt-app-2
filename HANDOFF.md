@@ -644,3 +644,11 @@ Da fare:
 - Registrazione: via la casella "Ho almeno 14 anni": serve la data di nascita e l'età si calcola da lì (account.js
   need-birth; adult true resta valido per le app vecchie senza data).
 - Prove: unit account, profiles, trophypro; run10, 16, 31, 32, 33, 50, 51, 60, 66, 71, 77, 79, 81, 85, 86, 88 verdi.
+- 8/11 pomeriggio (screenshot di Edoardo: Home tutta spenta; "se vado al fondo di una pagina porta al fondo anche le altre"):
+  - Scroll delle schede: la memoria dello scroll prendeva la prima pagina non in uscita, che durante lo swipe poteva
+    essere la scheda accanto, e subito dopo il cambio la nuova scheda con la chiave della vecchia (la portava in fondo).
+    Ora scope() prende solo [data-tab-page="<scheda>"] senza data-tab-leave e data-tab-neighbor. Prova in run88.
+  - Fuoco della Home: sul telefono animation-timeline: view() lasciava tutte le notizie spente. Ora è una classe:
+    l'IntersectionObserver mette news-center alla notizia che passa per il centro e focus-on su [data-home]; CSS con
+    transizione (scale .93 / opacity .5 le altre). Mai tutto spento: senza focus-on niente effetto.
+  - Verificato: screenshot della Home (in cima e con una notizia al centro), run88, run77, run71, run66 verdi.
