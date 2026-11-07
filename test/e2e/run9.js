@@ -11,7 +11,7 @@ const SEED_20 = require('../fixtures/seed-2.0.json');
   await ctx.addInitScript(() => { window.open = () => null; });
   const p = await ctx.newPage(); const errs = []; p.on('pageerror', e => errs.push(e.message));
   const w = (ms = 350) => p.waitForTimeout(ms);
-  const tap = async (txt, exact = false) => { const ok = await p.evaluate(({ txt, exact }) => { const n = s => s.replace(/\s+/g, ' ').trim(); const el = [...document.querySelectorAll('button')].find(b => exact ? n(b.textContent) === txt : n(b.textContent).includes(txt)); if (el) el.click(); return !!el; }, { txt, exact }); if (!ok) throw new Error('manca: ' + txt); await w(); };
+  const tap = async (txt, exact = false) => { const ok = await p.evaluate(({ txt, exact }) => { const n = s => s.replace(/\s+/g, ' ').trim(); const el = [...document.querySelectorAll('button')].find(b => exact ? (n(b.textContent) === txt || (b.hasAttribute('data-nav-tab') && n(b.textContent).toUpperCase() === txt)) : n(b.textContent).includes(txt)); if (el) el.click(); return !!el; }, { txt, exact }); if (!ok) throw new Error('manca: ' + txt); await w(); };
   const sel = async s => { await p.evaluate(s => document.querySelector(s).click(), s); await w(); };
   await p.goto('file://' + __dirname + '/' + (process.env.PAGE || 'test.html')); await w(500);
   await p.waitForFunction(() => !document.querySelector('[data-splash]'), null, { timeout: 8000 }).catch(() => {});

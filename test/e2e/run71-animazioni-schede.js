@@ -44,7 +44,7 @@ async function press(p, from, dx, ms, steps = 10) {
   for (let i = 1; i <= steps; i++) { await p.mouse.move(from.x + dx * i / steps, from.y); await p.waitForTimeout(ms / steps); }
 }
 const pillGap = p => p.evaluate(() => {
-  const pill = document.querySelector('[data-nav-pill] > *'), on = document.querySelector('[data-nav-tab][aria-current="page"]');
+  const pill = document.querySelector('[data-nav-ball]'), on = document.querySelector('[data-nav-tab][aria-current="page"]');
   if (!pill || !on) return null;
   const a = pill.getBoundingClientRect(), b = on.getBoundingClientRect();
   return Math.round((a.left + a.width / 2) - (b.left + b.width / 2));

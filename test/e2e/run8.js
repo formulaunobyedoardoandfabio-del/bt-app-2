@@ -28,7 +28,7 @@ async function tapText(p, txt, { exact = false, timeout = 4000 } = {}) {
   while (Date.now() < end) {
     const ok = await p.evaluate(({ txt, exact }) => {
       const n = s => s.replace(/\s+/g, ' ').trim();
-      const el = [...document.querySelectorAll('button, a')].find(b => exact ? n(b.textContent) === txt : n(b.textContent).includes(txt));
+      const el = [...document.querySelectorAll('button, a')].find(b => exact ? (n(b.textContent) === txt || (b.hasAttribute('data-nav-tab') && n(b.textContent).toUpperCase() === txt)) : n(b.textContent).includes(txt));
       if (!el) return false; el.click(); return true;
     }, { txt, exact });
     if (ok) return; await w(p, 150);

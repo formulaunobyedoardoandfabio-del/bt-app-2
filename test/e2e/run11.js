@@ -53,7 +53,7 @@ const text = p => p.evaluate(() => document.body.innerText);
 async function tapText(p, txt, { exact = false, timeout = 4000 } = {}) {
   const end = Date.now() + timeout;
   while (Date.now() < end) {
-    const ok = await p.evaluate(({ txt, exact }) => { const n = s => s.replace(/\s+/g, ' ').trim(); const el = [...document.querySelectorAll('button')].find(b => exact ? n(b.textContent) === txt : n(b.textContent).includes(txt)); if (!el) return false; el.click(); return true; }, { txt, exact });
+    const ok = await p.evaluate(({ txt, exact }) => { const n = s => s.replace(/\s+/g, ' ').trim(); const el = [...document.querySelectorAll('button')].find(b => exact ? (n(b.textContent) === txt || (b.hasAttribute('data-nav-tab') && n(b.textContent).toUpperCase() === txt)) : n(b.textContent).includes(txt)); if (!el) return false; el.click(); return true; }, { txt, exact });
     if (ok) return; await w(p, 150);
   }
   throw new Error(`bottone non trovato: "${txt}"`);

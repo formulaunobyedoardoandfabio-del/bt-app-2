@@ -743,11 +743,12 @@ function TopHeader({ isPremium, unread, onPremium, onBell, onProfile, trialDays 
   );
 }
 
+// 8/11: nomi come nella barra del design "4 Lega" (Home, Garage, Fanta, Race); nel cartello dello swipe in maiuscolo.
 const TABS = [
-  { id: "home", label: "HOME", icon: "home" },
-  { id: "garage", label: "GARAGE", icon: "garage" },
-  { id: "fanta", label: "FANTA", icon: "trophy" },
-  { id: "race", label: "RACE", icon: "flag" },
+  { id: "home", label: "Home", icon: "home" },
+  { id: "garage", label: "Garage", icon: "garage" },
+  { id: "fanta", label: "Fanta", icon: "trophy" },
+  { id: "race", label: "Race", icon: "flag" },
 ];
 const TAB_IDS = TABS.map(t => t.id);
 // G29: un gesto che parte da qui è dell'elemento, non dello swipe tra le schede: data-swipe-own (notizie, manettini,
@@ -763,31 +764,60 @@ function ownGesture(el, root) {
   return false;
 }
 
-// Barra in basso (25/10): la pillola rossa è una sola e scivola sotto la scheda attiva; durante lo swipe segue il dito
-// (--nav-drag, scritto dal codice dello swipe). Icona bianca e grigia una sopra l'altra: cambia solo l'opacità.
-const NAV_ICO = { position: "absolute", top: 0, left: 0, right: 0, bottom: 0, display: "flex", alignItems: "center", justifyContent: "center" };
+// Barra in basso. 8/11 notte (Edoardo, video "Floating Notch": "non devi prenderla dal design ma come da questo
+// video"): barra sospesa con gli angoli tondi; sopra la scheda attiva una palla col colore dei tasti (C.accent, di
+// serie il rosso LED) che porta l'icona e sta dentro un incavo curvo del bordo della barra. Toccando un'altra scheda
+// la palla salta fin lì (scivola di lato e fa un piccolo balzo, l'icona si spegne in volo e si riaccende
+// all'arrivo), l'incavo la segue, sull'icona toccata parte un'onda e sotto compare il nome della scheda. Le altre
+// schede mostrano solo l'icona grigia (il nome resta nel testo del tasto, per chi legge lo schermo e per le prove).
+// Durante lo swipe palla e incavo seguono il dito (--nav-drag e la classe "dragging" sul nav, scritte dal codice
+// dello swipe). Solo transform e opacità; con "Rimuovi animazioni" niente salto, onda né scivolata.
+const NAV_PATH = {
+  home: "M5 12l-2 0l9 -9l9 9l-2 0 M5 12v7a2 2 0 0 0 2 2h10a2 2 0 0 0 2 -2v-7 M9 21v-6a2 2 0 0 1 2 -2h2a2 2 0 0 1 2 2v6",
+  garage: "M3 21v-13l9 -4l9 4v13 M13 13h4v8h-4z M7 13h4v8h-4z M7 9h10",
+  trophy: "M8 21l8 0 M12 17l0 4 M7 4l10 0 M17 4v8a5 5 0 0 1 -10 0v-8 M3 9a2 2 0 1 0 4 0a2 2 0 1 0 -4 0 M17 9a2 2 0 1 0 4 0a2 2 0 1 0 -4 0",
+  flag: "M5 5a5 5 0 0 1 7 0a5 5 0 0 0 7 0v9a5 5 0 0 1 -7 0a5 5 0 0 0 -7 0v-9z M5 21v-7",
+};
+const NAV_ON = "#F4F4F5", NAV_OFF = "#A1A1AA", NAV_BAR = "#141418", NAV_EDGE = "rgba(255,255,255,.09)", NAV_FONT = "'Manrope', system-ui, sans-serif";
+const NAV_H = 60, NAV_BALL = 44, NAV_HOLE = 56, NAV_CY = 2;   // altezza barra, palla, incavo; centro della palla rispetto al bordo
+const navGlow = c => (/^#[0-9a-f]{6}$/i.test(c || "") ? c + "59" : "rgba(255,24,1,.35)");
+const NavGlyph = ({ name, color }) => (
+  <svg width="22" height="22" viewBox="0 0 24 24" aria-hidden="true" style={{ display: "block", flex: "none" }} fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d={NAV_PATH[name]} /></svg>
+);
 function BottomNav({ active, onChange, pillRef }) {
-  const idx = Math.max(0, TAB_IDS.indexOf(active));
+  const idx = Math.max(0, TAB_IDS.indexOf(active)), cur = TABS[idx];
+  const move = { position: "absolute", top: 0, left: 0, width: 100 / TABS.length + "%", transform: "translateX(calc((var(--nav-i) + var(--nav-drag, 0)) * 100%))" };
   return (
-    <div style={{ position: "relative", display: "flex", alignItems: "center", padding: "10px 8px 14px", borderTop: `1px solid ${C.border}`, background: C.bg, flexShrink: 0 }}>
-      <div aria-hidden="true" style={{ position: "absolute", left: 8, right: 8, top: 16, height: 26, pointerEvents: "none" }}>
-        <div ref={pillRef} data-nav-pill="" className="nav-pill" style={{ "--nav-i": idx, width: 100 / TABS.length + "%", height: "100%", display: "flex", justifyContent: "center", transform: "translateX(calc((var(--nav-i) + var(--nav-drag, 0)) * 100%))" }}>
-          <div style={{ width: 34, height: 26, borderRadius: 9, background: C.accent }} />
+    <nav ref={pillRef} aria-label="Sezioni" data-bottom-nav="" data-nav-pill="" className="nav-root" style={{ "--nav-i": idx, position: "relative", zIndex: 2, padding: "14px 12px 10px", background: "#000000", flexShrink: 0 }}>
+      <div style={{ position: "relative", height: NAV_H }}>
+        {/* fondo della barra con l'incavo (un cerchio del colore della pagina che scivola sul bordo) */}
+        <div aria-hidden="true" style={{ position: "absolute", inset: 0, borderRadius: 22, background: NAV_BAR, boxShadow: `inset 0 0 0 1px ${NAV_EDGE}, 0 10px 24px rgba(0,0,0,.45)`, overflow: "hidden" }}>
+          <div className="nav-move" style={{ ...move, height: "100%" }}>
+            <div data-nav-notch="" style={{ position: "absolute", left: "50%", top: NAV_CY - NAV_HOLE / 2, width: NAV_HOLE, height: NAV_HOLE, marginLeft: -NAV_HOLE / 2, borderRadius: "50%", background: "#000000", boxShadow: `inset 0 0 0 1px ${NAV_EDGE}` }} />
+          </div>
+        </div>
+        {/* la palla con l'icona della scheda attiva */}
+        <div aria-hidden="true" className="nav-move" style={{ ...move, height: 0, pointerEvents: "none", zIndex: 1 }}>
+          <div key={active} className="nav-hop" style={{ position: "absolute", left: "50%", top: NAV_CY - NAV_BALL / 2, width: NAV_BALL, height: NAV_BALL, marginLeft: -NAV_BALL / 2 }}>
+            <div data-nav-ball="" style={{ width: "100%", height: "100%", borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", backgroundColor: C.accent, backgroundImage: "radial-gradient(circle at 32% 26%, rgba(255,255,255,.34), rgba(255,255,255,0) 58%)", boxShadow: `0 4px 12px ${navGlow(C.accent)}, inset 0 -3px 6px rgba(0,0,0,.18)` }}>
+              <span className="nav-ball-ico" style={{ display: "flex" }}><NavGlyph name={cur.icon} color="#FFFFFF" /></span>
+            </div>
+          </div>
+        </div>
+        <div style={{ position: "absolute", inset: 0, display: "flex" }}>
+          {TABS.map(t => {
+            const on = t.id === active;
+            return (
+              <button key={t.id} className="press" data-nav-tab={t.id} aria-current={on ? "page" : undefined} onClick={() => onChange(t.id)} style={{ position: "relative", flex: 1, height: "100%", padding: 0, background: "transparent", border: 0 }}>
+                <span className="nav-ico" style={{ position: "absolute", left: "50%", top: NAV_H / 2 - 11, marginLeft: -11, opacity: on ? 0 : 1 }}><NavGlyph name={t.icon} color={NAV_OFF} /></span>
+                {on && <span key={"r" + active} aria-hidden="true" className="nav-ripple" style={{ position: "absolute", left: "50%", top: NAV_H / 2 - 20, width: 40, height: 40, marginLeft: -20, borderRadius: "50%", boxShadow: "inset 0 0 0 2px rgba(255,255,255,.55)" }} />}
+                <span key={on ? "on" : "off"} className={on ? "nav-label" : ""} style={{ position: "absolute", left: 0, right: 0, bottom: 7, textAlign: "center", fontFamily: NAV_FONT, fontWeight: 800, fontSize: 11, lineHeight: 1.2, color: NAV_ON, opacity: on ? 1 : 0 }}>{t.label}</span>
+              </button>
+            );
+          })}
         </div>
       </div>
-      {TABS.map(t => {
-        const on = t.id === active;
-        return (
-          <button key={t.id} className="press" data-nav-tab={t.id} aria-current={on ? "page" : undefined} onClick={() => onChange(t.id)} style={{ position: "relative", flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 4, padding: "6px 0" }}>
-            <span style={{ position: "relative", display: "block", width: 34, height: 26 }}>
-              <span className="nav-ico" style={{ ...NAV_ICO, opacity: on ? 1 : 0 }}><Icon name={t.icon} size={16} color="#fff" sw={2.3} /></span>
-              <span className="nav-ico" style={{ ...NAV_ICO, opacity: on ? 0 : 1 }}><Icon name={t.icon} size={18} color={C.dim} /></span>
-            </span>
-            <span style={{ fontFamily: F_HEAD, fontWeight: 700, fontSize: 9, color: on ? C.text : C.dim, letterSpacing: .4 }}>{t.label}</span>
-          </button>
-        );
-      })}
-    </div>
+    </nav>
   );
 }
 // Scheda accanto che compare ai lati durante lo swipe (25/10): sta appena fuori dallo schermo ed entra attaccata al
@@ -798,7 +828,7 @@ function TabPeek({ side, tab, peekRef }) {
   return (
     <div ref={peekRef} aria-hidden="true" data-tab-peek={side} className="tab-peek" style={{ position: "absolute", top: "50%", [side === "right" ? "left" : "right"]: "calc(100% + 12px)", marginTop: -34, display: "flex", flexDirection: "column", alignItems: "center", gap: 7, opacity: 0, pointerEvents: "none" }}>
       <span className="tab-peek-ico" style={{ "--peek-on": C.accent, width: 46, height: 46, borderRadius: 15, background: C.card, border: `1px solid ${C.border}`, display: "flex", alignItems: "center", justifyContent: "center" }}><Icon name={tab.icon} size={20} color={C.text} /></span>
-      <span data-label={tab.label} style={{ fontFamily: F_HEAD, fontWeight: 800, fontSize: 10, letterSpacing: .8, color: C.text }} />
+      <span data-label={tab.label.toUpperCase()} style={{ fontFamily: F_HEAD, fontWeight: 800, fontSize: 10, letterSpacing: .8, color: C.text }} />
     </div>
   );
 }

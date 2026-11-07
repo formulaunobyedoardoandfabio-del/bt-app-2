@@ -735,3 +735,20 @@ Da fare:
   schede non c'è più (ownGesture: la griglia scorre di lato); si cambia scheda dalla barra in basso.
 - La memoria dello scroll (scrollMem in App) ora ricorda anche scrollLeft.
 - Prove: test/e2e/run94-garage-griglia.js (1); run77 aggiornata (giù e di lato).
+
+## 8/11 notte: barra in basso "Floating Notch" (video di Edoardo)
+- BottomNav: barra sospesa con angoli tondi; palla col colore dei tasti (C.accent) con l'icona della scheda attiva,
+  dentro un incavo del bordo (cerchio nero che scivola, [data-nav-notch]). Toccando: la palla scivola e fa un balzo
+  (.nav-hop), icona spenta in volo, onda sull'icona toccata (.nav-ripple), nome che compare sotto (.nav-label).
+  Nomi delle schede ora "Home", "Garage", "Fanta", "Race" (nel cartello dello swipe in maiuscolo).
+- pillRef (--nav-drag e classe "dragging" dello swipe) ora è sul <nav>: palla e incavo leggono --nav-drag.
+- Prove: tapText (helpers e le copie vecchie in run8-run23) trova la scheda anche scritta in maiuscolo ('FANTA');
+  run50 e run71 guardano [data-nav-ball]. run50 "riavvio" a volte fallisce sotto carico (splash), da sola passa.
+
+## 8/11 notte: logica dei B&T Trophies del GP
+- src/logic/gp-trophies.js: computeGpTrophies(raw, { type }) → { headline, list, all }. Gara: Maestro della difesa,
+  Re del bagnato, La Fenice, Partenza razzo, Ripartenza fulminea, Il Mastino, Metronomo, Gomma eterna, Pit crew d'oro,
+  Missile, Re dei minisettori, Pittore di cordoli, L'Eremita; qualifica: Giro della vita + Missile, minisettori,
+  cordoli. Senza il dato vero il trofeo non c'è (griglia solo da posizioni prima del via, pit crew solo con
+  stop_duration). t = secondi dalla partenza della sessione (come sim.jumpTo). UI ancora da fare.
+- Prove: test/unit/gp-trophies.test.js (12).

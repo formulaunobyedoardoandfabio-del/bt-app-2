@@ -195,10 +195,21 @@
   .tab-peek.dragging{ transition:none; }
   .tab-peek [data-label]::after{ content:attr(data-label); }
   .tab-peek[data-ready="1"] .tab-peek-ico{ background:var(--peek-on,#FF1801) !important; border-color:var(--peek-on,#FF1801) !important; }
-  /* La pillola rossa della barra in basso scivola sotto la scheda attiva; durante lo swipe segue il dito. */
-  .nav-pill{ transition:transform .36s cubic-bezier(.3,1.2,.5,1); }
-  .nav-pill.dragging{ transition:none; }
-  .nav-ico{ transition:opacity .18s ease .06s; }
+  /* Barra in basso "Floating Notch" (8/11, video di Edoardo): palla e incavo scivolano sulla scheda toccata
+     (.nav-move), la palla fa un balzo (.nav-hop) con l'icona spenta in volo (.nav-ball-ico), sull'icona toccata
+     parte un'onda (.nav-ripple) e compare il nome (.nav-label). Durante lo swipe (.dragging) niente transizione. */
+  .nav-move{ transition:transform .48s cubic-bezier(.45,0,.2,1); }
+  .nav-root.dragging .nav-move{ transition:none; }
+  .nav-ico{ transition:opacity .2s ease .12s; }
+  .nav-hop{ animation:navhop .48s cubic-bezier(.45,0,.2,1) both; }
+  .nav-ball-ico{ animation:navballico .48s ease both; }
+  .nav-ripple{ animation:navripple .6s ease-out both; }
+  .nav-label{ animation:navlabel .3s ease .3s both; }
+  @keyframes navhop{ 0%{ transform:translateY(0) scale(1); } 45%{ transform:translateY(-16px) scale(.9); } 80%{ transform:translateY(2px) scale(1.04); } 100%{ transform:translateY(0) scale(1); } }
+  @keyframes navballico{ 0%, 55%{ opacity:0; transform:scale(.6); } 100%{ opacity:1; transform:scale(1); } }
+  @keyframes navripple{ from{ opacity:.9; transform:scale(.5); } to{ opacity:0; transform:scale(1.6); } }
+  @keyframes navlabel{ from{ opacity:0; transform:translateY(4px); } to{ opacity:1; transform:translateY(0); } }
+  [data-nav-tab]:focus-visible{ outline:2px solid #F4F4F5; outline-offset:-4px; border-radius:16px; }
   /* Sottoschede (pagina RACE): il contenuto nuovo entra dalla parte della sottoscheda toccata. */
   .sub-enter-left{ animation:subinleft .24s cubic-bezier(.16,.84,.24,1) backwards; }
   .sub-enter-right{ animation:subinright .24s cubic-bezier(.16,.84,.24,1) backwards; }
@@ -207,7 +218,9 @@
   @media (prefers-reduced-motion:reduce){
     .tab-enter-left, .tab-enter-right, .tab-leave, .sub-enter-left, .sub-enter-right{ animation:none; }
     .tab-leave, .tab-peek{ display:none; }
-    .tab-back, .nav-pill, .nav-ico{ transition:none; }
+    .tab-back, .nav-move, .nav-ico{ transition:none; }
+    .nav-hop, .nav-ball-ico, .nav-label{ animation:none; }
+    .nav-ripple{ display:none; }
   }
   @media (prefers-reduced-motion:reduce){ .press, .toast, .live-notice{ transition:none; animation:none; } .track-dot{ animation:none !important; } .cta-shine::after{ animation:none; display:none; } .led-seq > span{ animation:none; } .abort-yellow{ animation:none; opacity:1; } .abort-shake{ animation:none; } }
   /* 1/11: Pit Swipe. Easter egg: donuts (la carta gira, fumo), pioggia vera (gocce e tergicristallo). Solo transform e opacity. */

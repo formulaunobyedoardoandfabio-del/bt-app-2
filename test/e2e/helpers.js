@@ -57,7 +57,9 @@ async function tapText(p, txt, { exact = false, timeout = 4000, sel = 'button' }
   while (Date.now() < end) {
     const ok = await p.evaluate(({ txt, exact, sel }) => {
       const n = s => s.replace(/\s+/g, ' ').trim();
-      const el = [...document.querySelectorAll(sel)].find(b => (exact ? n(b.textContent) === txt : n(b.textContent).includes(txt)));
+      // 8/11: le schede della barra in basso si chiamano "Home", "Garage"... (design "4 Lega"): le prove che scrivono
+      // 'HOME' trovano la scheda lo stesso.
+      const el = [...document.querySelectorAll(sel)].find(b => (exact ? n(b.textContent) === txt || (b.hasAttribute('data-nav-tab') && n(b.textContent).toUpperCase() === txt) : n(b.textContent).includes(txt)));
       if (!el) { const g = document.querySelector('[data-settings-group][aria-expanded="false"]'); if (g) g.click(); return false; }   // 8/11: impostazioni in "Personalizza l'app"
       el.click(); return true;
     }, { txt, exact, sel });

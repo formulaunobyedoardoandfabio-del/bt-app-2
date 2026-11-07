@@ -34,8 +34,9 @@ const oldReds = p => p.evaluate(() => [...document.querySelectorAll('body *')].f
   return /rgba?\(232, 18, 29\b/.test([s.color, s.backgroundColor, s.backgroundImage, s.borderTopColor, s.borderBottomColor, s.borderLeftColor, s.borderRightColor, s.boxShadow, s.fill, s.stroke, s.outlineColor].join('|'));
 }).map(e => e.tagName + ' ' + (e.textContent || '').trim().slice(0, 30)));
 // Il tasto della scheda attiva nella barra in basso (pieno del colore dei tasti). Dal 25/10 è una pillola sola che
-// scivola sotto la scheda attiva ([data-nav-pill]); prima era dentro il tasto della scheda.
-const navPill = p => p.evaluate(() => { const e = document.querySelector('[data-nav-pill] > *'); return e ? getComputedStyle(e).backgroundColor : null; });
+// scivola sotto la scheda attiva ([data-nav-pill]); prima era dentro il tasto della scheda. 8/11: è la palla della
+// barra "Floating Notch" ([data-nav-ball]), col colore dei tasti.
+const navPill = p => p.evaluate(() => { const e = document.querySelector('[data-nav-ball]'); return e ? getComputedStyle(e).backgroundColor : null; });
 const openColors = async p => { await tapSel(p, '[aria-label="Profilo"]'); await w(p); await tapText(p, "Colori dell'app"); await w(p, 400); };
 // La ruota dei colori del telefono cambia il valore del campo da sé (come il selettore vero), poi l'evento "input".
 const setWheel = (p, hex) => p.evaluate(h => {
