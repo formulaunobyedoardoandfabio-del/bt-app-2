@@ -19,6 +19,15 @@ const notice = p => p.evaluate(() => { const e = document.querySelector('[data-t
 const doc = (p, path) => p.evaluate(x => window.firebase.__fake.doc(x), path);
 const openProfile = async p => { await tapSel(p, '[aria-label="Profilo"]'); await w(p, 500); };
 const openRoom = async p => { await goTab(p, 'RACE'); await tapSel(p, '[data-race-chat]'); await w(p, 500); await tapText(p, 'Chat Generale'); await w(p, 700); };
+// 7/11: la bacheca è la pagina "I miei trofei" con Vinti / Da vincere: le righe si leggono in tutte e due.
+const readRows = p => p.evaluate(() => Object.fromEntries([...document.querySelectorAll('[data-trophy]')].map(e => [e.getAttribute('data-trophy'), { won: e.getAttribute('data-won'), text: e.innerText.replace(/\s+/g, ' ').trim() }])));
+const allRows = async p => {
+  const won = await readRows(p);
+  await tapSel(p, '[data-tp-view="todo"]'); await w(p, 300);
+  const todo = await readRows(p);
+  await tapSel(p, '[data-tp-view="won"]'); await w(p, 300);
+  return { ...won, ...todo };
+};
 
 run({
   async 'previsione giusta: "Trofeo sbloccato: Indovino"'(b) {
@@ -66,14 +75,14 @@ run({
     await openProfile(p);
     const card = await p.evaluate(() => { const c = document.querySelector('[data-trophies]'); if (!c) return null; const m = c.querySelector('[data-medal]'); return { helmet: !!c.querySelector('[data-helmet]'), medal: m ? m.getAttribute('data-medal') : null, text: c.innerText.replace(/\s+/g, ' ').trim() }; });
     await tapText(p, 'Apri la bacheca'); await w(p, 400);
-    const rows = await p.evaluate(() => Object.fromEntries([...document.querySelectorAll('[data-trophy]')].map(e => [e.getAttribute('data-trophy'), { won: e.getAttribute('data-won'), text: e.innerText.replace(/\s+/g, ' ').trim() }])));
+    const rows = await allRows(p);
     const t = await text(p);
     await ctx.close();
     assert(card && card.helmet, 'casco nella bacheca: ' + JSON.stringify(card));
     assert(card.medal === 'bronzo' && /Medaglia di bronzo/.test(card.text), 'medaglia: ' + JSON.stringify(card));
     assert(new RegExp('1 di ' + require('../../src/logic/trophies').TROPHIES.length + ' trofei').test(card.text), 'conteggio dei trofei: ' + card.text);
     assert(Object.keys(rows).length === require('../../src/logic/trophies').TROPHIES.length, 'trofei nella bacheca: ' + Object.keys(rows).length);
-    assert(rows.casco.won === '1' && /Il mio casco/.test(rows.casco.text) && /12 ottobre 2026/.test(rows.casco.text), 'trofeo vinto con la data: ' + JSON.stringify(rows.casco));
+    assert(rows.casco.won === '1' && /Il mio casco/.test(rows.casco.text) && /12 ottobre/.test(rows.casco.text), 'trofeo vinto con la data (7/11: come nel design, senza l\'anno se è quest\'anno): ' + JSON.stringify(rows.casco));
     assert(rows.archivio.won === '0' && /Salva 5 notizie/.test(rows.archivio.text) && /2 di 5/.test(rows.archivio.text), 'da vincere con quanto manca: ' + JSON.stringify(rows.archivio));
     assert(/2,73 s/.test(rows.pitcrew.text), 'Pit crew: il record per sapere quanto manca: ' + JSON.stringify(rows.pitcrew));
     assert(rows.sgasata.won === '0' && /Trofeo segreto/.test(rows.sgasata.text) && !/Sgasata|logo/i.test(rows.sgasata.text), 'il trofeo segreto non si svela: ' + JSON.stringify(rows.sgasata));
@@ -117,7 +126,7 @@ run({
     await w(p, 3000);
     await openProfile(p);
     await tapText(p, 'Apri la bacheca'); await w(p, 400);
-    const row = await p.evaluate(() => { const e = document.querySelector('[data-trophy="sgasata"]'); return e ? { won: e.getAttribute('data-won'), text: e.innerText.replace(/\s+/g, ' ').trim() } : null; });
+    const row = (await allRows(p)).sgasata || null;
     await ctx.close();
     assert(n && n.label === 'Trofeo sbloccato: Sgasata', 'avviso del trofeo segreto: ' + JSON.stringify(n));
     assert(user.app2 && user.app2.trophies && typeof user.app2.trophies.sgasata === 'number', 'trofeo segreto salvato: ' + JSON.stringify(user.app2));

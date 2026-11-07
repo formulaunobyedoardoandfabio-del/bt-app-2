@@ -1,5 +1,15 @@
-/* 7/11: classifica completa della lega. La pillola dell'interruttore scivola (solo transform). */
+/* 7/11: classifica completa della lega (design "4 Lega"). Solo transform: la pillola dell'interruttore scivola,
+   i gradini del podio salgono, le frecce su e giù si muovono piano. Con "Rimuovi animazioni" tutto fermo. */
+@keyframes lt-rise { from { transform: scaleY(0); } to { transform: scaleY(1); } }
+@keyframes lt-up { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-3px); } }
+@keyframes lt-down { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(3px); } }
 .lt-seg-pill { transition: transform 200ms cubic-bezier(.2, .8, .2, 1); }
-.lt-seg-btn { cursor: pointer; }
+.lt-step { transform-origin: bottom; animation: lt-rise 700ms cubic-bezier(.2, .8, .2, 1) both; }
+.lt-up { animation: lt-up 1.6s ease-in-out infinite; }
+.lt-down { animation: lt-down 1.6s ease-in-out infinite; }
+.lt-seg-btn, .lt-back { cursor: pointer; }
 .lt-seg-btn:focus-visible, .lt-back:focus-visible { outline: 2px solid #F4F4F5; outline-offset: 2px; }
-@media (prefers-reduced-motion: reduce) { .lt-seg-pill { transition: none; } }
+@media (prefers-reduced-motion: reduce) {
+  .lt-seg-pill { transition: none; }
+  .lt-step, .lt-up, .lt-down { animation: none; }
+}

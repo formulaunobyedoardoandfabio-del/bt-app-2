@@ -42,20 +42,22 @@ run({
     assert(Math.abs(after - before) <= 4, `tornando alla Home: era a ${before}, ora a ${after}`);
     assert(!errs.length, errs.join(' | '));
   },
-  async 'Garage: giù, apro un gioco, torno indietro: la lista dei giochi è dove l\'avevo lasciata'(b) {
+  // 7/11: il Garage è a piastrelle da trascinare in tutte le direzioni: torna dove l'avevo lasciato, in giù e di lato.
+  async 'Garage: trascino giù e di lato, apro un gioco, torno indietro: le piastrelle sono dove le avevo lasciate'(b) {
     const { ctx, p, errs } = await open(b); await login(p); await w(p, 400);
     await tapSel(p, '[data-nav-tab="garage"]'); await w(p, 800);
-    await scrollTo(p, 500); await w(p, 300);
-    const before = await scroller(p);
-    await p.evaluate(() => { const e = [...document.querySelectorAll('[data-game]')].find(x => x.getBoundingClientRect().top > 120); e.click(); });
+    const pos = () => p.evaluate(() => { const el = document.querySelector('[data-garage-canvas]'); return el ? { x: Math.round(el.scrollLeft), y: Math.round(el.scrollTop), maxX: el.scrollWidth - el.clientWidth, maxY: el.scrollHeight - el.clientHeight } : null; });
+    await p.evaluate(() => { const el = document.querySelector('[data-garage-canvas]'); el.scrollLeft = 9999; el.scrollTop = 9999; el.dispatchEvent(new Event('scroll')); }); await w(p, 300);
+    const before = await pos();
+    await p.evaluate(() => { const box = document.querySelector('[data-garage-canvas]').getBoundingClientRect(); const e = [...document.querySelectorAll('[data-game]')].find(x => { const r = x.getBoundingClientRect(); return r.top > box.top && r.left > box.left && r.right < box.right && r.bottom < box.bottom; }); e.click(); });
     await w(p, 700);
     const inGame = await scroller(p);
     await tapSel(p, '[aria-label="Indietro"]'); await w(p, 900);
-    const after = await scroller(p);
+    const after = await pos();
     await ctx.close();
-    assert(before > 300, 'il Garage doveva scorrere: ' + before);
+    assert(before && before.x > 60 && before.y > 40 && before.x === before.maxX && before.y === before.maxY, 'il Garage doveva scorrere in giù e di lato: ' + JSON.stringify(before));
     assert(inGame === 0, 'il gioco si apre dall\'alto: ' + inGame);
-    assert(Math.abs(after - before) <= 4, `tornando dal gioco: era a ${before}, ora a ${after}`);
+    assert(after && Math.abs(after.x - before.x) <= 4 && Math.abs(after.y - before.y) <= 4, `tornando dal gioco: era a ${JSON.stringify(before)}, ora a ${JSON.stringify(after)}`);
     assert(!errs.length, errs.join(' | '));
   },
 });

@@ -16,7 +16,7 @@ const page = p => p.evaluate(() => {
     rows: q('[data-lt-row]').map(x => ({ pos: x.getAttribute('data-lt-pos'), text: x.innerText.replace(/\s+/g, ' ').trim() })),
     zones: q('[data-lt-zone]').map(x => x.getAttribute('data-lt-zone')),
     pressed: q('[data-lt-view]').filter(x => x.getAttribute('aria-pressed') === 'true').map(x => x.getAttribute('data-lt-view')),
-    note: (e.querySelector('[data-lt-note]') || {}).innerText,
+    moves: q('[data-lt-move]').map(x => x.getAttribute('data-lt-move')),
     empty: !!e.querySelector('[data-lt-empty]'),
     font: getComputedStyle(e).fontFamily, bg: getComputedStyle(e).backgroundColor,
     wide: document.documentElement.scrollWidth > window.innerWidth + 1,
@@ -46,8 +46,9 @@ run({
     assert(/Manrope/.test(season.font) && season.bg === 'rgb(0, 0, 0)', 'stile del design: ' + season.font + ' ' + season.bg);
     assert(season.podium.map(x => x[0]).join() === '2,1,3', 'podio 2-1-3: ' + season.podium.join(' | '));
     assert(season.podium[1] === '1:AN Anna 100 pt 1' && season.podium[0] === '2:BR Bruno 95 pt 2' && season.podium[2] === '3:CA Carla 90 pt 3', 'podio: ' + season.podium.join(' | '));
-    assert(season.rows.length === 9 && season.rows[0].pos === '4' && /Dario/.test(season.rows[0].text), 'lista dal 4°: ' + JSON.stringify(season.rows.slice(0, 2)));
-    assert(season.rows.some(r => /Tester/.test(r.text) && /TU/.test(r.text)), 'la mia riga con TU');
+    assert(season.rows.length === 9 && season.rows[0].pos === '4' && /^4 DA Dario 85$/.test(season.rows[0].text), 'lista dal 4° (posizione, sigla, nome, punti): ' + JSON.stringify(season.rows.slice(0, 2)));
+    assert(season.rows.some(r => /Tester \(tu\)/.test(r.text)), 'la mia riga con (tu): ' + JSON.stringify(season.rows.map(r => r.text)));
+    assert(season.moves.every(m => m === 'same'), 'senza GP contati nessuna freccia su o giù: ' + season.moves.join());
     assert(season.zones.join() === 'q2,q1', 'zone Q2 e Q1: ' + season.zones.join());
     assert(season.pressed.join() === 'season', 'senza GP contati si parte dalla Stagione: ' + season.pressed.join());
     assert(gp.pressed.join() === 'gp' && gp.empty && gp.podium.length === 0, 'Questo GP senza risultati: ' + JSON.stringify(gp));

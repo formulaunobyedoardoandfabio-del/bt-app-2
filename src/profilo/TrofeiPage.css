@@ -1,0 +1,8 @@
+/* 7/11: pagina "I miei trofei" (design "3 Trofei"). Solo transform: la pillola scivola, la barra della medaglia si
+   riempie una volta. Con "Rimuovi animazioni" ferme. */
+@keyframes tp-bar { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+.tp-seg-pill { transition: transform 200ms cubic-bezier(.2, .8, .2, 1); }
+.tp-bar { transform-origin: left center; animation: tp-bar 900ms cubic-bezier(.2, .8, .2, 1) both; }
+.tp-seg-btn, .tp-back { cursor: pointer; }
+.tp-seg-btn:focus-visible, .tp-back:focus-visible { outline: 2px solid #F4F4F5; outline-offset: 2px; }
+@media (prefers-reduced-motion: reduce) { .tp-seg-pill { transition: none; } .tp-bar { animation: none; } }

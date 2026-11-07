@@ -50,6 +50,7 @@ import { parseSocial } from "./logic/social";
 import { cutWords, fixCut } from "./logic/words";
 import { RainGlass } from "./pioggia/Pioggia";
 import ClassificaLega from "./fanta/ClassificaLega";
+import TrofeiPage from "./profilo/TrofeiPage";
 import FantaSeason from "./logic/fanta-season";
 import { createFantaLeague } from "./services/fantaleague";
 import { createProfiles } from "./services/profiles";
@@ -6001,8 +6002,32 @@ const GARAGE_SOON = [
   ["stint", "Stint Analyzer & Fuel Calculator", "Durata della gara e consumi: calo delle gomme e benzina da imbarcare."],
 ];
 
+// 7/11 sera (Edoardo, video): il Garage a piastrelle quadrate sfalsate a mattoncino, colorate per sezione, da
+// trascinare in tutte le direzioni; i bottoni in alto portano alla sezione. Colori scuri abbastanza per il testo
+// bianco (contrasto AA): giochi arancio, weekend rosso, tracciati verde, analisi viola (il viola dei tempi migliori).
+const GARAGE_SECTIONS = [
+  { id: "giochi", label: "GIOCHI", color: "#B04A16" },
+  { id: "weekend", label: "WEEKEND DI GARA", color: "#B3221B" },
+  { id: "tracciati", label: "TRACCIATI", color: "#16703C" },
+  { id: "analisi", label: "ANALISI", color: "#6E2FB3" },
+  { id: "soon", label: "IN ARRIVO", color: "#3A3A42" },
+];
+const GARAGE_COLS = 4, GARAGE_GAP = 10;
+// Segno piccolo in alto a destra della piastrella: che cosa è (gioco, weekend, pista, analisi).
+function GarageKind({ sec }) {
+  const p = { width: 15, height: 15, viewBox: "0 0 24 24", fill: "none", stroke: "#fff", strokeWidth: 2.4, strokeLinecap: "round", strokeLinejoin: "round", "aria-hidden": "true", style: { opacity: .9, flexShrink: 0 } };
+  if (sec === "giochi") return <svg {...p}><path d="M7 5l12 7-12 7z" fill="#fff" /></svg>;
+  if (sec === "weekend") return <svg {...p}><path d="M5 21V4M5 4h12l-2.5 4L17 12H5" /></svg>;
+  if (sec === "tracciati") return <svg {...p}><path d="M4 17c3-1 4-9 8-9s3 6 8 4" /><circle cx="4" cy="17" r="1.6" fill="#fff" /></svg>;
+  return <svg {...p}><path d="M5 20V12M12 20V5M19 20v-9" /></svg>;
+}
+
 function GarageScreen({ openGame = null, onGameOpened = null, races, pitBest, onPitResult, sillyPreds, onPredict, sillyOfficial, live, stratPreds = {}, onStrat, bluffTags = [], onBluffRefresh }) {
   const [game, setGame] = useState(null);
+  const [secOn, setSecOn] = useState("giochi");   // 7/11: sezione accesa nei bottoni in alto
+  const canvasRef = useRef(null), scrollRaf = useRef(0), secLock = useRef(0);   // secLock: dopo un bottone la sezione resta quella scelta
+  const vw = typeof window !== "undefined" ? window.innerWidth || 390 : 390;
+  useEffect(() => () => cancelAnimationFrame(scrollRaf.current), []);
   useEffect(() => { if (openGame) { setGame(openGame); if (onGameOpened) onGameOpened(); } }, [openGame]);   // 1/11: sfida al Pit Stop dalla Home
   const back = () => setGame(null);
   useBack(!!game, back);   // tasto indietro: dallo strumento si torna al Garage
@@ -6017,53 +6042,104 @@ function GarageScreen({ openGame = null, onGameOpened = null, races, pitBest, on
   if (game === "deg") return <TyreDegTool races={races} live={live} onBack={back} />;
   if (game === "mates") return <TeammatesTool races={races} onBack={back} />;
   if (game === "bluff") return <BluffTool races={races} live={live} tags={bluffTags} onRefresh={onBluffRefresh} onBack={back} />;
-  const card = (id, title, sub, tag) => (
-    <button key={id} className="press" data-game={id} onClick={() => setGame(id)} style={{ display: "flex", alignItems: "center", gap: 12, width: "calc(100% - 32px)", margin: "0 16px 12px", padding: 14, borderRadius: 18, background: C.card, border: `1px solid ${C.border}`, textAlign: "left" }}>
-      <GarageIcon id={id} />
-      <span style={{ flex: 1, minWidth: 0 }}>
-        <span style={{ display: "block", fontFamily: F_HEAD, fontWeight: 900, fontStyle: "italic", fontSize: 16, color: C.text }}>{title}</span>
-        <span style={{ display: "block", marginTop: 3, fontFamily: F_BODY, fontSize: 12, color: C.muted, lineHeight: 1.35 }}>{sub}</span>
-        {tag && <span style={{ display: "inline-block", marginTop: 5, padding: "2px 7px", borderRadius: 6, background: "rgba(231,179,76,.16)", fontFamily: F_BODY, fontWeight: 700, fontSize: 10.5, color: C.gold }}>{tag}</span>}
-      </span>
-      <Icon name="chevron" size={16} color={C.dim} />
-    </button>
-  );
   const open = Object.keys(sillyPreds || {}).length;
   const sNow = nowMs(), sRace = races.find(r => raceStartMs(r) + 3 * 3600e3 > sNow), sLock = sRace ? raceStartMs(sRace) - 15 * 60e3 : 0;
   const stratTag = !sRace ? null : stratPreds[sRace.id] ? "Strategia pubblicata" : sNow < sLock ? `Aperta fino a ${fmtRome(sLock)}` : "Chiusa · gara in corso";
+  const tiles = [
+    { id: "pitstop", sec: "giochi", title: "Pit Stop Challenge", sub: "Cambia le 4 gomme a tempo di record: obiettivo sotto i 2,0 secondi.", tag: pitBest != null ? `Il tuo record: ${fmtSec(pitBest)} s` : null },
+    { id: "silly", sec: "giochi", title: "Silly Season Predictor", sub: "Mercato piloti 2027: indovina chi guiderà dove e fai punti quando arriva il comunicato.", tag: open ? `${open} ${open === 1 ? "previsione pubblicata" : "previsioni pubblicate"}` : "6 sedili ancora aperti" },
+    { id: "aero", sec: "giochi", title: "Drag vs Downforce", sub: "Prepara la vettura per la pista del weekend: ala posteriore e altezza da terra.", tag: null },
+    { id: "setup", sec: "weekend", title: "Scanner dell'assetto", sub: "Prove libere vere: chi ha scaricato l'ala, chi cerca carico e chi ha già fatto la simulazione di gara.", tag: "Prove libere · dati veri" },
+    { id: "strategy", sec: "weekend", title: "Tire Strategy Predictor", sub: "Disegna mescole e soste della prossima gara: punti contro la strategia del vincitore.", tag: stratTag },
+    { id: "deg", sec: "weekend", title: "Degrado gomme", sub: "Quanto perde ogni gomma a ogni giro e quando arriva il crollo.", tag: live && live.type === "RACE" ? liveSrcLabel(live) : "Gare vere 2026" },
+    { id: "mates", sec: "weekend", title: "Compagni a confronto", sub: "Stessa macchina, chi va più forte? L'indice Over-Driving e i testa a testa del 2026.", tag: "Dati veri 2026" },
+    { id: "bluff", sec: "weekend", title: "Rilevatore di bluff", sub: "Radio contro tempi: le gomme sono davvero finite o è un bluff per ingannare gli altri?", tag: isOf1Live(live) ? "Radio vere · " + OF1_SRC : isDemoLive(live) ? "Prova DEMO (simulata)" : "Durante la gara" },
+    { id: "guide", sec: "tracciati", title: "Guida 2D dei tracciati", sub: "Tocca le curve: marcia, velocità, punto di staccata, rischio di bloccaggio e il momento storico B&T.", tag: "Dati veri" },
+    { id: "clash", sec: "tracciati", title: "Circuit Spec Clash", sub: "Due piste a confronto: Safety Car, sorpassi, frenate, gas a tavoletta e carico aerodinamico.", tag: null },
+    { id: "ghost", sec: "analisi", title: `Ghost Lap · qualifiche di ${(ghostForNow(races, nowMs()) || ghostSessions()[0] || [null, "Baku"])[1]}`, sub: "Due giri veri a confronto: velocità, frenate e replay 2D di ogni curva.", tag: "Dati veri" },
+    // Idee di Edoardo del 3-6/10 (documento "Idee nuove"): per ora solo annunciate (18/10: "creale ma mettile come in arrivo").
+    ...GARAGE_SOON.map(([id, title, sub]) => ({ id, sec: "soon", title, sub, soon: true })),
+  ];
+  // Griglia a mattoncino: GARAGE_COLS colonne, le righe dispari spostate di mezza piastrella; si trascina in tutte le
+  // direzioni (lo scroll vero del telefono, che ha già la sua inerzia). Piastrella di circa un terzo dello schermo.
+  const T = Math.round(Math.min(124, Math.max(88, (vw - 32 - 2 * GARAGE_GAP) / 3.3))), STEP = T + GARAGE_GAP, PAD = 16;
+  const at = i => { const row = Math.floor(i / GARAGE_COLS), col = i % GARAGE_COLS; return { left: PAD + col * STEP + (row % 2 ? STEP / 2 : 0), top: 10 + row * STEP }; };
+  const rowsN = Math.ceil(tiles.length / GARAGE_COLS), W = PAD * 2 + GARAGE_COLS * STEP - GARAGE_GAP + STEP / 2, H = 10 + rowsN * STEP - GARAGE_GAP + 28;
+  const firstOf = sec => tiles.findIndex(t => t.sec === sec);
+  const goSec = sec => {
+    const el = canvasRef.current, i = firstOf(sec);
+    if (!el || i < 0) return;
+    const p = at(i), still = prefersReduced();
+    el.scrollTo({ left: Math.max(0, p.left + T / 2 - el.clientWidth / 2), top: Math.max(0, p.top - 10), behavior: still ? "auto" : "smooth" });
+    setSecOn(sec);
+    secLock.current = Date.now() + 900;
+  };
+  // La sezione accesa è quella della piastrella più vicina al centro di quello che si vede.
+  const onCanvasScroll = () => {
+    const el = canvasRef.current;
+    if (!el || scrollRaf.current || Date.now() < secLock.current) return;
+    scrollRaf.current = requestAnimationFrame(() => {
+      scrollRaf.current = 0;
+      const cx = el.scrollLeft + el.clientWidth / 2, cy = el.scrollTop + el.clientHeight / 3;
+      let best = 0, bd = Infinity;
+      tiles.forEach((t, i) => { const p = at(i), d = (p.left + T / 2 - cx) ** 2 + (p.top + T / 2 - cy) ** 2; if (d < bd) { bd = d; best = i; } });
+      setSecOn(tiles[best].sec);
+    });
+  };
+  const R = Math.round(T * 0.24);
+  const sr = { position: "absolute", width: 1, height: 1, overflow: "hidden", clip: "rect(0 0 0 0)", whiteSpace: "nowrap" };
   return (
-    <div className="scrollcol" style={{ height: "100%" }}>
-      <div style={{ padding: "4px 16px 14px" }}>
+    <div data-garage-screen="" style={{ height: "100%", display: "flex", flexDirection: "column" }}>
+      <div style={{ padding: "4px 16px 10px", flexShrink: 0 }}>
         <h1 style={{ margin: 0, fontFamily: F_HEAD, fontWeight: 900, fontStyle: "italic", fontSize: 24, color: C.text }}>GARAGE</h1>
         <p style={{ margin: "4px 0 0", fontFamily: F_BODY, fontSize: 12.5, color: C.muted, lineHeight: 1.4 }}>Giochi e strumenti B&T per sfidare i tuoi riflessi e capire la F1 da vicino.</p>
       </div>
-      <div style={{ padding: "0 18px 8px", fontFamily: F_BODY, fontWeight: 700, fontSize: 11, letterSpacing: 1.2, color: C.gold }}>GIOCHI</div>
-      {card("pitstop", "Pit Stop Challenge", "Cambia le 4 gomme a tempo di record: obiettivo sotto i 2,0 secondi.", pitBest != null ? `Il tuo record: ${fmtSec(pitBest)} s` : null)}
-      {card("silly", "Silly Season Predictor", "Mercato piloti 2027: indovina chi guiderà dove e fai punti quando arriva il comunicato.", open ? `${open} ${open === 1 ? "previsione pubblicata" : "previsioni pubblicate"}` : "6 sedili ancora aperti")}
-      {card("aero", "Drag vs Downforce", "Prepara la vettura per la pista del weekend: ala posteriore e altezza da terra.", null)}
-      <div style={{ padding: "6px 18px 8px", fontFamily: F_BODY, fontWeight: 700, fontSize: 11, letterSpacing: 1.2, color: C.gold }}>WEEKEND DI GARA</div>
-      {card("setup", "Scanner dell'assetto", "Prove libere vere: chi ha scaricato l'ala, chi cerca carico e chi ha già fatto la simulazione di gara.", "Prove libere · dati veri")}
-      {card("strategy", "Tire Strategy Predictor", "Disegna mescole e soste della prossima gara: punti contro la strategia del vincitore.", stratTag)}
-      {card("deg", "Degrado gomme", "Quanto perde ogni gomma a ogni giro e quando arriva il crollo.", live && live.type === "RACE" ? liveSrcLabel(live) : "Gare vere 2026")}
-      {card("mates", "Compagni a confronto", "Stessa macchina, chi va più forte? L'indice Over-Driving e i testa a testa del 2026.", "Dati veri 2026")}
-      {card("bluff", "Rilevatore di bluff", "Radio contro tempi: le gomme sono davvero finite o è un bluff per ingannare gli altri?", isOf1Live(live) ? "Radio vere · " + OF1_SRC : isDemoLive(live) ? "Prova DEMO (simulata)" : "Durante la gara")}
-      <div style={{ padding: "6px 18px 8px", fontFamily: F_BODY, fontWeight: 700, fontSize: 11, letterSpacing: 1.2, color: C.gold }}>TRACCIATI</div>
-      {card("guide", "Guida 2D dei tracciati", "Tocca le curve: marcia, velocità, punto di staccata, rischio di bloccaggio e il momento storico B&T.", "Dati veri")}
-      {card("clash", "Circuit Spec Clash", "Due piste a confronto: Safety Car, sorpassi, frenate, gas a tavoletta e carico aerodinamico.", null)}
-      <div style={{ padding: "6px 18px 8px", fontFamily: F_BODY, fontWeight: 700, fontSize: 11, letterSpacing: 1.2, color: C.gold }}>ANALISI CON DATI VERI</div>
-      {card("ghost", `Ghost Lap · qualifiche di ${(ghostForNow(races, nowMs()) || ghostSessions()[0] || [null, "Baku"])[1]}`, "Due giri veri a confronto: velocità, frenate e replay 2D di ogni curva.", "Dati veri")}
-      {/* Idee di Edoardo del 3-6/10 (documento "Idee nuove"): per ora solo annunciate (18/10: "creale ma mettile come in arrivo"). */}
-      <div style={{ padding: "6px 18px 8px", fontFamily: F_BODY, fontWeight: 700, fontSize: 11, letterSpacing: 1.2, color: C.gold }}>IN ARRIVO</div>
-      {GARAGE_SOON.map(([id, title, sub]) => (
-        <div key={id} data-soon={id} style={{ display: "flex", alignItems: "center", gap: 12, margin: "0 16px 10px", padding: "12px 14px", borderRadius: 16, background: "transparent", border: `1px dashed ${C.border}` }}>
-          <GarageIcon id={id} soon size={48} />
-          <span style={{ flex: 1, minWidth: 0 }}>
-            <span style={{ display: "block", fontFamily: F_HEAD, fontWeight: 800, fontStyle: "italic", fontSize: 14.5, color: C.muted }}>{title}</span>
-            <span style={{ display: "block", marginTop: 3, fontFamily: F_BODY, fontSize: 11.5, color: C.dim, lineHeight: 1.35 }}>{sub}</span>
-          </span>
-          <span style={{ flexShrink: 0, padding: "3px 8px", borderRadius: 6, background: "rgba(231,179,76,.14)", fontFamily: F_BODY, fontWeight: 700, fontSize: 10, letterSpacing: .4, color: C.gold }}>IN ARRIVO</span>
+      <div className="scrollrow" role="group" aria-label="Sezioni del Garage" style={{ display: "flex", gap: 8, padding: "0 16px 10px", overflowX: "auto", scrollbarWidth: "none", flexShrink: 0 }}>
+        {GARAGE_SECTIONS.map(s => {
+          const on = secOn === s.id, n = tiles.filter(t => t.sec === s.id).length;
+          return (
+            <button key={s.id} type="button" className="press" data-garage-sec={s.id} aria-pressed={on} onClick={() => goSec(s.id)}
+              style={{ flexShrink: 0, display: "flex", alignItems: "center", gap: 8, height: 40, padding: "0 14px 0 10px", borderRadius: 12, background: on ? s.color : C.card, border: `1px solid ${on ? "rgba(255,255,255,.18)" : C.border}` }}>
+              <span aria-hidden="true" style={{ width: 14, height: 14, borderRadius: 4, background: s.color, boxShadow: on ? "0 0 0 1.5px rgba(255,255,255,.7)" : "none" }} />
+              <span style={{ fontFamily: F_HEAD, fontWeight: 900, fontStyle: "italic", fontSize: 12.5, color: on ? "#fff" : C.text, whiteSpace: "nowrap" }}>{s.label}</span>
+              <span style={{ fontFamily: F_BODY, fontWeight: 700, fontSize: 11, color: on ? "rgba(255,255,255,.8)" : C.dim }}>{n}</span>
+            </button>
+          );
+        })}
+      </div>
+      <div ref={canvasRef} className="scrollcol" data-garage-canvas="" data-scroll-key="garage" onScroll={onCanvasScroll}
+        style={{ flex: 1, minHeight: 0, overflow: "auto", overscrollBehavior: "contain", scrollbarWidth: "none" }}>
+        <div style={{ position: "relative", width: W, height: H }}>
+          {tiles.map((t, i) => {
+            const p = at(i), S = GARAGE_SECTIONS.find(s => s.id === t.sec);
+            const box = { position: "absolute", left: p.left, top: p.top, width: T, height: T, boxSizing: "border-box", borderRadius: R, padding: 10, display: "flex", flexDirection: "column", justifyContent: "space-between", textAlign: "left" };
+            if (t.soon) return (
+              <div key={t.id} data-soon={t.id} data-garage-tile={t.sec} style={{ ...box, background: "#131316", border: "1px dashed rgba(255,255,255,.16)" }}>
+                <GarageIcon id={t.id} soon size={34} />
+                <span style={{ display: "block", width: "100%", minWidth: 0 }}>
+                  <span style={sr}>{t.title}. {t.sub}</span>
+                  <WordClamp aria-hidden="true" text={t.title} lines={2} style={{ fontFamily: F_HEAD, fontWeight: 800, fontStyle: "italic", fontSize: 12.5, lineHeight: 1.15, color: C.muted }} />
+                  <span style={{ display: "block", marginTop: 3, fontFamily: F_BODY, fontWeight: 800, fontSize: 9.5, color: C.gold }}>In arrivo</span>
+                </span>
+              </div>
+            );
+            return (
+              <button key={t.id} type="button" className="press garage-tile" data-game={t.id} data-garage-tile={t.sec} onClick={() => setGame(t.id)}
+                style={{ ...box, background: `linear-gradient(150deg, rgba(255,255,255,.2), rgba(255,255,255,0) 58%), ${S.color}`, border: "1px solid rgba(255,255,255,.14)", boxShadow: "inset 0 1px 0 rgba(255,255,255,.22), 0 8px 18px rgba(0,0,0,.4)" }}>
+                <span style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", width: "100%" }}>
+                  <GarageIcon id={t.id} size={34} />
+                  <GarageKind sec={t.sec} />
+                </span>
+                <span style={{ display: "block", width: "100%", minWidth: 0 }}>
+                  <span style={sr}>{t.title}. {t.sub}</span>
+                  <WordClamp aria-hidden="true" text={t.title} lines={2} style={{ fontFamily: F_HEAD, fontWeight: 900, fontStyle: "italic", fontSize: 13, lineHeight: 1.12, color: "#fff" }} />
+                  {t.tag && <span style={{ display: "block", marginTop: 3, fontFamily: F_BODY, fontWeight: 700, fontSize: 9.5, color: "rgba(255,255,255,.88)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{t.tag}</span>}
+                </span>
+              </button>
+            );
+          })}
         </div>
-      ))}
+      </div>
     </div>
   );
 }
@@ -7858,7 +7934,7 @@ function FantaScreen({ elo = null, squad, setSquad, base, freeTransfers, budget,
   const wk = realWeek ? realWeek.lines.map(l => ({ id: realWeek.round + ":" + l.type, type: l.type, total: l.pts })) : wkLive;
   if (fullTable && league) {
     const gpRound = league.members.length ? league.members[0].gpRound : null;
-    return <ClassificaLega name={league.name} rows={rows} gpName={gpRound != null && raceNameOf ? raceNameOf(gpRound) : ""} onBack={() => setFullTable(false)} accent={C.accentInk} zoneOf={zoneOf} zones={LEAGUE_ZONES} />;
+    return <ClassificaLega name={league.name} rows={rows} gpName={gpRound != null && raceNameOf ? raceNameOf(gpRound) : ""} onBack={() => setFullTable(false)} zoneOf={zoneOf} />;
   }
   return (
     <div className="scrollcol" style={{ height: "100%" }}>
@@ -8057,33 +8133,23 @@ function TrophyNotice({ n }) {
 }
 // Bacheca nel Profilo: il casco, la medaglia, "N di 15 trofei" e la prossima medaglia; aperta, i trofei vinti con la
 // data (i più recenti prima) e quelli da vincere con cosa serve e, dove si conta, quanto manca.
-function TrophyCase({ trophies = {}, progress = {}, helmet = null, defs = TROPHIES }) {
-  const [open, setOpen] = useState(false);
-  const won = defs.filter(t => trophies[t.id]).sort((a, b) => trophies[b.id] - trophies[a.id]);
-  const todo = defs.filter(t => !trophies[t.id]);
+// 7/11 sera: i trofei per la pagina "I miei trofei" (src/profilo/TrofeiPage.jsx): nome (o "Trofeo segreto"), come si
+// vince, data in cui si è vinto e, dove si conta, quanto manca (testo e barra).
+function trophyItems(defs, trophies = {}, progress = {}) {
+  return defs.map(t => {
+    const won = !!trophies[t.id], hidden = !!t.secret && !won, p = progress[t.id] || {};
+    let extra = null, ratio = null;
+    if (!won && !hidden && p.value != null) {
+      if (t.id === "pitcrew" || t.id === "pitperfetto") { extra = `Record ${fmtSec(p.value)} s`; ratio = p.value > 0 ? Math.min(1, t.goal / p.value) : null; }
+      else if (t.goal > 1) { extra = `${Math.min(p.value, t.goal)} di ${t.goal}`; ratio = Math.min(p.value, t.goal) / t.goal; }
+    }
+    return { id: t.id, name: hidden ? SECRET_NAME : t.name, how: hidden ? SECRET_HOW : t.how, won, at: trophies[t.id] || null, hidden, extra, ratio };
+  });
+}
+function TrophyCase({ trophies = {}, helmet = null, defs = TROPHIES, onOpen }) {
+  const won = defs.filter(t => trophies[t.id]);
   const n = won.length, medal = medalOf(n);
   const nextAt = n < 1 ? 1 : n < 5 ? 5 : n < 10 ? 10 : null;
-  const extra = t => {
-    const p = progress[t.id] || {};
-    if (t.id === "pitcrew" || t.id === "pitperfetto") return p.value != null ? `Record ${fmtSec(p.value)} s` : null;
-    return t.goal > 1 && p.value != null ? `${Math.min(p.value, t.goal)} di ${t.goal}` : null;
-  };
-  const group = { padding: "12px 14px 4px", fontFamily: F_BODY, fontWeight: 700, fontSize: 10.5, letterSpacing: 1, color: C.dim, borderTop: `1px solid ${C.divider}` };
-  const row = (t, w, i) => {
-    const hide = t.secret && !w, x = !w && extra(t);
-    return (
-      <div key={t.id} data-trophy={t.id} data-won={w ? "1" : "0"} style={{ display: "flex", alignItems: "center", gap: 12, padding: "10px 14px", borderTop: i ? `1px solid ${C.divider}` : "none" }}>
-        <span style={{ width: 34, height: 34, borderRadius: 10, background: w ? "rgba(231,179,76,.14)" : "transparent", border: w ? "1px solid rgba(231,179,76,.4)" : `1px dashed ${C.border}`, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-          <Icon name={hide ? "lock" : "trophy"} size={16} color={w ? C.gold : C.dim} />
-        </span>
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontFamily: F_HEAD, fontWeight: 800, fontSize: 13.5, color: w ? C.text : C.muted }}>{hide ? SECRET_NAME : t.name}</div>
-          <div style={{ fontFamily: F_BODY, fontSize: 11.5, color: C.dim, lineHeight: 1.35, marginTop: 1 }}>{w ? `Vinto il ${fmtDay(trophies[t.id])}` : hide ? SECRET_HOW : t.how}</div>
-        </div>
-        {x && <span style={{ fontFamily: F_HEAD, fontWeight: 800, fontSize: 12, color: C.muted, flexShrink: 0, fontVariantNumeric: "tabular-nums" }}>{x}</span>}
-      </div>
-    );
-  };
   return (
     <>
       <div style={{ padding: "0 24px 10px" }}><span style={{ fontFamily: F_BODY, fontWeight: 700, fontSize: 11, color: C.dim, letterSpacing: 1 }}>I MIEI TROFEI</span></div>
@@ -8102,14 +8168,11 @@ function TrophyCase({ trophies = {}, progress = {}, helmet = null, defs = TROPHI
             <div style={{ fontFamily: F_BODY, fontSize: 11, color: C.dim, marginTop: 5 }}>{nextAt ? `${MEDAL_INFO[medalOf(nextAt)].label} a ${nextAt} ${nextAt === 1 ? "trofeo" : "trofei"}` : "Hai la medaglia più alta"}</div>
           </div>
         </div>
-        <button className="press" aria-expanded={open ? "true" : "false"} onClick={() => setOpen(o => !o)} style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 6, width: "100%", minHeight: 44, borderTop: `1px solid ${C.divider}`, fontFamily: F_HEAD, fontWeight: 800, fontSize: 12.5, color: C.text }}>
-          {open ? "Chiudi la bacheca" : "Apri la bacheca"}
-          <span style={{ display: "flex", transform: `rotate(${open ? -90 : 90}deg)`, transition: "transform .2s" }}><Icon name="chevron" size={13} color={C.muted} /></span>
+        {/* 7/11: il bottone apre la pagina "I miei trofei" (prima la bacheca si apriva qui sotto). */}
+        <button className="press" data-trophies-open="" onClick={onOpen} style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 6, width: "100%", minHeight: 44, borderTop: `1px solid ${C.divider}`, fontFamily: F_HEAD, fontWeight: 800, fontSize: 12.5, color: C.text }}>
+          Apri la bacheca
+          <Icon name="chevron" size={13} color={C.muted} />
         </button>
-        {open && won.length > 0 && <div style={group}>VINTI</div>}
-        {open && won.map((t, i) => row(t, true, i))}
-        {open && todo.length > 0 && <div style={group}>DA VINCERE</div>}
-        {open && todo.map((t, i) => row(t, false, i))}
       </div>
     </>
   );
@@ -8151,6 +8214,8 @@ function ProfiloScreen({ onCoffee = null, coffeePrice = null, fanLevel = null, r
   const waiting = !!account && account.loaded === false;
   const noAbout = !waiting && !!aboutMe && aboutMe.fan == null && aboutMe.follow == null;   // account di oggi senza "Su di te"
   const [persOpen, setPersOpen] = useState(false);   // 8/11: la voce "Personalizza l'app" aperta
+  const [trophyPage, setTrophyPage] = useState(false);   // 7/11: pagina "I miei trofei"
+  useBack(trophyPage, () => setTrophyPage(false));
   const rows = [
     { icon: "bell", label: "Notifiche", onClick: onNotifiche, chevron: true },
     // 8/11 (Edoardo): colori, suoni, vibrazioni, temi delle feste, Pit Board e promemoria in una sola voce che si apre.
@@ -8174,6 +8239,7 @@ function ProfiloScreen({ onCoffee = null, coffeePrice = null, fanLevel = null, r
     ...(onAdPrivacy ? [{ icon: "lock", label: "Preferenze privacy annunci", onClick: onAdPrivacy, chevron: true }] : []),
     { icon: "doc", label: "Termini e Condizioni", onClick: onTerms, chevron: true },
   ];
+  if (trophyPage && !guest) return <TrofeiPage items={trophyItems(trophyList, trophies, trophyProg)} onBack={() => setTrophyPage(false)} now={nowMs()} />;
   return (
     <div className="scrollcol" style={{ height: "100%" }}>
       <SubHeader title="PROFILO" onBack={onBack} />
@@ -8218,7 +8284,7 @@ function ProfiloScreen({ onCoffee = null, coffeePrice = null, fanLevel = null, r
       {!guest && noAbout && <p data-about-missing="" style={{ margin: "0 20px 10px", padding: "10px 14px", borderRadius: 12, background: "rgba(231,179,76,.1)", border: "1px solid rgba(231,179,76,.3)", fontFamily: F_BODY, fontSize: 12.5, color: C.text, lineHeight: 1.45 }}>Completa il tuo profilo: che tifoso sei e da quanti anni segui la F1</p>}
       {!guest && waiting && <p data-profile-waiting="" role="status" style={{ margin: "0 20px 14px", padding: "10px 14px", borderRadius: 12, background: "rgba(255,255,255,.04)", border: `1px solid ${C.border}`, fontFamily: F_BODY, fontSize: 12.5, color: C.muted, lineHeight: 1.45 }}>{ACCOUNT_MSG["not-loaded"]}</p>}
       {!guest && !waiting && <AboutCard about={aboutMe} onSave={onSaveAboutMe} />}
-      {!guest && !waiting && <TrophyCase trophies={trophies} progress={trophyProg} helmet={helmet} defs={trophyList} />}
+      {!guest && !waiting && <TrophyCase trophies={trophies} helmet={helmet} defs={trophyList} onOpen={() => setTrophyPage(true)} />}
 
       <button className="press cta-shine" onClick={onPremium} style={{ position: "relative", overflow: "hidden", display: "block", textAlign: "left", width: "calc(100% - 40px)", margin: "0 20px 22px", padding: 16, borderRadius: 18, background: "rgba(231,179,76,.1)", border: "1px solid rgba(231,179,76,.3)" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 9, marginBottom: 6 }}>
@@ -11817,9 +11883,14 @@ function App() {
     const scope = () => (view === "tab" ? box.querySelector(`[data-tab-page="${tab}"]:not([data-tab-leave]):not([data-tab-neighbor])`) : box);
     // Pagina interna di una scheda (un gioco del Garage): ha il tasto Indietro col titolo accanto, subito disegnato.
     const sig = scrollSig;
-    const restore = (el, want) => {
+    // 7/11: anche di lato (il Garage a piastrelle si trascina in tutte le direzioni).
+    const restore = (el, want, wantX) => {
       let n = 0;
-      const go = () => { if (cur !== el) return; el.scrollTop = want; if (Math.abs(el.scrollTop - want) > 2 && n++ < 60) raf = requestAnimationFrame(go); };
+      const go = () => {
+        if (cur !== el) return;
+        el.scrollTop = want; el.scrollLeft = wantX;
+        if ((Math.abs(el.scrollTop - want) > 2 || Math.abs(el.scrollLeft - wantX) > 2) && n++ < 60) raf = requestAnimationFrame(go);
+      };
       go();
     };
     const check = () => {
@@ -11827,9 +11898,9 @@ function App() {
       if (!el || el === cur) return;
       cur = el; key = scrollBase + "|" + sig(el);
       cancelAnimationFrame(raf);
-      if (mem[key] > 0) restore(el, mem[key]);
+      if (mem[key] > 0 || mem[key + "|x"] > 0) restore(el, mem[key] || 0, mem[key + "|x"] || 0);
     };
-    const onScroll = e => { if (cur && e.target === cur) mem[key] = cur.scrollTop; };
+    const onScroll = e => { if (cur && e.target === cur) { mem[key] = cur.scrollTop; mem[key + "|x"] = cur.scrollLeft; } };
     box.addEventListener("scroll", onScroll, true);
     const mo = new MutationObserver(check);
     mo.observe(box, { childList: true, subtree: true });

@@ -11,9 +11,18 @@ const Trophies = require('../../src/logic/trophies');
 const USER = app2 => ({ 'users/a@b.it': { name: 'Tester', nick: 'Tester', email: 'a@b.it', about: { birth: 1999, follow: 2, fan: 'vivo', years: 5 }, app2 } });
 const doc = (p, path) => p.evaluate(x => window.firebase.__fake.doc(x), path);
 const openProfile = async p => { await tapSel(p, '[aria-label="Profilo"]'); await w(p, 600); };
-const row = (p, id) => p.evaluate(x => { const e = document.querySelector(`[data-trophy="${x}"]`); return e ? { won: e.getAttribute('data-won'), text: e.innerText.replace(/\s+/g, ' ') } : null; }, id);
+// 7/11: la bacheca è la pagina "I miei trofei" con Vinti / Da vincere: se non è tra i vinti si guarda nell'altra.
+const row1 = (p, id) => p.evaluate(x => { const e = document.querySelector(`[data-trophy="${x}"]`); return e ? { won: e.getAttribute('data-won'), text: e.innerText.replace(/\s+/g, ' ') } : null; }, id);
+const row = async (p, id) => {
+  const a = await row1(p, id);
+  if (a) return a;
+  await tapSel(p, '[data-tp-view="todo"]'); await w(p, 300);
+  const b = await row1(p, id);
+  await tapSel(p, '[data-tp-view="won"]'); await w(p, 300);
+  return b;
+};
 const caseHead = p => p.evaluate(() => { const e = document.querySelector('[data-trophies]'); return e ? e.innerText.replace(/\s+/g, ' ') : ''; });
-const openTrophies = async p => { await tapSel(p, '[data-trophies] button'); await w(p, 300); };
+const openTrophies = async p => { await tapSel(p, '[data-trophies] button'); await w(p, 400); };
 
 // Chat
 const T0 = Date.parse('2026-10-07T09:00:00Z');

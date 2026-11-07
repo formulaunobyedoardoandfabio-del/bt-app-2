@@ -711,9 +711,27 @@ Da fare:
   Con "Rimuovi animazioni" niente gocce. Prove: test/unit/rain.test.js, words.test.js, run91-pioggia (6), run40 (radio).
 
 ## 7/11 sera: classifica completa della lega FantaF1
-- Pagina a parte (src/fanta/ClassificaLega.jsx e .css, design "Amici del paddock"): si apre solo toccando "Vedi la
+- Pagina a parte (src/fanta/ClassificaLega.jsx e .css), dal design "BT_FantaF1_nuovo_design.html" → "4 Lega" (solo
+  quella pagina: Edoardo ha detto di usare quel file al posto del .txt tagliato). Si apre solo toccando "Vedi la
   classifica completa" in fondo alla tabella o il titolo CLASSIFICA LEGA; Indietro (anche quello del telefono) torna.
-  Il file del design arrivato era tagliato dopo l'inizio del podio: lista e gradini 1 e 3 seguono lo stesso stile.
 - Questo GP / Stagione: FantaL.standings ora dà anche gp (punti dell'ultimo GP con i risultati, null se per quella
-  squadra non ha contato) e gpRound. Si parte da Questo GP se c'è un GP contato. Zone Q1/Q2 solo in Stagione.
+  squadra non ha contato) e gpRound. Si parte da Questo GP se c'è un GP contato. Freccia su/giù = posizione in
+  stagione prima e dopo l'ultimo GP (punti meno gp contro punti). Zone Q1/Q2 con la barretta colorata a sinistra.
+  Sigle di due lettere tutte diverse (Marco MA, Matteo MT). Podio: i gradini salgono (transform), frecce che oscillano.
 - Prove: test/unit/fantaleague.test.js (+1), test/e2e/run92-classifica.js (1).
+
+## 7/11 sera: pagina "I miei trofei" (Profilo)
+- Dal design "BT_Profilo_nuovo_design.html" solo "3 Trofei": src/profilo/TrofeiPage.jsx e .css. Si apre solo dal
+  bottone "Apri la bacheca" della scheda dei trofei nel Profilo (prima la bacheca si apriva sotto). trophyItems() in
+  App.jsx prepara nome, come si vince, data, quanto manca e barra. Vinti / Da vincere; tra i vinti, larga in fondo,
+  quella da vincere più vicina. Data senza anno se è quest'anno (come nel design). Segreti nascosti finché non vinti.
+- Prove: test/e2e/run93-trofei-pagina.js (1); run68 e run72 aggiornate (leggono le righe in tutte e due le viste).
+
+## 7/11 sera: Garage a piastrelle (video)
+- GarageScreen: piastrelle quadrate a mattoncino (4 colonne, righe dispari spostate di mezza piastrella), colori per
+  sezione (GARAGE_SECTIONS: giochi arancio, weekend rosso, tracciati verde, analisi viola, in arrivo scure tratteggiate),
+  da trascinare nei due versi (scroll vero del telefono, data-garage-canvas). Bottoni in alto per sezione (con quante
+  piastrelle) che portano lì; la sezione accesa segue quello che si vede. Dentro il Garage lo swipe di lato tra le
+  schede non c'è più (ownGesture: la griglia scorre di lato); si cambia scheda dalla barra in basso.
+- La memoria dello scroll (scrollMem in App) ora ricorda anche scrollLeft.
+- Prove: test/e2e/run94-garage-griglia.js (1); run77 aggiornata (giù e di lato).
