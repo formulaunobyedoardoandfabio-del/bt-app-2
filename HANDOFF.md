@@ -709,3 +709,11 @@ Da fare:
   (al massimo 15, da zero, punto a caso, vicine solo nell'8% dei casi, ferme 1,8-6 s, poi giù a ~1100 px/s).
   Piove se: in diretta il meteo di OpenF1 (rainfall); se no, nel weekend del GP, MET Norway adesso (rainingNow).
   Con "Rimuovi animazioni" niente gocce. Prove: test/unit/rain.test.js, words.test.js, run91-pioggia (6), run40 (radio).
+
+## 7/11 sera: classifica completa della lega FantaF1
+- Pagina a parte (src/fanta/ClassificaLega.jsx e .css, design "Amici del paddock"): si apre solo toccando "Vedi la
+  classifica completa" in fondo alla tabella o il titolo CLASSIFICA LEGA; Indietro (anche quello del telefono) torna.
+  Il file del design arrivato era tagliato dopo l'inizio del podio: lista e gradini 1 e 3 seguono lo stesso stile.
+- Questo GP / Stagione: FantaL.standings ora dà anche gp (punti dell'ultimo GP con i risultati, null se per quella
+  squadra non ha contato) e gpRound. Si parte da Questo GP se c'è un GP contato. Zone Q1/Q2 solo in Stagione.
+- Prove: test/unit/fantaleague.test.js (+1), test/e2e/run92-classifica.js (1).

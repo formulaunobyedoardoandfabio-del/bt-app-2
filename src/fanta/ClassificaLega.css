@@ -1,0 +1,5 @@
+/* 7/11: classifica completa della lega. La pillola dell'interruttore scivola (solo transform). */
+.lt-seg-pill { transition: transform 200ms cubic-bezier(.2, .8, .2, 1); }
+.lt-seg-btn { cursor: pointer; }
+.lt-seg-btn:focus-visible, .lt-back:focus-visible { outline: 2px solid #F4F4F5; outline-offset: 2px; }
+@media (prefers-reduced-motion: reduce) { .lt-seg-pill { transition: none; } }

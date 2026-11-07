@@ -69,6 +69,23 @@ t('lega: creata, un amico entra col codice, la storia della squadra va nel propr
   assert.deepStrictEqual((await L.loadLeague(lg.code)).members.map(m => m.name), ['Tester']);
 });
 
+t('classifica: punti dell\'ultimo GP con risultati per ognuno (null se quel GP non ha contato)', async () => {
+  const L = createFantaLeague({ fetch: fakeFetch(), now: () => NOW, store: mem() });
+  const two = [{ round: 1, race: { order: [{ id: 'leclerc', pos: 1, grid: 1 }, { id: 'hamilton', pos: 2, grid: 2 }] } }, { round: 2, race: { order: [{ id: 'hamilton', pos: 1, grid: 1 }, { id: 'leclerc', pos: 2, grid: 2 }] } }];
+  const lg = { members: [
+    { aid: 'ume', name: 'Tester', team: '', log: [SQ], bonus: 0 },
+    { aid: 'umarco', name: 'Marco', team: '', log: [{ ...SQ, t: 150, b: 'hamilton' }], bonus: 3 },
+  ] };
+  const st = L.standings(lg, two, r => (r === 1 ? 100 : 200));
+  const me = st.find(m => m.aid === 'ume'), marco = st.find(m => m.aid === 'umarco');
+  assert.strictEqual(me.gpRound, 2);
+  assert.ok(me.gp > 0 && marco.gp > 0, JSON.stringify(st.map(m => [m.aid, m.gp])));
+  assert.strictEqual(marco.pts, marco.gp + 3, 'Marco ha contato solo il GP 2 (+ bonus)');
+  const solo = L.standings({ members: [{ aid: 'ux', name: 'X', team: '', log: [{ ...SQ, t: 300 }], bonus: 0 }] }, two, r => (r === 1 ? 100 : 200));
+  assert.strictEqual(solo[0].gp, null, 'squadra arrivata dopo: nessun GP contato');
+  assert.strictEqual(L.standings(lg, [], () => 100)[0].gpRound, null);
+});
+
 (async () => {
   let pass = 0, fail = 0;
   const filter = process.argv[2] ? new RegExp(process.argv[2], 'i') : null;

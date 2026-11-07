@@ -49,6 +49,7 @@ import { createSocial } from "./services/social";
 import { parseSocial } from "./logic/social";
 import { cutWords, fixCut } from "./logic/words";
 import { RainGlass } from "./pioggia/Pioggia";
+import ClassificaLega from "./fanta/ClassificaLega";
 import FantaSeason from "./logic/fanta-season";
 import { createFantaLeague } from "./services/fantaleague";
 import { createProfiles } from "./services/profiles";
@@ -7809,7 +7810,7 @@ const LEAGUE_ZONES = {
   q1: { label: "ZONA Q1", bg: "rgba(255,24,1,.13)", line: "rgba(255,90,95,.45)", ink: "#FF5A5F" },
   q2: { label: "ZONA Q2", bg: "rgba(255,210,31,.11)", line: "rgba(255,210,31,.45)", ink: "#FFD23F" },
 };
-function FantaScreen({ elo = null, squad, setSquad, base, freeTransfers, budget, stats, race, lock, weekends = [], isPremium, onPremium, onToast, bonus = [], leagues = [], seasonPts = 0, realWeek = null, meAid = null, onCreateLeague, onJoinLeague, onLeaveLeague, onRenameLeague, needAccount, predictions = [], predAnswers = {}, predLockOf, onAnswerPrediction, standings }) {
+function FantaScreen({ elo = null, squad, setSquad, base, freeTransfers, budget, stats, race, lock, weekends = [], isPremium, onPremium, onToast, bonus = [], leagues = [], seasonPts = 0, realWeek = null, meAid = null, onCreateLeague, onJoinLeague, onLeaveLeague, onRenameLeague, needAccount, predictions = [], predAnswers = {}, predLockOf, onAnswerPrediction, standings, raceNameOf = null }) {
   const [, setTick] = useState(0);
   useEffect(() => { const iv = setInterval(() => setTick(n => n + 1), 30000); return () => clearInterval(iv); }, []);
   const bonusPts = bonus.reduce((a, b) => a + b.pts, 0);
@@ -7821,7 +7822,9 @@ function FantaScreen({ elo = null, squad, setSquad, base, freeTransfers, budget,
   const [mode, setMode] = useState(null);   // "create" | "join" | "rename"
   const [draft, setDraft] = useState("");
   const [leaveArmed, setLeaveArmed] = useState(false);
+  const [fullTable, setFullTable] = useState(false);   // 7/11: classifica completa della lega (pagina a parte)
   useBack(!!mode, () => setMode(null));
+  useBack(fullTable, () => setFullTable(false));
   const league = leagues.find(l => l.code === activeLeague) || leagues[0] || null;
   const rows = league ? league.members.map(m => ({ ...m, me: m.aid === meAid })) : [];
   const myPos = rows.findIndex(r => r.me) + 1;
@@ -7853,6 +7856,10 @@ function FantaScreen({ elo = null, squad, setSquad, base, freeTransfers, budget,
   );
   const wkLive = race ? weekends.filter(w => w.raceId === race.id) : [];
   const wk = realWeek ? realWeek.lines.map(l => ({ id: realWeek.round + ":" + l.type, type: l.type, total: l.pts })) : wkLive;
+  if (fullTable && league) {
+    const gpRound = league.members.length ? league.members[0].gpRound : null;
+    return <ClassificaLega name={league.name} rows={rows} gpName={gpRound != null && raceNameOf ? raceNameOf(gpRound) : ""} onBack={() => setFullTable(false)} accent={C.accentInk} zoneOf={zoneOf} zones={LEAGUE_ZONES} />;
+  }
   return (
     <div className="scrollcol" style={{ height: "100%" }}>
       <FantaSquadCard squad={squad} setSquad={setSquad} base={base} freeTransfers={freeTransfers} budget={budget} stats={stats} race={race} lock={lock} onToast={onToast} needAccount={needAccount} standings={standings} />
@@ -7940,7 +7947,9 @@ function FantaScreen({ elo = null, squad, setSquad, base, freeTransfers, budget,
       )}
 
       {league && <>
-      {heading("trophy", "CLASSIFICA LEGA", league.name)}
+      <button type="button" className="press" data-league-open="" aria-label={`Classifica completa di ${league.name}`} onClick={() => setFullTable(true)} style={{ display: "block", width: "100%", padding: 0, background: "transparent", border: 0, textAlign: "left" }}>
+        {heading("trophy", "CLASSIFICA LEGA", <span style={{ display: "inline-flex", alignItems: "center", gap: 4, color: C.text, fontWeight: 700 }}>Classifica completa <Icon name="chevron" size={13} color={C.muted} /></span>)}
+      </button>
       <div data-league-table="" style={{ margin: "0 16px 16px", borderRadius: 18, background: C.card, border: `1px solid ${C.border}`, overflow: "hidden" }}>
         {rows.map((u, i) => { const zone = zoneOf(i + 1, rows.length), Z = LEAGUE_ZONES[zone], first = Z && (i === 0 || zoneOf(i, rows.length) !== zone); return (
           <React.Fragment key={u.aid}>
@@ -7962,6 +7971,9 @@ function FantaScreen({ elo = null, squad, setSquad, base, freeTransfers, budget,
           </div>
           </React.Fragment>
         ); })}
+        <button type="button" className="press" data-league-full-btn="" onClick={() => setFullTable(true)} style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 6, width: "100%", padding: "12px 14px", background: "rgba(255,255,255,.04)", border: 0, borderTop: `1px solid ${C.divider}`, fontFamily: F_HEAD, fontWeight: 800, fontSize: 12.5, color: C.text }}>
+          Vedi la classifica completa <Icon name="chevron" size={14} color={C.muted} />
+        </button>
       </div>
       <p data-league-note="" style={{ margin: "-8px 20px 16px", fontFamily: F_BODY, fontSize: 10.5, color: C.dim, lineHeight: 1.45 }}>Punti dei GP veri (gara, qualifiche, Sprint) con le regole del FantaF1 e la squadra di ognuno al via del weekend; i cambi oltre i gratis tolgono punti. Contano i weekend da quando si ha la squadra in app.{qZones(rows.length).q1 > 0 ? ` Come nelle qualifiche 2026: con ${rows.length} squadre le ultime ${qZones(rows.length).q1} sono in Zona Q1 e le ${qZones(rows.length).q2} prima in Zona Q2.` : ""}</p>
       </>}
@@ -12174,7 +12186,7 @@ function App() {
     else if (tab === "garage") body = <GarageScreen openGame={garageGame} onGameOpened={() => setGarageGame(null)} races={races} pitBest={pitBest} onPitResult={t => {
       if (activeDuel && myAid) { const id = activeDuel; setActiveDuel(null); Duels.reply({ id, aid: myAid, time: t }).then(item => { setDuelsArr(a => [...a, item]); showToast("Sfida giocata: risultato in Home"); }, () => showToast("Risposta alla sfida non inviata")); }
       if (!userDataWait()) { setPitBest(b => b == null || t < b ? t : b); psBump("pit"); } }} sillyPreds={sillyPreds} onPredict={predictSeat} sillyOfficial={sillyOfficial} live={live} stratPreds={stratPreds} onStrat={(id, st) => { if (!userDataWait()) setStratPreds(x => ({ ...x, [id]: { stints: st, at: nowMs() } })); }} bluffTags={bluffNow} onBluffRefresh={loadBluffTags} />;
-    else if (tab === "fanta") body = <FantaScreen standings={shownStandings} squad={squad} setSquad={setSquad} base={squadBase} freeTransfers={freeTransfers} budget={FANTA_BUDGET} stats={fantaStats} race={fantaRace} lock={teamLockInfo} weekends={fantaLive} isPremium={isPremium} onPremium={() => setPremiumOpen(true)} onToast={showToast} bonus={bonus} leagues={leagueRows} elo={fantaElo} seasonPts={fantaSeason.total} realWeek={fantaRace ? fantaSeason.rounds.find(r => r.round === fantaRace.round) || null : null} meAid={account ? account.aid : null} onCreateLeague={createLeague} onJoinLeague={joinLeague} onLeaveLeague={leaveLeague} onRenameLeague={renameLeague} needAccount={needAccount} predictions={predictionsOpen} predAnswers={predAnswers} predLockOf={predLockOf} onAnswerPrediction={answerPrediction} />;
+    else if (tab === "fanta") body = <FantaScreen standings={shownStandings} squad={squad} setSquad={setSquad} base={squadBase} freeTransfers={freeTransfers} budget={FANTA_BUDGET} stats={fantaStats} race={fantaRace} lock={teamLockInfo} weekends={fantaLive} isPremium={isPremium} onPremium={() => setPremiumOpen(true)} onToast={showToast} bonus={bonus} leagues={leagueRows} elo={fantaElo} seasonPts={fantaSeason.total} realWeek={fantaRace ? fantaSeason.rounds.find(r => r.round === fantaRace.round) || null : null} meAid={account ? account.aid : null} onCreateLeague={createLeague} onJoinLeague={joinLeague} onLeaveLeague={leaveLeague} onRenameLeague={renameLeague} needAccount={needAccount} predictions={predictionsOpen} predAnswers={predAnswers} predLockOf={predLockOf} onAnswerPrediction={answerPrediction} raceNameOf={round => { const r = races.find(x => x.round === round); return r ? r.name : ""; }} />;
     return body;
   }
 

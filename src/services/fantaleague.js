@@ -91,9 +91,15 @@ function createFantaLeague({ fetch: f = (...a) => fetch(...a), now = () => Date.
   const renameLeague = (code, name) => { const n = String(name || "").trim().slice(0, 40); return n && codeOk(code) ? dbSet("fanta", docId(code), { name: n }) : Promise.resolve(); };
 
   // Classifica di una lega: punti veri di ogni membro (dalla sua storia e dai risultati), dal primo all'ultimo.
+  // 7/11: anche i punti dell'ultimo GP con risultati (gp; null se per lui quel GP non ha contato) per "Questo GP".
   function standings(league, rounds, lockOf) {
-    return (league ? league.members : []).map(m => ({ ...m, pts: FS.seasonPoints({ log: m.log, rounds, lockOf }).total + m.bonus }))
-      .sort((a, b) => b.pts - a.pts || a.name.localeCompare(b.name));
+    const list = Array.isArray(rounds) ? rounds : [];
+    const gpRound = list.length ? list[list.length - 1].round : null;
+    return (league ? league.members : []).map(m => {
+      const sp = FS.seasonPoints({ log: m.log, rounds: list, lockOf });
+      const last = gpRound == null ? null : sp.rounds.find(r => r.round === gpRound);
+      return { ...m, pts: sp.total + m.bonus, gp: last ? last.pts : null, gpRound };
+    }).sort((a, b) => b.pts - a.pts || a.name.localeCompare(b.name));
   }
 
   // Eliminazione dell'account: nelle sue leghe (codici nei dati dell'account) il membro resta solo come "uscito",
