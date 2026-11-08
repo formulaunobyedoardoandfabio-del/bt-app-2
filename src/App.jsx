@@ -56,6 +56,10 @@ import { computeGpTrophies } from "./logic/gp-trophies";
 import { buildStartGrid } from "./logic/start-grid";
 import Calcolatrice from "./mondiale/Calcolatrice";
 import { createPitWall } from "./logic/pit-wall";
+import AutoPred from "./logic/auto-predictions";
+import AutoNews from "./logic/auto-news";
+import FantaPrices from "./logic/fanta-prices";
+import { createHighlights } from "./services/highlights";
 import PitWallResult, { BoxOrOut, RedPlay, PitWallCard } from "./gara/PitWall";
 import { eventsLeft as champEventsLeft } from "./logic/champ-calc";
 import TrofeiPage from "./profilo/TrofeiPage";
@@ -2179,7 +2183,7 @@ function TyreFilter({ value, onChange }) {
   );
 }
 
-function HomeScreen({ holidayTop = null, pitSwipe = null, social = [], onOpenSocial = null, ig, onOpenIg, highlights = [], articles, tagFilter, onTag, onClearTag, onOpenArticle, isPremium, onPremium, onToast, onLiveTrack, onGoFanta, saved = [], onToggleSave, savedOnly = false, setSavedOnly, onOpenCircuit, homePoll = null, homeVote = null, onVote, hidden = [], onHide, onUnhideAll, onSwipeSave, onRefresh }) {
+function HomeScreen({ holidayTop = null, pitSwipe = null, social = [], onOpenSocial = null, ig, onOpenIg, highlights = [], ytHighlights = [], articles, tagFilter, onTag, onClearTag, onOpenArticle, isPremium, onPremium, onToast, onLiveTrack, onGoFanta, saved = [], onToggleSave, savedOnly = false, setSavedOnly, onOpenCircuit, homePoll = null, homeVote = null, onVote, hidden = [], onHide, onUnhideAll, onSwipeSave, onRefresh }) {
   const [q, setQ] = useState("");
   const homeRef = useRef(null);
   const pullRev = usePullRefresh(homeRef, onRefresh);
@@ -2372,6 +2376,15 @@ function HomeScreen({ holidayTop = null, pitSwipe = null, social = [], onOpenSoc
       )}
 
       <div data-snap-tail="" style={{ scrollSnapAlign: "start" }}>
+      {ytHighlights.length > 0 && (
+        <div style={{ padding: "0 16px 20px" }}>
+          <div data-yt-highlights={ytHighlights.length} style={{ padding: 16, borderRadius: 16, background: C.card, border: `1px solid ${C.border}` }}>
+            <span style={{ display: "block", fontFamily: F_BODY, fontWeight: 700, fontSize: 11, color: C.dim, letterSpacing: 1, marginBottom: 10 }}>HIGHLIGHTS UFFICIALI F1</span>
+            <HighlightsStrip items={ytHighlights} onToast={onToast} />
+            <span style={{ display: "block", marginTop: 8, fontFamily: F_BODY, fontSize: 10.5, color: C.dim }}>Video del canale YouTube di FORMULA 1: si aprono su YouTube.</span>
+          </div>
+        </div>
+      )}
       <SectionLabel icon="star">CONTENUTI PREMIUM</SectionLabel>
       <div style={{ display: "flex", flexDirection: "column", gap: 10, padding: "0 16px 20px" }}>
         {homePoll && <PollCard poll={homePoll} vote={homeVote} onVote={onVote} title="SONDAGGIO DELLA REDAZIONE" />}
@@ -2597,7 +2610,7 @@ function ArticleScreen({ article, onBack, isPremium, onPremium, onAdUnlock = nul
           </div>
         ) : (
           article.body.split("\n\n").map((p, i) => (
-            <p key={i} style={{ fontFamily: F_BODY, fontSize: 14.5, color: "#D8D8DA", lineHeight: 1.75, margin: "0 0 14px" }}>{p}</p>
+            <p key={i} style={{ fontFamily: F_BODY, fontSize: 14.5, color: "#D8D8DA", lineHeight: 1.75, margin: "0 0 14px", whiteSpace: "pre-line" }}>{p}</p>
           ))
         )}
         {article.poll && !locked && <div style={{ margin: "4px 0 14px" }}><PollCard poll={articlePoll(article)} vote={vote} onVote={onVote} /></div>}
@@ -8916,13 +8929,15 @@ function AdminPollsTab({ polls, votes, onAnswer }) {
   );
 }
 
-function AdminFantaTab({ fantaStats, setFantaStats, onToast }) {
+function AdminFantaTab({ fantaStats, setFantaStats, onToast, latestRound = null }) {
   const [kind, setKind] = useState("drivers");
   const toDraft = o => Object.fromEntries(Object.entries(o).map(([k, v]) => [k, { price: String(v.price), change: v.change == null ? "" : String(v.change), pts: String(v.pts) }]));
   const [draft, setDraft] = useState(() => ({ drivers: toDraft(fantaStats.drivers), teams: toDraft(fantaStats.teams) }));
   const set = (id, k, v) => setDraft(d => ({ ...d, [kind]: { ...d[kind], [id]: { ...d[kind][id], [k]: v } } }));
   const conv = o => Object.fromEntries(Object.entries(o).map(([k, v]) => [k, { price: parseFloat(v.price) || 0, change: v.change === "" ? null : parseFloat(v.change) || 0, pts: parseInt(v.pts, 10) || 0 }]));
-  const save = () => { setFantaStats({ drivers: conv(draft.drivers), teams: conv(draft.teams) }).then(ok => ok && onToast("Prezzi e punti FantaF1 salvati")); };
+  // 8/11: si salva anche fino a che round valgono (asOf): dai GP dopo i prezzi tornano a cambiare da soli.
+  const asOf = Number.isInteger(fantaStats.asOf) ? fantaStats.asOf : latestRound;
+  const save = () => { setFantaStats({ drivers: conv(draft.drivers), teams: conv(draft.teams), ...(Number.isInteger(asOf) ? { asOf } : {}) }).then(ok => ok && onToast("Prezzi e punti FantaF1 salvati")); };
   const ids = Object.keys(draft[kind]);
   return (
     <div>
@@ -9492,7 +9507,7 @@ function AdminChatTab({ chats, reports, banned, onDeleteMsg, onSuspend, onUnsusp
 // Impronta di un valore: le schede con la bozza (classifiche, prezzi FantaF1, Instagram) si rifanno da capo quando i
 // dati sotto cambiano (riletti da Firebase o appena salvati), così SALVA non riscrive valori vecchi (revisione Fase B, C2).
 const versionOf = v => { const s = JSON.stringify(v) || ""; let h = 5381; for (let i = 0; i < s.length; i++) h = (Math.imul(h, 33) + s.charCodeAt(i)) | 0; return (h >>> 0).toString(36) + "." + s.length; };
-function AdminScreen({ flags = null, onFlags = null, takes = [], onTakes = null, photos, setPhotos, silly = {}, onSilly, highlights = [], setHighlights, onBack, onPublish, articles, setArticles, fantaStats, setFantaStats, standings, setStandings, races, setRaces, extraRaces = [], setExtraRaces, ig, setIg, sentNotifs, onSendNotif, onDeleteNotif, onToast, tab, setTab, chats, reports, banned, onDeleteMsg, onSuspend, onUnsuspend, onIgnoreReport, liveProps = {}, polls = [], votes = {}, onPollAnswer, predictions = [], setPredictions, predAnswers = {}, holidayCfg = null, onHolidays = null, holiday = null }) {
+function AdminScreen({ flags = null, onFlags = null, takes = [], onTakes = null, photos, setPhotos, silly = {}, onSilly, highlights = [], setHighlights, onBack, onPublish, articles, setArticles, fantaStats, fantaLatestRound = null, setFantaStats, standings, setStandings, races, setRaces, extraRaces = [], setExtraRaces, ig, setIg, sentNotifs, onSendNotif, onDeleteNotif, onToast, tab, setTab, chats, reports, banned, onDeleteMsg, onSuspend, onUnsuspend, onIgnoreReport, liveProps = {}, polls = [], votes = {}, onPollAnswer, predictions = [], setPredictions, predAnswers = {}, holidayCfg = null, onHolidays = null, holiday = null }) {
   return (
     <div className="scrollcol" style={{ height: "100%" }}>
       <SubHeader title="PANNELLO ADMIN" onBack={onBack} />
@@ -9502,7 +9517,7 @@ function AdminScreen({ flags = null, onFlags = null, takes = [], onTakes = null,
       <div style={{ padding: "0 16px 28px" }}>
         {tab === "NEWS" && <AdminNewsTab articles={articles} setArticles={setArticles} onPublish={onPublish} onToast={onToast} />}
         {tab === "SONDAGGI" && <AdminPollsTab polls={polls} votes={votes} onAnswer={onPollAnswer} />}
-        {tab === "FANTA F1" && <AdminFantaTab key={"fs:" + versionOf(fantaStats)} fantaStats={fantaStats} setFantaStats={setFantaStats} onToast={onToast} />}
+        {tab === "FANTA F1" && <AdminFantaTab key={"fs:" + versionOf(fantaStats)} fantaStats={fantaStats} setFantaStats={setFantaStats} onToast={onToast} latestRound={fantaLatestRound} />}
         {tab === "FUNZIONI" && <AdminFlagsTab flags={flags} onSave={onFlags} />}
         {tab === "TEMI" && <AdminHolidaysTab cfg={holidayCfg} active={holiday} onSave={v => onHolidays && onHolidays(v)} />}
         {tab === "OPINIONI" && <AdminTakesTab takes={takes} onSave={v => onTakes && onTakes(v)} />}
@@ -11086,7 +11101,10 @@ function App() {
     if (!fantaUserReady) return;
     Promise.all(leagueCodes.map(c => FantaL.loadLeague(c).catch(() => null))).then(ls => setLeagues(ls.filter(Boolean)));
   }, [fantaUserReady, leagueCodes.join(","), tab === "fanta"]);
-  useEffect(() => { if (tab === "fanta" && JOLPICA_ON) FantaL.results().then(setFantaRounds, () => {}); }, [tab]);
+  // 8/11: i risultati veri servono anche alle previsioni automatiche (e ai loro punti): si leggono all'avvio (in cache 3 ore)
+  // e di nuovo entrando nel FantaF1.
+  const [roundsTried, setRoundsTried] = useState(!JOLPICA_ON);
+  useEffect(() => { if (JOLPICA_ON) FantaL.results().then(r => { setFantaRounds(r); setRoundsTried(true); }, () => setRoundsTried(true)); }, [tab === "fanta"]);   // eslint-disable-line react-hooks/exhaustive-deps
   // Colori dell'app (G01-G02): si applicano qui, prima di disegnare le pagine. Finché Authentication non ha risposto o
   // i dati dell'account non sono arrivati vale il colore usato l'ultima volta su questo telefono.
   const themePending = account === undefined || (!!userEmail && userLoaded !== userEmail);
@@ -11960,22 +11978,53 @@ function App() {
 
   // Punti bonus del FantaF1: pronostici meteo indovinati (+2 ciascuno).
   const allPolls = [...(homePoll ? [{ ...homePoll, where: "Home" }] : []), ...articles.filter(a => a.poll).map(a => ({ ...articlePoll(a), where: a.title }))];
+  // 8/11: previsioni automatiche (src/logic/auto-predictions.js): domande del weekend fatte dall'app e corrette coi
+  // risultati veri; le risposte trovate restano sul telefono ("bt-auto-answers") così i punti non spariscono senza rete.
+  const [autoAns, setAutoAns] = useState(() => { const v = local.get("bt-auto-answers"); return v && typeof v === "object" ? v : {}; });
+  const autoQs = (() => {
+    const cur = weekendRace(races);
+    const qs = AutoPred.racesToAsk(races, { current: cur, answered: predAnswers }).flatMap(r => AutoPred.questionsFor(r, { sprint: !!(CIRCUIT_INFO[r.circuitId] && CIRCUIT_INFO[r.circuitId].sprint) }));
+    return AutoPred.withAnswers(qs, fantaRounds, { teamOf: id => (driverById(id) || {}).teamId || null }).map(q => (q.answer == null && autoAns[q.id] != null ? { ...q, answer: autoAns[q.id] } : q));
+  })();
+  const autoNew = autoQs.filter(q => q.answer != null && autoAns[q.id] !== q.answer).map(q => q.id + "=" + q.answer).join(",");
+  useEffect(() => {
+    if (!autoNew) return;
+    setAutoAns(m => { const n = { ...m }; autoQs.forEach(q => { if (q.answer != null) n[q.id] = q.answer; }); local.set("bt-auto-answers", n); return n; });
+  }, [autoNew]);   // eslint-disable-line react-hooks/exhaustive-deps
+  const allPredictions = [...predictions, ...autoQs];
+  // 8/11: highlights ufficiali F1 dal canale YouTube (api/highlights.js), ogni 30 minuti; senza rete gli ultimi letti.
+  const ytHL = React.useMemo(() => createHighlights({ store: local }), []);
+  const [ytHighlights, setYtHighlights] = useState(() => { const v = local.get("bt-yt-highlights"); return v && Array.isArray(v.items) ? v.items : []; });
+  useEffect(() => {
+    let alive = true;
+    const go = () => ytHL.list().then(x => { if (alive && Array.isArray(x)) setYtHighlights(x); }, () => {});
+    go();
+    const iv = setInterval(go, 30 * 60e3);
+    return () => { alive = false; clearInterval(iv); };
+  }, [ytHL]);
+  // 8/11: notizie scritte dall'app coi risultati veri (src/logic/auto-news.js) accanto a quelle dell'admin.
+  const autoNewsList = AutoNews.autoNews(fantaRounds, races, { name: id => (driverById(id) || {}).full || null, team: id => (driverById(id) || {}).team || null, weekendOf: c => (CIRCUIT_INFO[c] || {}).weekend || null })
+    .map(a => ({ ...a, time: Compat.relTime(a.date, nowMs()) }));
+  const newsAll = autoNewsList.length ? [...articles, ...autoNewsList] : articles;
+  // 8/11: prezzi FantaF1 che cambiano da soli dopo ogni GP coi punti veri del weekend (src/logic/fanta-prices.js).
+  const latestRaceRound = fantaRounds.reduce((m, r) => (r && r.race && Array.isArray(r.race.order) && r.race.order.length ? Math.max(m, r.round) : m), 0) || null;
+  const shownFantaStats = Number.isInteger(fantaStats.asOf) ? FantaPrices.autoPrices(fantaStats, fantaRounds, { asOf: fantaStats.asOf, teamOf: FantaSeason.TEAM_OF }) : fantaStats;
   const bonus = [
     ...Object.keys(wxResult).filter(k => wxGuess[k] && wxGuess[k] === wxResult[k]).map(k => {
       const [rid, key] = k.split(":"), r = races.find(x => x.id === rid);
       return { id: "wx:" + k, kind: "meteo", label: `Meteo ${LiveSim.SESSION_LABEL[key] || key}${r ? " · " + r.name : ""}`, pts: 2 };
     }),
     ...allPolls.filter(pl => pl.answer && votes[pl.id] === pl.answer).map(pl => ({ id: "poll:" + pl.id, kind: "sondaggio", label: "Sondaggio · " + pl.q, pts: 2 })),
-    ...predictions.filter(q => BtLogic.predictionCorrect(q, predAnswers[q.id]) === true).map(q => ({ id: "pred:" + q.id, kind: "previsione", label: "Previsione · " + q.q, pts: BtLogic.RULES.predictionBonus })),
+    ...allPredictions.filter(q => BtLogic.predictionCorrect(q, predAnswers[q.id]) === true).map(q => ({ id: "pred:" + q.id, kind: "previsione", label: "Previsione · " + q.q, pts: BtLogic.RULES.predictionBonus })),
   ];
   // 31/10: il totale dei bonus va nelle mie leghe quando cambia (anche la classifica di lega conta i pronostici).
   const bonusTotal = bonus.reduce((a, x) => a + x.pts, 0);
   fantaBonusRef.current = bonusTotal;
   useEffect(() => {
-    if (!fantaUserReady || !account || !leagueCodes.length) return;
+    if (!fantaUserReady || !roundsTried || !account || !leagueCodes.length) return;   // 8/11: dopo i risultati (bonus completi)
     FantaL.pushLog(leagueCodes, { aid: account.aid, name: account.name, team: squad.name, bonus: bonusTotal }, squadLog);
     setLeagues(ls => ls.map(l => ({ ...l, members: l.members.map(m => (m.aid === account.aid ? { ...m, bonus: bonusTotal } : m)) })));
-  }, [fantaUserReady, bonusTotal, leagueCodes.join(",")]);
+  }, [fantaUserReady, roundsTried, bonusTotal, leagueCodes.join(",")]);
   // Trofei (G31): dai dati veri dell'account e dei documenti condivisi (src/logic/trophies.js). Solo con un account e i
   // suoi dati letti (si salvano lì); un trofeo nuovo si segna con la data, con l'avviso, il suono della Shift Light e
   // la vibrazione. La squadra del FantaF1 conta solo se non è più quella di partenza.
@@ -12102,7 +12151,7 @@ function App() {
   const psSessions = psRace && CIRCUIT_INFO[psRace.circuitId] ? (CIRCUIT_INFO[psRace.circuitId].weekend || []) : [];
   const psEnds = psSessions.map(x => Date.parse(x.utc) + (x.key === "RACE" ? 2 : 1) * 3600000).filter(isFinite);
   const psKey = BtSwipe.deckKey(nowMs(), psEnds);
-  const psNews = BtLogic.newestFirst(articles.filter(a => a && a.published !== false && !hidden.includes(a.id)))
+  const psNews = BtLogic.newestFirst(newsAll.filter(a => a && a.published !== false && !hidden.includes(a.id)))
     .map(a => ({ ...a, topics: [...articleTags(a).map(t => t.key), a.cat ? "k:" + String(a.cat).toLowerCase() : null].filter(Boolean) }));
   const psDriverCard = (() => {
     const d = favDriver ? driverById(favDriver) : null;
@@ -12117,7 +12166,7 @@ function App() {
   const myVotesT = myAid ? Object.fromEntries(Object.entries(psTally).filter(([k, t]) => k.startsWith("t:") && t.byAid[myAid] != null).map(([k, t]) => [k.slice(2), t.byAid[myAid]])) : {};
   const psFresh = BtSwipe.buildDeck({ news: psNews, takes, voted: myVotesT, facts: psFacts, driverCard: psDriverCard, weights: swipe.w || {}, fav: { driver: favDriver, team: favTeam }, mode: swipe.mode || "taste", key: psKey });
   const psDeck = swipe.deck && swipe.deck.key === psKey ? swipe.deck : null;
-  const psCards = psDeck ? (psDeck.cards || []).map(c => (c.k === "news" ? (psNews.find(a => a.id === c.id) || articles.find(a => a.id === c.id)) && { ...(psNews.find(a => a.id === c.id) || articles.find(a => a.id === c.id)), kind: "news" }
+  const psCards = psDeck ? (psDeck.cards || []).map(c => (c.k === "news" ? (psNews.find(a => a.id === c.id) || newsAll.find(a => a.id === c.id)) && { ...(psNews.find(a => a.id === c.id) || newsAll.find(a => a.id === c.id)), kind: "news" }
       : c.k === "take" ? takes.find(t => t.id === c.id) && { ...takes.find(t => t.id === c.id), kind: "take" }
       : c.k === "tf" ? psFacts.find(f => f.id === c.id) && { ...psFacts.find(f => f.id === c.id), kind: "tf" }
       : c.k === "driver" && psDriverCard ? { ...psDriverCard, kind: "driver" } : null)).filter(Boolean) : psFresh;
@@ -12260,7 +12309,7 @@ function App() {
     const last = Number(local.get("bt-last-seen")) || 0, now = nowMs();
     local.set("bt-last-seen", now);
     if (!last || now - last < 7 * 86400000) return;
-    const news = articles.filter(a => { const t = Date.parse(a.date || ""); return isFinite(t) && t > last; }).length;
+    const news = newsAll.filter(a => { const t = Date.parse(a.date || ""); return isFinite(t) && t > last; }).length;
     const gp = races.filter(r => { const t = Date.parse(String(r.date).slice(0, 10) + "T12:00:00Z"); return t > last && t < now; }).length;
     setWelcome({ days: Math.floor((now - last) / 86400000), news, races: gp });
   }, [userLoaded, userEmail]);
@@ -12336,8 +12385,8 @@ function App() {
   // Fine dell'ultimo GP già corso (partenza della gara + 4 ore): da lì ripartono le stanze della gara.
   const lastGpEnd = (races || []).map(r => raceStartMs(r) + 4 * 3600e3).filter(t => isFinite(t) && t < nowMs()).sort((a, b) => b - a)[0] || 0;
   const chatSince = id => (!id || id === "generale" || id === "fanta" ? 0 : lastGpEnd);
-  const activeArticle = articles.find(a => a.id === articleId);
-  const shareArticle = shareId != null ? articles.find(a => a.id === shareId) : null;
+  const activeArticle = newsAll.find(a => a.id === articleId);
+  const shareArticle = shareId != null ? newsAll.find(a => a.id === shareId) : null;
   // 31/10 sera (Edoardo): sfondo e scritta della bandiera a scacchi solo se la sessione si è vista mentre era in corso
   // (anche rivista dall'inizio); finita e aperta dopo (la sessione di OpenF1 parte dalla fine) niente scacchi.
   const liveSt = (st0 => {
@@ -12350,7 +12399,7 @@ function App() {
   // Quello che si può mandare in chat come link (ChatLinkPicker) e le foto delle miniature.
   // 31/10 sera (Edoardo): finita la gara (stato CONCLUSA del calendario) i sondaggi e le previsioni di quel weekend
   // spariscono da soli da FANTA e dai link della chat; restano nei dati, così i punti presi non si perdono.
-  const predictionsOpen = predictions.filter(q => q.kind === "history" || !q.raceId || (races.find(r => r.id === q.raceId) || {}).status !== "CONCLUSA");
+  const predictionsOpen = allPredictions.filter(q => q.kind === "history" || !q.raceId || (races.find(r => r.id === q.raceId) || {}).status !== "CONCLUSA");
   const chatShareCtx = { share: shareToChat, sources: {
     articles, races, predictions: predictionsOpen, predAnswers, squad, trophyList, trophies, pitBest, sillyPreds, stratPreds,
     me: account ? { name: account.name, team: favTeam, driver: favDriver, fan: aboutMe && aboutMe.fan } : null,
@@ -12403,9 +12452,9 @@ function App() {
 
   let body;
   if (view === "article" && activeArticle) body = <ArticleScreen article={activeArticle} onBack={viewBack.article} isPremium={isPaid || adNews.includes(activeArticle.id)} onAdUnlock={Ads.canReward() ? () => watchAdNews(activeArticle.id) : null} adBusy={adBusy} onPremium={() => setPremiumOpen(true)} onTag={filterByTag} saved={saved.includes(activeArticle.id)} onToggleSave={() => toggleSave(activeArticle.id)} onShare={() => setShareId(activeArticle.id)} vote={votes["art-" + activeArticle.id] || null} onVote={castVote} />;
-  else if (view === "circuit" && circuitId) body = <CircuitScreen circuitId={circuitId} races={races} articles={articles} onBack={viewBack.circuit} onTag={filterByTag} onOpenArticle={openArticle} />;
+  else if (view === "circuit" && circuitId) body = <CircuitScreen circuitId={circuitId} races={races} articles={newsAll} onBack={viewBack.circuit} onTag={filterByTag} onOpenArticle={openArticle} />;
   else if (view === "adminLock") body = <AdminKeypad onOk={() => { setAdminUnlocked(true); setView("admin"); }} onCancel={viewBack.adminLock} />;
-  else if (view === "admin" && adminUnlocked && Account.isAdmin()) body = <AdminScreen flags={flags} onFlags={v => commitShared("flags", () => v).then(ok => { if (ok) showToast(v.pitSwipe ? "Pit Swipe acceso per tutti" : "Pit Swipe spento per tutti"); })} takes={takes} onTakes={v => commitShared("takes", () => v).then(ok => { if (ok) showToast("Opinioni salvate"); })} holidayCfg={holidayCfg} holiday={holiday} onHolidays={v => commitShared("holidays", () => v).then(ok => { if (ok) showToast("Temi delle feste salvati"); })} photos={commonsPhotos} setPhotos={adminSet.commonsPhotos} silly={sillyOfficial} onSilly={officialSeat} highlights={highlights} setHighlights={adminSet.highlights} onBack={viewBack.admin} onPublish={publishArticle} articles={articles} setArticles={adminSet.articles} fantaStats={fantaStats} setFantaStats={adminSet.fantaStats} standings={standings} setStandings={adminSet.standings} races={races} setRaces={adminSet.races} extraRaces={racesDoc.extra} setExtraRaces={adminSet.extraRaces} ig={ig} setIg={adminSet.ig} sentNotifs={sentNotifs} onSendNotif={sendNotif} onDeleteNotif={deleteNotif} onToast={showToast} tab={adminTab} setTab={setAdminTab} chats={chats} reports={reports} banned={banned} onDeleteMsg={deleteChatMsg} onSuspend={suspendUser} onUnsuspend={unsuspendUser} onIgnoreReport={ignoreReport} liveProps={liveProps} polls={allPolls} votes={votes} onPollAnswer={setPollAnswer} predictions={predictions} setPredictions={adminSet.predictions} predAnswers={predAnswers} />;
+  else if (view === "admin" && adminUnlocked && Account.isAdmin()) body = <AdminScreen flags={flags} onFlags={v => commitShared("flags", () => v).then(ok => { if (ok) showToast(v.pitSwipe ? "Pit Swipe acceso per tutti" : "Pit Swipe spento per tutti"); })} takes={takes} onTakes={v => commitShared("takes", () => v).then(ok => { if (ok) showToast("Opinioni salvate"); })} holidayCfg={holidayCfg} holiday={holiday} onHolidays={v => commitShared("holidays", () => v).then(ok => { if (ok) showToast("Temi delle feste salvati"); })} photos={commonsPhotos} setPhotos={adminSet.commonsPhotos} silly={sillyOfficial} onSilly={officialSeat} highlights={highlights} setHighlights={adminSet.highlights} onBack={viewBack.admin} onPublish={publishArticle} articles={articles} setArticles={adminSet.articles} fantaStats={shownFantaStats} fantaLatestRound={latestRaceRound} setFantaStats={adminSet.fantaStats} standings={standings} setStandings={adminSet.standings} races={races} setRaces={adminSet.races} extraRaces={racesDoc.extra} setExtraRaces={adminSet.extraRaces} ig={ig} setIg={adminSet.ig} sentNotifs={sentNotifs} onSendNotif={sendNotif} onDeleteNotif={deleteNotif} onToast={showToast} tab={adminTab} setTab={setAdminTab} chats={chats} reports={reports} banned={banned} onDeleteMsg={deleteChatMsg} onSuspend={suspendUser} onUnsuspend={unsuspendUser} onIgnoreReport={ignoreReport} liveProps={liveProps} polls={allPolls} votes={votes} onPollAnswer={setPollAnswer} predictions={predictions} setPredictions={adminSet.predictions} predAnswers={predAnswers} />;
   else if (view === "chatThread" && activeChat) body = <ChatThreadScreen since={chatSince(activeChat && activeChat.id)} chat={activeChat} onBack={viewBack.chatThread} onSend={guest ? () => needLogin("Per scrivere in chat serve un account.") : sendMessage} isPremium={isPremium} blocked={blocked} onReport={guest ? () => needLogin("Per segnalare un messaggio serve un account.") : reportMessage} onBlock={blockUser} onReact={guest ? () => needLogin("Per reagire ai messaggi serve un account.") : reactMessage} trophyList={trophyList} myWon={trophies} pendingLink={pendingLink} onPendingUsed={() => setPendingLink(null)} onOpenLink={openLink} liveRace={races.find(r => r.status === "LIVE") || null} />;
   else if (view === "instagram") body = <InstagramView ig={ig} onToast={showToast} onBack={viewBack.instagram} />;
   else if (view === "ghost") body = <GhostLap key={ghostInit ? JSON.stringify(ghostInit) : "ghost"} init={ghostInit} onBack={viewBack.ghost} />;
@@ -12433,7 +12482,7 @@ function App() {
         {onboardShow && <OnboardCard steps={onboardSteps} onHide={() => setSwipe(s => ({ ...s, onb: "off" }))} />}
         {pitSwipeOn && <PitSwipeCard info={{ total: psCards.length, i: psDeck ? psDeck.i : 0, done: !!(psDeck && psDeck.done), streak: psStreak, level: psLevel, missions: psMissions, nextText: psNextText }} onOpen={openPitSwipe} />}
         {duelList.length > 0 && <DuelsCard duels={duelList} onPlay={playDuel} />}
-      </>} ig={ig} highlights={highlights} onOpenIg={() => { setIgFrom("tab"); setView("instagram"); }} articles={articles} tagFilter={tagFilter} onTag={filterByTag} onClearTag={() => setTagFilter(null)} onOpenArticle={openArticle} isPremium={isPremium} onPremium={() => setPremiumOpen(true)} onToast={showToast} onLiveTrack={() => setLiveTrackOpen(true)} onGoFanta={() => goTab("fanta")}  saved={saved} onToggleSave={toggleSave} savedOnly={savedOnly} setSavedOnly={setSavedOnly} onOpenCircuit={openCircuit} homePoll={homePoll} homeVote={votes.home || null} onVote={castVote}
+      </>} ig={ig} highlights={highlights} ytHighlights={ytHighlights} onOpenIg={() => { setIgFrom("tab"); setView("instagram"); }} articles={newsAll} tagFilter={tagFilter} onTag={filterByTag} onClearTag={() => setTagFilter(null)} onOpenArticle={openArticle} isPremium={isPremium} onPremium={() => setPremiumOpen(true)} onToast={showToast} onLiveTrack={() => setLiveTrackOpen(true)} onGoFanta={() => goTab("fanta")}  saved={saved} onToggleSave={toggleSave} savedOnly={savedOnly} setSavedOnly={setSavedOnly} onOpenCircuit={openCircuit} homePoll={homePoll} homeVote={votes.home || null} onVote={castVote}
       hidden={hidden} onHide={hideArticle} onUnhideAll={() => { if (!userDataWait()) setHidden([]); }} onSwipeSave={saveFromSwipe}
       onRefresh={() => refreshShared(["news", "highlights", "ig", "homePoll"]).catch(() => {})} />;
     else if (tab === "race") body = <RaceScreen champion={champion} proOk={isPremium} proHint={proHintOf} onProAd={Ads.canReward() ? () => watchAdPro() : null} proBusy={adBusy} onStandingsEnd={isPaid ? null : Ads.standingsEnd} favDriver={favDriver} dotdVote={live ? votesNow.dotd[live.raceId] : null} onDotdVote={(k, id) => live && voteDotd(live.raceId, k, id)} ratings={votesNow.ratings} onRate={rateDriver} onOpenChats={() => setView("chats")} onOpenGhost={() => setView("ghost")} races={races} standings={shownStandings} isPremium={isPremium} onPremium={() => setPremiumOpen(true)} onSelectDriver={setSelectedDriver} live={live} liveSt={liveSt} onExpandMap={() => setLiveTrackOpen(true)} onTelemetry={(carId, lapNo, sector) => proGate("telemetry", () => setTelemetry({ carId, lapNo, sector }))} onOpenCircuit={openCircuit} wxGuess={wxGuess} wxResult={wxResult} onGuessWeather={guessWeather} onLapTimes={id => proGate("laps", () => setLapList(id))} onSecondScreen={() => proGate("ss", () => setSsOpen(true))} lastRace={lastRace} of1={of1} onOf1Refresh={() => of1TickRef.current && of1TickRef.current(true)} of1Sessions={of1Sessions}
@@ -12443,7 +12492,7 @@ function App() {
     else if (tab === "garage") body = <GarageScreen openGame={garageGame} onGameOpened={() => setGarageGame(null)} races={races} pitBest={pitBest} onPitResult={t => {
       if (activeDuel && myAid) { const id = activeDuel; setActiveDuel(null); Duels.reply({ id, aid: myAid, time: t }).then(item => { setDuelsArr(a => [...a, item]); showToast("Sfida giocata: risultato in Home"); }, () => showToast("Risposta alla sfida non inviata")); }
       if (!userDataWait()) { setPitBest(b => b == null || t < b ? t : b); psBump("pit"); } }} sillyPreds={sillyPreds} onPredict={predictSeat} sillyOfficial={sillyOfficial} live={live} stratPreds={stratPreds} onStrat={(id, st) => { if (!userDataWait()) setStratPreds(x => ({ ...x, [id]: { stints: st, at: nowMs() } })); }} bluffTags={bluffNow} onBluffRefresh={loadBluffTags} />;
-    else if (tab === "fanta") body = <FantaScreen standings={shownStandings} squad={squad} setSquad={setSquad} base={squadBase} freeTransfers={freeTransfers} budget={FANTA_BUDGET} stats={fantaStats} race={fantaRace} lock={teamLockInfo} weekends={fantaLive} isPremium={isPremium} onPremium={() => setPremiumOpen(true)} onToast={showToast} bonus={bonus} leagues={leagueRows} elo={fantaElo} seasonPts={fantaSeason.total} realWeek={fantaRace ? fantaSeason.rounds.find(r => r.round === fantaRace.round) || null : null} meAid={account ? account.aid : null} onCreateLeague={createLeague} onJoinLeague={joinLeague} onLeaveLeague={leaveLeague} onRenameLeague={renameLeague} needAccount={needAccount} predictions={predictionsOpen} predAnswers={predAnswers} predLockOf={predLockOf} onAnswerPrediction={answerPrediction} raceNameOf={round => { const r = races.find(x => x.round === round); return r ? r.name : ""; }} />;
+    else if (tab === "fanta") body = <FantaScreen standings={shownStandings} squad={squad} setSquad={setSquad} base={squadBase} freeTransfers={freeTransfers} budget={FANTA_BUDGET} stats={shownFantaStats} race={fantaRace} lock={teamLockInfo} weekends={fantaLive} isPremium={isPremium} onPremium={() => setPremiumOpen(true)} onToast={showToast} bonus={bonus} leagues={leagueRows} elo={fantaElo} seasonPts={fantaSeason.total} realWeek={fantaRace ? fantaSeason.rounds.find(r => r.round === fantaRace.round) || null : null} meAid={account ? account.aid : null} onCreateLeague={createLeague} onJoinLeague={joinLeague} onLeaveLeague={leaveLeague} onRenameLeague={renameLeague} needAccount={needAccount} predictions={predictionsOpen} predAnswers={predAnswers} predLockOf={predLockOf} onAnswerPrediction={answerPrediction} raceNameOf={round => { const r = races.find(x => x.round === round); return r ? r.name : ""; }} />;
     return body;
   }
 

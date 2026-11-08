@@ -35,7 +35,9 @@ const predictionsFromStore = qs => list(qs).map(q => (Array.isArray(q.options) ?
 // FantaF1: { drivers: { id: { price, change, pts } }, teams: {…} } (documento nuovo, già nella forma della 2.0).
 const fantaRows = o => Object.fromEntries(Object.entries(o).map(([id, [price, change, pts]]) => [id, { price, change, pts }]));
 const FANTA_DEFAULT = { drivers: fantaRows(F1.FANTASY.drivers), teams: fantaRows(F1.FANTASY.teams) };
-const fantaOf = d => (isObj(d) && isObj(d.drivers) && isObj(d.teams) ? { drivers: d.drivers, teams: d.teams } : clone(FANTA_DEFAULT));
+// 8/11: asOf = ultimo round già dentro i prezzi; da lì in poi cambiano da soli (src/logic/fanta-prices.js). Il listino
+// di serie è quello di F1 Fantasy dopo il round 15. Un listino salvato dall'admin senza asOf resta com'è (a mano).
+const fantaOf = d => (isObj(d) && isObj(d.drivers) && isObj(d.teams) ? { drivers: d.drivers, teams: d.teams, ...(Number.isInteger(d.asOf) ? { asOf: d.asOf } : {}) } : { ...clone(FANTA_DEFAULT), asOf: 15 });
 
 // Classifiche della 2.0 (R02) nel formato di oggi.
 const ST = F1.STANDINGS;

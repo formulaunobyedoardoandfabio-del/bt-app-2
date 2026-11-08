@@ -809,3 +809,26 @@ Da fare:
   di vantaggio che servono e gli arrivi minimi (titleWatch in champ-calc.js). Prove: champ-calc (+4), run97 (+controlli).
 - Non fatto (di proposito): XP da tifoso del design (l'app non ha un contatore XP per questi giochi: niente numeri
   inventati), mappa col punto dell'incidente (OpenF1 non dice dove; c'è il testo della direzione gara).
+
+## 8/11 mattina: controllo degli automatismi e i quattro che mancavano
+- Già da soli: stato delle gare (orari del calendario), classifiche (Jolpica), punti FantaF1 e leghe (Jolpica), Ghost
+  Lap e dati del weekend (workflow dati-f1, TracingInsights), trofei, griglia di partenza, sondaggi tolti dopo la gara.
+- Non attivo: post di Instagram (workflow social): mancano i segreti IG_USER_ID e IG_TOKEN su GitHub (li mette Edoardo).
+  Non controllabile da qui: le variabili di Vercel (accesso al team negato all'MCP).
+- Previsioni automatiche (src/logic/auto-predictions.js): per la gara del weekend pole, Sprint (se c'è), vincitore,
+  scuderia, giro veloce, quanti non arrivano; id fissi "auto:<gara>:<chiave>", si chiudono all'inizio della sessione,
+  risposte dai risultati di Jolpica (FantaL.results ora si legge anche all'avvio). Risposte trovate salvate in
+  bt_bt-auto-answers; il bonus va nelle leghe solo dopo il primo tentativo di lettura dei risultati (roundsTried).
+- Notizie automatiche (src/logic/auto-news.js): qualifica, Sprint e gara dell'ultimo weekend + gara di quello prima,
+  scritte dall'app (categoria GARA, gratis), accanto a quelle dell'admin (newsAll); paragrafi con a capo (pre-line).
+- Prezzi FantaF1 automatici (src/logic/fanta-prices.js): dal listino con asOf (di serie F1 Fantasy dopo il round 15),
+  ogni GP coi risultati sposta i prezzi per quarti dei punti del weekend (±0,3/±0,1; scuderie ±0,6/±0,2; minimo 3,0).
+  Un listino salvato dall'admin senza asOf resta a mano finché l'admin non lo risalva (ora si salva asOf).
+  [Guessing] I punti della stagione sono quelli di F1 Fantasy fino al round 15 più i nostri dopo: regole simili, non
+  identiche.
+- Highlights ufficiali F1 (api/highlights.js + src/services/highlights.js): feed YouTube del canale FORMULA 1, solo i
+  video "Highlights", titoli in italiano, card gratis in Home fuori dai contenuti Premium; si aprono su YouTube.
+  [Guessing] id del canale UCB_qr75-ydFVKSF9Dmo6izg: se il feed non risponde la funzione lo ricava da youtube.com/@formula1
+  (variabile F1_YT_CHANNEL per cambiarlo). Non provata sul feed vero (la rete di qui non arriva a YouTube).
+  I "Video highlights esclusivi" del Premium restano di B&T (dall'admin): sono contenuti propri, non si automatizzano.
+- Prove: test/unit/{auto-predictions,auto-news,fanta-prices,highlights}.test.js, test/e2e/run99-automatici.js (4).
