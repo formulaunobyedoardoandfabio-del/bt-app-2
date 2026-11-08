@@ -209,9 +209,15 @@ run({
   },
 
   // ── Dati F1 che si aggiornano da soli (25/10): Ghost Lap delle ultime qualifiche e dati del weekend ──
-  async 'dati F1: dopo le qualifiche di Austin il Ghost Lap è di Austin (Race e Garage), senza nuovo APK'(b) {
+  // 8/11: il sito tiene solo gli ultimi Ghost (li aggiorna da solo TracingInsights): la prova legge l'ultimo dall'indice
+  // vero e mette l'orologio al giorno dopo quelle qualifiche (prima era fissa su Austin, che dal sito non c'è più).
+  async 'dati F1: dopo le qualifiche il Ghost Lap è quello delle ultime qualifiche sul sito (Race e Garage), senza nuovo APK'(b) {
+    const IDX = JSON.parse(require('fs').readFileSync(require('path').join(F1DIR, 'index.json'), 'utf8')), G0 = IDX.ghosts[0];
+    const CI = require('../../src/data/circuit-info.json'), Q = CI[G0.circuitId].weekend.find(x => x.key === 'QUALI');
+    const GH = JSON.parse(require('fs').readFileSync(require('path').join(F1DIR, `ghost-${G0.circuitId}.json`), 'utf8'));
+    const codes = Object.keys(GH.laps).slice(0, 2);
     const hits = [];
-    const { ctx, p, errs } = await open(b, { now: '2026-10-25T08:00:00Z', routes: { ...OF1_LOCKED, ...f1data(hits) } }); await login(p); await w(p, 1200);
+    const { ctx, p, errs } = await open(b, { now: new Date(Date.parse(Q.utc) + 14 * 3600e3).toISOString(), routes: { ...OF1_LOCKED, ...f1data(hits) } }); await login(p); await w(p, 1200);
     await goTab(p, 'RACE'); await w(p, 600);
     const race = norm(await p.evaluate(() => (document.querySelector('[data-ghost-open]') || {}).innerText || ''));
     await goTab(p, 'GARAGE'); await w(p, 500);
@@ -219,10 +225,10 @@ run({
     await tapSel(p, '[data-game="ghost"]'); await w(p, 700);
     const lap = norm(await text(p));
     await ctx.close();
-    assert(/QUALIFICHE DI AUSTIN/.test(race), 'Race: ' + race);
-    assert(/qualifiche di Austin/.test(garage), 'Garage: ' + garage);
-    assert(/Antonelli|ANT/.test(lap) && /Leclerc|LEC/.test(lap), 'Ghost Lap: ' + lap.slice(0, 300));
-    assert(hits.includes('index.json') && hits.includes('ghost-us-2012.json'), 'richieste: ' + hits.join(', '));
+    assert(race.includes('QUALIFICHE DI ' + G0.place.toUpperCase()), 'Race: ' + race + ' | hits: ' + hits.join(','));
+    assert(garage.includes('qualifiche di ' + G0.place), 'Garage: ' + garage);
+    assert(codes.every(c => lap.includes(c)), 'Ghost Lap: ' + codes + ' in ' + lap.slice(0, 300));
+    assert(hits.includes('index.json') && hits.includes(`ghost-${G0.circuitId}.json`), 'richieste: ' + hits.join(', '));
     assert(!errs.length, errs.join(' | '));
   },
   async 'dati F1: senza il sito restano i dati dentro l\'APK (Ghost Lap di Sepang)'(b) {

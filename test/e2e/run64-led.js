@@ -46,7 +46,7 @@ run({
     assert(busy.green === 'shiftrun', 'i LED non si accendono in sequenza: ' + busy.green);
     assert(done && done.state === 'done' && done.blue === 'shiftblue', 'a fine accesso i blu non lampeggiano: ' + JSON.stringify(done));
     assert(played.includes('done'), 'manca il suono di conferma: ' + JSON.stringify(played));
-    assert(!after.login && !after.shift && /HOME/.test(after.text), 'dopo la Shift Light non si entra nell\'app: ' + JSON.stringify({ login: after.login, shift: after.shift }));
+    assert(!after.login && !after.shift && /HOME/i.test(after.text), 'dopo la Shift Light non si entra nell\'app: ' + JSON.stringify({ login: after.login, shift: after.shift }));
     assert(!errs.length, errs.join(' | '));
   },
 

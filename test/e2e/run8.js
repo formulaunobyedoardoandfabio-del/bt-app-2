@@ -67,7 +67,7 @@ const tests = {
     await login(p);
     const t2 = await text(p); await ctx.close();
     assert(!/Accettazione dei Termini/.test(t2), 'i Termini restano aperti dopo ACCETTO');
-    assert(/HOME/.test(t2), 'dopo i Termini e l\'accesso non si entra nell\'app');
+    assert(/HOME/i.test(t2), 'dopo i Termini e l\'accesso non si entra nell\'app');
     assert(!errs.length, 'errori JS: ' + errs.join(' | '));
   },
   async 'chat: segnalare un messaggio lo manda al pannello admin'(b) {

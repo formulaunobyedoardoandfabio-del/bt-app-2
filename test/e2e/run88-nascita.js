@@ -121,7 +121,8 @@ run({
     await p.mouse.move(40, y, { steps: 4 }); await p.mouse.up(); await w(p, 700);
     const after = await p.evaluate(() => { const el = document.querySelector('[data-tab-page="garage"]:not([data-tab-neighbor]) .scrollcol'); return el ? el.scrollTop : null; });
     await ctx.close();
-    assert(saved > 300, 'la pagina GARAGE non scorre abbastanza per la prova: ' + saved);
+    // 7/11: il Garage a piastrelle è più corto di prima (scorre circa 140 px): basta che scorra un po'.
+    assert(saved > 100, 'la pagina GARAGE non scorre abbastanza per la prova: ' + saved);
     assert(half !== null && Math.abs(half - saved) <= 3, 'a metà swipe GARAGE riparte dall\'inizio: ' + JSON.stringify({ saved, half }));
     assert(after !== null && Math.abs(after - saved) <= 3, 'arrivati su GARAGE il punto è cambiato: ' + JSON.stringify({ saved, after }));
     assert(!errs.length, errs.join(' | '));

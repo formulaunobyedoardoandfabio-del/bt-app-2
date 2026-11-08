@@ -797,5 +797,9 @@ Da fare:
 - Finestre con le stesse regole della bandiera dell'app (openf1.js). Giocate in localStorage "bt-pitwall" (ultime 12).
 - Logica: src/logic/pit-wall.js; aspetto: src/gara/PitWall.jsx. Prove: test/unit/pit-wall.test.js (6, Safety Car vere
   di Baku e rossa vera di Interlagos), test/e2e/run98-muretto.js (2).
+- Prove sistemate dopo la serie completa dell'8/11 (nessuna cancellata): run8 e run64 cercavano "HOME" maiuscolo (la
+  barra Floating Notch scrive "Home"); run88 voleva 300 px di scorrimento nel Garage (ora a piastrelle ne ha circa 140);
+  run70 Ghost Lap era fissa su Austin, che il sito non ha più (TracingInsights tiene gli ultimi due): ora legge l'ultimo
+  Ghost dall'indice vero. Instabili sotto carico (passano da sole, 2 volte su 2): run70 "Premium ... riaperto l'app".
 - Non fatto (di proposito): XP da tifoso del design (l'app non ha un contatore XP per questi giochi: niente numeri
   inventati), mappa col punto dell'incidente (OpenF1 non dice dove; c'è il testo della direzione gara).
