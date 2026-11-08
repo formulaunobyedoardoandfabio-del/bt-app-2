@@ -901,3 +901,7 @@ Da fare:
    tempo vero (location di OpenF1), o puntini agganciati al leader al cambio giro.
 3. Radar meteo sulla mappa vera come nelle grafiche F1 (oggi c'è un radar DEMO solo nel Second Screen: RadarOverlay).
    Solo dati veri: serve una fonte di pioggia vera (es. RainViewer o Open-Meteo); niente radar finto in diretta.
+4. (18:56) Fanta = domande di STORIA delle previsioni (kind "history"): togliere dopo ogni GP e crearne in automatico
+   prima di ogni GP, un po' meno di oggi. Solo dati veri: domande fatte da Jolpica (vincitore qui l'anno scorso, pole
+   dell'anno scorso, chi ha vinto più volte su questa pista), risposte corrette in automatico, in
+   src/logic/auto-predictions.js accanto alle previsioni del weekend. Non iniziato (uso al 98%).
