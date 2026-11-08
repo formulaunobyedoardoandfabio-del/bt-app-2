@@ -36,6 +36,7 @@ run({
     const { ctx, p, errs } = await open(b);
     await register(p, { birth: 2001, steps: 4, fan: 'vroom' });   // 5 anni da tifoso
     await tapSel(p, '[aria-label="Profilo"]'); await w(p, 400);
+    await tapText(p, 'Profilo pubblico').catch(() => {}); await w(p, 400);   // 8/11: Su di te sta in Profilo pubblico
     const rows = await p.evaluate(() => Object.fromEntries([...document.querySelectorAll('[data-about-row]')].map(e => [e.getAttribute('data-about-row'), e.innerText.replace(/\s+/g, ' ').trim()])));
     const user = await doc(p, 'users/fabio@b.it'), auth = await authState(p); await ctx.close();
     assert(/2001/.test(rows.birth || '') && /5 anni/.test(rows.follow || '') && /Se fa Vroom è bello/.test(rows.fan || ''), 'Su di te nel profilo: ' + JSON.stringify(rows));

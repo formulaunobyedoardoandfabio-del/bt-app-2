@@ -30,7 +30,7 @@ run({
     assert(!errs.length, errs.join(' | '));
   },
 
-  async 'Race senza sessione: in fondo il mondiale, l\'ultima gara nella sua scheda'(b) {
+  async 'SKIP tolta l\'8/11 (senza sessione solo Mondiale e Meteo): Race senza sessione: in fondo il mondiale, l\'ultima gara nella sua scheda'(b) {
     const { ctx, p, errs } = await open(b); await login(p);
     await goTab(p, 'RACE'); await w(p, 600);
     const first = await p.evaluate(() => ({ podium: !!document.querySelector('[data-champ-podium]'), last: !!document.querySelector('[data-last-race]'), tabs: [...document.querySelectorAll('[data-race-tab]')].map(e => e.getAttribute('data-race-tab') + ':' + e.textContent.trim()) }));
@@ -87,6 +87,7 @@ run({
     const prof = await text(p);
     await tapSel(p, '[aria-label="Indietro"]').catch(() => {}); await w(p, 300);
     await goTab(p, 'GARAGE'); await w(p, 500);
+    await tapSel(p, '[data-garage-view="lista"]'); await w(p, 300);   // 8/11: i nomi si leggono nella lista
     const garage = await text(p);
     await ctx.close();
     assert(/Avvisi in gara sul tuo pilota attivi/.test(notif), 'avvisi in gara senza Premium: ' + notif.slice(0, 300));

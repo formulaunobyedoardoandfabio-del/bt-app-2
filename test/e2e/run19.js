@@ -95,7 +95,7 @@ const tests = {
     assert(/il tuo voto/i.test(after.text) && /media della community/i.test(after.text), 'manca la legenda del radar');
     assert(!errs.length, errs.join(' | '));
   },
-  async 'pagelle: anche per l\'ultima gara (Baku), con un radar per ogni pilota'(b) {
+  async 'SKIP tolta l\'8/11 (senza sessione solo Mondiale e Meteo): pagelle: anche per l\'ultima gara (Baku), con un radar per ogni pilota'(b) {
     const { ctx, p, errs } = await open(b); await login(p); await goTab(p, 'RACE');
     await tapSel(p, '[data-race-tab="classifica"]'); await w(p, 300);   // 18/10: l'ultima gara ha la sua scheda
     const t = await inner(p, '[data-ratings]');
@@ -115,6 +115,7 @@ const tests = {
   let pass = 0, fail = 0;
   for (const [name, fn] of Object.entries(tests)) {
     if (filter && !filter.test(name)) continue;
+    if (/^SKIP\b/.test(name)) { console.log(name); continue; }   // 8/11: prove di cose tolte (motivo nel nome)
     try { await fn(b); pass++; console.log('PASS  ' + name); }
     catch (e) { fail++; console.log('FAIL  ' + name + '\n      → ' + String(e.message).split('\n')[0].slice(0, 400)); }
   }

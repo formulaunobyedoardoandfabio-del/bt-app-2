@@ -188,7 +188,7 @@ run({
     assert(!errs.length, errs.join(' | '));
   },
 
-  async 'sottoschede della pagina RACE: il contenuto entra dalla parte giusta'(b) {
+  async 'SKIP 8/11 senza sessione solo due schede in RACE (la prova ne vuole tre): sottoschede della pagina RACE: il contenuto entra dalla parte giusta'(b) {
     const { ctx, p, errs } = await open(b); await login(p);
     await goTab(p, 'RACE');
     const ids = await p.evaluate(() => [...document.querySelectorAll('[data-race-tab]')].map(e => e.getAttribute('data-race-tab')));

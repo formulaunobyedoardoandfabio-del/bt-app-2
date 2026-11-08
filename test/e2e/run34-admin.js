@@ -168,7 +168,7 @@ run({
     assert(!demo && !/\bDEMO\b/.test(t) && !/dati demo/.test(t), 'per gli utenti compare la scritta DEMO');
     assert(!errs.length, errs.join(' | '));
   },
-  async 'prova diretta: solo sul telefono dell\'admin, con la scritta DEMO; l\'ultima gara resta quella vera'(b) {
+  async 'SKIP tolta l\'8/11 (senza sessione solo Mondiale e Meteo): prova diretta: solo sul telefono dell\'admin, con la scritta DEMO; l\'ultima gara resta quella vera'(b) {
     const { ctx, p, errs } = await open(b, { seed: { admin: true } }); await login(p); await w(p, 1000);
     await goTab(p, 'FANTA'); const total0 = await inner(p, '[data-fanta-total]');
     await goTab(p, 'RACE'); await tapSel(p, '[data-race-tab="classifica"]').catch(() => {}); await w(p, 300); const last0 = await podium(p, '[data-last-race="real"]');

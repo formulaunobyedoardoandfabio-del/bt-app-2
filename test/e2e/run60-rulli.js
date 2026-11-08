@@ -51,6 +51,7 @@ run({
   async 'anno di nascita in "Su di te": manettino (role="slider"), uno scatto per anno con il tic, frecce della tastiera'(b) {
     const { ctx, p, errs } = await open(b); await login(p);
     await tapSel(p, '[aria-label="Profilo"]'); await w(p, 400);
+    await tapText(p, 'Profilo pubblico').catch(() => {}); await w(p, 400);   // 8/11: Su di te sta in Profilo pubblico
     await tapSel(p, '[aria-label="Modifica Su di te"]'); await w(p, 300);
     await spyFx(p);
     const a = await knob(p, '#aboutBirth');
@@ -81,6 +82,7 @@ run({
     await ctx.close();
     const c = await open(b); await login(c.p);
     await tapSel(c.p, '[aria-label="Profilo"]'); await w(c.p, 400);
+    await tapText(c.p, 'Profilo pubblico').catch(() => {}); await w(c.p, 400);   // 8/11: Su di te sta in Profilo pubblico
     await tapSel(c.p, '[aria-label="Modifica Su di te"]'); await w(c.p, 300);
     const k2 = await knob(c.p, '#aboutBirth');
     await c.ctx.close();

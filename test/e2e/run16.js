@@ -95,7 +95,7 @@ const tests = {
     const rows = (await attrs(p, '[data-champ-row]', 'data-champ-row')).map(Number); await ctx.close();
     assert(rows[0] === 1 && rows.length === 23, 'durante la diretta la lista deve essere completa: ' + rows.join(','));
   },
-  async 'ultima gara: sotto il podio la classifica parte dal 4° (ritirati in fondo)'(b) {
+  async 'SKIP tolta l\'8/11 (senza sessione solo Mondiale e Meteo): ultima gara: sotto il podio la classifica parte dal 4° (ritirati in fondo)'(b) {
     const { ctx, p } = await open(b); await login(p); await goTab(p, 'RACE');
     await tapSel(p, '[data-race-tab="classifica"]').catch(() => {}); await w(p, 300); const pos = await attrs(p, '[data-last-race="real"] [data-result-pos]', 'data-result-pos'); await ctx.close();
     assert(pos.length === 19 && pos[0] === '4' && !pos.some(x => ['1', '2', '3'].includes(x)), 'classifica ultima gara: ' + pos.join(','));
@@ -236,6 +236,7 @@ const tests = {
     await p.fill('#regBirth', '15/06/2000');   // 8/11: l'età dalla data (niente casella "Ho almeno 14 anni")
     await tapText(p, 'CREA ACCOUNT', { exact: true }); await w(p, 2900);   // Task 9: i Termini si accettano al primo avvio, non dopo l'accesso
     await tapSel(p, '[aria-label="Profilo"]'); await w(p, 400);
+    await tapText(p, 'Profilo pubblico').catch(() => {}); await w(p, 400);   // 8/11: Su di te sta in Profilo pubblico
     const follow = await inner(p, '[data-about-row="follow"]'), fan = await inner(p, '[data-about-row="fan"]'), birth = await inner(p, '[data-about-row="birth"]');
     await ctx.close();
     assert(lbl0 === '1 anno', 'valore iniziale del contachilometri: ' + lbl0);
@@ -250,6 +251,7 @@ const tests = {
   async 'profilo: "Su di te" si modifica (anno di nascita, anni di F1, tipo di tifoso)'(b) {
     const { ctx, p } = await open(b); await login(p);
     await tapSel(p, '[aria-label="Profilo"]'); await w(p, 400);
+    await tapText(p, 'Profilo pubblico').catch(() => {}); await w(p, 400);   // 8/11: Su di te sta in Profilo pubblico
     await tapSel(p, '[aria-label="Modifica Su di te"]'); await w(p, 300);
     await p.focus('#aboutBirth'); for (let i = 0; i < 5; i++) await p.keyboard.press('ArrowUp'); await w(p, 100);   // primo scatto 2000, poi 2004
     await p.focus('#aboutFollow'); await p.keyboard.press('End'); await w(p, 150);
@@ -269,6 +271,7 @@ const tests = {
   let pass = 0, fail = 0;
   for (const [name, fn] of Object.entries(tests)) {
     if (filter && !filter.test(name)) continue;
+    if (/^SKIP\b/.test(name)) { console.log(name); continue; }   // 8/11: prove di cose tolte (motivo nel nome)
     try { await fn(b); pass++; console.log('PASS  ' + name); }
     catch (e) { fail++; console.log('FAIL  ' + name + '\n      → ' + String(e.message).split('\n')[0].slice(0, 400)); }
   }

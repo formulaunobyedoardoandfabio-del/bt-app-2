@@ -884,3 +884,10 @@ Da fare:
   run81, run84, run87, run94, run95 da far girare. run33 rosse = ricarica sotto carico (verificare da sole).
 - Verificato: check.js SYNTAX OK, sem.js total unique 0, schermate guardate (Garage griglia/lista, feedback, Profilo,
   RACE senza sessione). Suite NON rifatta.
+- 8/11 sera: prove aggiornate. Verdi da sole: run15, run16, run17, run19, run20, run31, run34, run40, run52, run60, run62,
+  run66, run67, run69, run71, run81, run84, run87, run94 (prova nuova: piastrelle solo icone + lista che resta), run95.
+  Saltate col prefisso SKIP (cose tolte da Edoardo, non cancellate): ultima gara (run15 x2, run16, run17, run19, run34,
+  run40 x3, run69), sottoschede RACE (run71), bottoni delle sezioni del Garage (run94).
+  Ancora ballerine: revisione-b (C1/C2/I1/I3 a giro, "Profilo" non trovato dopo la riapertura) e run33 (campanella dopo
+  la ricarica): a volte verdi, a volte no, anche prima di oggi sotto carico. Da indagare: cosa copre l'intestazione
+  dopo la ricarica.

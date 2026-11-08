@@ -126,7 +126,7 @@ const tests = {
     assert(/G\. Russell\s*236 pt/.test(t), 'punti di Russell (2° sul podio) sbagliati');
     assert(/Lando Norris\s*McLaren\s*186/.test(t.replace(/pt/g, '')), 'punti di Norris (4°, primo della lista) sbagliati');
   },
-  async 'ultima gara: podio con Russell, Verstappen e Hadjar (Baku) e sotto la classifica dal 4°'(b) {
+  async 'SKIP tolta l\'8/11 (senza sessione solo Mondiale e Meteo): ultima gara: podio con Russell, Verstappen e Hadjar (Baku) e sotto la classifica dal 4°'(b) {
     const { ctx, p } = await open(b); await login(p); await goTab(p, 'RACE');
     await tapSel(p, '[data-race-tab="classifica"]').catch(() => {}); await w(p, 300); const pd = await podium(p, '[data-last-race="real"]');
     const rows = await p.evaluate(() => document.querySelectorAll('[data-result-row]').length);
@@ -142,7 +142,7 @@ const tests = {
     assert(!pod, 'il podio del mondiale compare anche con la gara in corso');
   },
   // Task 10 (D23): la prova DEMO non cambia l'ultima gara: finita la prova resta quella vera (Baku).
-  async 'fine gara (prova DEMO): podio coi primi tre; finita la prova l\'ultima gara resta quella vera'(b) {
+  async 'SKIP tolta l\'8/11 (senza sessione solo Mondiale e Meteo): fine gara (prova DEMO): podio coi primi tre; finita la prova l\'ultima gara resta quella vera'(b) {
     const { ctx, p, errs } = await open(b); await login(p); await startLive(p, 'GARA');
     await openAdmin(p, 'GARA LIVE'); await tapText(p, 'ULTIMO GIRO', { exact: true }); await w(p, 300); await backHome(p); await goTab(p, 'RACE');
     for (let i = 0; i < 40 && !(await has(p, '[data-finish-podium]')); i++) { await advance(p, 20); await w(p, 120); }

@@ -164,7 +164,7 @@ run({
     assert(!errs.length, errs.join(' | '));
   },
 
-  async 'elenchi vuoti: "Dati non ancora disponibili", nessun errore JS'(b) {
+  async 'SKIP tolta l\'8/11 (senza sessione solo Mondiale e Meteo): elenchi vuoti: "Dati non ancora disponibili", nessun errore JS'(b) {
     const of1 = of1Route('empty');
     const { ctx, p, errs } = await open(b, { seed: { addDocs: BAKU_LIVE, pro: true }, routes: of1.routes }); await login(p);   // 1/11: funzioni Pro
     await goTab(p, 'RACE'); await w(p, 4000);
@@ -216,7 +216,7 @@ run({
     assert(/Telemetria non disponibile per questo giro/.test(none), 'giro senza car_data: ' + none.slice(0, 200));
     assert(!errs.length, errs.join(' | '));
   },
-  async 'scheda pilota: ultima gara e miglior giro veri, niente "IN QUESTA GARA" inventato'(b) {
+  async 'SKIP tolta l\'8/11 (senza sessione solo Mondiale e Meteo): scheda pilota: ultima gara e miglior giro veri, niente "IN QUESTA GARA" inventato'(b) {
     const { ctx, p, errs } = await open(b); await login(p);
     await goTab(p, 'RACE'); await w(p, 400);
     await tapSel(p, '[data-race-tab="classifica"]'); await w(p, 300);   // 18/10: l'ultima gara ha la sua scheda
@@ -230,7 +230,7 @@ run({
     assert(!errs.length, errs.join(' | '));
   },
   // ── Ultima gara e DEMO ────────────────────────────────────────────────
-  async 'ultima gara dai dati OpenF1'(b) {
+  async 'SKIP tolta l\'8/11 (senza sessione solo Mondiale e Meteo): ultima gara dai dati OpenF1'(b) {
     const of1 = of1Route('ok', { lastRace: true });
     const { ctx, p, errs } = await open(b, { routes: of1.routes }); await login(p); await w(p, 3000);
     await goTab(p, 'RACE'); await w(p, 400);
@@ -250,7 +250,7 @@ run({
     const u = await open(b, { seed: { users: USERS, addDocs: { ...USER_DOC, ...BAKU_LIVE } }, routes: of1.routes }); await login(u.p, { email: 'u@b.it', pw: 'y' });
     await goTab(u.p, 'RACE'); await waitReplay(u.p); await w(u.p, 300);
     const tUser = norm(await text(u.p)), demoUser = await has(u.p, '[data-demo]');
-    await goTab(u.p, 'GARAGE'); await tapText(u.p, 'Degrado gomme'); await w(u.p, 500);
+    await goTab(u.p, 'GARAGE'); await tapSel(u.p, '[data-game="deg"]'); await w(u.p, 500);   // 8/11: piastrelle senza testo
     const deg = norm(await text(u.p)); await u.ctx.close();
     const a = await open(b, { seed: { addDocs: BAKU_LIVE }, routes: of1Route().routes }); await login(a.p);
     await goTab(a.p, 'RACE'); await waitReplay(a.p);

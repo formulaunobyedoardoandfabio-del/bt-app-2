@@ -315,7 +315,7 @@ const tests = {
     assert(art1.includes('incendio'), 'immagine dell\'avviso: ' + art1.join(','));
     assert(inStage.includes('motore'), 'nel Second Screen l\'avviso non è nello schermo girato: ' + inStage.join(','));
   },
-  async 'ritiri: nell\'ultima gara i ritirati hanno l\'immagine del ritiro'(b) {
+  async 'SKIP tolta l\'8/11 (senza sessione solo Mondiale e Meteo): ritiri: nell\'ultima gara i ritirati hanno l\'immagine del ritiro'(b) {
     const { ctx, p } = await open(b); await login(p); await goTab(p, 'RACE');
     await tapSel(p, '[data-race-tab="classifica"]').catch(() => {}); await w(p, 300); const arts = await attrs(p, '[data-last-race="real"] [data-result-pos="RIT"] [data-dnf-art]', 'data-dnf-art');
     const rit = await count(p, '[data-last-race="real"] [data-result-pos="RIT"]'); await ctx.close();
@@ -435,6 +435,7 @@ const tests = {
   let pass = 0, fail = 0;
   for (const [name, fn] of Object.entries(tests)) {
     if (filter && !filter.test(name)) continue;
+    if (/^SKIP\b/.test(name)) { console.log(name); continue; }   // 8/11: prove di cose tolte (motivo nel nome)
     try { await fn(b); pass++; console.log('PASS  ' + name); }
     catch (e) { fail++; console.log('FAIL  ' + name + '\n      → ' + String(e.message).split('\n')[0].slice(0, 400)); }
   }

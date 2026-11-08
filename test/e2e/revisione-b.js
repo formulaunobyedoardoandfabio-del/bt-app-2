@@ -27,6 +27,7 @@ async function reopenFlaky(ctx, p, flaky) {
   }, flaky);
   await p.reload();
   await p.waitForFunction(() => !document.querySelector('[data-splash]'), null, { timeout: 30000 }).catch(() => {});
+  await p.waitForSelector('[aria-label="Profilo"]', { timeout: 12000 }).catch(() => {});   // 8/11: l'app riaperta può metterci di più
   await w(p, 900);
 }
 
@@ -39,6 +40,7 @@ async function reopenOffline(ctx, p, mode = 'offline') {
   }, mode);
   await p.reload();
   await p.waitForFunction(() => !document.querySelector('[data-splash]'), null, { timeout: 30000 }).catch(() => {});
+  await p.waitForSelector('[aria-label="Profilo"]', { timeout: 12000 }).catch(() => {});   // 8/11: l'app riaperta può metterci di più
   await w(p, 700);
 }
 const back = async p => { await p.evaluate(() => { window.firebase.__fake.offline = false; window.firebase.__fake.holdReads = false; window.dispatchEvent(new Event('online')); }); await w(p, 1500); };
@@ -101,6 +103,7 @@ run({
   async 'C1: avvio senza rete: nessun nome dall\'email né chat a suo nome; tornata la rete profilo vero, Pannello Admin e chat'(b) {
     const { ctx, p, errs } = await open(b, { seed: { admin: true } }); await login(p);
     await reopenOffline(ctx, p);
+    await p.waitForSelector('[aria-label=\"Profilo\"]', { timeout: 15000 }).catch(() => {});   // 8/11: avvio più lento
     await tapSel(p, '[aria-label="Profilo"]'); await w(p, 500);
     const prof1 = norm(await text(p)), waiting = await has(p, '[data-profile-name="waiting"]');
     await tapSel(p, '[aria-label="Indietro"]'); await w(p, 300);
@@ -210,9 +213,11 @@ run({
   async 'minori 5 e 11: in "Su di te" niente anni sotto i 14; i Termini (§8) dicono anche "Su di te" e feedback'(b) {
     const { ctx, p, errs } = await open(b); await login(p);
     await tapSel(p, '[aria-label="Profilo"]'); await w(p, 400);
+    await tapText(p, 'Profilo pubblico').catch(() => {}); await w(p, 400);   // 8/11: Su di te sta in Profilo pubblico
     await tapSel(p, '[aria-label="Modifica Su di te"]'); await w(p, 300);   // Tappa 3 (G17): l'anno è un manettino
     const years = await p.evaluate(() => { const k = document.querySelector('#aboutBirth'); return k ? [+k.getAttribute('aria-valuemax')] : []; });
     await tapText(p, 'Annulla', { exact: true }).catch(() => {}); await w(p, 200);
+    await tapSel(p, '[aria-label="Indietro"]'); await w(p, 400);   // 8/11: da Profilo pubblico si torna al Profilo
     await tapText(p, 'Termini e Condizioni'); await w(p, 500);
     const terms = norm(await text(p)); await ctx.close();
     const max = new Date(Date.parse('2026-10-07T10:00:00Z')).getFullYear() - 14;

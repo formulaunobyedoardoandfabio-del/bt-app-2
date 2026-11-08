@@ -95,8 +95,11 @@ const tests = {
   },
   async 'garage: sezione Giochi con Pit Stop Challenge e Silly Season Predictor'(b) {
     const { ctx, p, errs } = await open(b); await login(p); await goTab(p, 'GARAGE');
-    const t = norm(await text(p)), games = await attrs(p, '[data-game]', 'data-game'); await ctx.close();
-    assert(/GIOCHI/.test(t) && JSON.stringify(games.slice(0, 3)) === JSON.stringify(['pitstop', 'silly', 'aero']) && games.includes('ghost'), 'giochi: ' + games.join(','));
+    const games = await attrs(p, '[data-game]', 'data-game'), names = await attrs(p, '[data-game]', 'aria-label');
+    await tapSel(p, '[data-garage-view="lista"]'); await w(p, 300);   // 8/11: piastrelle solo icone; i nomi nella lista
+    const t = norm(await text(p)); await ctx.close();
+    assert(/^Pit Stop Challenge/.test(names[0] || '') && /GIOCHI/.test(t), 'piastrelle col nome per il lettore dello schermo e lista con le sezioni: ' + names.slice(0, 2));
+    assert(JSON.stringify(games.slice(0, 3)) === JSON.stringify(['pitstop', 'silly', 'aero']) && games.includes('ghost'), 'giochi: ' + games.join(','));
     assert(/Pit Stop Challenge/i.test(t) && /Silly Season/i.test(t), 'mancano i nomi dei giochi');
     assert(!errs.length, errs.join(' | '));
   },

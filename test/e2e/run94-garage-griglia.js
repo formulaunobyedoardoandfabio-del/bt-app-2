@@ -15,7 +15,22 @@ const grid = p => p.evaluate(() => {
 });
 
 run({
-  async 'piastrelle quadrate a mattoncino, colori per sezione, si trascina nei due versi; i bottoni portano alla sezione'(b) {
+  // 8/11 (Edoardo): piastrelle con solo le icone, niente bottoni delle sezioni, lista come prima a scelta (resta scelta).
+  async 'Garage: piastrelle solo icone (nome per il lettore dello schermo), niente bottoni sezioni, interruttore lista che resta'(b) {
+    const { ctx, p, errs } = await open(b); await login(p); await goTab(p, 'GARAGE'); await w(p, 400);
+    const grid = await p.evaluate(() => ({ secs: document.querySelectorAll('[data-garage-sec]').length, tiles: [...document.querySelectorAll('[data-garage-tile]')].map(e => ({ txt: e.innerText.trim(), label: e.getAttribute('aria-label') || '' })), mode: document.querySelector('[data-garage-screen]').getAttribute('data-garage-mode') }));
+    await tapSel(p, '[data-garage-view="lista"]'); await w(p, 400);
+    const list = await p.evaluate(() => ({ rows: document.querySelectorAll('[data-garage-row]').length, text: document.querySelector('[data-garage-list]').innerText }));
+    await goTab(p, 'HOME'); await w(p, 400); await goTab(p, 'GARAGE'); await w(p, 400);   // si esce e si rientra
+    const again = await p.evaluate(() => (document.querySelector('[data-garage-screen]') || { getAttribute: () => 'nessuna' }).getAttribute('data-garage-mode') + ':' + localStorage.getItem('bt_bt-garage-view'));
+    await ctx.close();
+    assert(grid.mode === 'griglia' && grid.secs === 0, 'griglia senza bottoni delle sezioni: ' + JSON.stringify(grid).slice(0, 200));
+    assert(grid.tiles.length > 10 && grid.tiles.every(t => t.txt === '' && t.label.length > 3), 'piastrelle senza testo, col nome nascosto: ' + JSON.stringify(grid.tiles.slice(0, 3)));
+    assert(list.rows >= 10 && /Pit Stop Challenge/.test(list.text) && /GIOCHI/.test(list.text) && /IN ARRIVO/.test(list.text), 'lista come prima: ' + list.text.slice(0, 200));
+    assert(again === 'lista:"lista"', 'la scelta resta (salvata sul telefono): ' + again);
+    assert(!errs.length, errs.join(' | '));
+  },
+  async 'SKIP 8/11 tolti i bottoni delle sezioni e i nomi sulle piastrelle (Edoardo): piastrelle quadrate a mattoncino, colori per sezione, si trascina nei due versi; i bottoni portano alla sezione'(b) {
     const { ctx, p, errs } = await open(b); await login(p);
     await goTab(p, 'GARAGE'); await w(p, 700);
     const g0 = await grid(p);
