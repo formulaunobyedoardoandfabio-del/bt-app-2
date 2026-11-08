@@ -55,5 +55,49 @@ t('gare rimaste dal calendario: niente gare finite, la Sprint prima del GP', () 
   assert.deepStrictEqual(ev.map(e => e.id), ['r20:s', 'r20', 'r21']);
 });
 
+// 8/11 (Edoardo): "il minimo di ogni pilota per far vincere matematicamente il pilota in testa".
+const GPS = [{ id: 'r21', name: 'Las Vegas', sprint: false }, { id: 'r22', name: 'Qatar', sprint: false }, { id: 'r23', name: 'Abu Dhabi', sprint: false }];
+t('titolo: chiudibile al prossimo GP, punti di vantaggio che servono e minimi di gara per ogni rivale', () => {
+  // A 302, B 236, C 230: restano 75. Dopo Las Vegas restano 50.
+  const rows = [{ id: 'A', name: 'Antonelli', points: 302 }, { id: 'B', name: 'Russell', points: 236 }, { id: 'C', name: 'Leclerc', points: 230 }];
+  const w = K.titleWatch(rows, GPS);
+  assert.strictEqual(w.leader.id, 'A');
+  assert.strictEqual(w.decided, false);
+  assert.strictEqual(w.atIndex, 0, 'si può chiudere già a Las Vegas');
+  assert.deepStrictEqual(w.rivals.map(r => r.id), ['B', 'C']);
+  const B = w.rivals[0], C = w.rivals[1];
+  // B: dopo Las Vegas A deve avere più di 50 punti di vantaggio: ora 66, quindi B può recuperarne al massimo 15.
+  assert.strictEqual(B.need, -15);
+  // se A vince (25) B può fare al massimo 40: qualunque risultato. Con B fuori dai punti ad A va bene anche zero.
+  assert.deepStrictEqual([B.ifWin, B.leaderMin], ['any', 'out']);
+  // B vince (25): ad A servono almeno 10 punti = 5° (10) o meglio
+  assert.strictEqual(B.ifRivalWins, 5);
+  assert.strictEqual(C.need, -21);
+  assert.strictEqual(C.ifRivalWins, 8, 'C vince: ad A servono 4 punti = 8°');
+});
+t('titolo: non chiudibile subito, si dice quando al più presto e quanto serve fino a lì', () => {
+  const rows = [{ id: 'A', name: 'A', points: 300 }, { id: 'B', name: 'B', points: 280 }];
+  const w = K.titleWatch(rows, GPS);
+  // dopo Las Vegas restano 50: A dovrebbe fare 31 più di B in un GP (impossibile). Dopo il Qatar restano 25: servono 6.
+  assert.strictEqual(w.atIndex, 1);
+  assert.strictEqual(w.rivals[0].need, 6);
+  assert.strictEqual(w.rivals[0].ifWin, null, 'su più gare niente esempi di arrivo');
+});
+t('titolo: già deciso, o nessuna gara rimasta', () => {
+  const w = K.titleWatch([{ id: 'A', name: 'A', points: 400 }, { id: 'B', name: 'B', points: 300 }], GPS);
+  assert.strictEqual(w.decided, true);
+  assert.deepStrictEqual(w.rivals, []);
+  assert.strictEqual(K.titleWatch([{ id: 'A', points: 10 }], []).decided, true);
+  assert.strictEqual(K.titleWatch([], GPS), null);
+});
+t('titolo: Sprint come prossimo evento e minimi con la tabella della Sprint', () => {
+  const ev = [{ id: 'r21:s', name: 'Las Vegas', sprint: true }, { id: 'r21', name: 'Las Vegas', sprint: false }];
+  const w = K.titleWatch([{ id: 'A', name: 'A', points: 120 }, { id: 'B', name: 'B', points: 95 }], ev);
+  // dopo la Sprint restano 25: A deve avere più di 25 di vantaggio (ora 25): serve 1 punto più di B nella Sprint.
+  assert.strictEqual(w.atIndex, 0);
+  assert.strictEqual(w.rivals[0].need, 1);
+  assert.deepStrictEqual([w.rivals[0].ifWin, w.rivals[0].leaderMin, w.rivals[0].ifRivalWins], ['any', 8, null]);
+});
+
 console.log(`\n${pass} passati, ${fail} falliti`);
 process.exit(fail ? 1 : 0);

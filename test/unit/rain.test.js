@@ -37,5 +37,25 @@ t('la prima goccia non è mai "vicina" (non c\'è niente accanto)', () => {
   const rnd = seeded(5);
   for (let i = 0; i < 50; i++) assert.strictEqual(R.pickSpot([], { w: 390, h: 844, rnd }).close, false);
 });
+// 8/11 (Edoardo): "le gocce solo se c'è la qualifica o il GP in corso, se no non si devono vedere".
+const WK = [{ key: 'FP1', utc: '2026-11-20T00:30Z' }, { key: 'FP2', utc: '2026-11-20T04:00Z' }, { key: 'FP3', utc: '2026-11-21T00:30Z' }, { key: 'QUALI', utc: '2026-11-21T04:00Z' }, { key: 'RACE', utc: '2026-11-22T04:00Z' }];
+const at = s => Date.parse(s);
+t('gocce: solo durante qualifica o gara (non nelle prove libere, non fra una sessione e l\'altra)', () => {
+  assert.strictEqual(R.rainSessionNow(WK, at('2026-11-20T01:00Z')), null, 'FP1');
+  assert.strictEqual(R.rainSessionNow(WK, at('2026-11-21T03:50Z')), null, 'prima della qualifica');
+  assert.strictEqual(R.rainSessionNow(WK, at('2026-11-21T04:30Z')), 'QUALI');
+  assert.strictEqual(R.rainSessionNow(WK, at('2026-11-21T06:00Z')), null, 'qualifica finita');
+  assert.strictEqual(R.rainSessionNow(WK, at('2026-11-22T06:30Z')), 'RACE', 'gara lunga (anche con rossa)');
+  assert.strictEqual(R.rainSessionNow(WK, at('2026-11-22T07:30Z')), null, 'dopo la gara');
+});
+t('gocce: Sprint e qualifica Sprint contano come gara e qualifica; dati rotti = niente gocce', () => {
+  const SP = [{ key: 'SQ', utc: '2026-11-20T08:30Z' }, { key: 'SPRINT', utc: '2026-11-21T04:00Z' }];
+  assert.strictEqual(R.rainSessionNow(SP, at('2026-11-20T09:00Z')), 'SQ');
+  assert.strictEqual(R.rainSessionNow(SP, at('2026-11-21T04:40Z')), 'SPRINT');
+  assert.strictEqual(R.rainSessionNow(null, Date.now()), null);
+  assert.strictEqual(R.rainSessionNow([{ key: 'RACE', utc: 'boh' }], Date.now()), null);
+  assert.strictEqual(R.isRainSession('RACE') && R.isRainSession('QUALI') && R.isRainSession('SQ') && R.isRainSession('SPRINT'), true);
+  assert.strictEqual(R.isRainSession('FP2'), false);
+});
 console.log(`\n${pass} passati, ${fail} falliti`);
 process.exit(fail ? 1 : 0);

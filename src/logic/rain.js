@@ -40,4 +40,14 @@ function makeDrop(drops, { w, h, rnd = Math.random, id } = {}) {
 // Ogni quanto ne nasce una (ms): dalla prima, che arriva dopo un attimo, poi a caso.
 const nextDelay = (rnd = Math.random) => Math.round(450 + rnd() * 1150);
 
-module.exports = { MAX_DROPS, SIZES, MIN_GAP, CLOSE_CHANCE, pickSpot, makeDrop, nextDelay };
+// 8/11 (Edoardo): gocce solo con una qualifica o una gara in corso (anche Sprint e qualifica Sprint); mai nelle prove
+// libere né fra una sessione e l'altra. Minuti dall'inizio in cui la sessione conta come "in corso" (largo per le rosse).
+const RAIN_SESSIONS = { QUALI: 90, SQ: 75, SPRINT: 90, RACE: 180 };
+const isRainSession = key => Object.prototype.hasOwnProperty.call(RAIN_SESSIONS, String(key || "").toUpperCase());
+function rainSessionNow(weekend, now) {
+  if (!Array.isArray(weekend) || !Number.isFinite(now)) return null;
+  const s = weekend.find(x => x && isRainSession(x.key) && Number.isFinite(Date.parse(x.utc)) && now >= Date.parse(x.utc) && now <= Date.parse(x.utc) + RAIN_SESSIONS[String(x.key).toUpperCase()] * 60000);
+  return s ? String(s.key).toUpperCase() : null;
+}
+
+module.exports = { MAX_DROPS, SIZES, MIN_GAP, CLOSE_CHANCE, pickSpot, makeDrop, nextDelay, RAIN_SESSIONS, isRainSession, rainSessionNow };

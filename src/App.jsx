@@ -49,6 +49,7 @@ import { createSocial } from "./services/social";
 import { parseSocial } from "./logic/social";
 import { cutWords, fixCut } from "./logic/words";
 import { RainGlass } from "./pioggia/Pioggia";
+import { rainSessionNow, isRainSession } from "./logic/rain";
 import ClassificaLega from "./fanta/ClassificaLega";
 import TrophiesScreen, { TrophiesCard } from "./gara/Trophies";
 import { computeGpTrophies } from "./logic/gp-trophies";
@@ -10849,17 +10850,20 @@ function App() {
     return () => clearInterval(iv);
   }, [live]);
   useRadioAuto(live);   // 7/11 sera: team radio nuove in automatico ovunque nell'app (se acceso)
-  // 7/11 sera: piove al circuito? In diretta decide il meteo di OpenF1 della sessione (rainfall); se no, nel weekend del
-  // GP (da 3 ore prima della prima sessione a 3 ore dopo l'ultima) il meteo vero di MET Norway adesso. Allora le gocce.
+  // 7/11 sera: piove al circuito? In diretta decide il meteo di OpenF1 della sessione (rainfall); se no il meteo vero di
+  // MET Norway adesso. 8/11 (Edoardo): gocce solo con qualifica o gara in corso (anche Sprint e qualifica Sprint, orari
+  // del calendario in src/logic/rain.js); nelle prove libere e fuori dalle sessioni mai.
   const [rainOn, setRainOn] = useState(false);
   useEffect(() => {
     let alive = true;
     const check = () => {
-      if (isOf1Live(live) && live.ongoing) { const w = live.sim.weather(); if (w) { setRainOn(!!w.rain); return; } }
+      if (isOf1Live(live) && live.ongoing) {
+        if (!isRainSession(live.type)) { setRainOn(false); return; }
+        const w = live.sim.weather(); if (w) { setRainOn(!!w.rain); return; }
+      }
       const race = weekendRace(racesRef.current || []);
-      const ws = race && CIRCUIT_INFO[race.circuitId] ? (CIRCUIT_INFO[race.circuitId].weekend || []).map(s => Date.parse(s.utc)).filter(isFinite) : [];
-      const now = nowMs();
-      if (!ws.length || now < Math.min(...ws) - 3 * 3600000 || now > Math.max(...ws) + 3 * 3600000) { setRainOn(false); return; }
+      const wk = race && CIRCUIT_INFO[race.circuitId] ? CIRCUIT_INFO[race.circuitId].weekend : null;
+      if (!rainSessionNow(wk, nowMs())) { setRainOn(false); return; }
       Meteo.forecast(race.circuitId).then(fc => { if (alive) setRainOn(BtSwipe.rainingNow(fc, nowMs())); }, () => {});
     };
     check();

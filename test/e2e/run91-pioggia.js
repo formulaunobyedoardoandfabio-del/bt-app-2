@@ -5,7 +5,9 @@
 // Uso: node test/build-test.js && node test/e2e/run91-pioggia.js [filtro]
 const { open, w, has, login, assert, run } = require('./helpers');
 
-const NOW = '2026-11-07T17:10:00Z';   // sabato del GP del Brasile, prima delle qualifiche
+// 8/11 (Edoardo): gocce solo con qualifica o gara in corso. NOW = durante le qualifiche del Brasile (18:00 UTC).
+const NOW = '2026-11-07T18:20:00Z';
+const BEFORE_Q = '2026-11-07T17:10:00Z';   // sabato, prima delle qualifiche: anche se piove niente gocce
 const meteo = rain => ({
   'https://bt-app-2.vercel.app/api/meteo**': route => route.fulfill({ status: 200, contentType: 'application/json', headers: { 'Access-Control-Allow-Origin': '*' },
     body: JSON.stringify({ updated: '2026-11-07T16:00:00Z', hours: [16, 17, 18, 19].map(h => ({ t: `2026-11-07T${h}:00:00Z`, step: 1, temp: 21, wind: 12, hum: 88, rain: rain ? 1.4 : 0, sym: rain ? 'rain' : 'cloudy' })) }) }),
@@ -37,6 +39,12 @@ run({
     assert(!dry.errs.length && !off.errs.length, dry.errs.concat(off.errs).join(' | '));
   },
 
+  async 'piove ma non c\'è qualifica né gara in corso: niente gocce'(b) {
+    const { ctx, p, errs } = await open(b, { now: BEFORE_Q, routes: meteo(true) }); await login(p); await w(p, 3500);
+    const r = await rain(p); await ctx.close();
+    assert(r && r.on === 'off' && r.n === 0, 'prima delle qualifiche: ' + JSON.stringify(r));
+    assert(!errs.length, errs.join(' | '));
+  },
   async 'con "Rimuovi animazioni" niente gocce'(b) {
     const { ctx, p, errs } = await open(b, { now: NOW, routes: meteo(true), reducedMotion: 'reduce' }); await login(p); await w(p, 3500);
     const r = await rain(p); await ctx.close();

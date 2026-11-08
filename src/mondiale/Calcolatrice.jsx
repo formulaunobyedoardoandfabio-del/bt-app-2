@@ -3,11 +3,73 @@
 // ancora vincere (piloti e costruttori), e uno scenario fra due piloti scegliendo l'arrivo in ogni GP e Sprint rimasti.
 // Conti in src/logic/champ-calc.js, sui punti veri della classifica e sulle gare rimaste del calendario.
 import React, { useState } from "react";
-import { contenders, maxLeft, scenario, ptsOf, SPRINT } from "../logic/champ-calc";
+import { contenders, maxLeft, scenario, ptsOf, SPRINT, titleWatch } from "../logic/champ-calc";
 import "./Calcolatrice.css";
 
 const K = { bg: "#000000", card: "#18181C", line: "rgba(255,255,255,.08)", text: "#F4F2EF", muted: "#9C9CA1", dim: "#86858C", green: "#3ED66B", gold: "#E7B34C", head: "'Titillium Web', sans-serif", body: "'Work Sans', sans-serif" };
 const lastName = n => String(n || "").split(" ").slice(-1)[0];
+const pl = n => (Math.abs(n) === 1 ? "punto" : "punti");
+// colore della squadra mescolato al fondo della carta (opaco: niente color-mix, che i telefoni vecchi non hanno)
+const tint = (hex, f = .16, bg = [24, 24, 28]) => {
+  const m = /^#?([0-9a-f]{6})$/i.exec(String(hex || ""));
+  if (!m) return "#18181C";
+  const c = [0, 2, 4].map(i => parseInt(m[1].slice(i, i + 2), 16));
+  return "#" + c.map((v, i) => Math.round(bg[i] + (v - bg[i]) * f).toString(16).padStart(2, "0")).join("");
+};
+
+// 8/11 (Edoardo): in cima, colorato e animato, cosa serve a chi è in testa per vincere il Mondiale matematicamente:
+// quando può chiuderlo e, rivale per rivale, i punti di vantaggio e gli arrivi minimi (conti in titleWatch).
+function TitleBanner({ watch, kind, accent }) {
+  if (!watch) return null;
+  const team = kind === "costruttori";
+  const L = watch.leader, Ln = team ? L.name : lastName(L.name), Lc = L.color || accent;
+  const where = e => (e.sprint ? `nella Sprint del ${e.name}` : `al ${e.name}`);
+  const within = e => (e.sprint ? `entro la Sprint del ${e.name}` : `entro il ${e.name}`);
+  const words = watch.decided ? [Ln, "è", "campione", "del", "mondo"]
+    : [Ln, "può", "vincere", "il", "Mondiale", ...(watch.atIndex === 0 ? ["già"] : ["al", "più", "presto"]), ...where(watch.at).split(" ")];
+  let i = 0;
+  const line = r => {
+    const Rn = team ? r.name : lastName(r.name), w = watch.atIndex === 0 ? "" : " " + within(watch.at);
+    if (r.need > 0) return `${Ln} deve fare almeno ${r.need} ${pl(r.need)} più di ${Rn}${w}.`;
+    if (r.need === 0) return `${Rn} non deve recuperargli nemmeno un punto${w}.`;
+    return `${Rn} non deve recuperargli più di ${-r.need} ${pl(r.need)}${w}.`;
+  };
+  const chips = r => {
+    const Rn = lastName(r.name), out = [];
+    if (r.ifWin === "any") out.push(`${Ln} 1°: ${Rn} qualunque arrivo`); else if (r.ifWin === "out") out.push(`${Ln} 1°: ${Rn} fuori dai punti`); else if (r.ifWin) out.push(`${Ln} 1°: ${Rn} ${r.ifWin}° o peggio`);
+    if (r.ifRivalWins === "any") out.push(`${Rn} 1°: ${Ln} qualunque arrivo`); else if (r.ifRivalWins) out.push(`${Rn} 1°: ${Ln} almeno ${r.ifRivalWins}°`); else if (r.ifWin !== null || r.leaderMin !== null) out.push(`${Rn} 1°: non basta`);
+    if (r.leaderMin === "out") out.push(`${Rn} fuori dai punti: a ${Ln} basta anche zero`); else if (r.leaderMin) out.push(`${Rn} fuori dai punti: ${Ln} almeno ${r.leaderMin}°`);
+    return out;
+  };
+  return (
+    <section data-calc-title={watch.decided ? "deciso" : String(watch.atIndex)} aria-live="polite" className="calc-title" style={{ "--calc-c": Lc, "--calc-a": accent, "--calc-tint": tint(Lc), marginTop: 12, borderRadius: 20, padding: "16px 14px 14px" }}>
+      <span className="calc-title-sheen" aria-hidden="true" />
+      <div style={{ position: "relative", fontSize: 11, fontWeight: 700, color: Lc, letterSpacing: .3 }}>{watch.decided ? "Mondiale deciso" : "Per vincere il Mondiale"}</div>
+      <h2 style={{ position: "relative", margin: "4px 0 0", fontFamily: K.head, fontWeight: 900, fontStyle: "italic", fontSize: 24, lineHeight: 1.08, overflowWrap: "break-word" }}>
+        {words.map((w, k) => <span key={k} className="calc-word" style={{ "--d": `${(i++) * 55}ms`, color: k === 0 ? Lc : K.text, display: "inline-block", marginRight: ".26em" }}>{w}</span>)}
+      </h2>
+      {watch.decided && <p style={{ position: "relative", margin: "6px 0 0", fontSize: 12.5, color: K.muted }}>Nessuno può più raggiungerlo, anche vincendo tutte le gare che restano.</p>}
+      {!watch.decided && (
+        <div style={{ position: "relative", marginTop: 10, display: "flex", flexDirection: "column", gap: 10 }}>
+          {watch.rivals.map((r, k) => (
+            <div key={r.id} data-calc-need={r.id} data-need={r.need} className="calc-rise" style={{ "--d": `${words.length * 55 + 120 + k * 120}ms`, paddingTop: k ? 10 : 0, borderTop: k ? `1px solid ${K.line}` : "none" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <span aria-hidden="true" style={{ width: 4, height: 18, borderRadius: 2, background: r.color || K.muted, flexShrink: 0 }} />
+                <span style={{ fontSize: 13.5, fontWeight: 600, lineHeight: 1.35 }}>{line(r)}</span>
+              </div>
+              {chips(r).length > 0 && (
+                <div style={{ marginTop: 6, display: "flex", flexWrap: "wrap", gap: 6 }}>
+                  {chips(r).map(c => <span key={c} data-calc-chip="" style={{ padding: "4px 9px", borderRadius: 999, fontSize: 11.5, fontWeight: 600, color: K.text, background: "rgba(255,255,255,.06)", border: `1px solid ${K.line}` }}>{c}</span>)}
+                </div>
+              )}
+            </div>
+          ))}
+          <p style={{ margin: 0, fontSize: 11, color: K.dim }}>{watch.rivals.length > 1 ? "Devono succedere tutte insieme. " : ""}A pari punti contano le vittorie: qui chiediamo sempre un punto in più.</p>
+        </div>
+      )}
+    </section>
+  );
+}
 const nice = n => String(n).replace(/\B(?=(\d{3})+(?!\d))/g, ".");
 
 function Seg({ value, onChange, items, accent }) {
@@ -62,6 +124,7 @@ export default function Calcolatrice({ drivers = [], teams = [], events = [], on
         <h1 style={{ margin: 0, fontFamily: K.head, fontWeight: 900, fontStyle: "italic", fontSize: 22 }}>Calcolatrice del Mondiale</h1>
       </div>
       <Seg value={kind} onChange={setKind} accent={accent} items={[["piloti", "Piloti"], ["costruttori", "Costruttori"]]} />
+      <TitleBanner key={kind} watch={titleWatch(rows, events, kind)} kind={kind} accent={accent} />
       <section data-calc-left={left} style={{ marginTop: 12, background: K.card, border: `1px solid ${K.line}`, borderRadius: 18, padding: 14 }}>
         <div style={{ fontSize: 12, color: K.muted }}>Restano {nGp} {nGp === 1 ? "GP" : "GP"}{nSp ? ` e ${nSp} Sprint` : ""}</div>
         <div style={{ marginTop: 4, fontFamily: K.head, fontWeight: 900, fontSize: 30, lineHeight: 1, fontVariantNumeric: "tabular-nums" }}>{nice(left)} <span style={{ fontSize: 15, color: K.muted, fontWeight: 700 }}>punti in palio {kind === "costruttori" ? "per squadra" : "per pilota"}</span></div>

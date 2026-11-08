@@ -801,5 +801,11 @@ Da fare:
   barra Floating Notch scrive "Home"); run88 voleva 300 px di scorrimento nel Garage (ora a piastrelle ne ha circa 140);
   run70 Ghost Lap era fissa su Austin, che il sito non ha più (TracingInsights tiene gli ultimi due): ora legge l'ultimo
   Ghost dall'indice vero. Instabili sotto carico (passano da sole, 2 volte su 2): run70 "Premium ... riaperto l'app".
+- 8/11 mattina: gocce della pioggia solo con qualifica o gara in corso (anche Sprint e qualifica Sprint): in diretta
+  OpenF1 conta live.type, se no gli orari del calendario (src/logic/rain.js rainSessionNow: Q 90 min, SQ 75, Sprint 90,
+  gara 180); mai nelle prove libere. Prove: test/unit/rain.test.js (+2), run91 (orario spostato in qualifica, +1).
+- 8/11 mattina: calcolatrice, riquadro "Per vincere il Mondiale" in cima (colori della squadra del primo, parole che
+  entrano una alla volta, riflesso che passa): quando il primo può chiudere il titolo e, per ogni rivale in corsa, i punti
+  di vantaggio che servono e gli arrivi minimi (titleWatch in champ-calc.js). Prove: champ-calc (+4), run97 (+controlli).
 - Non fatto (di proposito): XP da tifoso del design (l'app non ha un contatore XP per questi giochi: niente numeri
   inventati), mappa col punto dell'incidente (OpenF1 non dice dove; c'è il testo della direzione gara).

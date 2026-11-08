@@ -3,6 +3,7 @@
 // punti in palio (25 a GP, 8 a Sprint), chi può ancora vincere, scenario fra due piloti scegliendo gli arrivi.
 // Uso: node test/build-test.js && node test/e2e/run97-calcolatrice.js [filtro]
 const { open, w, tapSel, goTab, login, assert, run } = require('./helpers');
+const K = require('../../src/logic/champ-calc');
 
 const MID = '2026-11-09T10:00:00Z';    // dopo il Brasile: restano Las Vegas, Qatar (con Sprint) e Abu Dhabi
 const END = '2026-12-20T10:00:00Z';    // mondiale finito
@@ -31,6 +32,16 @@ run({
     const top = Math.max(...c.rows.map(r => r.pts));
     c.rows.forEach(r => assert(r.alive === (r.pts + left >= top), `in corsa sbagliato per ${r.id}: ${r.pts}+${left} vs ${top}`));
     assert(c.result === 'aperto' || c.result === 'a' || c.result === 'b', 'scenario: ' + c.result);
+    // 8/11: in cima cosa serve a chi è in testa per vincere il Mondiale, rivale per rivale (stessi conti di titleWatch)
+    await w(p, 1800);   // fine delle animazioni del titolo
+    const tb = await p.evaluate(() => { const e = document.querySelector('[data-calc-title]'); return e && { at: e.getAttribute('data-calc-title'), title: e.querySelector('h2').innerText, needs: [...e.querySelectorAll('[data-calc-need]')].map(x => [x.getAttribute('data-calc-need'), +x.getAttribute('data-need'), x.innerText]), chips: e.querySelectorAll('[data-calc-chip]').length, op: getComputedStyle(e.querySelector('.calc-word')).opacity }; });
+    const tw = K.titleWatch(c.rows.map(r => ({ id: r.id, name: r.id, points: r.pts })), c.evs);
+    await (await p.$('[data-calc-title]')).screenshot({ path: '/tmp/bt/run97-titolo.png' });
+    assert(tb, 'manca il riquadro di cosa serve per vincere il Mondiale');
+    assert(tb.at === (tw.decided ? 'deciso' : String(tw.atIndex)), `quando si decide: ${tb.at} contro ${tw.atIndex}`);
+    assert(JSON.stringify(tb.needs.map(x => [x[0], x[1]])) === JSON.stringify(tw.rivals.map(r => [r.id, r.need])), 'punti che servono: ' + JSON.stringify(tb.needs) + ' attesi ' + JSON.stringify(tw.rivals));
+    assert(/Mondiale|campione/.test(tb.title) && tb.op === '1', 'titolo animato e poi visibile: ' + JSON.stringify(tb));
+    if (!tw.decided && tw.atIndex === 0) assert(tb.chips >= tw.rivals.length, 'arrivi minimi per ogni rivale: ' + tb.chips);
     const [pa0, pb0] = c.score.split('–').map(x => +x.trim());
     // primo evento: il primo pilota vince, il secondo fuori dai punti
     const e0 = c.evs[0];

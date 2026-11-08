@@ -1,5 +1,30 @@
-/* 8/11: calcolatrice del Mondiale (src/mondiale/Calcolatrice.jsx). Risposta al tocco solo con transform. */
+/* 8/11: calcolatrice del Mondiale (src/mondiale/Calcolatrice.jsx). Solo transform e opacity; ferma con
+   "Rimuovi animazioni". Il riquadro del titolo ha il bordo nel colore della squadra di chi è in testa. */
 .calc-btn { cursor: pointer; transition: transform 140ms ease-out; }
 .calc-btn:active { transform: scale(.97); }
 .calc-btn:focus-visible, .calc-select:focus-visible { outline: 2px solid #F4F2EF; outline-offset: 2px; }
-@media (prefers-reduced-motion: reduce) { .calc-btn { transition: none; } .calc-btn:active { transform: none; } }
+
+.calc-title {
+  position: relative; overflow: hidden; color: #F4F2EF;
+  border: 1.5px solid transparent;
+  background:
+    linear-gradient(160deg, var(--calc-tint, #18181C), #18181C 55%) padding-box,
+    linear-gradient(120deg, var(--calc-c), var(--calc-a) 55%, var(--calc-c)) border-box;
+}
+/* riflesso che passa sopra il riquadro: una volta all'apertura, poi ogni 7 secondi */
+.calc-title-sheen {
+  position: absolute; inset: -20% auto -20% 0; width: 45%; pointer-events: none;
+  background: linear-gradient(100deg, transparent, rgba(255,255,255,.13), transparent);
+  transform: translateX(-120%) skewX(-18deg); animation: calcSheen 7s ease-in-out 400ms infinite;
+}
+@keyframes calcSheen { 0% { transform: translateX(-120%) skewX(-18deg); } 22%, 100% { transform: translateX(330%) skewX(-18deg); } }
+/* parole del titolo una dopo l'altra, poi le righe dei rivali */
+.calc-word { opacity: 0; transform: translateY(10px); animation: calcRise 420ms cubic-bezier(.2,.8,.2,1) var(--d, 0ms) forwards; }
+.calc-rise { opacity: 0; transform: translateY(8px); animation: calcRise 460ms cubic-bezier(.2,.8,.2,1) var(--d, 0ms) forwards; }
+@keyframes calcRise { to { opacity: 1; transform: none; } }
+
+@media (prefers-reduced-motion: reduce) {
+  .calc-btn { transition: none; } .calc-btn:active { transform: none; }
+  .calc-title-sheen { display: none; }
+  .calc-word, .calc-rise { animation: none; opacity: 1; transform: none; }
+}
