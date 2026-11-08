@@ -68,7 +68,7 @@ const assert = (c, m) => { if (!c) throw new Error(m); };
 // Attiva la prova gratuita Premium (serve per il Second Screen) e torna alla Home.
 async function premiumTrial(p) {
   await tapSel(p, '[aria-label="Profilo"]'); await w(p); await tapText(p, 'Passa a Premium'); await w(p, 300);
-  await tapText(p, 'PROVA GRATIS'); await w(p, 1500); await tapText(p, 'INIZIA'); await w(p, 300);
+  await tapSel(p, '[data-premium-cta]'); await w(p, 300); await tapSel(p, '[data-confirm-cta]'); await w(p, 1800); await tapSel(p, '[data-premium-close]'); await w(p, 300);   // 8/11: nuovo design del Premium
   await tapSel(p, '[aria-label="Indietro"]'); await w(p, 300);
 }
 // Second Screen: rotazione, misure (senza rotazione), grafiche e mappa.
@@ -266,8 +266,8 @@ const tests = {
     await p.fill('#leagueDraft', 'bt-uff1'); await tapText(p, 'Entra', { exact: true }); await w(p, 800);
     const card = await p.evaluate(() => { const e = document.querySelector('[data-league-card]'); return e ? e.innerText.replace(/\s+/g, ' ') : ''; });
     const doc = await p.evaluate(() => window.firebase.__fake.doc('fanta/lega-BT-UFF1'));
-    await tapSel(p, '[aria-label="Profilo"]'); await w(p); await tapText(p, 'Passa a Premium'); await w(p, 300); await tapText(p, 'PROVA GRATIS'); await w(p, 1600);
-    await tapText(p, 'INIZIA'); await w(p, 300); await tapSel(p, '[aria-label="Indietro"]').catch(() => {}); await w(p, 200);
+    await tapSel(p, '[aria-label="Profilo"]'); await w(p); await tapText(p, 'Passa a Premium'); await w(p, 300); await tapSel(p, '[data-premium-cta]'); await w(p, 300); await tapSel(p, '[data-confirm-cta]'); await w(p, 1800);
+    await tapSel(p, '[data-premium-close]'); await w(p, 300); await tapSel(p, '[aria-label="Indietro"]').catch(() => {}); await w(p, 200);
     await goTab(p, 'FANTA'); await tapText(p, '+ Nuova lega'); await w(p, 300);
     await p.fill('#leagueDraft', 'Pit Stop Club'); await tapText(p, 'Crea lega', { exact: true }); await w(p, 800);
     const t = norm(await text(p));
@@ -330,8 +330,8 @@ const tests = {
   },
   async 'sondaggi: anche il sondaggio della Home vale +2 punti se esatto'(b) {
     const { ctx, p } = await open(b); await login(p);
-    await tapSel(p, '[aria-label="Profilo"]'); await w(p); await tapText(p, 'Passa a Premium'); await w(p, 300); await tapText(p, 'PROVA GRATIS'); await w(p, 1500);
-    await tapText(p, 'INIZIA'); await w(p, 300); await tapSel(p, '[aria-label="Indietro"]'); await w(p, 300);
+    await tapSel(p, '[aria-label="Profilo"]'); await w(p); await tapText(p, 'Passa a Premium'); await w(p, 300); await tapSel(p, '[data-premium-cta]'); await w(p, 300); await tapSel(p, '[data-confirm-cta]'); await w(p, 1800);
+    await tapSel(p, '[data-premium-close]'); await w(p, 300); await tapSel(p, '[aria-label="Indietro"]'); await w(p, 300);
     await tapSel(p, '[data-poll="home"] [data-poll-option="verstappen"]'); await w(p, 300);
     await openAdmin(p, 'SONDAGGI'); await tapSel(p, '[data-poll-admin="home"] [data-answer="verstappen"]'); await w(p, 300);
     await backHome(p); await goTab(p, 'FANTA'); const fanta = norm(await text(p)); await ctx.close();
@@ -409,19 +409,20 @@ const tests = {
   },
   // ── Premium: prova gratuita di 2 settimane ────────────────────────────
   // 18/10 (Edoardo): la prova gratuita dura un GP (fino alla fine del prossimo GP), non più 2 settimane.
-  async 'premium: prova gratuita per un GP, poi si vedono i giorni rimasti'(b) {
+  // 8/11 (Edoardo, nuovo design): di nuovo 14 giorni, e finisce da sola (niente addebiti).
+  async 'premium: prova gratuita di 14 giorni che finisce da sola, poi si vedono i giorni rimasti'(b) {
     const { ctx, p, errs } = await open(b); await login(p);
     await tapSel(p, '[aria-label="Profilo"]'); await w(p); await tapText(p, 'Passa a Premium'); await w(p, 300);
     const t0 = norm(await text(p));
-    await tapText(p, 'PROVA GRATIS'); await w(p, 1600);
-    const t1 = norm(await text(p));
-    await tapText(p, 'INIZIA'); await w(p, 300);
+    await tapSel(p, '[data-premium-cta]'); await w(p, 300); await tapSel(p, '[data-confirm-cta]'); await w(p, 1800);
+    const t1 = norm(await p.evaluate(() => { const e = document.querySelector('[data-premium-sheet]'); return e ? e.getAttribute('data-premium-screen') + ' ' + e.innerText : 'nessun foglio'; }));
+    await tapSel(p, '[data-premium-close]'); await w(p, 300);
     const prof = norm(await text(p));
     await tapSel(p, '[aria-label="Indietro"]'); await w(p, 300);
     const chip = await p.evaluate(() => { const e = document.querySelector('[data-premium-chip]'); return e ? e.innerText.replace(/\s+/g, ' ') : ''; });
     await ctx.close();
-    assert(/PROVA GRATIS PER UN GP/.test(t0) && /poi/i.test(t0), 'nel Premium manca la prova gratuita per un GP');
-    assert(/Prova gratuita attiva/.test(t1) && /prossimo GP/.test(t1), 'dopo la prova non dice che è attiva per il prossimo GP');
+    assert(/Prova 2 settimane gratis/.test(t0) && /finisce da sola/.test(t0), 'nel Premium manca la prova gratuita di 2 settimane');
+    assert(/PROVA ATTIVA/.test(t1) && /FINO AL 14 OTTOBRE/.test(t1), 'dopo la prova non dice fino a quando è attiva: ' + t1.slice(0, 200));
     assert(/Prova gratuita/.test(prof) && /\d+ giorni rimasti/.test(prof), 'nel profilo non si vedono i giorni rimasti');
     assert(/PROVA/.test(chip) && /\d/.test(chip), 'in alto non si vede la prova con i giorni: ' + chip);
     assert(!errs.length, 'errori JS: ' + errs.join(' | '));

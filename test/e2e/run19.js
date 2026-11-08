@@ -59,7 +59,7 @@ const advance = (p, sec) => p.evaluate(s => window.__btLive.advance(s), sec);
 const assert = (c, m) => { if (!c) throw new Error(m); };
 async function premiumTrial(p) {
   await tapSel(p, '[aria-label="Profilo"]'); await w(p); await tapText(p, 'Passa a Premium'); await w(p, 300);
-  await tapText(p, 'PROVA GRATIS'); await w(p, 1500); await tapText(p, 'INIZIA'); await w(p, 300);
+  await tapSel(p, '[data-premium-cta]'); await w(p, 300); await tapSel(p, '[data-confirm-cta]'); await w(p, 1800); await tapSel(p, '[data-premium-close]'); await w(p, 300);   // 8/11: nuovo design del Premium
   await tapSel(p, '[aria-label="Indietro"]'); await w(p, 300);
 }
 async function finishRace(p) { await openAdmin(p, 'GARA LIVE'); await tapText(p, 'ULTIMO GIRO', { exact: true }); await w(p, 300); await backHome(p); await goTab(p, 'RACE'); for (let i = 0; i < 40 && !(await has(p, '[data-finish-podium]')); i++) { await advance(p, 20); await w(p, 120); } }

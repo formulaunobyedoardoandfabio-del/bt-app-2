@@ -832,3 +832,36 @@ Da fare:
   (variabile F1_YT_CHANNEL per cambiarlo). Non provata sul feed vero (la rete di qui non arriva a YouTube).
   I "Video highlights esclusivi" del Premium restano di B&T (dall'admin): sono contenuti propri, non si automatizzano.
 - Prove: test/unit/{auto-predictions,auto-news,fanta-prices,highlights}.test.js, test/e2e/run99-automatici.js (4).
+
+## 8/11 giorno: metà gara, schermo acceso nel Second Screen, Premium nuovo (design "B&T Premium, nuovo design 2")
+- Metà gara (src/logic/halfway.js, src/services/reminders.js): partenza vista = app aperta sulla gara nei primi 15 minuti
+  (bt-start-seen). Se non l'hai vista: notifica del telefono programmata a +50' dal via (id 120, testo generico: ad app
+  chiusa il telefono non sa chi è in testa) e, se a metà gara l'app è aperta o in sottofondo, notifica vera subito coi
+  dati veri (id 121: "Metà gara · Giro 26/51", "GP …: ANT davanti a RUS (+2,3 s) e LEC (+5,1 s)") più l'avviso in app;
+  la generica si toglie e non si riprogramma (bt-half-done). Interruttore "Avviso a metà gara" nel Profilo.
+  Dati veri anche ad app chiusa = notifiche dal server (Firebase Cloud Messaging): NON fatto, serve il sì di Edoardo.
+- Second Screen (Edoardo 11:36: "modalità TV = solo che non si spegne mai lo schermo"): finché è aperto lo schermo
+  resta acceso (useKeepAwake: plugin @capacitor-community/keep-awake nell'APK, aggiunto a package.json; Wake Lock nel
+  browser, ripreso al ritorno). Tolti i due pannelli della prima versione. Unica cosa in più: spostamento di 1-3 px al
+  minuto contro il burn-in OLED (src/logic/oled.js, proprietà CSS translate sullo stage). dimFor/wakes restano in
+  oled.js con le loro prove ma l'app non li usa più.
+- Premium (src/premium/Premium.jsx + .css): pagina a schermo intero, schermate Premium, Gratis o Premium, Sblocca senza
+  pagare (video + tutti i trofei), Prova attiva (giorni rimasti), Sei Premium (numeri veri), Conferma, Attivazione,
+  Premium attivo, Ricevuta. Tolte le schermate della carta (6b, 6c): nell'APK paga Google Play con la sua finestra.
+  Prova: 14 giorni, una volta per account, FINISCE DA SOLA (scelta di Edoardo; prima durava un GP). Avviso 2 giorni
+  prima alle 18 (id 130, anche coi promemoria spenti: è la promessa della Conferma). "Oppure abbonati subito" per chi
+  non vuole la prova. Il chip PREMIUM in alto ora apre la pagina anche da Premium.
+- Ricevuta (src/premium/receipt-pdf.js): con Google Play si salva nell'account premium.receipt {orderId, at, plan,
+  price} (cleanReceipt) e premium.plan. PDF fatto a mano (Helvetica, euro), codice a barre Code 128 vero del numero
+  d'ordine (letto davvero: tools/scan-receipt.py con zxing-cpp; a schermo si legge da densità 2x in su, cioè ogni
+  telefono di oggi). "Problemi col Premium?" apre Condividi col PDF allegato e il testo con numero d'ordine e account
+  (Per: bt.formula1@gmail.com); sul sito scarica il PDF e apre la mail.
+  La prova vera è il numero d'ordine: Edoardo lo cerca nella Play Console → Gestione ordini. Il PDF da solo si può
+  falsificare, il numero d'ordine no.
+  [Likely] orderId arriva da @capgo/native-purchases su Android (tx.orderId); se mancasse, niente ricevuta (mai finta).
+- Prove: test/unit/{halfway,half-notify,oled,trial-reminder,receipt-pdf}.test.js, test/e2e/run100-meta-gara.js,
+  run101-tv.js (ora: schermo acceso), run102-premium.js (3). Aggiornate al nuovo Premium: run8, run13, run14, run16-22,
+  run69, run70, run76, run86, run88.
+- Verificato 8/11 15:52: `JOBS=2 bash test/all.sh` → 129 file verdi su 134; i 5 rossi (revisione-b C2, run31 riaperta
+  senza rete, run32 messaggio dopo ricarica, run34 foto dopo ricarica, run56 nascoste dopo riavvio) sono prove con
+  ricarica della pagina sotto carico: rifatte da sole sono verdi. Codice a barre letto davvero dal PDF (zxing-cpp).

@@ -47,7 +47,7 @@ const PHONE = (reward) => `(() => {
   window.BT_ADMOB_TEST = true;
 })();`;
 const chip = p => p.evaluate(() => { const e = document.querySelector('[data-premium-chip]'); return e ? e.getAttribute('data-premium-chip') : null; });
-async function watchAd(p) { await tapSel(p, '[data-premium-chip]'); await w(p, 500); await tapSel(p, '[data-ad-pro] button'); await w(p, 2200); }
+async function watchAd(p) { await tapSel(p, '[data-premium-chip]'); await w(p, 500); await tapSel(p, '[data-premium-free]'); await w(p, 400); await tapSel(p, '[data-ad-pro]'); await w(p, 2200); }   // 8/11: il video è in "Sblocca senza pagare"
 // Lo schermo si spegne (o l'app va in secondo piano): document.hidden diventa vero.
 const screenOff = p => p.evaluate(() => { Object.defineProperty(document, 'hidden', { configurable: true, get: () => true }); document.dispatchEvent(new Event('visibilitychange')); });
 

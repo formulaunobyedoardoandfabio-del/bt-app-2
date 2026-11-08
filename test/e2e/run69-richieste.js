@@ -56,7 +56,7 @@ run({
 
   // 1/11 (Edoardo): Second Screen, telemetria, tempi sul giro, radio e gomme tornano funzioni Pro (Premium o un video);
   // avvisi e sondaggi restano gratis.
-  async 'Premium: avvisi e sondaggi gratis; Second Screen e funzioni della gara sono Pro; stagione 6 €, prova per un GP'(b) {
+  async 'Premium: avvisi e sondaggi gratis; Second Screen e funzioni della gara sono Pro; stagione 6 €, prova gratis che finisce da sola'(b) {
     const POLL = { 'shared/bt-home-poll': { id: 'home', q: 'Chi vince il prossimo GP?', options: [{ id: 'a', label: 'Norris' }, { id: 'b', label: 'Leclerc' }] } };
     const { ctx, p, errs } = await open(b, { seed: { addDocs: POLL } }); await login(p);
     const poll = await p.evaluate(() => document.querySelectorAll('[data-poll-option]').length);
@@ -71,10 +71,10 @@ run({
     ['Tempi su giro in tempo reale', 'Gomme: usura e strategia', 'Team radio audio live', 'Pit stop e distacchi completi', 'Modalità Second Screen durante la gara', 'Notifiche personalizzate in tempo reale', 'Sondaggi e contenuti della redazione']
       .forEach(f => assert(!sheet.includes(f), 'ancora nel Premium: ' + f));
     assert(/6 €/.test(sheet) && /stagione/i.test(sheet) && /1 € in meno/.test(sheet), 'prezzo a stagione: ' + sheet.slice(0, 400));
-    assert(/PROVA GRATIS PER UN GP/.test(sheet), 'prova per un GP');
-    assert(!/2,99|24,99|2 SETTIMANE/.test(sheet), 'prezzi o prova vecchi');
+    assert(/Prova 2 settimane gratis/.test(sheet) && /finisce da sola/.test(sheet), 'prova gratis che finisce da sola (8/11: di nuovo 14 giorni)');
+    assert(!/2,99|24,99/.test(sheet), 'prezzi vecchi');
     assert(!ss.open && ss.gate, 'il Second Screen senza Premium chiede Premium: ' + JSON.stringify(ss));
-    assert(/Telemetria live/.test(sheet) && /Team radio/.test(sheet) && /Zero pubblicità/.test(sheet), 'nel Premium mancano le funzioni Pro della gara (7/11: tre icone con due parole)');
+    assert(/TELEMETRIA/.test(sheet) && /Team radio/.test(sheet) && /Gomme/.test(sheet) && /Zero pubblicità/.test(sheet), 'nel Premium mancano le funzioni Pro della gara (8/11: nuovo design)');
     assert(!errs.length, errs.join(' | '));
   },
 

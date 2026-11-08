@@ -88,7 +88,7 @@ run({
     assert(!after.open && after.gate === 'ss', 'senza premio resta bloccato: ' + JSON.stringify(after));
     assert(/Guarda il video fino in fondo/.test(page), 'manca l\'avviso');
     assert(site.gate === 'ss' && !site.video, 'sul sito: ' + JSON.stringify(site));
-    assert(/Ogni GP vissuto dal muretto box/.test(prem), '"Passa a Premium" apre il Premium');   // 7/11: titolo sul risultato, non sul nome del piano
+    assert(/ingegnere di pista/.test(prem), '"Passa a Premium" apre il Premium');   // 8/11: titolo del nuovo design
     assert(!web.errs.length && !apk.errs.length, web.errs.concat(apk.errs).join(' | '));
   },
 
@@ -131,12 +131,12 @@ run({
     const { ctx, p, errs } = await open(b, { init: PHONE({ owned: false }), seed: { addDocs: TRIAL_USED } }); await login(p); await w(p, 800);
     await tapSel(p, '[data-premium-chip="off"]'); await w(p, 500);
     const sheet = await text(p);
-    await tapText(p, 'ABBONATI'); await w(p, 1500);
+    await tapSel(p, '[data-premium-cta]'); await w(p, 300); await tapSel(p, '[data-confirm-cta]'); await w(p, 1500);   // 8/11: nuovo design
     const buys = await p.evaluate(() => window.__buys.slice());
     await w(p, 1200);
     const user = await doc(p, 'users/a@b.it');
     await ctx.close();
-    assert(/5,99 € a stagione/.test(sheet), 'prezzo di Google Play: ' + sheet.slice(0, 500));
+    assert(/5,99 € all'anno/.test(sheet), 'prezzo di Google Play: ' + sheet.slice(0, 500));
     assert(buys.length === 1 && buys[0].productIdentifier === 'premium_stagione' && buys[0].planIdentifier === 'stagione' && buys[0].productType === 'subs', 'acquisto: ' + JSON.stringify(buys));
     assert(!JSON.stringify(buys).includes('a@b.it'), 'mai l\'email a Google');
     const pr = user && user.app2 && user.app2.premium;

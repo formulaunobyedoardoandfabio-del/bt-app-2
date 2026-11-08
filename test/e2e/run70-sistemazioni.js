@@ -70,8 +70,8 @@ run({
   async 'Premium: la prova gratuita resta dopo aver chiuso e riaperto l\'app'(b) {
     const { ctx, p, errs } = await open(b); await login(p);
     await tapSel(p, '[data-premium-chip="off"]'); await w(p, 400);
-    await tapText(p, 'PROVA GRATIS'); await w(p, 1500);
-    await tapText(p, 'INIZIA'); await w(p, 1500);   // i dati dell'account si salvano 800 ms dopo l'ultima modifica
+    await tapSel(p, '[data-premium-cta]'); await w(p, 300); await tapSel(p, '[data-confirm-cta]'); await w(p, 1800);
+    await tapSel(p, '[data-premium-close]'); await w(p, 1500);   // i dati dell'account si salvano 800 ms dopo l'ultima modifica
     const before = await chip(p);
     await reopen(p);
     const after = await chip(p);
@@ -97,8 +97,8 @@ run({
     })();`;
     const { ctx, p, errs } = await open(b, { init: PLAY }); await login(p);
     await tapSel(p, '[data-premium-chip="off"]'); await w(p, 400);
-    await tapText(p, 'Oppure abbonati subito'); await w(p, 1600);
-    await tapText(p, 'INIZIA'); await w(p, 1500);
+    await tapSel(p, '[data-premium-buy]'); await w(p, 300); await tapSel(p, '[data-confirm-cta]'); await w(p, 1600);   // 8/11: nuovo design
+    await tapSel(p, '[data-premium-close]'); await w(p, 1500);
     const before = await chip(p);
     await reopen(p);
     const after = await chip(p);
@@ -108,27 +108,28 @@ run({
     assert(!errs.length, errs.join(' | '));
   },
 
-  async 'Premium: la prova finisce da sola dopo il GP e non si può rifare'(b) {
-    const { ctx, p, errs } = await open(b); await login(p);   // 7/10: la prova vale fino alla fine del GP di Singapore (11/10)
+  // 8/11 (Edoardo, nuovo design): la prova dura 14 giorni (7/10 → 21/10) e finisce da sola.
+  async 'Premium: la prova finisce da sola dopo 14 giorni e non si può rifare'(b) {
+    const { ctx, p, errs } = await open(b); await login(p);
     await tapSel(p, '[data-premium-chip="off"]'); await w(p, 400);
-    await tapText(p, 'PROVA GRATIS'); await w(p, 1500);
-    await tapText(p, 'INIZIA'); await w(p, 1500);
-    await ctx.addInitScript(() => { window.__btNow = Date.parse('2026-10-14T10:00:00Z'); });   // tre giorni dopo il GP
+    await tapSel(p, '[data-premium-cta]'); await w(p, 300); await tapSel(p, '[data-confirm-cta]'); await w(p, 1800);
+    await tapSel(p, '[data-premium-close]'); await w(p, 1500);
+    await ctx.addInitScript(() => { window.__btNow = Date.parse('2026-10-22T10:00:00Z'); });   // un giorno dopo la fine della prova
     await reopen(p);
     const after = await chip(p);
     await tapSel(p, '[data-premium-chip="off"]').catch(() => {}); await w(p, 400);
     const sheet = await text(p);
     await ctx.close();
-    assert(after === 'off:Premium', 'dopo il GP la prova è ancora attiva: ' + after);
-    assert(!/PROVA GRATIS PER UN GP/.test(sheet) && /ABBONATI/.test(sheet), 'la prova si può rifare: ' + sheet.slice(0, 300));
+    assert(after === 'off:Premium', 'dopo 14 giorni la prova è ancora attiva: ' + after);
+    assert(!/Prova 2 settimane gratis/.test(sheet) && /Abbonati · /.test(sheet), 'la prova si può rifare: ' + sheet.slice(0, 300));
     assert(!errs.length, errs.join(' | '));
   },
 
   async 'Premium: uscendo dall\'account si toglie, rientrando torna'(b) {
     const { ctx, p, errs } = await open(b); await login(p);
     await tapSel(p, '[data-premium-chip="off"]'); await w(p, 400);
-    await tapText(p, 'PROVA GRATIS'); await w(p, 1500);
-    await tapText(p, 'INIZIA'); await w(p, 1500);
+    await tapSel(p, '[data-premium-cta]'); await w(p, 300); await tapSel(p, '[data-confirm-cta]'); await w(p, 1800);
+    await tapSel(p, '[data-premium-close]'); await w(p, 1500);
     await tapSel(p, '[aria-label="Profilo"]'); await w(p, 400);
     await tapText(p, 'Esci', { exact: true }); await w(p, 1200);
     const out = await chip(p);
@@ -196,7 +197,10 @@ run({
     await ctx.close();
     assert(/GP di Singapore \(round 17\)/.test(t) && /Jolpica/.test(t), 'manca la nota con la fonte: ' + t.slice(-400));
     assert(/Antonelli/.test(podium) && /340 pt/.test(podium), 'il podio non è quello vero: ' + podium);
-    assert(hits.length >= 2 && hits.length <= 4, 'richieste a Jolpica: ' + hits.join(', '));
+    // 8/11: all'avvio si leggono anche i risultati dei GP (previsioni, notizie e prezzi automatici): 3 richieste in più,
+    // in cache 3 ore. Le classifiche restano 2-4 richieste.
+    const st = hits.filter(h => /standings/.test(h));
+    assert(st.length >= 2 && st.length <= 4 && hits.length <= st.length + 3, 'richieste a Jolpica: ' + hits.join(', '));
     assert(!errs.length, errs.join(' | '));
   },
   async 'classifiche: senza Jolpica restano quelle dell\'admin'(b) {
@@ -302,8 +306,8 @@ run({
   async 'pubblicità: con il Premium niente pubblicità'(b) {
     const { ctx, p, errs } = await open(b, { capacitor: capAds() }); await login(p); await w(p, 900);
     await tapSel(p, '[data-premium-chip="off"]'); await w(p, 400);
-    await tapText(p, 'PROVA GRATIS'); await w(p, 1500);
-    await tapText(p, 'INIZIA'); await w(p, 1200);
+    await tapSel(p, '[data-premium-cta]'); await w(p, 300); await tapSel(p, '[data-confirm-cta]'); await w(p, 1800);
+    await tapSel(p, '[data-premium-close]'); await w(p, 1200);
     await goTab(p, 'RACE'); await w(p, 600);
     const list = banners(await ads(p)), space = await adSpace(p);
     await ctx.close();

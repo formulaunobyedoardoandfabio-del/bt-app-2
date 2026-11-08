@@ -145,13 +145,13 @@ const tests = {
     op = await p.evaluate(() => window.__opened.slice()); await ctx.close();
     assert(op.filter(u => /privacy\.html$/.test(u)).length >= 2, 'nei Termini manca il link alla privacy');
   },
-  async 'Premium: per ora si prova senza pagare (anteprima demo)'(b) {
+  async 'Premium: prova gratuita senza addebiti, oppure abbonati subito'(b) {
     const { ctx, p } = await open(b);
     await enter(p);
     await tapSel(p, '[aria-label="Profilo"]'); await w(p); await tapText(p, 'Passa a Premium'); await w(p, 400);
     const t = await text(p); await ctx.close();
-    assert(/PROVA GRATIS PER UN GP/.test(t) && /abbonati subito/i.test(t), 'mancano i bottoni per la prova gratuita e per abbonarsi');   // dalla versione 16; prova per un GP dal 18/10
-    assert(/nessun pagamento reale/.test(t), 'non è chiaro che è una prova senza pagamento');
+    assert(/Prova 2 settimane gratis/.test(t) && /Oppure abbonati subito/.test(t), 'mancano i bottoni per la prova gratuita e per abbonarsi');   // 8/11: nuovo design, prova di 14 giorni
+    assert(/nessun addebito/.test(t), 'non è chiaro che la prova non costa niente');
   },
   async 'dicitura non ufficiale su Home e Profilo, email di contatto giusta'(b) {
     const { ctx, p } = await open(b);

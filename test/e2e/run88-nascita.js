@@ -95,7 +95,7 @@ run({
     const prem = await p.evaluate(() => {
       const sh = document.querySelector('[data-premium-sheet]');
       const sel = [...sh.querySelectorAll('[data-plan]')].map(e => e.getAttribute('data-plan') + ':' + e.getAttribute('aria-checked'));
-      return { title: sh.querySelector('[data-premium-title]').textContent, cells: sh.querySelectorAll('[data-gp-cell]').length, perks: sh.querySelectorAll('[data-premium-perks] > *').length, sel, saving: (sh.querySelector('[data-saving]') || {}).textContent || null, after: !!sh.querySelector('[data-after-trial]') };
+      return { title: sh.querySelector('[data-premium-title]').textContent, tele: !!sh.querySelector('[aria-label^="Traccia della velocità"]'), perks: sh.querySelectorAll('[data-premium-perks] > *').length, sel, saving: (sh.querySelector('[data-saving]') || {}).textContent || null, after: !!sh.querySelector('[data-after-trial]') };
     });
     await ctx.close();
     assert(elo0 && elo0.v === 'none' && /Parti da 1200/.test(elo0.t), 'ELO senza leghe: ' + JSON.stringify(elo0));
@@ -103,8 +103,9 @@ run({
     // 8/11: nel mio profilo niente "Livello del tifoso" (lo vedono gli altri) né "Funzioni Pro coi trofei"; sei impostazioni in una voce
     assert(!unl.pro && !unl.level && unl.subs === 0 && /Personalizza l'app/.test(unl.group || ''), 'profilo: ' + JSON.stringify(unl));
     assert(['Colori dell\'app', 'Suoni', 'Vibrazioni', 'Temi delle feste', 'Pit Board in tutta l\'app', 'Promemoria sul telefono'].every(x => open8.some(t => t.startsWith(x))), 'dentro "Personalizza l\'app": ' + JSON.stringify(open8));
-    assert(prem.title === 'Ogni GP vissuto dal muretto box' && prem.cells >= 20 && prem.perks === 3, 'Premium: ' + JSON.stringify(prem));
-    assert(prem.sel.join(',') === 'annual:true,month:false' && /RISPARMI \d+%/.test(prem.saving || '') && prem.after, 'piani: ' + JSON.stringify(prem));
+    // 8/11 (nuovo design 2): titolo nuovo, telemetria d'esempio, quattro cose che sblocchi
+    assert(prem.title === 'Vedi la gara come un ingegnere di pista' && prem.tele && prem.perks === 4, 'Premium: ' + JSON.stringify(prem));
+    assert(prem.sel.join(',') === 'annual:true,month:false' && /Risparmi il \d+%/.test(prem.saving || '') && prem.after, 'piani: ' + JSON.stringify(prem));
     assert(!errs.length, errs.join(' | '));
   },
 

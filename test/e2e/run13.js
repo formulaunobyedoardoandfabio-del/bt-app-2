@@ -64,9 +64,9 @@ const tests = {
   async 'premium: per ora si attiva per prova, senza pagare'(b) {
     const { ctx, p } = await open(b); await login(p);
     await tapSel(p, '[aria-label="Profilo"]'); await w(p); await tapText(p, 'Passa a Premium'); await w(p, 300);
-    await tapText(p, 'PROVA GRATIS'); await w(p, 1500);   // dalla versione 16: prova gratuita di 2 settimane
+    await tapSel(p, '[data-premium-cta]'); await w(p, 300); await tapSel(p, '[data-confirm-cta]'); await w(p, 1800);   // dalla versione 16: prova gratuita di 2 settimane
     const t = await text(p); await ctx.close();
-    assert(/Prova gratuita attiva!/.test(t), 'il Premium di prova non si attiva');
+    assert(/Benvenuto/.test(t) && /PROVA ATTIVA/.test(t), 'il Premium di prova non si attiva');   // 8/11: nuovo design
   },
   async 'fuori diretta: la prossima gara resta come prima'(b) {
     const { ctx, p } = await open(b); await login(p); await goRace(p);

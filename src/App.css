@@ -69,6 +69,9 @@
     .ss-stage{ left:50%; top:50%; width:100cqh; height:100cqw; transform:translate(-50%,-50%) rotate(90deg); }
     .ss-stage.ss-flip{ transform:translate(-50%,-50%) rotate(-90deg); }
   }
+  /* 8/11: modalità TV, spostamento lento di pochi pixel (protezione OLED, src/logic/oled.js) */
+  .ss-shift{ transition:translate 2s ease-in-out; }   /* 8/11: protezione OLED del Second Screen, 1-3 px al minuto */
+  @media (prefers-reduced-motion:reduce){ .ss-shift{ transition:none; } }
   @keyframes trackmove{ from{ offset-distance:0%; } to{ offset-distance:100%; } }
   /* 7/11 (video di Edoardo, "Flip Down"): l'avviso scende ruotando dal bordo alto come un cartello appeso, in 3D. */
   .live-notice{ transform-origin:50% 0; animation:noticein .7s cubic-bezier(.25,.8,.3,1) both; }
