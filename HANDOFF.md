@@ -785,3 +785,17 @@ Da fare:
 - Conti: src/logic/champ-calc.js. Prove: test/unit/champ-calc.test.js (7), test/e2e/run97-calcolatrice.js (2).
 - A pari punti decidono le vittorie: la calcolatrice non le conosce e lo scrive sotto la lista.
 - .gitignore ha righe di Skipper (un plugin), non mie: lasciate fuori dal commit.
+
+## 8/11 notte: Muretto dei tifosi (Safety Car e bandiera rossa)
+- Design "B&T Trophies e pause di gara" (SafetyCar, Rossa, Esito), solo sessioni OpenF1, scheda Tempi della pagina Race.
+- Safety Car / VSC in gara: "Box o fuori?" per i primi 8 quando entra (gomma ed età dagli stint), "Ha fermato" per chi
+  è già ai box, "Pit stop regalato" con la gomma nuova; Fatto salva. A pausa finita (+20 s) la scheda "com'è andata"
+  apre la pagina con Tu / Squadra / Esito: box = ha fermato fra l'ingresso della Safety Car e 20 s dopo la fine.
+- Bandiera rossa (anche in qualifica): cosa è successo (messaggi della direzione gara poco prima, in italiano se noti),
+  "Rivedi gli ultimi 60 s" (replayAt), "Quanto dura la rossa?" (5-90 min), gomma della ripartenza del pilota preferito
+  (o di chi è primo), chat, Gioca. Risultato: minuti veri e gomma al primo giro dopo la ripresa.
+- Finestre con le stesse regole della bandiera dell'app (openf1.js). Giocate in localStorage "bt-pitwall" (ultime 12).
+- Logica: src/logic/pit-wall.js; aspetto: src/gara/PitWall.jsx. Prove: test/unit/pit-wall.test.js (6, Safety Car vere
+  di Baku e rossa vera di Interlagos), test/e2e/run98-muretto.js (2).
+- Non fatto (di proposito): XP da tifoso del design (l'app non ha un contatore XP per questi giochi: niente numeri
+  inventati), mappa col punto dell'incidente (OpenF1 non dice dove; c'è il testo della direzione gara).

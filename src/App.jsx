@@ -54,6 +54,8 @@ import TrophiesScreen, { TrophiesCard } from "./gara/Trophies";
 import { computeGpTrophies } from "./logic/gp-trophies";
 import { buildStartGrid } from "./logic/start-grid";
 import Calcolatrice from "./mondiale/Calcolatrice";
+import { createPitWall } from "./logic/pit-wall";
+import PitWallResult, { BoxOrOut, RedPlay, PitWallCard } from "./gara/PitWall";
 import { eventsLeft as champEventsLeft } from "./logic/champ-calc";
 import TrofeiPage from "./profilo/TrofeiPage";
 import FantaSeason from "./logic/fanta-season";
@@ -6603,11 +6605,13 @@ function EndSpy({ onEnd }) {
   }, []);
   return <div ref={ref} data-end-spy="" aria-hidden="true" style={{ height: 1 }} />;
 }
-function RaceScreen({ champion = null, proUnlocked = [], proHint = null, proOk = true, onProAd = null, proBusy = false, onStandingsEnd = null, isPremium, onPremium, onSelectDriver, races, standings, live, liveSt, onExpandMap, onTelemetry, onOpenCircuit, wxGuess, wxResult, onGuessWeather, onLapTimes, onSecondScreen, lastRace, dotdVote, onDotdVote, ratings = {}, onRate, onOpenChats, onOpenGhost, of1 = null, onOf1Refresh, replay = null, favDriver = null, of1Sessions = null, onOf1Pick = null, sessionNote = null, trophies = null, onReplayAt = null, onShareTrophy = null, startGrid = null }) {
+function RaceScreen({ champion = null, proUnlocked = [], proHint = null, proOk = true, onProAd = null, proBusy = false, onStandingsEnd = null, isPremium, onPremium, onSelectDriver, races, standings, live, liveSt, onExpandMap, onTelemetry, onOpenCircuit, wxGuess, wxResult, onGuessWeather, onLapTimes, onSecondScreen, lastRace, dotdVote, onDotdVote, ratings = {}, onRate, onOpenChats, onOpenGhost, of1 = null, onOf1Refresh, replay = null, favDriver = null, of1Sessions = null, onOf1Pick = null, sessionNote = null, trophies = null, onReplayAt = null, onShareTrophy = null, startGrid = null, pitWall = null, pitPlays = {}, onPitSave = null, onSharePit = null }) {
   const [pitOpen, setPitOpen] = useState(null);   // 1/11 notte: pilota con le gomme dei pit aperte (scheda Gomme)
   const [trophyPage, setTrophyPage] = useState(false);   // 8/11: pagina dei B&T Trophies
   useBack(trophyPage, () => setTrophyPage(false));
   const [calcOpen, setCalcOpen] = useState(false);   // 8/11: calcolatrice del Mondiale (solo se restano gare)
+  const [pitPage, setPitPage] = useState(null);   // 8/11: chiave della pausa di cui vedere "com'è andata"
+  useBack(!!pitPage, () => setPitPage(null));
   useBack(calcOpen, () => setCalcOpen(false));
   const [tab, setTab] = useState(null);
   // Pit Board (G27): si vede quando la tabella dei tempi arriva in cima alla pagina (stato cambiato solo al passaggio).
@@ -6631,6 +6635,19 @@ function RaceScreen({ champion = null, proUnlocked = [], proHint = null, proOk =
   const card = { margin: "0 16px 16px", borderRadius: 18, background: C.card, border: `1px solid ${C.border}`, overflow: "hidden" };
   useEffect(checkBoard, [curTab, !!st]);
   const calcEv = calcEvents(races, nowMs());
+  // Muretto dei tifosi: pausa in corso (Safety Car, VSC, rossa) e ultima pausa finita in cui hai giocato.
+  const pwT = st && pitWall ? st.t : null;
+  const pwKeyOf = w => (live && live.sessionKey) + ":" + w.kind + ":" + Math.round(w.a);
+  const pwCur = pwT != null ? pitWall.at(pwT) : null;
+  const pwSet = (key, patch) => { if (onPitSave) onPitSave(key, patch); };
+  const pwLabel = w => { if (w.kind === "red") return "Bandiera rossa"; const b = pitWall.boxBoard(w, w.a); return (w.kind === "vsc" ? "Virtual Safety Car" : "Safety Car") + (b && b.lap ? " del giro " + b.lap : ""); };
+  const pwOutcome = w => { const pl = pitPlays[pwKeyOf(w)] || {}; return { box: w.kind !== "red" && pl.picks ? pitWall.boxResult(w, pl.picks, pwT) : null, red: w.kind === "red" && pl.redDone ? pitWall.redResult(w, pl.red, pwT) : null }; };
+  const pwEnded = pwT != null && !pwCur ? [...pitWall.windows].reverse().find(w => w.b != null && w.b <= pwT && pitPlays[pwKeyOf(w)]) || null : null;
+  const pwFav = st ? (st.cars.find(c => c.id === favDriver && !c.dnf) || st.cars.filter(c => !c.dnf && c.pos > 0).sort((a, b) => a.pos - b.pos)[0] || null) : null;
+  if (pitPage && pitWall && st) {
+    const w = pitWall.windows.find(x => pwKeyOf(x) === pitPage);
+    if (w) { const o = pwOutcome(w); return <PitWallResult label={pwLabel(w)} box={o.box} red={o.red} onBack={() => setPitPage(null)} onShare={onSharePit ? () => onSharePit(pwLabel(w), o.box, o.red, liveRace && liveRace.circuitId) : null} />; }
+  }
   if (calcOpen && calcEv.length) return <Calcolatrice drivers={calcRows(standings.drivers, "driver")} teams={calcRows(standings.teams, "team")} events={calcEv} startKind={champ} accent={C.accent} onBack={() => setCalcOpen(false)} />;
   if (trophyPage && trophies) {
     const lbl = st && isRaceType(st.type) ? "Gara finita" : st && /QUALI|SQ/.test(String(st.type)) ? "Qualifica finita" : "Sessione finita";
@@ -6701,6 +6718,19 @@ function RaceScreen({ champion = null, proUnlocked = [], proHint = null, proOk =
       </div>
 
       <div key={curTab} data-race-pane={curTab} data-sub-enter={subDir || undefined} className={subDir ? "sub-enter-" + subDir : undefined}>
+      {curTab === "classifica" && pwCur && (pwCur.kind === "sc" || pwCur.kind === "vsc") && isRaceType(st.type) && (() => {
+        const k = pwKeyOf(pwCur), pl = pitPlays[k] || {};
+        return <BoxOrOut board={pitWall.boxBoard(pwCur, pwT)} kind={pwCur.kind} picks={pl.picks || {}} done={!!pl.done}
+          onPick={(n, v) => { const pk = { ...(pl.picks || {}) }; if (v) pk[n] = v; else delete pk[n]; pwSet(k, { picks: pk }); }} onDone={() => pwSet(k, { done: true })} />;
+      })()}
+      {curTab === "classifica" && pwCur && pwCur.kind === "red" && (() => {
+        const k = pwKeyOf(pwCur), pl = pitPlays[k] || {}, g = pl.red || {}, drv = pwFav ? pwFav.number : null;
+        const lastRc = st.messages && st.messages.length ? st.messages[st.messages.length - 1].text : null;
+        return <RedPlay info={pitWall.redBoard(pwCur, pwT)} driverCode={pwFav ? pwFav.code : null} guess={g} locked={!!pl.redDone}
+          onGuess={x => pwSet(k, { red: { ...x, driver: drv } })} onPlay={() => pwSet(k, { redDone: true, red: { mins: 25, ...g, driver: drv } })}
+          onReplay={onReplayAt} onChat={onOpenChats} lastMsg={lastRc} />;
+      })()}
+      {curTab === "classifica" && pwEnded && (() => { const o = pwOutcome(pwEnded); return <PitWallCard label={pwLabel(pwEnded)} box={o.box} red={o.red} onOpen={() => setPitPage(pwKeyOf(pwEnded))} />; })()}
       {curTab === "classifica" && st && st.flag === "red" && isRaceType(st.type) && <RedFlagGrid st={st} now={live && live.sim ? live.sim.t : null} />}
       {curTab === "classifica" && st && <div ref={tblRef}><TimingTable st={st} onTelemetry={onTelemetry} onSelectDriver={onSelectDriver} onLapTimes={onLapTimes} /></div>}
       {curTab === "messaggi" && st && <RaceControlList messages={st.messages} />}
@@ -10926,6 +10956,16 @@ function App() {
     return () => { off = true; clearInterval(iv); };
   }, [gridKey]);   // eslint-disable-line react-hooks/exhaustive-deps
   const replayAt = t => { if (!isOf1Live(live) || !live.sim) return; live.sim.jumpTo(Math.max(0, t || 0)); syncNotices(live); setReplay(r => ({ ...r, playing: true })); setLiveTick(n => n + 1); };
+  // 8/11: Muretto dei tifosi (src/logic/pit-wall.js): Box o fuori sotto Safety Car e giochi della bandiera rossa sui
+  // dati veri della sessione. Le giocate restano sul telefono (ultime 12 pause), una per pausa.
+  const pitWall = React.useMemo(() => (isOf1Live(live) && live.raw ? createPitWall(live.raw) : null), [isOf1Live(live) ? live.raw : null]);   // eslint-disable-line react-hooks/exhaustive-deps
+  const [pitPlays, setPitPlays] = useState(() => { const v = local.get("bt-pitwall"); return v && typeof v === "object" ? v : {}; });
+  const savePit = (key, patch) => setPitPlays(m => {
+    const n = { ...m, [key]: { ...(m[key] || {}), ...patch } };
+    Object.keys(n).slice(0, Math.max(0, Object.keys(n).length - 12)).forEach(k => { delete n[k]; });
+    local.set("bt-pitwall", n);
+    return n;
+  });
   // ── Contenuti condivisi su Firebase (src/services/appdata.js) ──────────
   // Un nuovo valore uguale a quello che c'è già non cambia lo stato (niente ridisegni inutili a ogni rilettura).
   const keep = set => v => set(cur => (sameJson(cur, v) ? cur : v));
@@ -12395,7 +12435,7 @@ function App() {
     else if (tab === "race") body = <RaceScreen champion={champion} proOk={isPremium} proHint={proHintOf} onProAd={Ads.canReward() ? () => watchAdPro() : null} proBusy={adBusy} onStandingsEnd={isPaid ? null : Ads.standingsEnd} favDriver={favDriver} dotdVote={live ? votesNow.dotd[live.raceId] : null} onDotdVote={(k, id) => live && voteDotd(live.raceId, k, id)} ratings={votesNow.ratings} onRate={rateDriver} onOpenChats={() => setView("chats")} onOpenGhost={() => setView("ghost")} races={races} standings={shownStandings} isPremium={isPremium} onPremium={() => setPremiumOpen(true)} onSelectDriver={setSelectedDriver} live={live} liveSt={liveSt} onExpandMap={() => setLiveTrackOpen(true)} onTelemetry={(carId, lapNo, sector) => proGate("telemetry", () => setTelemetry({ carId, lapNo, sector }))} onOpenCircuit={openCircuit} wxGuess={wxGuess} wxResult={wxResult} onGuessWeather={guessWeather} onLapTimes={id => proGate("laps", () => setLapList(id))} onSecondScreen={() => proGate("ss", () => setSsOpen(true))} lastRace={lastRace} of1={of1} onOf1Refresh={() => of1TickRef.current && of1TickRef.current(true)} of1Sessions={of1Sessions}
       onOf1Pick={key => { of1PickRef.current = key === of1Sessions.latest ? null : key; setOf1Sessions(x => ({ ...x, shown: key })); if (of1TickRef.current) of1TickRef.current(true); }}
       sessionNote={of1Live && of1Live.raw && !of1Live.raw.laps.length && of1Live.raw.session_result.length ? "I tempi giro per giro non sono ancora su OpenF1 (arrivano qualche ora dopo la fine): intanto la classifica con il miglior giro di ognuno." : null} replay={replayCtl}
-      trophies={gpTrophies} startGrid={startGrid && startGrid.key === gridKey ? startGrid.rows : null} onReplayAt={replayAt} onShareTrophy={(it, raceName, circuitId) => shareToChat({ t: "race", id: circuitId || undefined, ti: `B&T Trophy: ${it.name}`, su: `${it.who} · ${it.stat}`, ln: [it.text] })} />;
+      pitWall={pitWall} pitPlays={pitPlays} onPitSave={savePit} onSharePit={(label, box, red, circuitId) => shareToChat({ t: "race", id: circuitId || undefined, ti: "Muretto dei tifosi", su: label, ln: [box && box.total ? `${box.right} scelte giuste su ${box.total} a Box o fuori` : null, red && red.diff != null ? `Rossa di ${red.mins} min: sbagliato di ${red.diff}` : null].filter(Boolean) })} trophies={gpTrophies} startGrid={startGrid && startGrid.key === gridKey ? startGrid.rows : null} onReplayAt={replayAt} onShareTrophy={(it, raceName, circuitId) => shareToChat({ t: "race", id: circuitId || undefined, ti: `B&T Trophy: ${it.name}`, su: `${it.who} · ${it.stat}`, ln: [it.text] })} />;
     else if (tab === "garage") body = <GarageScreen openGame={garageGame} onGameOpened={() => setGarageGame(null)} races={races} pitBest={pitBest} onPitResult={t => {
       if (activeDuel && myAid) { const id = activeDuel; setActiveDuel(null); Duels.reply({ id, aid: myAid, time: t }).then(item => { setDuelsArr(a => [...a, item]); showToast("Sfida giocata: risultato in Home"); }, () => showToast("Risposta alla sfida non inviata")); }
       if (!userDataWait()) { setPitBest(b => b == null || t < b ? t : b); psBump("pit"); } }} sillyPreds={sillyPreds} onPredict={predictSeat} sillyOfficial={sillyOfficial} live={live} stratPreds={stratPreds} onStrat={(id, st) => { if (!userDataWait()) setStratPreds(x => ({ ...x, [id]: { stints: st, at: nowMs() } })); }} bluffTags={bluffNow} onBluffRefresh={loadBluffTags} />;

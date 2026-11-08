@@ -1,0 +1,7 @@
+/* 8/11: Muretto dei tifosi (src/gara/PitWall.jsx). Risposta al tocco solo con transform. */
+.pw-btn { cursor: pointer; transition: transform 120ms ease-out; }
+.pw-btn:active:not(:disabled) { transform: translateY(1px); }
+.pw-btn:disabled { cursor: default; opacity: .45; }
+.pw-btn:focus-visible, .pw-range:focus-visible { outline: 2px solid #F4F2EF; outline-offset: 2px; }
+.pw-range { accent-color: #FF1801; }
+@media (prefers-reduced-motion: reduce) { .pw-btn { transition: none; } .pw-btn:active:not(:disabled) { transform: none; } }
