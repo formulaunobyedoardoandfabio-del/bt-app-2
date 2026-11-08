@@ -891,3 +891,13 @@ Da fare:
   Ancora ballerine: revisione-b (C1/C2/I1/I3 a giro, "Profilo" non trovato dopo la riapertura) e run33 (campanella dopo
   la ricarica): a volte verdi, a volte no, anche prima di oggi sotto carico. Da indagare: cosa copre l'intestazione
   dopo la ricarica.
+
+## 8/11 18:54: richieste di Edoardo NON iniziate (uso al 97%)
+1. Fanta: "tutte le cose di storia si tolgono dopo ogni GP e si mettono in automatico (magari un po' meno)". Da capire
+   cosa intende con "cose di storia": nel codice del Fanta non c'è niente che si chiami "storie" (forse sondaggi o
+   previsioni del Fanta?). Chiedere prima di fare.
+2. Mappa coi puntini (LiveMap): i primi passando dal via si fermano ad aspettare gli altri; gruppi di 4-7 puntini si
+   teletrasportano. Probabile causa da verificare: interpolazione della posizione fatta per giro/distanza invece che col
+   tempo vero (location di OpenF1), o puntini agganciati al leader al cambio giro.
+3. Radar meteo sulla mappa vera come nelle grafiche F1 (oggi c'è un radar DEMO solo nel Second Screen: RadarOverlay).
+   Solo dati veri: serve una fonte di pioggia vera (es. RainViewer o Open-Meteo); niente radar finto in diretta.
