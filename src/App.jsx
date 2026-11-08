@@ -69,6 +69,7 @@ import FantaSeason from "./logic/fanta-season";
 import { createFantaLeague } from "./services/fantaleague";
 import { createProfiles } from "./services/profiles";
 import PremiumFlow from "./premium/Premium";
+import FaceRating from "./feedback/FaceRating";
 import ReceiptPdf from "./premium/receipt-pdf";
 import { WelcomeFlow, GuestTour, OrbitLoader, SlowSwap, ENTRY_KEY, TOUR_KEY, WT, btnWhite, btnOutline } from "./benvenuto/Benvenuto";
 
@@ -6176,10 +6177,11 @@ function GarageKind({ sec }) {
 
 function GarageScreen({ openGame = null, onGameOpened = null, races, pitBest, onPitResult, sillyPreds, onPredict, sillyOfficial, live, stratPreds = {}, onStrat, bluffTags = [], onBluffRefresh }) {
   const [game, setGame] = useState(null);
-  const [secOn, setSecOn] = useState("giochi");   // 7/11: sezione accesa nei bottoni in alto
-  const canvasRef = useRef(null), scrollRaf = useRef(0), secLock = useRef(0);   // secLock: dopo un bottone la sezione resta quella scelta
+  // 8/11 (Edoardo): piastrelle con solo le icone, via i bottoni delle sezioni in alto, e la lista di prima a scelta
+  // (interruttore in alto a destra, scelta salvata su questo telefono).
+  const [view, setView] = useState(() => (local.get("bt-garage-view") === "lista" ? "lista" : "griglia"));
+  const canvasRef = useRef(null);
   const vw = typeof window !== "undefined" ? window.innerWidth || 390 : 390;
-  useEffect(() => () => cancelAnimationFrame(scrollRaf.current), []);
   useEffect(() => { if (openGame) { setGame(openGame); if (onGameOpened) onGameOpened(); } }, [openGame]);   // 1/11: sfida al Pit Stop dalla Home
   const back = () => setGame(null);
   useBack(!!game, back);   // tasto indietro: dallo strumento si torna al Garage
@@ -6217,80 +6219,79 @@ function GarageScreen({ openGame = null, onGameOpened = null, races, pitBest, on
   const T = Math.round(Math.min(124, Math.max(88, (vw - 32 - 2 * GARAGE_GAP) / 3.3))), STEP = T + GARAGE_GAP, PAD = 16;
   const at = i => { const row = Math.floor(i / GARAGE_COLS), col = i % GARAGE_COLS; return { left: PAD + col * STEP + (row % 2 ? STEP / 2 : 0), top: 10 + row * STEP }; };
   const rowsN = Math.ceil(tiles.length / GARAGE_COLS), W = PAD * 2 + GARAGE_COLS * STEP - GARAGE_GAP + STEP / 2, H = 10 + rowsN * STEP - GARAGE_GAP + 28;
-  const firstOf = sec => tiles.findIndex(t => t.sec === sec);
-  const goSec = sec => {
-    const el = canvasRef.current, i = firstOf(sec);
-    if (!el || i < 0) return;
-    const p = at(i), still = prefersReduced();
-    el.scrollTo({ left: Math.max(0, p.left + T / 2 - el.clientWidth / 2), top: Math.max(0, p.top - 10), behavior: still ? "auto" : "smooth" });
-    setSecOn(sec);
-    secLock.current = Date.now() + 900;
-  };
-  // La sezione accesa è quella della piastrella più vicina al centro di quello che si vede.
-  const onCanvasScroll = () => {
-    const el = canvasRef.current;
-    if (!el || scrollRaf.current || Date.now() < secLock.current) return;
-    scrollRaf.current = requestAnimationFrame(() => {
-      scrollRaf.current = 0;
-      const cx = el.scrollLeft + el.clientWidth / 2, cy = el.scrollTop + el.clientHeight / 3;
-      let best = 0, bd = Infinity;
-      tiles.forEach((t, i) => { const p = at(i), d = (p.left + T / 2 - cx) ** 2 + (p.top + T / 2 - cy) ** 2; if (d < bd) { bd = d; best = i; } });
-      setSecOn(tiles[best].sec);
-    });
-  };
   const R = Math.round(T * 0.24);
-  const sr = { position: "absolute", width: 1, height: 1, overflow: "hidden", clip: "rect(0 0 0 0)", whiteSpace: "nowrap" };
+  const pickView = v => { setView(v); local.set("bt-garage-view", v); fx.play("tick"); };
+  const viewBtn = (id, label, glyph) => (
+    <button type="button" className="press" data-garage-view={id} aria-label={label} aria-pressed={view === id} onClick={() => pickView(id)}
+      style={{ width: 44, height: 44, borderRadius: 12, display: "flex", alignItems: "center", justifyContent: "center", background: view === id ? C.accent : C.card, border: `1px solid ${view === id ? C.accent : C.border}` }}>
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{glyph}</svg>
+    </button>
+  );
+  const LIST_LABEL = { giochi: "GIOCHI", weekend: "WEEKEND DI GARA", tracciati: "TRACCIATI", analisi: "ANALISI CON DATI VERI", soon: "IN ARRIVO" };
+  const listCard = t => t.soon ? (
+    <div key={t.id} data-soon={t.id} style={{ display: "flex", alignItems: "center", gap: 12, margin: "0 16px 10px", padding: "12px 14px", borderRadius: 16, background: "transparent", border: `1px dashed ${C.border}` }}>
+      <GarageIcon id={t.id} soon size={48} />
+      <span style={{ flex: 1, minWidth: 0 }}>
+        <span style={{ display: "block", fontFamily: F_HEAD, fontWeight: 800, fontStyle: "italic", fontSize: 14.5, color: C.muted }}>{t.title}</span>
+        <span style={{ display: "block", marginTop: 3, fontFamily: F_BODY, fontSize: 11.5, color: C.dim, lineHeight: 1.35 }}>{t.sub}</span>
+      </span>
+      <span style={{ flexShrink: 0, padding: "3px 8px", borderRadius: 6, background: "rgba(231,179,76,.14)", fontFamily: F_BODY, fontWeight: 700, fontSize: 10, letterSpacing: .4, color: C.gold }}>IN ARRIVO</span>
+    </div>
+  ) : (
+    <button key={t.id} className="press" data-game={t.id} data-garage-row={t.sec} onClick={() => setGame(t.id)} style={{ display: "flex", alignItems: "center", gap: 12, width: "calc(100% - 32px)", margin: "0 16px 12px", padding: 14, borderRadius: 18, background: C.card, border: `1px solid ${C.border}`, textAlign: "left" }}>
+      <GarageIcon id={t.id} />
+      <span style={{ flex: 1, minWidth: 0 }}>
+        <span style={{ display: "block", fontFamily: F_HEAD, fontWeight: 900, fontStyle: "italic", fontSize: 16, color: C.text }}>{t.title}</span>
+        <span style={{ display: "block", marginTop: 3, fontFamily: F_BODY, fontSize: 12, color: C.muted, lineHeight: 1.35 }}>{t.sub}</span>
+        {t.tag && <span style={{ display: "inline-block", marginTop: 5, padding: "2px 7px", borderRadius: 6, background: "rgba(231,179,76,.16)", fontFamily: F_BODY, fontWeight: 700, fontSize: 10.5, color: C.gold }}>{t.tag}</span>}
+      </span>
+      <Icon name="chevron" size={16} color={C.dim} />
+    </button>
+  );
+  const ICON = Math.round(T * 0.58);
   return (
-    <div data-garage-screen="" style={{ height: "100%", display: "flex", flexDirection: "column" }}>
-      <div style={{ padding: "4px 16px 10px", flexShrink: 0 }}>
-        <h1 style={{ margin: 0, fontFamily: F_HEAD, fontWeight: 900, fontStyle: "italic", fontSize: 24, color: C.text }}>GARAGE</h1>
-        <p style={{ margin: "4px 0 0", fontFamily: F_BODY, fontSize: 12.5, color: C.muted, lineHeight: 1.4 }}>Giochi e strumenti B&T per sfidare i tuoi riflessi e capire la F1 da vicino.</p>
+    <div data-garage-screen="" data-garage-mode={view} style={{ height: "100%", display: "flex", flexDirection: "column" }}>
+      <div style={{ display: "flex", alignItems: "flex-start", gap: 12, padding: "4px 16px 12px", flexShrink: 0 }}>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <h1 style={{ margin: 0, fontFamily: F_HEAD, fontWeight: 900, fontStyle: "italic", fontSize: 24, color: C.text }}>GARAGE</h1>
+          <p style={{ margin: "4px 0 0", fontFamily: F_BODY, fontSize: 12.5, color: C.muted, lineHeight: 1.4 }}>Giochi e strumenti B&T per sfidare i tuoi riflessi e capire la F1 da vicino.</p>
+        </div>
+        <div role="group" aria-label="Come vedere il Garage" style={{ display: "flex", gap: 6, flexShrink: 0 }}>
+          {viewBtn("griglia", "Vista a piastrelle", <><rect x="4" y="4" width="7" height="7" rx="1.5" /><rect x="13" y="4" width="7" height="7" rx="1.5" /><rect x="4" y="13" width="7" height="7" rx="1.5" /><rect x="13" y="13" width="7" height="7" rx="1.5" /></>)}
+          {viewBtn("lista", "Vista a lista", <path d="M9 6h11M9 12h11M9 18h11M4.5 6h.01M4.5 12h.01M4.5 18h.01" />)}
+        </div>
       </div>
-      <div className="scrollrow" role="group" aria-label="Sezioni del Garage" style={{ display: "flex", gap: 8, padding: "0 16px 10px", overflowX: "auto", scrollbarWidth: "none", flexShrink: 0 }}>
-        {GARAGE_SECTIONS.map(s => {
-          const on = secOn === s.id, n = tiles.filter(t => t.sec === s.id).length;
-          return (
-            <button key={s.id} type="button" className="press" data-garage-sec={s.id} aria-pressed={on} onClick={() => goSec(s.id)}
-              style={{ flexShrink: 0, display: "flex", alignItems: "center", gap: 8, height: 40, padding: "0 14px 0 10px", borderRadius: 12, background: on ? s.color : C.card, border: `1px solid ${on ? "rgba(255,255,255,.18)" : C.border}` }}>
-              <span aria-hidden="true" style={{ width: 14, height: 14, borderRadius: 4, background: s.color, boxShadow: on ? "0 0 0 1.5px rgba(255,255,255,.7)" : "none" }} />
-              <span style={{ fontFamily: F_HEAD, fontWeight: 900, fontStyle: "italic", fontSize: 12.5, color: on ? "#fff" : C.text, whiteSpace: "nowrap" }}>{s.label}</span>
-              <span style={{ fontFamily: F_BODY, fontWeight: 700, fontSize: 11, color: on ? "rgba(255,255,255,.8)" : C.dim }}>{n}</span>
-            </button>
-          );
-        })}
-      </div>
-      <div ref={canvasRef} className="scrollcol" data-garage-canvas="" data-scroll-key="garage" onScroll={onCanvasScroll}
+      <div ref={canvasRef} className="scrollcol" data-garage-canvas="" data-scroll-key={view === "lista" ? "garage-lista" : "garage"}
         style={{ flex: 1, minHeight: 0, overflow: "auto", overscrollBehavior: "contain", scrollbarWidth: "none" }}>
+        {view === "lista" ? (
+          <div data-garage-list="" style={{ paddingBottom: 16 }}>
+            {GARAGE_SECTIONS.map((sec, k) => {
+              const items = tiles.filter(t => t.sec === sec.id);
+              return items.length ? <React.Fragment key={sec.id}>
+                <div style={{ padding: (k ? "6px" : "0") + " 18px 8px", fontFamily: F_BODY, fontWeight: 700, fontSize: 11, letterSpacing: 1.2, color: C.gold }}>{LIST_LABEL[sec.id]}</div>
+                {items.map(listCard)}
+              </React.Fragment> : null;
+            })}
+          </div>
+        ) : (
         <div style={{ position: "relative", width: W, height: H }}>
           {tiles.map((t, i) => {
-            const p = at(i), S = GARAGE_SECTIONS.find(s => s.id === t.sec);
-            const box = { position: "absolute", left: p.left, top: p.top, width: T, height: T, boxSizing: "border-box", borderRadius: R, padding: 10, display: "flex", flexDirection: "column", justifyContent: "space-between", textAlign: "left" };
+            const p = at(i), S = GARAGE_SECTIONS.find(x => x.id === t.sec);
+            const box = { position: "absolute", left: p.left, top: p.top, width: T, height: T, boxSizing: "border-box", borderRadius: R, display: "flex", alignItems: "center", justifyContent: "center" };
             if (t.soon) return (
-              <div key={t.id} data-soon={t.id} data-garage-tile={t.sec} style={{ ...box, background: "#131316", border: "1px dashed rgba(255,255,255,.16)" }}>
-                <GarageIcon id={t.id} soon size={34} />
-                <span style={{ display: "block", width: "100%", minWidth: 0 }}>
-                  <span style={sr}>{t.title}. {t.sub}</span>
-                  <WordClamp aria-hidden="true" text={t.title} lines={2} style={{ fontFamily: F_HEAD, fontWeight: 800, fontStyle: "italic", fontSize: 12.5, lineHeight: 1.15, color: C.muted }} />
-                  <span style={{ display: "block", marginTop: 3, fontFamily: F_BODY, fontWeight: 800, fontSize: 9.5, color: C.gold }}>In arrivo</span>
-                </span>
+              <div key={t.id} data-soon={t.id} data-garage-tile={t.sec} role="img" aria-label={t.title + ", in arrivo"} style={{ ...box, background: "#131316", border: "1px dashed rgba(255,255,255,.16)" }}>
+                <GarageIcon id={t.id} soon size={ICON} />
               </div>
             );
             return (
-              <button key={t.id} type="button" className="press garage-tile" data-game={t.id} data-garage-tile={t.sec} onClick={() => setGame(t.id)}
+              <button key={t.id} type="button" className="press garage-tile" data-game={t.id} data-garage-tile={t.sec} aria-label={t.title + (t.tag ? ". " + t.tag : "")} onClick={() => setGame(t.id)}
                 style={{ ...box, background: `linear-gradient(150deg, rgba(255,255,255,.2), rgba(255,255,255,0) 58%), ${S.color}`, border: "1px solid rgba(255,255,255,.14)", boxShadow: "inset 0 1px 0 rgba(255,255,255,.22), 0 8px 18px rgba(0,0,0,.4)" }}>
-                <span style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", width: "100%" }}>
-                  <GarageIcon id={t.id} size={34} />
-                  <GarageKind sec={t.sec} />
-                </span>
-                <span style={{ display: "block", width: "100%", minWidth: 0 }}>
-                  <span style={sr}>{t.title}. {t.sub}</span>
-                  <WordClamp aria-hidden="true" text={t.title} lines={2} style={{ fontFamily: F_HEAD, fontWeight: 900, fontStyle: "italic", fontSize: 13, lineHeight: 1.12, color: "#fff" }} />
-                  {t.tag && <span style={{ display: "block", marginTop: 3, fontFamily: F_BODY, fontWeight: 700, fontSize: 9.5, color: "rgba(255,255,255,.88)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{t.tag}</span>}
-                </span>
+                <GarageIcon id={t.id} size={ICON} />
               </button>
             );
           })}
         </div>
+        )}
       </div>
     </div>
   );
@@ -6663,7 +6664,7 @@ function EndSpy({ onEnd }) {
   }, []);
   return <div ref={ref} data-end-spy="" aria-hidden="true" style={{ height: 1 }} />;
 }
-function RaceScreen({ champion = null, proUnlocked = [], proHint = null, proOk = true, onProAd = null, proBusy = false, onStandingsEnd = null, isPremium, onPremium, onSelectDriver, races, standings, live, liveSt, onExpandMap, onTelemetry, onOpenCircuit, wxGuess, wxResult, onGuessWeather, onLapTimes, onSecondScreen, lastRace, dotdVote, onDotdVote, ratings = {}, onRate, onOpenChats, onOpenGhost, of1 = null, onOf1Refresh, replay = null, favDriver = null, of1Sessions = null, onOf1Pick = null, sessionNote = null, trophies = null, onReplayAt = null, onShareTrophy = null, startGrid = null, pitWall = null, pitPlays = {}, onPitSave = null, onSharePit = null }) {
+function RaceScreen({ champion = null, proUnlocked = [], proHint = null, proOk = true, onProAd = null, proBusy = false, onStandingsEnd = null, isPremium, onPremium, onSelectDriver, races, standings, live, liveSt, onExpandMap, onTelemetry, onOpenCircuit, wxGuess, wxResult, onGuessWeather, onLapTimes, onSecondScreen, lastRace, dotdVote, onDotdVote, ratings = {}, onRate, onOpenChats, onOpenGhost, of1 = null, onOf1Refresh, replay = null, favDriver = null, of1Sessions = null, onOf1Pick = null, sessionNote = null, trophies = null, onHideTrophies = null, onReplayAt = null, onShareTrophy = null, startGrid = null, pitWall = null, pitPlays = {}, onPitSave = null, onSharePit = null }) {
   const [pitOpen, setPitOpen] = useState(null);   // 1/11 notte: pilota con le gomme dei pit aperte (scheda Gomme)
   const [trophyPage, setTrophyPage] = useState(false);   // 8/11: pagina dei B&T Trophies
   useBack(trophyPage, () => setTrophyPage(false));
@@ -6680,9 +6681,11 @@ function RaceScreen({ champion = null, proUnlocked = [], proHint = null, proOk =
   const checkBoard = () => { const sc = scRef.current, tb = tblRef.current; const v = !!(sc && tb && tb.getBoundingClientRect().top < sc.getBoundingClientRect().top + 4); setBoard(b => (b === v ? b : v)); };
   const [champ, setChamp] = useState("piloti");
   const st = live ? liveSt : null;
+  // 8/11 (Edoardo): senza prove libere, qualifica o gara in corso (e senza rivedere una sessione) solo Mondiale e Meteo
+  // (col pronostico meteo del GP, che si gioca proprio prima): via ultima gara (e le sue pagelle), gomme e radio. Con la
+  // sessione in corso tutte le schede come prima.
   const tabs = st ? [["classifica", "Tempi"], ["radio", "Radio"], ["meteo", "Meteo"], ["gomme", "Gomme"], ["messaggi", "Direzione gara"], ["mondiale", "Mondiale"]]
-    : [["mondiale", "Mondiale"], ["classifica", "Ultima gara"], ["radio", "Radio"], ["meteo", "Meteo"], ["gomme", "Gomme"]];
-  // Senza sessione (18/10): di serie il mondiale; l'ultima gara nella sua scheda.
+    : [["mondiale", "Mondiale"], ["meteo", "Meteo"]];
   const curTab = tab && tabs.some(t => t[0] === tab) ? tab : tabs[0][0];
   const subDir = useSlideFrom(tabs.findIndex(t => t[0] === curTab));   // 25/10: da che parte entra il contenuto
   const liveRace = live ? races.find(r => r.id === live.raceId) : null;
@@ -6718,9 +6721,6 @@ function RaceScreen({ champion = null, proUnlocked = [], proHint = null, proOk =
       {(pullRace.pull > 0 || pullRace.busy) && <PullGauge overlay rev={pullRace.rev} busy={pullRace.busy} pull={pullRace.pull} />}
       {st && st.flag === "red" && <div role="status" data-red-banner="" style={{ position: "sticky", top: 0, zIndex: 6, margin: "0 0 10px", padding: "10px 12px", background: FLAG_UI.red.color, fontFamily: F_HEAD, fontWeight: 900, fontStyle: "italic", fontSize: 15, letterSpacing: .8, color: "#fff", textAlign: "center", overflow: "hidden" }}><WarnPulse />BANDIERA ROSSA · SESSIONE SOSPESA</div>}
       {st && curTab === "classifica" && <PitBoard st={st} driverId={favDriver} visible={board} />}
-      {st && liveRace && st.finished && isRaceType(st.type) && <FinishPodium st={st} race={liveRace} onSelectDriver={onSelectDriver} />}
-      {st && st.finished && trophies && trophies.headline && <TrophiesCard data={trophies} onOpen={() => setTrophyPage(true)} />}
-      {st && st.finished && /^(QUALI|SQ)$/.test(String(st.type)) && <StartGrid st={st} official={startGrid} rc={live && live.raw ? live.raw.race_control : []} />}
       {realLive && (!live || live.source === "openf1") && <SessionPicker sessions={of1Sessions} onPick={onOf1Pick} note={st ? sessionNote : null} />}
       {st && liveRace ? <LiveCard race={liveRace} st={st} track={live.track} source={live.source} onExpand={onExpandMap} replay={replay} /> : (
       <div style={{ position: "relative", margin: "4px 16px 14px", borderRadius: 18, overflow: "hidden", background: C.card, border: `1px solid ${C.border}` }}>
@@ -6769,11 +6769,15 @@ function RaceScreen({ champion = null, proUnlocked = [], proHint = null, proOk =
       )}
 
       <>
-      <div className="scrollrow" style={{ display: "flex", gap: 8, padding: "0 16px", marginBottom: 16, overflowX: "auto", scrollbarWidth: "none" }}>
+      {/* 8/11 (Edoardo): podio, B&T Trophies e griglia di partenza non più in cima ma subito prima della classifica dei tempi */}
+      {st && liveRace && st.finished && isRaceType(st.type) && <FinishPodium st={st} race={liveRace} onSelectDriver={onSelectDriver} />}
+      {st && st.finished && trophies && trophies.headline && <TrophiesCard data={trophies} onOpen={() => setTrophyPage(true)} onHide={onHideTrophies} />}
+      {st && st.finished && /^(QUALI|SQ)$/.test(String(st.type)) && <StartGrid st={st} official={startGrid} rc={live && live.raw ? live.raw.race_control : []} />}
+      {tabs.length > 1 && <div className="scrollrow" style={{ display: "flex", gap: 8, padding: "0 16px", marginBottom: 16, overflowX: "auto", scrollbarWidth: "none" }}>
         {tabs.map(([id, label]) => (
           <button key={id} className="press" data-race-tab={id} onClick={() => setTab(id)} style={{ flex: "1 0 auto", padding: "10px 13px", borderRadius: 12, background: curTab === id ? C.accent : C.card, border: `1px solid ${curTab === id ? C.accent : C.border}`, fontFamily: F_HEAD, fontWeight: 800, fontSize: 12, color: curTab === id ? "#fff" : C.muted, textAlign: "center", whiteSpace: "nowrap" }}>{label}</button>
         ))}
-      </div>
+      </div>}
 
       <div key={curTab} data-race-pane={curTab} data-sub-enter={subDir || undefined} className={subDir ? "sub-enter-" + subDir : undefined}>
       {curTab === "classifica" && pwCur && (pwCur.kind === "sc" || pwCur.kind === "vsc") && isRaceType(st.type) && (() => {
@@ -8379,7 +8383,7 @@ function TrophyCase({ trophies = {}, helmet = null, defs = TROPHIES, onOpen }) {
   );
 }
 
-function ProfiloScreen({ onCoffee = null, coffeePrice = null, fanLevel = null, reminders = true, onReminders = null, halfway = true, onHalfway = null, holidays = true, onHolidays = null, miniPit = true, onMiniPit = null, ig, onOpenIg, trial = null, trialUsed = false, onBack, onNotifiche, onPremium, onAdmin, onLogout, isPremium, onAbout, onHelp, onFeedback, aboutMe, onSaveAboutMe, favTeam, favDriver, onPickTeam, onPickDriver, guest, onLogin, onTerms, blocked = [], onUnblock, onDeleteAccount, savedCount = 0, onOpenSaved, account = null, onSaveName, isAdmin = false, onTheme, sounds = true, haptics = true, onSounds, onHaptics, helmet = null, onHelmet, trophies = {}, trophyProg = {}, trophyList = TROPHIES, onAdPrivacy = null }) {
+function ProfiloScreen({ onCoffee = null, coffeePrice = null, fanLevel = null, reminders = true, onReminders = null, halfway = true, onHalfway = null, trophiesOn = true, onTrophiesOn = null, holidays = true, onHolidays = null, miniPit = true, onMiniPit = null, ig, onOpenIg, trial = null, trialUsed = false, onBack, onNotifiche, onPremium, onAdmin, onLogout, isPremium, onAbout, onHelp, onFeedback, aboutMe, onSaveAboutMe, favTeam, favDriver, onPickTeam, onPickDriver, guest, onLogin, onTerms, blocked = [], onUnblock, onDeleteAccount, savedCount = 0, onOpenSaved, account = null, onSaveName, isAdmin = false, onTheme, sounds = true, haptics = true, onSounds, onHaptics, helmet = null, onHelmet, trophies = {}, trophyProg = {}, trophyList = TROPHIES, onAdPrivacy = null }) {
   const ft = favTeam ? teamById(favTeam) : null;
   const fd = favDriver ? driverById(favDriver) : null;
   const favRows = [
@@ -8417,7 +8421,12 @@ function ProfiloScreen({ onCoffee = null, coffeePrice = null, fanLevel = null, r
   const [persOpen, setPersOpen] = useState(false);   // 8/11: la voce "Personalizza l'app" aperta
   const [trophyPage, setTrophyPage] = useState(false);   // 7/11: pagina "I miei trofei"
   useBack(trophyPage, () => setTrophyPage(false));
+  // 8/11 (Edoardo): nel tuo profilo niente "Su di te" e "I miei preferiti" (li vedono gli altri quando aprono il tuo
+  // profilo); si cambiano dalla pagina "Profilo pubblico".
+  const [pubPage, setPubPage] = useState(false);
+  useBack(pubPage, () => setPubPage(false));
   const rows = [
+    { icon: "person", label: "Profilo pubblico", value: guest ? "Preferiti" : "Su di te e preferiti", onClick: () => setPubPage(true), chevron: true },
     { icon: "bell", label: "Notifiche", onClick: onNotifiche, chevron: true },
     // 8/11 (Edoardo): colori, suoni, vibrazioni, temi delle feste, Pit Board e promemoria in una sola voce che si apre.
     { icon: "palette", label: "Personalizza l'app", onClick: () => setPersOpen(o => !o), chevron: true, group: true, open: persOpen },
@@ -8429,6 +8438,7 @@ function ProfiloScreen({ onCoffee = null, coffeePrice = null, fanLevel = null, r
       ...(onMiniPit ? [{ icon: "stopwatch", label: "Pit Board in tutta l'app", toggle: { on: miniPit !== false, onChange: onMiniPit }, sub: true }] : []),
       ...(onReminders ? [{ icon: "bell", label: "Promemoria sul telefono", toggle: { on: reminders !== false, onChange: onReminders }, sub: true }] : []),
       ...(onHalfway ? [{ icon: "flag", label: "Avviso a metà gara (se perdi la partenza)", toggle: { on: halfway !== false, onChange: onHalfway }, sub: true }] : []),
+      ...(onTrophiesOn ? [{ icon: "trophy", label: "B&T Trophies dopo la sessione", toggle: { on: trophiesOn !== false, onChange: onTrophiesOn }, sub: true }] : []),
     ] : []),
     ...(isAdmin ? [{ icon: "gear", label: "Pannello Admin · Pubblica notizia", onClick: onAdmin, badge: "ADMIN" }] : []),
     { icon: "help", label: "Assistenza", onClick: onHelp, chevron: true },
@@ -8442,6 +8452,32 @@ function ProfiloScreen({ onCoffee = null, coffeePrice = null, fanLevel = null, r
     { icon: "doc", label: "Termini e Condizioni", onClick: onTerms, chevron: true },
   ];
   if (trophyPage && !guest) return <TrofeiPage items={trophyItems(trophyList, trophies, trophyProg)} onBack={() => setTrophyPage(false)} now={nowMs()} />;
+  if (pubPage) return (
+    <div className="scrollcol" data-profile-public="" style={{ height: "100%" }}>
+      <SubHeader title="PROFILO PUBBLICO" onBack={() => setPubPage(false)} />
+      {!guest && <p style={{ margin: "0 24px 16px", fontFamily: F_BODY, fontSize: 12.5, color: C.muted, lineHeight: 1.45 }}>Gli altri lo vedono quando aprono il tuo profilo dalla chat.</p>}
+      {!guest && waiting && <p data-profile-waiting="" role="status" style={{ margin: "0 20px 14px", padding: "10px 14px", borderRadius: 12, background: "rgba(255,255,255,.04)", border: `1px solid ${C.border}`, fontFamily: F_BODY, fontSize: 12.5, color: C.muted, lineHeight: 1.45 }}>{ACCOUNT_MSG["not-loaded"]}</p>}
+      {!guest && !waiting && <AboutCard about={aboutMe} onSave={onSaveAboutMe} />}
+      <div style={{ padding: "0 24px 10px" }}><span style={{ fontFamily: F_BODY, fontWeight: 700, fontSize: 11, color: C.dim, letterSpacing: 1 }}>I MIEI PREFERITI</span></div>
+      <div style={{ margin: "0 20px 8px", borderRadius: 18, background: C.card, border: `1px solid ${C.border}`, overflow: "hidden" }}>
+        {favRows.map((r, i) => (
+          <div key={r.key}>
+            <button className="press" onClick={r.onClick} style={{ display: "flex", alignItems: "center", gap: 12, width: "100%", padding: 14, textAlign: "left" }}>
+              {r.key === "driver" && fd ? <Headshot driver={fd} size={36} /> : <div style={{ width: 36, height: 36, borderRadius: 10, background: r.color ? r.color + "26" : "rgba(255,255,255,.06)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}><Icon name={r.icon} size={16} color={r.color || C.text} /></div>}
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontFamily: F_BODY, fontSize: 11, color: C.dim }}>{r.label}</div>
+                <div style={{ fontFamily: F_BODY, fontWeight: 600, fontSize: 14, color: r.color ? C.text : C.muted }}>{r.value}</div>
+              </div>
+              {r.tag && <span style={{ fontFamily: F_BODY, fontWeight: 700, fontSize: 11, color: r.color }}>{r.tag}</span>}
+              <Icon name="chevron" size={16} color={C.dim} />
+            </button>
+            {i < favRows.length - 1 && <div style={{ height: 1, background: C.divider, margin: "0 14px" }} />}
+          </div>
+        ))}
+      </div>
+      <p style={{ margin: "0 24px 22px", fontFamily: F_BODY, fontSize: 11, color: C.dim, lineHeight: 1.45 }}>Riceverai una notifica quando pubblichiamo notizie sulla tua scuderia e sul tuo pilota del cuore. Puoi disattivarle dalla sezione Notifiche.</p>
+    </div>
+  );
   return (
     <div className="scrollcol" style={{ height: "100%" }}>
       <SubHeader title="PROFILO" onBack={onBack} />
@@ -8483,9 +8519,8 @@ function ProfiloScreen({ onCoffee = null, coffeePrice = null, fanLevel = null, r
       </div>
       )}
       {ig && onOpenIg && <IgBigButton ig={ig} onOpen={onOpenIg} />}
-      {!guest && noAbout && <p data-about-missing="" style={{ margin: "0 20px 10px", padding: "10px 14px", borderRadius: 12, background: "rgba(231,179,76,.1)", border: "1px solid rgba(231,179,76,.3)", fontFamily: F_BODY, fontSize: 12.5, color: C.text, lineHeight: 1.45 }}>Completa il tuo profilo: che tifoso sei e da quanti anni segui la F1</p>}
+      {!guest && noAbout && <button type="button" className="press" data-about-missing="" onClick={() => setPubPage(true)} style={{ display: "block", width: "calc(100% - 40px)", textAlign: "left", margin: "0 20px 10px", padding: "10px 14px", borderRadius: 12, background: "rgba(231,179,76,.1)", border: "1px solid rgba(231,179,76,.3)", fontFamily: F_BODY, fontSize: 12.5, color: C.text, lineHeight: 1.45 }}>Completa il tuo profilo: che tifoso sei e da quanti anni segui la F1</button>}
       {!guest && waiting && <p data-profile-waiting="" role="status" style={{ margin: "0 20px 14px", padding: "10px 14px", borderRadius: 12, background: "rgba(255,255,255,.04)", border: `1px solid ${C.border}`, fontFamily: F_BODY, fontSize: 12.5, color: C.muted, lineHeight: 1.45 }}>{ACCOUNT_MSG["not-loaded"]}</p>}
-      {!guest && !waiting && <AboutCard about={aboutMe} onSave={onSaveAboutMe} />}
       {!guest && !waiting && <TrophyCase trophies={trophies} helmet={helmet} defs={trophyList} onOpen={() => setTrophyPage(true)} />}
 
       <button className="press cta-shine" onClick={onPremium} style={{ position: "relative", overflow: "hidden", display: "block", textAlign: "left", width: "calc(100% - 40px)", margin: "0 20px 22px", padding: 16, borderRadius: 18, background: "rgba(231,179,76,.1)", border: "1px solid rgba(231,179,76,.3)" }}>
@@ -8501,24 +8536,6 @@ function ProfiloScreen({ onCoffee = null, coffeePrice = null, fanLevel = null, r
           : trialUsed ? "Rimuovi la pubblicità e sblocca tutti i contenuti esclusivi B&T." : "Prova gratis per 2 settimane: niente pubblicità e tutti i contenuti esclusivi B&T."}</p>
       </button>
 
-      <div style={{ padding: "0 24px 10px" }}><span style={{ fontFamily: F_BODY, fontWeight: 700, fontSize: 11, color: C.dim, letterSpacing: 1 }}>I MIEI PREFERITI</span></div>
-      <div style={{ margin: "0 20px 8px", borderRadius: 18, background: C.card, border: `1px solid ${C.border}`, overflow: "hidden" }}>
-        {favRows.map((r, i) => (
-          <div key={r.key}>
-            <button className="press" onClick={r.onClick} style={{ display: "flex", alignItems: "center", gap: 12, width: "100%", padding: 14, textAlign: "left" }}>
-              {r.key === "driver" && fd ? <Headshot driver={fd} size={36} /> : <div style={{ width: 36, height: 36, borderRadius: 10, background: r.color ? r.color + "26" : "rgba(255,255,255,.06)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}><Icon name={r.icon} size={16} color={r.color || C.text} /></div>}
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontFamily: F_BODY, fontSize: 11, color: C.dim }}>{r.label}</div>
-                <div style={{ fontFamily: F_BODY, fontWeight: 600, fontSize: 14, color: r.color ? C.text : C.muted }}>{r.value}</div>
-              </div>
-              {r.tag && <span style={{ fontFamily: F_BODY, fontWeight: 700, fontSize: 11, color: r.color }}>{r.tag}</span>}
-              <Icon name="chevron" size={16} color={C.dim} />
-            </button>
-            {i < favRows.length - 1 && <div style={{ height: 1, background: C.divider, margin: "0 14px" }} />}
-          </div>
-        ))}
-      </div>
-      <p style={{ margin: "0 24px 22px", fontFamily: F_BODY, fontSize: 11, color: C.dim, lineHeight: 1.45 }}>Riceverai una notifica quando pubblichiamo notizie sulla tua scuderia e sul tuo pilota del cuore. Puoi disattivarle dalla sezione Notifiche.</p>
 
       {blocked.length > 0 && <>
         <div style={{ padding: "0 24px 10px" }}><span style={{ fontFamily: F_BODY, fontWeight: 700, fontSize: 11, color: C.dim, letterSpacing: 1 }}>UTENTI BLOCCATI</span></div>
@@ -9874,7 +9891,8 @@ function LoadingScreen({ ready, onDone, holiday = null }) {
   );
 }
 
-// Feedback come l'app di oggi (FeedbackModal): da 1 a 5 stelle (obbligatorie), una categoria e un testo facoltativo;
+// Feedback come l'app di oggi (FeedbackModal): voto da 1 a 5 (obbligatorio; dall'8/11 con la faccina animata al posto
+// delle stelline, src/feedback/FaceRating.jsx), una categoria e un testo facoltativo;
 // si salva in shared/bt-feedback-<id> (src/services/feedback.js).
 function FeedbackModal({ onClose, onSend }) {
   const [stars, setStars] = useState(0);
@@ -9906,14 +9924,9 @@ function FeedbackModal({ onClose, onSend }) {
         ) : (
           <>
             <h2 style={{ fontFamily: F_HEAD, fontWeight: 900, fontStyle: "italic", fontSize: 17, color: C.text, margin: "0 0 4px" }}>Invia feedback</h2>
-            <p style={{ fontFamily: F_BODY, color: C.muted, fontSize: 12, margin: "0 0 16px" }}>Bastano 30 secondi: scegli le stelle e, se vuoi, scrivici cosa cambiare.</p>
-            <div style={{ display: "flex", justifyContent: "center", gap: 8, marginBottom: 12 }}>
-              {[1, 2, 3, 4, 5].map(n => (
-                <button key={n} className="press" data-feedback-star={n} aria-label={`${n} stell${n === 1 ? "a" : "e"}`} aria-pressed={n <= stars ? "true" : "false"} onClick={() => { setStars(n); buzz(40); }}
-                  style={{ lineHeight: 0, transition: "transform .15s", transform: n <= stars ? "scale(1.15)" : "scale(1)" }}><svg viewBox="0 0 24 24" width="34" height="34" aria-hidden="true"><path d="M12 2.8l2.8 5.7 6.3.9-4.6 4.4 1.1 6.2L12 17.1 6.4 20l1.1-6.2L2.9 9.4l6.3-.9z" fill={n <= stars ? C.gold : "none"} stroke={n <= stars ? C.gold : C.dim} strokeWidth="1.6" strokeLinejoin="round" /></svg></button>
-              ))}
-            </div>
-            <p style={{ textAlign: "center", fontFamily: F_BODY, fontSize: 12, color: C.muted, margin: "0 0 14px", minHeight: 16 }}>{LABELS[stars]}</p>
+            <p style={{ fontFamily: F_BODY, color: C.muted, fontSize: 12, margin: "0 0 16px" }}>Bastano 30 secondi: scegli una faccina e, se vuoi, scrivici cosa cambiare.</p>
+            <FaceRating value={stars} onChange={n => { setStars(n); buzz(40); }} />
+            <p data-feedback-label="" style={{ textAlign: "center", fontFamily: F_HEAD, fontWeight: 800, fontSize: 14, color: stars ? C.text : C.muted, margin: "8px 0 14px", minHeight: 18 }}>{stars ? LABELS[stars] : "Tocca una faccina"}</p>
             <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 14 }}>
               {FEEDBACK_CATS.map(c => {
                 const on = category === c.id;
@@ -10663,6 +10676,9 @@ function App() {
   const [favTeam, setFavTeam] = useState(USER_INIT.favTeam);
   const [favDriver, setFavDriver] = useState(USER_INIT.favDriver);
   const [notifPrefs, setNotifPrefs] = useState(USER_INIT.notifPrefs);
+  // 8/11 (Edoardo: "metti la possibilità di togliere i B&T Trophies"): scelta di questo telefono.
+  const [trophiesOff, setTrophiesOff] = useState(() => local.get("bt-trophies-off") === true);
+  const setTrophiesOn = on => { setTrophiesOff(!on); local.set("bt-trophies-off", !on); };
   // Tappa 3: colori dell'app (sul telefono e nell'account), suoni, vibrazioni, casco e notizie nascoste (account).
   const [theme, setTheme] = useState(() => cleanTheme(local.get(THEME_KEY)) || USER_INIT.theme);
   const [bootColor] = useState(() => { const t = local.get(THEME_KEY); return (t && Colors.normHex(t.color)) || null; });
@@ -12498,6 +12514,7 @@ function App() {
     miniPit={miniPitOn} onMiniPit={v => { setMiniPitOn(v); local.set("bt-minipit-on", v); fx.play("tick"); }}
     fanLevel={guest ? null : { level: psLevel, xp: BtSwipe.xpOf(swipe.tot || {}, psTrophies), missions: psMissions }}
     reminders={notifPrefs.reminders !== false} onReminders={guest ? null : v => { if (userDataWait()) return; if (v) remAskRef.current = true; setNotifPrefs(x => ({ ...x, reminders: v })); fx.play("tick"); }}
+    trophiesOn={!trophiesOff} onTrophiesOn={v => { setTrophiesOn(v); fx.play("tick"); }}
     halfway={notifPrefs.halfway !== false} onHalfway={guest ? null : v => { if (userDataWait()) return; if (v) remAskRef.current = true; setNotifPrefs(x => ({ ...x, halfway: v })); fx.play("tick"); }} />;
   else if (view === "notifiche") body = <NotificheScreen offline={offline} onBack={viewBack.notifiche} onAction={a => { if (a === "feedback") { if (feedbackAsk && !feedbackAsk.read) saveAsk({ ...feedbackAsk, read: true }); setFeedbackOpen(true); } }} notifs={notifs} onReadAll={readAll} isPremium={isPremium} onPremium={() => setPremiumOpen(true)} favTeam={favTeam} favDriver={favDriver} prefs={notifPrefs} onPrefs={v => { if (!userDataWait()) setNotifPrefs(v); }} onGoProfilo={() => setView("profilo")} />;
   else body = tabBodyFor(tab);
@@ -12516,7 +12533,7 @@ function App() {
     else if (tab === "race") body = <RaceScreen champion={champion} proOk={isPremium} proHint={proHintOf} onProAd={Ads.canReward() ? () => watchAdPro() : null} proBusy={adBusy} onStandingsEnd={isPaid ? null : Ads.standingsEnd} favDriver={favDriver} dotdVote={live ? votesNow.dotd[live.raceId] : null} onDotdVote={(k, id) => live && voteDotd(live.raceId, k, id)} ratings={votesNow.ratings} onRate={rateDriver} onOpenChats={() => setView("chats")} onOpenGhost={() => setView("ghost")} races={races} standings={shownStandings} isPremium={isPremium} onPremium={() => setPremiumOpen(true)} onSelectDriver={setSelectedDriver} live={live} liveSt={liveSt} onExpandMap={() => setLiveTrackOpen(true)} onTelemetry={(carId, lapNo, sector) => proGate("telemetry", () => setTelemetry({ carId, lapNo, sector }))} onOpenCircuit={openCircuit} wxGuess={wxGuess} wxResult={wxResult} onGuessWeather={guessWeather} onLapTimes={id => proGate("laps", () => setLapList(id))} onSecondScreen={() => proGate("ss", () => setSsOpen(true))} lastRace={lastRace} of1={of1} onOf1Refresh={() => of1TickRef.current && of1TickRef.current(true)} of1Sessions={of1Sessions}
       onOf1Pick={key => { of1PickRef.current = key === of1Sessions.latest ? null : key; setOf1Sessions(x => ({ ...x, shown: key })); if (of1TickRef.current) of1TickRef.current(true); }}
       sessionNote={of1Live && of1Live.raw && !of1Live.raw.laps.length && of1Live.raw.session_result.length ? "I tempi giro per giro non sono ancora su OpenF1 (arrivano qualche ora dopo la fine): intanto la classifica con il miglior giro di ognuno." : null} replay={replayCtl}
-      pitWall={pitWall} pitPlays={pitPlays} onPitSave={savePit} onSharePit={(label, box, red, circuitId) => shareToChat({ t: "race", id: circuitId || undefined, ti: "Muretto dei tifosi", su: label, ln: [box && box.total ? `${box.right} scelte giuste su ${box.total} a Box o fuori` : null, red && red.diff != null ? `Rossa di ${red.mins} min: sbagliato di ${red.diff}` : null].filter(Boolean) })} trophies={gpTrophies} startGrid={startGrid && startGrid.key === gridKey ? startGrid.rows : null} onReplayAt={replayAt} onShareTrophy={(it, raceName, circuitId) => shareToChat({ t: "race", id: circuitId || undefined, ti: `B&T Trophy: ${it.name}`, su: `${it.who} · ${it.stat}`, ln: [it.text] })} />;
+      pitWall={pitWall} pitPlays={pitPlays} onPitSave={savePit} onSharePit={(label, box, red, circuitId) => shareToChat({ t: "race", id: circuitId || undefined, ti: "Muretto dei tifosi", su: label, ln: [box && box.total ? `${box.right} scelte giuste su ${box.total} a Box o fuori` : null, red && red.diff != null ? `Rossa di ${red.mins} min: sbagliato di ${red.diff}` : null].filter(Boolean) })} trophies={trophiesOff ? null : gpTrophies} onHideTrophies={() => { setTrophiesOn(false); showToast("B&T Trophies nascosti: li riaccendi da Profilo, Personalizza l'app"); }} startGrid={startGrid && startGrid.key === gridKey ? startGrid.rows : null} onReplayAt={replayAt} onShareTrophy={(it, raceName, circuitId) => shareToChat({ t: "race", id: circuitId || undefined, ti: `B&T Trophy: ${it.name}`, su: `${it.who} · ${it.stat}`, ln: [it.text] })} />;
     else if (tab === "garage") body = <GarageScreen openGame={garageGame} onGameOpened={() => setGarageGame(null)} races={races} pitBest={pitBest} onPitResult={t => {
       if (activeDuel && myAid) { const id = activeDuel; setActiveDuel(null); Duels.reply({ id, aid: myAid, time: t }).then(item => { setDuelsArr(a => [...a, item]); showToast("Sfida giocata: risultato in Home"); }, () => showToast("Risposta alla sfida non inviata")); }
       if (!userDataWait()) { setPitBest(b => b == null || t < b ? t : b); psBump("pit"); } }} sillyPreds={sillyPreds} onPredict={predictSeat} sillyOfficial={sillyOfficial} live={live} stratPreds={stratPreds} onStrat={(id, st) => { if (!userDataWait()) setStratPreds(x => ({ ...x, [id]: { stints: st, at: nowMs() } })); }} bluffTags={bluffNow} onBluffRefresh={loadBluffTags} />;

@@ -865,3 +865,22 @@ Da fare:
 - Verificato 8/11 15:52: `JOBS=2 bash test/all.sh` → 129 file verdi su 134; i 5 rossi (revisione-b C2, run31 riaperta
   senza rete, run32 messaggio dopo ricarica, run34 foto dopo ricarica, run56 nascoste dopo riavvio) sono prove con
   ricarica della pagina sotto carico: rifatte da sole sono verdi. Codice a barre letto davvero dal PDF (zxing-cpp).
+
+## 8/11 pomeriggio: ultime sistemazioni (uso di Edoardo al 96%: prove da aggiornare NON fatte)
+- RACE: senza sessione in corso solo le schede Mondiale e Meteo (pronostico meteo), scelta di Edoardo; con la sessione
+  tutte come prima. Via "Ultima gara" (podio, classifica, pagelle) senza sessione. Podio di fine gara, B&T Trophies e
+  griglia di partenza ora subito prima della riga delle schede (non più in cima).
+- B&T Trophies nascondibili: X sulla scheda (data-tr-hide) + interruttore in Profilo → Personalizza l'app (bt-trophies-off,
+  solo su questo telefono).
+- Garage: interruttore piastrelle/lista (data-garage-view, bt-garage-view); piastrelle solo icone (nome in aria-label);
+  tolti i bottoni delle sezioni (data-garage-sec); la lista è quella di prima (data-garage-row).
+- Feedback: faccina animata (src/feedback/FaceRating.jsx + .css) al posto delle stelline; data-feedback-star resta.
+- Profilo: "Su di te" e "I miei preferiti" non più nel proprio profilo; voce "Profilo pubblico" (data-profile-public) che
+  apre la pagina per cambiarli. Gli altri li vedono come prima.
+- DA FARE (prove rotte dai cambi voluti, da aggiornare, non cancellare): revisione-b (Su di te: entrare da Profilo
+  pubblico), run15 (ultima gara x2 → niente scheda; mondiale/meteo ok col tab Meteo rimesso, rifare), run16 (ultima gara,
+  Su di te), run17 ritiri ultima gara, run19 pagelle ultima gara, run20 garage sezioni, run31 Su di te, run34 ultima gara,
+  run40 (gomme/classifica senza sessione, ultima gara, Degrado gomme), run60 Su di te; poi run62, run66, run67, run69-71,
+  run81, run84, run87, run94, run95 da far girare. run33 rosse = ricarica sotto carico (verificare da sole).
+- Verificato: check.js SYNTAX OK, sem.js total unique 0, schermate guardate (Garage griglia/lista, feedback, Profilo,
+  RACE senza sessione). Suite NON rifatta.

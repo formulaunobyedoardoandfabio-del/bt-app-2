@@ -120,20 +120,30 @@ const Header = ({ title, onBack }) => (
 );
 
 // Scheda in RACE a sessione finita: il trofeo della gara e il bottone per vederli tutti.
-export function TrophiesCard({ data, onOpen }) {
+// 8/11 (Edoardo: "metti la possibilità di togliere i B&T Trophies"): X in alto a destra (onHide); si riaccendono da
+// Profilo → Personalizza l'app.
+export function TrophiesCard({ data, onOpen, onHide = null }) {
   const h = data && data.headline;
   if (!h) return null;
   return (
-    <button type="button" className="tr-btn tr-card" data-tr-card="" onClick={onOpen}
-      style={{ display: "flex", alignItems: "center", gap: 12, width: "calc(100% - 32px)", margin: "0 16px 14px", padding: 12, borderRadius: 18, background: TT.card, border: `1px solid ${TT.line}`, textAlign: "left" }}>
-      <TrophyMedal item={h} size={56} />
-      <span style={{ flex: 1, minWidth: 0 }}>
-        <span style={{ display: "block", fontFamily: TT.body, fontWeight: 700, fontSize: 10.5, letterSpacing: 1, color: TT.gold }}>B&amp;T TROPHIES</span>
-        <span style={{ display: "block", marginTop: 2, fontFamily: TT.head, fontWeight: 900, fontStyle: "italic", fontSize: 17, lineHeight: 1.1, color: TT.text }}>{h.name}</span>
-        <span style={{ display: "block", marginTop: 2, fontFamily: TT.body, fontSize: 12, color: TT.muted, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{h.who} · {h.stat}</span>
-      </span>
-      <span style={{ flexShrink: 0, fontFamily: TT.head, fontWeight: 700, fontSize: 12.5, color: TT.text }}>{data.all.length > 1 ? `Tutti i ${data.all.length}` : "Apri"}</span>
-    </button>
+    <div data-tr-wrap="" style={{ position: "relative", margin: "0 16px 14px" }}>
+      <button type="button" className="tr-btn tr-card" data-tr-card="" onClick={onOpen}
+        style={{ display: "flex", alignItems: "center", gap: 12, width: "100%", margin: 0, padding: onHide ? "12px 44px 12px 12px" : 12, boxSizing: "border-box", borderRadius: 18, background: TT.card, border: `1px solid ${TT.line}`, textAlign: "left" }}>
+        <TrophyMedal item={h} size={56} />
+        <span style={{ flex: 1, minWidth: 0 }}>
+          <span style={{ display: "block", fontFamily: TT.body, fontWeight: 700, fontSize: 10.5, letterSpacing: 1, color: TT.gold }}>B&amp;T TROPHIES</span>
+          <span style={{ display: "block", marginTop: 2, fontFamily: TT.head, fontWeight: 900, fontStyle: "italic", fontSize: 17, lineHeight: 1.1, color: TT.text }}>{h.name}</span>
+          <span style={{ display: "block", marginTop: 2, fontFamily: TT.body, fontSize: 12, color: TT.muted, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{h.who} · {h.stat}</span>
+        </span>
+        <span style={{ flexShrink: 0, fontFamily: TT.head, fontWeight: 700, fontSize: 12.5, color: TT.text }}>{data.all.length > 1 ? `Tutti i ${data.all.length}` : "Apri"}</span>
+      </button>
+      {onHide && (
+        <button type="button" className="tr-btn" data-tr-hide="" aria-label="Nascondi i B&T Trophies" onClick={onHide}
+          style={{ position: "absolute", top: 0, right: 0, width: 44, height: 44, display: "flex", alignItems: "center", justifyContent: "center", background: "none", border: "none", padding: 0, cursor: "pointer" }}>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={TT.muted} strokeWidth="2.4" strokeLinecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" /></svg>
+        </button>
+      )}
+    </div>
   );
 }
 

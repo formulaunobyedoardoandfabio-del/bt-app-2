@@ -1,0 +1,14 @@
+/* 8/11: faccina del feedback (src/feedback/FaceRating.jsx). Solo transform e opacity. */
+.ff-layer { transition: opacity 220ms ease, transform 260ms cubic-bezier(.2,.8,.2,1); }
+.ff-pick { transition: transform 180ms cubic-bezier(.2,.8,.2,1), opacity 180ms ease; }
+.ff-pick:focus-visible { outline: 2px solid #F4F4F5; outline-offset: 2px; }
+.ff-pop { animation: ffPop 420ms cubic-bezier(.2,.8,.2,1) both; }
+@keyframes ffPop { 0% { transform: scale(.88); } 55% { transform: scale(1.08); } 100% { transform: scale(1); } }
+.ff-blink { transform-box: fill-box; transform-origin: center; animation: ffBlink 3.6s ease-in-out infinite; }
+@keyframes ffBlink { 0%, 92%, 100% { transform: scaleY(1); } 95% { transform: scaleY(.12); } }
+.ff-look { animation: ffLook 3s ease-in-out infinite; }
+@keyframes ffLook { 0%, 20%, 100% { transform: translateX(0); } 35%, 50% { transform: translateX(-3px); } 65%, 80% { transform: translateX(3px); } }
+@media (prefers-reduced-motion: reduce) {
+  .ff-layer, .ff-pick { transition: none; }
+  .ff-pop, .ff-blink, .ff-look { animation: none; }
+}
