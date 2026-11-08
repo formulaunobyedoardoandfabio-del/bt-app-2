@@ -775,3 +775,13 @@ Da fare:
   qualifica; sito pubblico e, se "bloccato", api/live (che già permette starting_grid). Riletta ogni 10 minuti.
 - Logica: src/logic/start-grid.js. Prove: test/unit/start-grid.test.js (5), test/e2e/run96-griglia-qualifica.js (2).
 - [Guessing] Non so con quale session_key OpenF1 pubblica starting_grid (gara o qualifica): si provano tutte e due.
+
+## 8/11 notte: calcolatrice del Mondiale
+- Race → Mondiale: tasto "Calcolatrice" (data-calc-open) accanto a Piloti/Costruttori, solo se restano GP o Sprint
+  (calcEvents in App.jsx: gare non finite dal calendario; la Sprint conta solo se la sessione SPRINT non è passata).
+- Pagina src/mondiale/Calcolatrice.jsx: punti in palio (25 a GP e 8 a Sprint; squadre 43 e 15), chi può ancora vincere
+  (In corsa / Fuori), scenario fra due piloti con gli arrivi per ogni evento (il posto preso dall'altro è disattivato).
+  Deciso = chi insegue non recupera nemmeno con il massimo che gli resta; se restano in corsa solo quei due, "campione".
+- Conti: src/logic/champ-calc.js. Prove: test/unit/champ-calc.test.js (7), test/e2e/run97-calcolatrice.js (2).
+- A pari punti decidono le vittorie: la calcolatrice non le conosce e lo scrive sotto la lista.
+- .gitignore ha righe di Skipper (un plugin), non mie: lasciate fuori dal commit.

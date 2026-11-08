@@ -53,6 +53,8 @@ import ClassificaLega from "./fanta/ClassificaLega";
 import TrophiesScreen, { TrophiesCard } from "./gara/Trophies";
 import { computeGpTrophies } from "./logic/gp-trophies";
 import { buildStartGrid } from "./logic/start-grid";
+import Calcolatrice from "./mondiale/Calcolatrice";
+import { eventsLeft as champEventsLeft } from "./logic/champ-calc";
 import TrofeiPage from "./profilo/TrofeiPage";
 import FantaSeason from "./logic/fanta-season";
 import { createFantaLeague } from "./services/fantaleague";
@@ -2958,6 +2960,17 @@ function champOf(standings, races, now) {
   const lead = ds[0].points - ds[1].points;
   return lead > pts ? { id: ds[0].id, points: ds[0].points, lead, second: ds[1].id, year: new Date(now).getFullYear() } : null;
 }
+// 8/11: GP e Sprint che restano per la calcolatrice del Mondiale. La Sprint conta solo se non è già passata (orario
+// della sessione SPRINT nel calendario del weekend); la gara resta finché non è finita.
+function calcEvents(races, now) {
+  const sprintMs = r => { const w = ((CIRCUIT_INFO[r.circuitId] || {}).weekend || []).find(x => x.key === "SPRINT"); return w ? Date.parse(w.utc) : NaN; };
+  const isSprint = r => !!(CIRCUIT_INFO[r.circuitId] && CIRCUIT_INFO[r.circuitId].sprint) && !(isFinite(sprintMs(r)) && sprintMs(r) + 2 * 3600e3 <= now);
+  return champEventsLeft(races, now, { isSprint, startMs: raceStartMs });
+}
+const calcRows = (rows, kind) => (rows || []).filter(r => r && isFinite(r.points)).map(r => {
+  if (kind === "team") { const t = teamById(r.id); return { id: r.id, name: t ? t.name : r.id, color: t ? t.color : null, points: r.points, position: r.position }; }
+  const d = driverById(r.id); return { id: r.id, name: d ? d.full : r.id, color: teamColorOf(r.id), points: r.points, position: r.position };
+});
 // Numeri a tamburo (video di Edoardo, "Score Wheel"; rifatto il 7/11). Le cifre salgono dal basso come su un tamburo e
 // si fermano sul valore, una dopo l'altra; quando il numero cambia girano solo le cifre cambiate (il conto alla rovescia
 // scatta, i punti si aggiornano). Il testo resta il numero vero, per i lettori di schermo e le prove.
@@ -6594,6 +6607,8 @@ function RaceScreen({ champion = null, proUnlocked = [], proHint = null, proOk =
   const [pitOpen, setPitOpen] = useState(null);   // 1/11 notte: pilota con le gomme dei pit aperte (scheda Gomme)
   const [trophyPage, setTrophyPage] = useState(false);   // 8/11: pagina dei B&T Trophies
   useBack(trophyPage, () => setTrophyPage(false));
+  const [calcOpen, setCalcOpen] = useState(false);   // 8/11: calcolatrice del Mondiale (solo se restano gare)
+  useBack(calcOpen, () => setCalcOpen(false));
   const [tab, setTab] = useState(null);
   // Pit Board (G27): si vede quando la tabella dei tempi arriva in cima alla pagina (stato cambiato solo al passaggio).
   const scRef = useRef(null), tblRef = useRef(null);
@@ -6615,6 +6630,8 @@ function RaceScreen({ champion = null, proUnlocked = [], proHint = null, proOk =
   const done = races.filter(r => r.status === "CONCLUSA").length;
   const card = { margin: "0 16px 16px", borderRadius: 18, background: C.card, border: `1px solid ${C.border}`, overflow: "hidden" };
   useEffect(checkBoard, [curTab, !!st]);
+  const calcEv = calcEvents(races, nowMs());
+  if (calcOpen && calcEv.length) return <Calcolatrice drivers={calcRows(standings.drivers, "driver")} teams={calcRows(standings.teams, "team")} events={calcEv} startKind={champ} accent={C.accent} onBack={() => setCalcOpen(false)} />;
   if (trophyPage && trophies) {
     const lbl = st && isRaceType(st.type) ? "Gara finita" : st && /QUALI|SQ/.test(String(st.type)) ? "Qualifica finita" : "Sessione finita";
     return <TrophiesScreen data={trophies} gpName={liveRace ? liveRace.name : ""} sessionLabel={lbl} onBack={() => setTrophyPage(false)} accent={C.accent}
@@ -6730,6 +6747,7 @@ function RaceScreen({ champion = null, proUnlocked = [], proHint = null, proOk =
 
       {curTab === "mondiale" && (
         <div style={{ margin: "0 16px 16px" }}>
+          <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 10 }}>
           <div data-champ-seg={champ} style={{ position: "relative", display: "inline-grid", gridTemplateColumns: "1fr 1fr", padding: 3, marginBottom: 10, borderRadius: 999, background: "rgba(255,255,255,.05)", border: `1px solid ${C.border}` }}>
             <span aria-hidden="true" className="seg-move" style={{ position: "absolute", top: 3, bottom: 3, left: 3, width: "calc(50% - 3px)", transform: `translateX(${champ === "costruttori" ? 100 : 0}%)` }}>
               <span key={champ} className="seg-stretch" style={{ display: "block", width: "100%", height: "100%", borderRadius: 999, background: alpha(C.accentInk, .16), border: `1px solid ${C.accentInk}`, boxSizing: "border-box" }} />
@@ -6737,6 +6755,12 @@ function RaceScreen({ champion = null, proUnlocked = [], proHint = null, proOk =
             {[["piloti", "Piloti"], ["costruttori", "Costruttori"]].map(([id, l]) => (
               <button key={id} className="press" aria-pressed={champ === id} onClick={() => setChamp(id)} style={{ position: "relative", padding: "7px 16px", borderRadius: 999, background: "none", fontFamily: F_BODY, fontWeight: 700, fontSize: 11.5, color: champ === id ? C.text : C.muted }}>{l}</button>
             ))}
+          </div>
+          {calcEv.length > 0 && (standings.drivers || []).length > 1 && (
+            <button type="button" className="press" data-calc-open="" onClick={() => setCalcOpen(true)} style={{ flexShrink: 0, display: "inline-flex", alignItems: "center", gap: 6, minHeight: 36, padding: "0 12px", borderRadius: 999, background: "rgba(255,255,255,.05)", border: `1px solid ${C.border}`, fontFamily: F_BODY, fontWeight: 700, fontSize: 11.5, color: C.text }}>
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><rect x="4" y="3" width="16" height="18" rx="2" /><path d="M8 7h8M8 11h.01M12 11h.01M16 11h.01M8 15h.01M12 15h.01M16 15h.01M8 18h.01M12 18h4" /></svg>Calcolatrice
+            </button>
+          )}
           </div>
           {!st && (() => {
             const top = (champ === "piloti" ? standings.drivers : standings.teams).slice().sort((a, b) => a.position - b.position).slice(0, 3);

@@ -1,0 +1,5 @@
+/* 8/11: calcolatrice del Mondiale (src/mondiale/Calcolatrice.jsx). Risposta al tocco solo con transform. */
+.calc-btn { cursor: pointer; transition: transform 140ms ease-out; }
+.calc-btn:active { transform: scale(.97); }
+.calc-btn:focus-visible, .calc-select:focus-visible { outline: 2px solid #F4F2EF; outline-offset: 2px; }
+@media (prefers-reduced-motion: reduce) { .calc-btn { transition: none; } .calc-btn:active { transform: none; } }
