@@ -908,3 +908,16 @@ Da fare:
 5. (19:02) Penalità dei piloti: non solo notifica ma segno nella tabella dei tempi (es. "+5 s" accanto al pilota) che
    resta finché quel pilota non fa il pit stop (penalità scontata). Dati veri: messaggi race_control di OpenF1
    ("5 SECOND TIME PENALTY FOR CAR 44") + pit di OpenF1 dopo l'ora del messaggio. Non iniziato (uso al 98%).
+6. (19:14) Altre richieste per la prossima volta:
+   - prima della gara, al posto dei B&T Highlights, collegamento al Tire Strategy Predictor;
+   - app tradotta in tutte le lingue (prima le principali, testi in un file per lingua);
+   - icona dell'app modificabile (icone alternative di Android, scelte nel Profilo);
+   - animazione della classifica (posizioni che scorrono) e animazione del pit quando il pilota passa dai box;
+   - B&T Highlights: miglior pit stop della gara; rendere funzionanti le altre grafiche;
+   - Fanta: scelta dei piloti come su Chess.com (presentazione del pilota, carta, ecc.);
+   - codice admin: schermata in stile "hacker" (terminale verde, righe che scorrono) invece di quella bella;
+   - BUG: nel Fanta l'admin vede ancora le previsioni dei vecchi GP (agli altri non si vedono più): pulirle anche per
+     l'admin (o mostrarle solo in un archivio).
+   - Idee già mandate da Edoardo sul Fanta e sulle funzioni nuove: nei documenti del progetto claude/idee-nuove.md,
+     claude/piano-generale.md, claude/piano-gara-live.md, claude/piano-play-store-e-utenti-attivi.md e nella memoria
+     (areas/idee-future.md). Rileggerli all'inizio della prossima sessione.
