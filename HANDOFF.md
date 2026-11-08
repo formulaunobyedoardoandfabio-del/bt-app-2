@@ -905,3 +905,6 @@ Da fare:
    prima di ogni GP, un po' meno di oggi. Solo dati veri: domande fatte da Jolpica (vincitore qui l'anno scorso, pole
    dell'anno scorso, chi ha vinto più volte su questa pista), risposte corrette in automatico, in
    src/logic/auto-predictions.js accanto alle previsioni del weekend. Non iniziato (uso al 98%).
+5. (19:02) Penalità dei piloti: non solo notifica ma segno nella tabella dei tempi (es. "+5 s" accanto al pilota) che
+   resta finché quel pilota non fa il pit stop (penalità scontata). Dati veri: messaggi race_control di OpenF1
+   ("5 SECOND TIME PENALTY FOR CAR 44") + pit di OpenF1 dopo l'ora del messaggio. Non iniziato (uso al 98%).
