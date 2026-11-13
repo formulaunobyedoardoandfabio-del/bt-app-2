@@ -7,6 +7,7 @@
 - con BT_ADMOB_TEST=1 accende gli annunci di prova di Google ("B&T - APK di prova" e, finché c'è il
   test chiuso, anche "B&T - Play Store": vedi codemagic.yaml)
 """
+import json
 import os
 import time
 import re
@@ -105,6 +106,70 @@ android {
 }
 """
     print("Firma di release configurata")
+
+# ── NOTIFICHE (13/11): icona piccola bianca (bandiera a scacchi), rosso B&T, logo grande; Firebase per le push ──
+# Icona e colore valgono per le notifiche del telefono (promemoria, Pit Swipe: capacitor.config.json → LocalNotifications)
+# e per quelle del team mandate da Firebase Cloud Messaging (valori di serie nel manifest).
+draw_dir = os.path.join(RES_DIR, "drawable")
+os.makedirs(draw_dir, exist_ok=True)
+with open(os.path.join(draw_dir, "ic_stat_bt.xml"), "w") as f:
+    f.write(
+        '<?xml version="1.0" encoding="utf-8"?>\n'
+        '<vector xmlns:android="http://schemas.android.com/apk/res/android" android:width="24dp" android:height="24dp"'
+        ' android:viewportWidth="24" android:viewportHeight="24">\n'
+        '    <path android:fillColor="#FFFFFFFF" android:pathData="M4,2h2v20h-2z"/>\n'
+        '    <path android:fillColor="#FFFFFFFF" android:pathData="M7,3h13v12h-13zM8.5,4.5v9h10v-9z"/>\n'
+        '    <path android:fillColor="#FFFFFFFF" android:pathData="M8.5,4.5h3.3v3h-3.3zM15.2,4.5h3.3v3h-3.3zM11.8,7.5h3.4v3h-3.4zM8.5,10.5h3.3v3h-3.3zM15.2,10.5h3.3v3h-3.3z"/>\n'
+        "</vector>\n"
+    )
+logo = os.path.join(ICON_SRC, "mipmap-xxhdpi", "ic_launcher.png")
+if os.path.isfile(logo):
+    shutil.copyfile(logo, os.path.join(draw_dir, "bt_logo.png"))
+values_dir = os.path.join(RES_DIR, "values")
+os.makedirs(values_dir, exist_ok=True)
+with open(os.path.join(values_dir, "bt_notif.xml"), "w") as f:
+    f.write('<?xml version="1.0" encoding="utf-8"?>\n<resources>\n    <color name="bt_notif">#FF1801</color>\n</resources>\n')
+manifest = open(MANIFEST).read()
+if "default_notification_icon" not in manifest:
+    manifest = manifest.replace(
+        "</application>",
+        '    <meta-data android:name="com.google.firebase.messaging.default_notification_icon" android:resource="@drawable/ic_stat_bt" />\n'
+        '        <meta-data android:name="com.google.firebase.messaging.default_notification_color" android:resource="@color/bt_notif" />\n'
+        '        <meta-data android:name="com.google.firebase.messaging.default_notification_channel_id" android:value="bt-novita" />\n'
+        "    </application>",
+        1,
+    )
+    open(MANIFEST, "w").write(manifest)
+print("Icona e colore delle notifiche applicati")
+
+# Firebase Cloud Messaging: serve resources/google-services.json (Firebase → Impostazioni progetto → app Android).
+# Non è un segreto (come la configurazione web già nell'app). Si copia solo se è proprio di questa app: un file di
+# un'altra app farebbe fallire la build. Senza file l'app funziona lo stesso, solo senza notifiche push.
+GS = "resources/google-services.json"
+push_on = False
+if os.path.isfile(GS):
+    try:
+        app_id = json.load(open("capacitor.config.json"))["appId"]
+        names = [c["client_info"]["android_client_info"]["package_name"] for c in json.load(open(GS)).get("client", [])]
+    except Exception as e:
+        app_id, names = None, []
+        print(f"ATTENZIONE: {GS} non si legge ({e}): notifiche push spente")
+    if app_id and app_id in names:
+        shutil.copyfile(GS, "android/app/google-services.json")
+        push_on = True
+    elif app_id:
+        print(f"ATTENZIONE: {GS} è per {names}, non per {app_id}: notifiche push spente")
+else:
+    print(f"ATTENZIONE: manca {GS}: notifiche push spente (il resto dell'app funziona)")
+if push_on:
+    ROOT_GRADLE = "android/build.gradle"
+    rg = open(ROOT_GRADLE).read()
+    if "com.google.gms:google-services" not in rg:
+        rg = re.sub(r"(classpath\s+['\"]com\.android\.tools\.build:gradle:[^'\"]+['\"])", r"\1\n        classpath 'com.google.gms:google-services:4.4.2'", rg, count=1)
+        open(ROOT_GRADLE, "w").write(rg)
+    if "com.google.gms.google-services" not in gradle:
+        gradle += "\napply plugin: 'com.google.gms.google-services'\n"
+    print("Notifiche push (Firebase Cloud Messaging) configurate")
 
 open(GRADLE, "w").write(gradle)
 

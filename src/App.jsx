@@ -21,6 +21,7 @@ import BtElo from "./logic/elo";
 import BtTrophyPro from "./logic/trophypro";
 import { createSwipeVotes } from "./services/swipevotes";
 import Reminders from "./services/reminders";
+import Push from "./services/push";
 import { createDuels, duelState } from "./services/duels";
 import Colors from "./logic/colors";
 import { filterNews, TYRES, LANES } from "./logic/newsfilter";
@@ -8383,7 +8384,7 @@ function TrophyCase({ trophies = {}, helmet = null, defs = TROPHIES, onOpen }) {
   );
 }
 
-function ProfiloScreen({ onCoffee = null, coffeePrice = null, fanLevel = null, reminders = true, onReminders = null, halfway = true, onHalfway = null, trophiesOn = true, onTrophiesOn = null, holidays = true, onHolidays = null, miniPit = true, onMiniPit = null, ig, onOpenIg, trial = null, trialUsed = false, onBack, onNotifiche, onPremium, onAdmin, onLogout, isPremium, onAbout, onHelp, onFeedback, aboutMe, onSaveAboutMe, favTeam, favDriver, onPickTeam, onPickDriver, guest, onLogin, onTerms, blocked = [], onUnblock, onDeleteAccount, savedCount = 0, onOpenSaved, account = null, onSaveName, isAdmin = false, onTheme, sounds = true, haptics = true, onSounds, onHaptics, helmet = null, onHelmet, trophies = {}, trophyProg = {}, trophyList = TROPHIES, onAdPrivacy = null }) {
+function ProfiloScreen({ onCoffee = null, coffeePrice = null, fanLevel = null, reminders = true, onReminders = null, halfway = true, onHalfway = null, news = true, onNews = null, trophiesOn = true, onTrophiesOn = null, holidays = true, onHolidays = null, miniPit = true, onMiniPit = null, ig, onOpenIg, trial = null, trialUsed = false, onBack, onNotifiche, onPremium, onAdmin, onLogout, isPremium, onAbout, onHelp, onFeedback, aboutMe, onSaveAboutMe, favTeam, favDriver, onPickTeam, onPickDriver, guest, onLogin, onTerms, blocked = [], onUnblock, onDeleteAccount, savedCount = 0, onOpenSaved, account = null, onSaveName, isAdmin = false, onTheme, sounds = true, haptics = true, onSounds, onHaptics, helmet = null, onHelmet, trophies = {}, trophyProg = {}, trophyList = TROPHIES, onAdPrivacy = null }) {
   const ft = favTeam ? teamById(favTeam) : null;
   const fd = favDriver ? driverById(favDriver) : null;
   const favRows = [
@@ -8437,6 +8438,7 @@ function ProfiloScreen({ onCoffee = null, coffeePrice = null, fanLevel = null, r
       ...(onHolidays ? [{ icon: "sparkle", label: "Temi delle feste", toggle: { on: holidays !== false, onChange: onHolidays }, sub: true }] : []),
       ...(onMiniPit ? [{ icon: "stopwatch", label: "Pit Board in tutta l'app", toggle: { on: miniPit !== false, onChange: onMiniPit }, sub: true }] : []),
       ...(onReminders ? [{ icon: "bell", label: "Promemoria sul telefono", toggle: { on: reminders !== false, onChange: onReminders }, sub: true }] : []),
+      ...(onNews ? [{ icon: "bell", label: "Novità da B&T sul telefono (anche a schermo bloccato)", toggle: { on: news !== false, onChange: onNews }, sub: true }] : []),
       ...(onHalfway ? [{ icon: "flag", label: "Avviso a metà gara (se perdi la partenza)", toggle: { on: halfway !== false, onChange: onHalfway }, sub: true }] : []),
       ...(onTrophiesOn ? [{ icon: "trophy", label: "B&T Trophies dopo la sessione", toggle: { on: trophiesOn !== false, onChange: onTrophiesOn }, sub: true }] : []),
     ] : []),
@@ -9649,7 +9651,7 @@ function TermsSheet({ review, onAccept, onClose }) {
             <div key={h}>
               <h3 style={{ fontFamily: F_HEAD, fontWeight: 800, fontStyle: "italic", fontSize: 14, color: C.accentInk, margin: "4px 0 6px" }}>{h}</h3>
               {b !== null ? <p style={pStyle}>{b}</p> : (
-                <p style={pStyle}>Raccogliamo solo i dati necessari al funzionamento del servizio (email, nome, "Su di te" cioè data o anno di nascita, da quanti anni segui la F1 e che tifoso sei, messaggi in chat, segnalazioni, feedback con la tua email, preferenze) e li conserviamo su Firebase (Google). Non vendiamo i dati a terzi. Puoi eliminare l'account e i tuoi dati in qualsiasi momento da Profilo → Elimina account. Tutti i dettagli sono nella <button className="press" onClick={() => openUrl(PRIVACY_URL)} aria-label="Apri la Privacy Policy" style={{ font: "inherit", color: C.accentInk, textDecoration: "underline", padding: 0 }}>Privacy Policy</button>.</p>
+                <p style={pStyle}>Raccogliamo solo i dati necessari al funzionamento del servizio (email, nome, "Su di te" cioè data o anno di nascita, da quanti anni segui la F1 e che tifoso sei, messaggi in chat, segnalazioni, feedback con la tua email, preferenze) e li conserviamo su Firebase (Google). Per mandarti le notifiche sul telefono usiamo Firebase Cloud Messaging (Google), che dà al telefono un codice per riceverle: le spegni da Profilo → Personalizza l'app o dalle impostazioni del telefono. Non vendiamo i dati a terzi. Puoi eliminare l'account e i tuoi dati in qualsiasi momento da Profilo → Elimina account. Tutti i dettagli sono nella <button className="press" onClick={() => openUrl(PRIVACY_URL)} aria-label="Apri la Privacy Policy" style={{ font: "inherit", color: C.accentInk, textDecoration: "underline", padding: 0 }}>Privacy Policy</button>.</p>
               )}
               {b2 && <p style={pStyle}>{b2}</p>}
             </div>
@@ -11416,8 +11418,14 @@ function App() {
     if (view !== "notifiche") setDropN(fresh);
   }, [dropKey]);
   const sentNotifs = Compat.notifsFromStore(notifsRaw, 0, nowMs()).map(n => ({ id: n.id, title: n.title, body: n.body, sentAt: fmtSent(n.date) }));
+  // 13/11 (Edoardo: "le notifiche che scrivo non appaiono nella schermata di blocco"): salvata su Firebase (campanella),
+  // poi si chiede al server di mandarla davvero ai telefoni (src/services/push.js, api/push.js). L'admin vede l'esito.
   const sendNotif = (title, body) => AppData.appendNotif({ title, body }, nowMs())
-    .then(n => { setNotifsRaw(l => [...l, n]); return true; }, () => { showToast(NOT_SAVED); return false; });
+    .then(n => {
+      setNotifsRaw(l => [...l, n]);
+      Push.announce().then(r => showToast(r.ok ? (r.sent ? "Notifica mandata anche ai telefoni" : "Notifica salvata nella campanella") : (Push.MSG[r.reason] || Push.MSG.failed)));
+      return true;
+    }, () => { showToast(NOT_SAVED); return false; });
   const deleteNotif = id => AppData.removeNotif(id)
     .then(() => { setNotifsRaw(l => l.filter(n => String(n.id) !== String(id))); return true; }, () => { showToast(NOT_SAVED); return false; });
 
@@ -12342,6 +12350,9 @@ function App() {
     setWelcome({ days: Math.floor((now - last) / 86400000), news, races: gp });
   }, [userLoaded, userEmail]);
   // Promemoria sul telefono: si rifanno quando cambiano mazzo, serie o preferenza; il permesso solo dopo il primo giro.
+  // 13/11: notifiche push del team. Ogni telefono si iscrive al tema delle novità (di serie sì; si spegne dal Profilo).
+  const newsOn = notifPrefs.news !== false;
+  useEffect(() => { Push.sync(capPlugin("FirebaseMessaging"), newsOn); }, [newsOn]);
   const remTrialEnd = trial && !trial.converted && !premium.sub ? trial.end : null;   // 8/11: avviso della prova
   const remSig = [psKey, !!(psDoneDeck), psStreak.n, psStreak.danger, notifPrefs.reminders !== false, notifPrefs.halfway !== false, ((swipe.tot || {}).decks || 0) > 0, psRace ? psRace.id : "", psRace && startSeen[psRace.id] ? 1 : 0, remTrialEnd || ""].join("|");
   // 8/11 (Edoardo: "le notifiche chiedile solo prima che servano, non appena installata l'app"): il permesso si chiede
@@ -12515,6 +12526,12 @@ function App() {
     fanLevel={guest ? null : { level: psLevel, xp: BtSwipe.xpOf(swipe.tot || {}, psTrophies), missions: psMissions }}
     reminders={notifPrefs.reminders !== false} onReminders={guest ? null : v => { if (userDataWait()) return; if (v) remAskRef.current = true; setNotifPrefs(x => ({ ...x, reminders: v })); fx.play("tick"); }}
     trophiesOn={!trophiesOff} onTrophiesOn={v => { setTrophiesOn(v); fx.play("tick"); }}
+    news={newsOn} onNews={guest ? null : v => {
+      if (userDataWait()) return;
+      setNotifPrefs(x => ({ ...x, news: v })); fx.play("tick");
+      const LN = capPlugin("LocalNotifications");   // accesa adesso: il permesso si chiede adesso
+      if (v && LN && LN.requestPermissions) LN.requestPermissions().catch(() => {});
+    }}
     halfway={notifPrefs.halfway !== false} onHalfway={guest ? null : v => { if (userDataWait()) return; if (v) remAskRef.current = true; setNotifPrefs(x => ({ ...x, halfway: v })); fx.play("tick"); }} />;
   else if (view === "notifiche") body = <NotificheScreen offline={offline} onBack={viewBack.notifiche} onAction={a => { if (a === "feedback") { if (feedbackAsk && !feedbackAsk.read) saveAsk({ ...feedbackAsk, read: true }); setFeedbackOpen(true); } }} notifs={notifs} onReadAll={readAll} isPremium={isPremium} onPremium={() => setPremiumOpen(true)} favTeam={favTeam} favDriver={favDriver} prefs={notifPrefs} onPrefs={v => { if (!userDataWait()) setNotifPrefs(v); }} onGoProfilo={() => setView("profilo")} />;
   else body = tabBodyFor(tab);

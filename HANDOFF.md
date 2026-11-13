@@ -921,3 +921,26 @@ Da fare:
    - Idee già mandate da Edoardo sul Fanta e sulle funzioni nuove: nei documenti del progetto claude/idee-nuove.md,
      claude/piano-generale.md, claude/piano-gara-live.md, claude/piano-play-store-e-utenti-attivi.md e nella memoria
      (areas/idee-future.md). Rileggerli all'inizio della prossima sessione.
+
+## 13/11: notifiche del team vere (push) e aspetto delle notifiche
+- Causa (Edoardo: "le notifiche che scrivo nell'app non appaiono nella schermata di blocco"): le notifiche dell'admin
+  stavano solo in shared/bt-notifs (campanella dentro l'app); nessun canale push. I promemoria (Pit Swipe) funzionano
+  perché li programma il telefono (LocalNotifications).
+- Fatto: plugin @capacitor-firebase/messaging ^8.6.0 (package.json); src/services/push.js (sync: canale "bt-novita" +
+  tema "novita"; announce: POST api/push); api/push.js (legge shared/bt-notifs col FIREBASE_SERVICE_ACCOUNT, manda solo
+  le notifiche degli ultimi 15 minuti, una volta sola con pushlog/<id>; non accetta testi da chi chiama);
+  api/_lib/pay.js (getShared, claim, release, fcm; scope anche firebase.messaging); App.jsx (sendNotif chiama announce
+  e l'admin vede l'esito; iscrizione all'avvio; interruttore "Novità da B&T sul telefono" in Personalizza l'app;
+  riga nell'informativa). scripts/prepare_android.py: icona bianca ic_stat_bt, colore #FF1801, logo grande bt_logo,
+  valori di serie di FCM nel manifest, copia resources/google-services.json solo se è di com.bt.formula1.
+  capacitor.config.json: LocalNotifications smallIcon/iconColor. reminders.js: look() su tutte le notifiche locali.
+- PASSI DI EDOARDO (senza, le push NON partono; l'app funziona lo stesso):
+  1. Firebase → Impostazioni progetto → Le tue app → Aggiungi app Android, pacchetto com.bt.formula1 → scarica
+     google-services.json → caricarlo nel repo in resources/google-services.json.
+  2. Vercel → progetto bt-app-2 → Settings → Environment Variables → FIREBASE_SERVICE_ACCOUNT (JSON dell'account di
+     servizio: Firebase → Impostazioni progetto → Account di servizio → Genera nuova chiave privata) → Redeploy.
+  3. Aggiornare la Privacy Policy sul sito (PRIVACY_URL) con Firebase Cloud Messaging.
+  4. Nuovo APK/AAB (il plugin è codice nativo: serve una build nuova).
+- [Likely] non verificato su un telefono vero: la build Android col plugin, l'arrivo della push, l'icona.
+- Prove: test/unit/push-api.test.js (6), push-client.test.js (3), test/e2e/run103-push.js (3); prova a secco di
+  prepare_android.py su un progetto finto (senza file, file giusto, file di un'altra app).

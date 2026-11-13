@@ -74,7 +74,7 @@ function createGoogle({ fetchImpl = (...a) => fetch(...a), env = process.env, no
     if (tok && now() < exp - 60000) return tok;
     const a = account(), iat = Math.floor(now() / 1000);
     const head = b64u(JSON.stringify({ alg: "RS256", typ: "JWT" }));
-    const claim = b64u(JSON.stringify({ iss: a.client_email, scope: "https://www.googleapis.com/auth/datastore", aud: "https://oauth2.googleapis.com/token", iat, exp: iat + 3600 }));
+    const claim = b64u(JSON.stringify({ iss: a.client_email, scope: "https://www.googleapis.com/auth/datastore https://www.googleapis.com/auth/firebase.messaging", aud: "https://oauth2.googleapis.com/token", iat, exp: iat + 3600 }));
     const sig = crypto.createSign("RSA-SHA256").update(head + "." + claim).sign(a.private_key);
     const r = await fetchImpl("https://oauth2.googleapis.com/token", { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" }, body: new URLSearchParams({ grant_type: "urn:ietf:params:oauth:grant-type:jwt-bearer", assertion: head + "." + claim + "." + b64u(sig) }).toString() });
     let j = null;
@@ -96,7 +96,37 @@ function createGoogle({ fetchImpl = (...a) => fetch(...a), env = process.env, no
     if (r.status === 404) return { ok: false, reason: "no-user" };
     return { ok: !!r.ok, status: r.status };
   }
-  return { token, patchUser };
+  // ── Notifiche push (13/11, api/push.js) ──
+  const base = () => `https://firestore.googleapis.com/v1/projects/${encodeURIComponent(account().project_id)}/databases/(default)/documents`;
+  const auth = async () => ({ Authorization: "Bearer " + await token(), "Content-Type": "application/json" });
+  // Valore di Firestore → valore normale (bastano testi, numeri, sì/no, elenchi e oggetti).
+  const unval = v => (!v || typeof v !== "object" ? null
+    : "stringValue" in v ? v.stringValue : "integerValue" in v ? Number(v.integerValue) : "doubleValue" in v ? v.doubleValue
+    : "booleanValue" in v ? v.booleanValue : "arrayValue" in v ? ((v.arrayValue && v.arrayValue.values) || []).map(unval)
+    : "mapValue" in v ? Object.fromEntries(Object.entries((v.mapValue && v.mapValue.fields) || {}).map(([k, x]) => [k, unval(x)])) : null);
+  // L'elenco di shared/<doc> (campo __arr, come lo scrive l'app con arrayUnion).
+  async function getShared(doc) {
+    const r = await fetchImpl(`${base()}/shared/${encodeURIComponent(doc)}`, { headers: await auth() });
+    if (r.status === 404) return [];
+    if (!r.ok) throw Object.assign(new Error("firestore"), { code: "firestore" });
+    const j = await r.json();
+    const arr = unval(j && j.fields && j.fields.__arr);
+    return Array.isArray(arr) ? arr : [];
+  }
+  // Prenota pushlog/<id>: riesce solo la prima volta (se c'è già Firestore risponde 409).
+  async function claim(id, data = {}) {
+    const fields = Object.fromEntries(Object.entries(data).map(([k, x]) => [k, val(x)]));
+    const r = await fetchImpl(`${base()}/pushlog?documentId=${encodeURIComponent(id)}`, { method: "POST", headers: await auth(), body: JSON.stringify({ fields }) });
+    if (r.status === 409) return false;
+    if (!r.ok) throw Object.assign(new Error("firestore"), { code: "firestore" });
+    return true;
+  }
+  async function release(id) { await fetchImpl(`${base()}/pushlog/${encodeURIComponent(id)}`, { method: "DELETE", headers: await auth() }); }
+  async function fcm(msg) {
+    const r = await fetchImpl(`https://fcm.googleapis.com/v1/projects/${encodeURIComponent(account().project_id)}/messages:send`, { method: "POST", headers: await auth(), body: JSON.stringify(msg) });
+    return { ok: !!r.ok, status: r.status };
+  }
+  return { token, patchUser, getShared, claim, release, fcm };
 }
 
 module.exports = { SITE, EMAIL, send, rawBody, jsonBody, form, stripeSigOk, createGoogle, cfgErr };

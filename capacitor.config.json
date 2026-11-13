@@ -4,5 +4,11 @@
   "webDir": "build",
   "server": {
     "androidScheme": "https"
+  },
+  "plugins": {
+    "LocalNotifications": {
+      "smallIcon": "ic_stat_bt",
+      "iconColor": "#FF1801"
+    }
   }
 }

@@ -70,6 +70,13 @@ function plan({ now, race = null, sessions = [], deckDone = false, streak = null
 }
 
 // Programma i promemoria col plugin (null nel browser: niente). ask: chiedere il permesso se manca.
+// 13/11 (Edoardo: "migliora la grafica della notifica del Pit Swipe"): icona bianca con la bandiera a scacchi, rosso
+// B&T, logo grande a destra, testo intero quando si apre la notifica e in basso da dove arriva (Pit Swipe, Weekend di
+// gara...). Icona e logo li mette scripts/prepare_android.py; se mancano Android usa quelli di serie.
+const LOOK = { smallIcon: "ic_stat_bt", iconColor: "#FF1801", largeIcon: "bt_logo" };
+const FROM = id => (id === ID.deck || id === ID.streak ? "Pit Swipe" : id === ID.half || id === ID.halfLive ? "Gara in corso" : id === ID.trial ? "B&T Premium" : "Weekend di gara");
+const look = id => ({ ...LOOK, summaryText: FROM(id) });
+
 async function apply(plugin, list, { ask = false } = {}) {
   if (!plugin || !plugin.schedule) return false;
   try {
@@ -79,7 +86,7 @@ async function apply(plugin, list, { ask = false } = {}) {
     const ids = [ID.deck, ID.streak, ID.half, ID.trial, ...Array.from({ length: 10 }, (_, i) => ID.session + i)];
     if (plugin.cancel) await plugin.cancel({ notifications: ids.map(id => ({ id })) });
     if (!list.length) return true;
-    await plugin.schedule({ notifications: list.map(x => ({ id: x.id, title: x.title, body: x.body, schedule: { at: new Date(x.at), allowWhileIdle: true } })) });
+    await plugin.schedule({ notifications: list.map(x => ({ id: x.id, title: x.title, body: x.body, ...look(x.id), largeBody: x.body, schedule: { at: new Date(x.at), allowWhileIdle: true } })) });
     return true;
   } catch (e) { return false; }
 }
@@ -97,9 +104,9 @@ async function notifyNow(plugin, { id, title, body }) {
   try {
     const perm = plugin.checkPermissions ? await plugin.checkPermissions() : { display: "granted" };
     if (perm.display !== "granted") return false;
-    await plugin.schedule({ notifications: [{ id, title, body, schedule: { at: new Date(Date.now() + 1000), allowWhileIdle: true } }] });
+    await plugin.schedule({ notifications: [{ id, title, body, ...look(id), largeBody: body, schedule: { at: new Date(Date.now() + 1000), allowWhileIdle: true } }] });
     return true;
   } catch (e) { return false; }
 }
 
-module.exports = { plan, apply, cancelHalf, notifyNow, ID, romeAt, HALF_MS };
+module.exports = { plan, apply, cancelHalf, notifyNow, look, ID, romeAt, HALF_MS };
