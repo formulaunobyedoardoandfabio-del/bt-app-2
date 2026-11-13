@@ -62,7 +62,7 @@ const SHARED_DOCS = {
   "bt-silly-official": {},
   "bt-predictions": predictionsToStore(F1.HISTORY_QUESTIONS),   // solo le domande di storia h1-h4
   "bt-home-poll": null,                   // riquadro del sondaggio nascosto
-  "bt-fanta-stats": FANTA_DEFAULT,
+  "bt-fanta-stats": { ...FANTA_DEFAULT, asOf: 15 },   // 13/11: senza asOf i prezzi automatici dell'8/11 non partivano mai col listino di serie
   "bt-driver-photos": {},
   "bt-commons-photos": { drivers: {}, cars: {}, logos: {} },   // Tappa 3 (G30): foto di Commons scelte dall'admin
   "bt-trophies": null,                    // 25/10: trofei cambiati da Firebase (niente documento: quelli di serie)

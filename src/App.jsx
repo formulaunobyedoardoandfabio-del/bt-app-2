@@ -7724,11 +7724,12 @@ function FantaSlot({ kind, index, id, stats, boost, locked, standings, onOpen, o
 }
 
 // Scelta di un pilota o di una scuderia: tutti, con prezzo, variazione e punti; chi non entra nel budget è spento.
-function FantaPicker({ kind, slot, squad, stats, budget, onPick, onClose }) {
+function FantaPicker({ kind, slot, squad, stats, budget, listing = null, onPick, onClose }) {
   const isD = kind === "drivers";
   const [sort, setSort] = useState("price");
   const current = squad[kind][slot];
-  const left = budget - BtLogic.squadValue(squad, stats) + (current ? Number(stats[kind][current].price) : 0);
+  // 13/11: soldi liberi come in F1 Fantasy (conta quanto hai pagato; chi cambi si vende al prezzo di oggi).
+  const left = BtLogic.bank(squad, stats, budget, listing) + (current && stats[kind][current] ? Number(stats[kind][current].price) : 0);
   const rows = Object.entries(stats[kind]).map(([id, v]) => ({ id, ...v })).sort((a, b) => sort === "price" ? b.price - a.price || b.pts - a.pts : b.pts - a.pts);
   const chip = (id, l) => <button key={id} className="press" aria-pressed={sort === id ? "true" : "false"} onClick={() => setSort(id)} style={{ padding: "6px 12px", borderRadius: 999, background: sort === id ? alpha(C.accentInk, .16) : "rgba(255,255,255,.05)", border: `1px solid ${sort === id ? C.accentInk : C.border}`, fontFamily: F_BODY, fontWeight: 700, fontSize: 11.5, color: sort === id ? C.text : C.muted }}>{l}</button>;
   return (
@@ -7742,13 +7743,14 @@ function FantaPicker({ kind, slot, squad, stats, budget, onPick, onClose }) {
           <button className="press" aria-label="Chiudi" onClick={onClose} style={{ width: 32, height: 32, borderRadius: "50%", background: "rgba(255,255,255,.08)", display: "flex", alignItems: "center", justifyContent: "center" }}><Icon name="close" size={13} sw={2.2} /></button>
         </div>
         <div style={{ display: "flex", gap: 6, padding: "0 18px 10px" }}>{chip("price", "Per prezzo")}{chip("pts", "Per punti")}</div>
+        {rows.some(r => r.id !== current && !squad[kind].includes(r.id) && !BtLogic.canAfford(squad, stats, budget, kind, slot, r.id, listing)) && <p data-picker-hint="" style={{ margin: "0 18px 8px", padding: "8px 10px", borderRadius: 10, background: "rgba(255,255,255,.05)", fontFamily: F_BODY, fontSize: 11.5, color: C.muted, lineHeight: 1.4 }}>In grigio chi non entra nel budget. Per liberare soldi togli o cambia chi costa di più: chi vendi vale il prezzo di oggi.</p>}
         <div className="scrollcol" style={{ flex: 1, minHeight: 0, paddingBottom: 12 }}>
           {rows.map(r => {
             const d = isD ? driverById(r.id) : null, t = isD ? (d && teamById(d.teamId)) : teamById(r.id);
             if (!t) return null;
             const inSquad = squad[kind].includes(r.id) && r.id !== current;
-            const afford = BtLogic.canAfford(squad, stats, budget, kind, slot, r.id);
-            const why = r.id === current ? "In squadra" : inSquad ? "Già in squadra" : !afford ? "Budget insufficiente" : null;
+            const afford = BtLogic.canAfford(squad, stats, budget, kind, slot, r.id, listing);
+            const why = r.id === current ? "In squadra" : inSquad ? "Già in squadra" : !afford ? `Budget insufficiente: ti mancano ${fmtM(Math.round((Number(r.price) - left) * 10) / 10, true)}` : null;
             const off = inSquad || (!afford && r.id !== current);
             return (
               <button key={r.id} data-pick={r.id} className="press" disabled={off} onClick={() => { onPick(r.id); onClose(); }} style={{ display: "flex", alignItems: "center", gap: 12, width: "100%", padding: "9px 18px", textAlign: "left", opacity: off ? .42 : 1, background: r.id === current ? alpha(C.accentInk, .08) : "transparent" }}>
@@ -7772,19 +7774,19 @@ function FantaPicker({ kind, slot, squad, stats, budget, onPick, onClose }) {
 }
 
 // La tua squadra come in F1 Fantasy: chiusura con conto alla rovescia, nome, cambi gratis, budget, 5 piloti e 2 scuderie.
-function FantaSquadCard({ squad, setSquad, base, freeTransfers, budget, stats, race, lock, onToast, needAccount, standings }) {
+function FantaSquadCard({ squad, setSquad, base, freeTransfers, budget, stats, listing = null, race, lock, onToast, needAccount, standings }) {
   const [picking, setPicking] = useState(null);   // { kind, slot }
   const [naming, setNaming] = useState(false);
   useBack(!!picking, () => setPicking(null));
   useBack(naming, () => setNaming(false));
   const [nameDraft, setNameDraft] = useState(squad.name);
   const value = BtLogic.squadValue(squad, stats);
-  const left = Math.round((budget - value) * 10) / 10;
+  const left = BtLogic.bank(squad, stats, budget, listing);   // 13/11: budget − quanto hai pagato (+ guadagni), non i prezzi di oggi
   const tr = BtLogic.transfers(base, squad, freeTransfers);
   const locked = lock.locked;
   const guard = fn => (...a) => { if (needAccount()) return; if (locked) { onToast(`Squadra bloccata fino alla fine della gara`); return; } fn(...a); };
   const setSlot = (kind, slot, id) => setSquad(s => {
-    const next = { ...s, [kind]: s[kind].map((x, i) => i === slot ? id : x) };
+    const next = { ...BtLogic.place(s, stats, kind, slot, id, listing) };
     if (kind === "drivers" && !next.drivers.includes(next.boost)) next.boost = next.drivers.find(Boolean) || null;
     return next;
   });
@@ -7848,8 +7850,8 @@ function FantaSquadCard({ squad, setSquad, base, freeTransfers, budget, stats, r
           <div style={{ fontFamily: F_BODY, fontSize: 12, color: C.muted }}>Budget: <b data-budget-left="" style={{ fontFamily: F_HEAD, fontWeight: 900, fontSize: 16, color: left < 0 ? "#FF5A5F" : C.text }}>{fmtM(left, true)}</b></div>
           <div style={{ height: 4, width: 150, marginTop: 5, borderRadius: 2, background: "rgba(255,255,255,.1)", overflow: "hidden" }}><div style={{ height: "100%", width: Math.max(0, Math.min(100, left / budget * 100)) + "%", background: left < 0 ? C.red : TIMING.green }} /></div>
         </div>
-        <button className="press" disabled={locked} onClick={guard(() => { setSquad(s => ({ ...s, drivers: s.drivers.map(() => null), teams: s.teams.map(() => null), boost: null })); onToast("Squadra svuotata: scegli piloti e scuderie"); })} style={{ padding: "8px 10px", fontFamily: F_HEAD, fontWeight: 800, fontSize: 13, color: C.muted, textDecoration: "underline", opacity: locked ? .45 : 1 }}>Reset</button>
-        <button className="press" disabled={locked || complete} onClick={guard(() => { setSquad(s => BtLogic.autoFill(s, stats, budget)); onToast("Squadra completata: la combinazione con più punti in stagione che entra nel budget"); })} style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "9px 14px", borderRadius: 999, background: locked || complete ? "rgba(255,255,255,.12)" : "#fff", fontFamily: F_HEAD, fontWeight: 900, fontSize: 13, color: locked || complete ? C.dim : "#111" }}><Icon name="sparkle" size={14} color={locked || complete ? C.dim : "#111"} />Riempi</button>
+        <button className="press" disabled={locked} onClick={guard(() => { setSquad(s => BtLogic.clearSquad(s, stats, listing)); onToast("Squadra svuotata: scegli piloti e scuderie"); })} style={{ padding: "8px 10px", fontFamily: F_HEAD, fontWeight: 800, fontSize: 13, color: C.muted, textDecoration: "underline", opacity: locked ? .45 : 1 }}>Reset</button>
+        <button className="press" disabled={locked || complete} onClick={guard(() => { setSquad(s => BtLogic.autoFill(s, stats, budget, listing)); onToast("Squadra completata: la combinazione con più punti in stagione che entra nel budget"); })} style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "9px 14px", borderRadius: 999, background: locked || complete ? "rgba(255,255,255,.12)" : "#fff", fontFamily: F_HEAD, fontWeight: 900, fontSize: 13, color: locked || complete ? C.dim : "#111" }}><Icon name="sparkle" size={14} color={locked || complete ? C.dim : "#111"} />Riempi</button>
       </div>
       <p style={{ margin: "2px 14px 0", fontFamily: F_BODY, fontSize: 10.5, color: C.dim }}>Budget totale {fmtM(budget, true)} · squadra {fmtM(value, true)} · tocca "2X" per raddoppiare i punti di un pilota.</p>
 
@@ -7870,7 +7872,7 @@ function FantaSquadCard({ squad, setSquad, base, freeTransfers, budget, stats, r
         {locked && <ParcFerme kind="squad" at={lock.lockAt} liftable />}
       </div>
       {!complete && <p role="status" style={{ margin: "-4px 14px 14px", fontFamily: F_BODY, fontSize: 11.5, color: C.gold }}>Mancano {squad.drivers.filter(x => !x).length + squad.teams.filter(x => !x).length} posti: completa la squadra prima della chiusura, altrimenti non prende punti.</p>}
-      {picking && <FantaPicker kind={picking.kind} slot={picking.slot} squad={squad} stats={stats} budget={budget} onClose={() => setPicking(null)}
+      {picking && <FantaPicker kind={picking.kind} slot={picking.slot} squad={squad} stats={stats} budget={budget} listing={listing} onClose={() => setPicking(null)}
         onPick={id => { setSlot(picking.kind, picking.slot, id); const d = driverById(id), t = teamById(id); onToast(`${d ? d.full : t ? t.name : id} entra nella tua squadra`); }} />}
     </div>
   );
@@ -8092,7 +8094,7 @@ const LEAGUE_ZONES = {
   q1: { label: "ZONA Q1", bg: "rgba(255,24,1,.13)", line: "rgba(255,90,95,.45)", ink: "#FF5A5F" },
   q2: { label: "ZONA Q2", bg: "rgba(255,210,31,.11)", line: "rgba(255,210,31,.45)", ink: "#FFD23F" },
 };
-function FantaScreen({ elo = null, squad, setSquad, base, freeTransfers, budget, stats, race, lock, weekends = [], isPremium, onPremium, onToast, bonus = [], leagues = [], seasonPts = 0, realWeek = null, meAid = null, onCreateLeague, onJoinLeague, onLeaveLeague, onRenameLeague, needAccount, predictions = [], predAnswers = {}, predLockOf, onAnswerPrediction, standings, raceNameOf = null }) {
+function FantaScreen({ elo = null, squad, setSquad, base, freeTransfers, budget, stats, listing = null, race, lock, weekends = [], isPremium, onPremium, onToast, bonus = [], leagues = [], seasonPts = 0, realWeek = null, meAid = null, onCreateLeague, onJoinLeague, onLeaveLeague, onRenameLeague, needAccount, predictions = [], predAnswers = {}, predLockOf, onAnswerPrediction, standings, raceNameOf = null }) {
   const [, setTick] = useState(0);
   useEffect(() => { const iv = setInterval(() => setTick(n => n + 1), 30000); return () => clearInterval(iv); }, []);
   const bonusPts = bonus.reduce((a, b) => a + b.pts, 0);
@@ -8144,7 +8146,7 @@ function FantaScreen({ elo = null, squad, setSquad, base, freeTransfers, budget,
   }
   return (
     <div className="scrollcol" style={{ height: "100%" }}>
-      <FantaSquadCard squad={squad} setSquad={setSquad} base={base} freeTransfers={freeTransfers} budget={budget} stats={stats} race={race} lock={lock} onToast={onToast} needAccount={needAccount} standings={standings} />
+      <FantaSquadCard squad={squad} setSquad={setSquad} base={base} freeTransfers={freeTransfers} budget={budget} stats={stats} listing={listing} race={race} lock={lock} onToast={onToast} needAccount={needAccount} standings={standings} />
 
       <div style={{ margin: "0 16px 16px", padding: "16px", borderRadius: 18, background: C.card, border: `1px solid ${C.border}` }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
@@ -12351,6 +12353,9 @@ function App() {
   }, [userLoaded, userEmail]);
   // Promemoria sul telefono: si rifanno quando cambiano mazzo, serie o preferenza; il permesso solo dopo il primo giro.
   // 13/11: notifiche push del team. Ogni telefono si iscrive al tema delle novità (di serie sì; si spegne dal Profilo).
+  // 13/11 (budget del Fanta a prezzo pagato): alle squadre fatte prima si segna una volta sola il prezzo del listino
+  // (senza i rialzi automatici); se non c'è niente da segnare la squadra resta la stessa e non si salva niente.
+  useEffect(() => { if (guest || !userLoaded || !sharedReady) return; setSquad(q => BtLogic.withPaid(q, fantaStats)); }, [guest, userLoaded, sharedReady, fantaStats, squad]);
   const newsOn = notifPrefs.news !== false;
   useEffect(() => { Push.sync(capPlugin("FirebaseMessaging"), newsOn); }, [newsOn]);
   const remTrialEnd = trial && !trial.converted && !premium.sub ? trial.end : null;   // 8/11: avviso della prova
@@ -12554,7 +12559,7 @@ function App() {
     else if (tab === "garage") body = <GarageScreen openGame={garageGame} onGameOpened={() => setGarageGame(null)} races={races} pitBest={pitBest} onPitResult={t => {
       if (activeDuel && myAid) { const id = activeDuel; setActiveDuel(null); Duels.reply({ id, aid: myAid, time: t }).then(item => { setDuelsArr(a => [...a, item]); showToast("Sfida giocata: risultato in Home"); }, () => showToast("Risposta alla sfida non inviata")); }
       if (!userDataWait()) { setPitBest(b => b == null || t < b ? t : b); psBump("pit"); } }} sillyPreds={sillyPreds} onPredict={predictSeat} sillyOfficial={sillyOfficial} live={live} stratPreds={stratPreds} onStrat={(id, st) => { if (!userDataWait()) setStratPreds(x => ({ ...x, [id]: { stints: st, at: nowMs() } })); }} bluffTags={bluffNow} onBluffRefresh={loadBluffTags} />;
-    else if (tab === "fanta") body = <FantaScreen standings={shownStandings} squad={squad} setSquad={setSquad} base={squadBase} freeTransfers={freeTransfers} budget={FANTA_BUDGET} stats={shownFantaStats} race={fantaRace} lock={teamLockInfo} weekends={fantaLive} isPremium={isPremium} onPremium={() => setPremiumOpen(true)} onToast={showToast} bonus={bonus} leagues={leagueRows} elo={fantaElo} seasonPts={fantaSeason.total} realWeek={fantaRace ? fantaSeason.rounds.find(r => r.round === fantaRace.round) || null : null} meAid={account ? account.aid : null} onCreateLeague={createLeague} onJoinLeague={joinLeague} onLeaveLeague={leaveLeague} onRenameLeague={renameLeague} needAccount={needAccount} predictions={predictionsOpen} predAnswers={predAnswers} predLockOf={predLockOf} onAnswerPrediction={answerPrediction} raceNameOf={round => { const r = races.find(x => x.round === round); return r ? r.name : ""; }} />;
+    else if (tab === "fanta") body = <FantaScreen standings={shownStandings} squad={squad} setSquad={setSquad} base={squadBase} freeTransfers={freeTransfers} budget={FANTA_BUDGET} listing={fantaStats} stats={shownFantaStats} race={fantaRace} lock={teamLockInfo} weekends={fantaLive} isPremium={isPremium} onPremium={() => setPremiumOpen(true)} onToast={showToast} bonus={bonus} leagues={leagueRows} elo={fantaElo} seasonPts={fantaSeason.total} realWeek={fantaRace ? fantaSeason.rounds.find(r => r.round === fantaRace.round) || null : null} meAid={account ? account.aid : null} onCreateLeague={createLeague} onJoinLeague={joinLeague} onLeaveLeague={leaveLeague} onRenameLeague={renameLeague} needAccount={needAccount} predictions={predictionsOpen} predAnswers={predAnswers} predLockOf={predLockOf} onAnswerPrediction={answerPrediction} raceNameOf={round => { const r = races.find(x => x.round === round); return r ? r.name : ""; }} />;
     return body;
   }
 

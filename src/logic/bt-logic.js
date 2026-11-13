@@ -122,16 +122,58 @@
 
   const priceOf = (stats, kind, id) => (id && stats[kind][id] ? Number(stats[kind][id].price) || 0 : 0);
   const squadValue = (squad, stats) => Math.round((squad.drivers.reduce((s, id) => s + priceOf(stats, "drivers", id), 0) + squad.teams.reduce((s, id) => s + priceOf(stats, "teams", id), 0)) * 10) / 10;
-  // Si può mettere `id` al posto `slot` senza sforare il budget? (il vecchio del posto viene venduto)
-  function canAfford(squad, stats, budget, kind, slot, id) {
-    const left = budget - squadValue(squad, stats) + priceOf(stats, kind, squad[kind][slot]);
+  // 13/11 (bug dei tester: "dopo un certo punto non si può più scegliere la scuderia"): budget come in F1 Fantasy.
+  // Prima i soldi liberi erano budget − prezzi di OGGI di chi hai: coi prezzi automatici chi va forte sale a ogni GP, la
+  // squadra finiva "fuori budget" e tolta una scuderia non si poteva più rimettere. Ora conta quanto hai PAGATO
+  // (squad.paid[kind][id]); chi vendi si vende al prezzo di oggi e il guadagno (o la perdita) resta tuo (squad.gain).
+  // `listing` = il listino senza i prezzi automatici: vale come prezzo pagato per le squadre fatte prima del 13/11.
+  const KINDS2 = ["drivers", "teams"];
+  const fin = v => typeof v === "number" && isFinite(v);
+  const paidOf = (squad, stats, kind, id, listing) => {
+    const v = squad.paid && squad.paid[kind] ? squad.paid[kind][id] : undefined;
+    return fin(v) ? v : priceOf(listing || stats, kind, id);
+  };
+  // Soldi liberi: budget + guadagni già incassati − quanto hai pagato chi hai in squadra.
+  function bank(squad, stats, budget, listing) {
+    const paid = KINDS2.reduce((t, kind) => t + squad[kind].reduce((a, id) => a + (id ? paidOf(squad, stats, kind, id, listing) : 0), 0), 0);
+    return Math.round((budget + (Number(squad.gain) || 0) - paid) * 10) / 10;
+  }
+  // Si può mettere `id` al posto `slot`? (il vecchio del posto si vende al prezzo di oggi)
+  function canAfford(squad, stats, budget, kind, slot, id, listing) {
+    const left = bank(squad, stats, budget, listing) + priceOf(stats, kind, squad[kind][slot]);
     return priceOf(stats, kind, id) <= left + 1e-9;
+  }
+  // Segna quanto è stato pagato chi è in squadra e non ce l'ha ancora segnato (dal listino). Niente da segnare: la
+  // stessa squadra (nessun salvataggio inutile).
+  function withPaid(squad, listing) {
+    if (!squad || !Array.isArray(squad.drivers) || !Array.isArray(squad.teams)) return squad;
+    let changed = false;
+    const paid = { drivers: { ...(squad.paid && squad.paid.drivers) }, teams: { ...(squad.paid && squad.paid.teams) } };
+    KINDS2.forEach(kind => squad[kind].forEach(id => { if (id && !fin(paid[kind][id])) { paid[kind][id] = priceOf(listing, kind, id); changed = true; } }));
+    return changed ? { ...squad, paid } : squad;
+  }
+  // Mette `id` (null = toglie) al posto `slot`: vende il vecchio al prezzo di oggi, compra il nuovo al prezzo di oggi.
+  function place(squad, stats, kind, slot, id, listing) {
+    const cur = squad[kind][slot];
+    if ((cur || null) === (id || null)) return squad;
+    const base = withPaid(squad, listing || stats);
+    const paid = { drivers: { ...(base.paid && base.paid.drivers) }, teams: { ...(base.paid && base.paid.teams) } };
+    let gain = Number(squad.gain) || 0;
+    if (cur) { gain = Math.round((gain + priceOf(stats, kind, cur) - paid[kind][cur]) * 10) / 10; delete paid[kind][cur]; }
+    if (id) paid[kind][id] = priceOf(stats, kind, id);
+    return { ...squad, [kind]: squad[kind].map((x, i) => (i === slot ? id || null : x)), paid, gain };
+  }
+  // Svuota la squadra vendendo tutti al prezzo di oggi (i guadagni restano).
+  function clearSquad(squad, stats, listing) {
+    let s = squad;
+    KINDS2.forEach(kind => squad[kind].forEach((id, i) => { if (id) s = place(s, stats, kind, i, null, listing); }));
+    return { ...s, boost: null };
   }
 
   // Riempie i posti vuoti con la combinazione che fa più punti della stagione restando nel budget
   // (a parità di punti, quella che costa meno). Chi è già in squadra resta.
-  function autoFill(squad, stats, budget) {
-    const s = { ...squad, drivers: squad.drivers.slice(), teams: squad.teams.slice() };
+  function autoFill(squad, stats, budget, listing) {
+    let s = { ...squad, drivers: squad.drivers.slice(), teams: squad.teams.slice() };
     const fixed = [...s.drivers, ...s.teams].filter(Boolean);
     const pool = kind => Object.entries(stats[kind]).map(([id, v]) => ({ id, price: Number(v.price) || 0, pts: Number(v.pts) || 0 })).filter(x => !fixed.includes(x.id));
     const combos = (arr, k) => {
@@ -144,7 +186,7 @@
       return out;
     };
     const needD = s.drivers.filter(x => !x).length, needT = s.teams.filter(x => !x).length;
-    const left = budget - squadValue(s, stats);
+    const left = bank(s, stats, budget, listing);
     const dC = combos(pool("drivers"), needD).sort((a, b) => a.price - b.price);
     const bestUpTo = []; let bi = -1;   // per ogni prezzo: la combinazione di piloti con più punti che costa al massimo così
     dC.forEach((c, i) => { if (bi < 0 || c.pts > dC[bi].pts || (c.pts === dC[bi].pts && c.price < dC[bi].price)) bi = i; bestUpTo.push(bi); });
@@ -159,8 +201,8 @@
     });
     if (win) {
       const dq = win.d.ids.slice(), tq = win.t.ids.slice();
-      s.drivers = s.drivers.map(x => x || dq.shift() || null);
-      s.teams = s.teams.map(x => x || tq.shift() || null);
+      s.drivers.forEach((x, i) => { if (!x && dq.length) s = place(s, stats, "drivers", i, dq.shift(), listing); });
+      s.teams.forEach((x, i) => { if (!x && tq.length) s = place(s, stats, "teams", i, tq.shift(), listing); });
     }
     if (!s.drivers.includes(s.boost)) {
       const best = s.drivers.filter(Boolean).sort((a, b) => (stats.drivers[b].pts || 0) - (stats.drivers[a].pts || 0))[0];
@@ -290,6 +332,6 @@
     return { vmax: Math.round(v.vmax), vcorner: Math.round(v.vcorner), lapDelta: Math.round(pen * lapTime) / 100, ideal: { wing: iw, ride: ir, vmax: Math.round(vi.vmax), vcorner: Math.round(vi.vcorner) }, warnings };
   }
 
-  return { SESSION_MIN, startOf, endOf, wxLock, teamLock, countdown, RULES, aeroModel, sessionPoints, squadScore, transfers, nextFree, squadValue, canAfford, autoFill, norm, predictionCorrect, newsAge, newestFirst, RATING_PARAMS, communityRatings,
+  return { SESSION_MIN, startOf, endOf, wxLock, teamLock, countdown, RULES, aeroModel, sessionPoints, squadScore, transfers, nextFree, squadValue, canAfford, autoFill, bank, place, withPaid, clearSquad, norm, predictionCorrect, newsAge, newestFirst, RATING_PARAMS, communityRatings,
     PIT_WHEELS, PIT_STEPS, PIT_RULES, pitNew, pitLights, pitGo, pitTap, pitRating, SILLY_RULES, sillyPoints, SILLY_FANS, sillyBoard };
 });

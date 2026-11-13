@@ -944,3 +944,13 @@ Da fare:
 - [Likely] non verificato su un telefono vero: la build Android col plugin, l'arrivo della push, l'icona.
 - Prove: test/unit/push-api.test.js (6), push-client.test.js (3), test/e2e/run103-push.js (3); prova a secco di
   prepare_android.py su un progetto finto (senza file, file giusto, file di un'altra app).
+
+
+## 13/11: Fanta, budget sul prezzo pagato (bug del tester: "non riesco più a scegliere la scuderia")
+
+- Causa: il budget libero era `FANTA_BUDGET − valore di oggi della squadra`. Quando i prezzi salgono (in automatico dopo un GP o a mano dall'admin) chi aveva i più forti andava sotto zero e una scuderia tolta, anche la stessa, non si poteva più rimettere ("Budget insufficiente"). Non era un legame piloti → scuderia.
+- Ora come F1 Fantasy: conta il prezzo pagato. `squad.paid[kind][id]` + `squad.gain` (guadagni delle vendite). Funzioni in `src/logic/bt-logic.js`: `bank`, `place`, `withPaid`, `clearSquad`; `canAfford` e `autoFill` prendono anche `listing`.
+- `src/App.jsx`: `FantaPicker` e `FantaSquadCard` usano `bank`/`place`; chi non entra nel budget dice quanto manca ("ti mancano $X") e sopra la lista c'è una riga che spiega come liberare soldi. Le squadre già salvate prendono `paid` dal listino alla prima apertura (`withPaid`).
+- `src/services/appdata.js`: il listino di serie ha `asOf: 15` anche prima che arrivi Firestore (prima i prezzi automatici partivano solo dopo).
+- Da sapere: un listino salvato dall'admin SENZA `asOf` resta a mano (prezzi automatici spenti). Basta un "Salva" nella scheda admin del Fanta per riaccenderli. Non verificato sul Firestore vero.
+- Prove: `test/unit/fanta-budget.test.js` (6), `test/e2e/run104-fanta-budget.js` (1), più run14-18, run62, run78, run99 verdi.
