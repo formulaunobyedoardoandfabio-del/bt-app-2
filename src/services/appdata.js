@@ -76,7 +76,8 @@ const cleanTakes = v => (Array.isArray(v) ? v : []).filter(t => isObj(t) && type
   .sort((a, b) => b.at - a.at).slice(0, 60);
 
 // 7/11: funzioni accese dall'admin; ogni valore che non è true è spento.
-const cleanFlags = v => ({ pitSwipe: !!(isObj(v) && v.pitSwipe === true) });
+// 13/11: hiddenQs = domande di storia automatiche tolte dall'admin (id "auto:<gara>:h-<tipo>"), le ultime 200.
+const cleanFlags = v => ({ pitSwipe: !!(isObj(v) && v.pitSwipe === true), hiddenQs: isObj(v) && Array.isArray(v.hiddenQs) ? [...new Set(v.hiddenQs.filter(x => typeof x === "string" && /^auto:[A-Za-z0-9_-]{1,12}:h-[a-z]{1,12}$/.test(x)))].slice(-200) : [] });
 
 // Ogni contenuto dell'app (nome dello stato della 2.0) → i suoi documenti e le conversioni.
 // from(documenti, ora) dà il valore per l'app; to(valore) dà i documenti da scrivere (null = documento da cancellare).
@@ -116,6 +117,9 @@ const USER_KEYS = ["saved", "favTeam", "favDriver", "notifPrefs", "votes", "squa
   "theme", "sounds", "haptics", "helmet", "hidden", "trophies", "premium", "squadLog", "leagues", "holidays", "swipe"];   // 1/11: Pit Swipe (gusti, mazzo, serie, missioni, easter egg)   // 31/10: temi delle feste   // 31/10: FantaF1 vero
 const USER_SAVE_MS = 800;
 const pickUser = v => { const out = {}; if (isObj(v)) USER_KEYS.forEach(k => { if (v[k] !== undefined) out[k] = v[k]; }); return out; };
+// 13/11 (accesso lento): i dati personali stanno nel profilo (users/<email>.app2) che l'accesso ha appena letto: l'app li
+// prende da lì invece di rileggere lo stesso documento. In copia: cambiarli non tocca il profilo.
+const userDataOf = app2 => pickUser(isObj(app2) ? clone(app2) : null);
 
 function createAppData({ fb = FB } = {}) {
   // Ultima versione di ogni documento letta da Firebase (o scritta) da questo telefono: null = il documento non c'è.
@@ -269,4 +273,4 @@ function sharedDefaults(now = Date.now()) {
   return values;
 }
 
-module.exports = { D_NEWS, SHARED_DOCS, KINDS, USER_KEYS, USER_SAVE_MS, sharedDefaults, createAppData, ...createAppData() };
+module.exports = { D_NEWS, SHARED_DOCS, KINDS, USER_KEYS, USER_SAVE_MS, sharedDefaults, userDataOf, createAppData, ...createAppData() };

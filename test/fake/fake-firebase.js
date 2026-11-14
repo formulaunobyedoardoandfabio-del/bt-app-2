@@ -49,7 +49,7 @@
 
   let offline = false;
   const waiters = [];
-  const fake = { failWrites: false };
+  const fake = { failWrites: false, reads: [] };   // 13/11: reads = i documenti letti (get), in ordine
   Object.defineProperty(fake, 'offline', {
     enumerable: true,
     get: () => offline,
@@ -150,7 +150,7 @@
   function docRef(path) {
     return {
       id: path.split('/').pop(), path,
-      async get() { await whenReadable(); net(); return snap(path, allDocs()[path]); },
+      async get() { fake.reads.push(path); await whenReadable(); net(); return snap(path, allDocs()[path]); },
       async set(data, opts) { const all0 = allDocs(); applySet(all0, path, data, opts); await canWrite(); const all = allDocs(); applySet(all, path, data, opts); save(FS_KEY, all); },
       async update(data) { validate(data, path); await canWrite(); const all = allDocs(); applyUpdate(all, path, data); save(FS_KEY, all); },
       async delete() { await canWrite(); const all = allDocs(); delete all[path]; save(FS_KEY, all); },

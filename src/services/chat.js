@@ -19,7 +19,7 @@ const CHAT_MSG = {
 // 25/10: il profilo veloce (p: tifo, casco, trofei) va col messaggio solo quando cambia, o dopo una settimana, per
 // stanza: chi lo guarda prende l'ultimo messaggio dell'autore che ce l'ha. Ricordato sul telefono (bt-chat-p-<stanza>).
 const PROFILE_KEY = k => "bt-chat-p-" + k, PROFILE_REFRESH_MS = 7 * 86400000;
-const REPORTS_KEY = "bt-chat-reports", BANNED_KEY = "bt-chat-banned", BLOCKED_KEY = "bt-blocked", LEGACY_KEY = "bt-chat";
+const REPORTS_KEY = "bt-chat-reports", BANNED_KEY = "bt-chat-banned", BLOCKED_KEY = "bt-blocked", LEGACY_KEY = "bt-chat", MIGRATED_KEY = "bt-chat-migrated";
 const ROOM_IDS = Object.keys(C.CHAT_DB_KEY);
 const mkErr = code => Object.assign(new Error(CHAT_MSG[code] || code), { code });
 const list = v => (Array.isArray(v) ? v.filter(x => x && typeof x === "object") : []);
@@ -144,10 +144,16 @@ function createChat({ sg = FB.sg, sgStrict = FB.sgStrict, ss = FB.ss, sharedAppe
   }
 
   // La chat di una volta (shared/bt-chat) diventa la Generale, se questa non c'è ancora.
+  // 13/11 (accesso lento): l'app lo chiama a ogni accesso, e ogni volta rileggeva tutta la Generale. Vista una volta
+  // che c'è (o copiata), questo telefono se lo ricorda e non la rilegge più.
   async function migrateLegacy() {
-    if ((await sgStrict(C.CHAT_DB_KEY.generale)) != null) return;
-    const old = await sgStrict(LEGACY_KEY);
-    if (old) await ss(C.CHAT_DB_KEY.generale, list(old));
+    if (local.get(MIGRATED_KEY)) return;
+    if ((await sgStrict(C.CHAT_DB_KEY.generale)) == null) {
+      const old = await sgStrict(LEGACY_KEY);
+      if (old) await ss(C.CHAT_DB_KEY.generale, list(old));
+      else return;   // niente da copiare e niente Generale: si riguarda la prossima volta
+    }
+    local.set(MIGRATED_KEY, true);
   }
 
   // Eliminazione dell'account: i suoi messaggi (stesso aid, oppure senza aid e con lo stesso nome) dalle 5 stanze e da

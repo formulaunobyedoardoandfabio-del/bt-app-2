@@ -954,3 +954,28 @@ Da fare:
 - `src/services/appdata.js`: il listino di serie ha `asOf: 15` anche prima che arrivi Firestore (prima i prezzi automatici partivano solo dopo).
 - Da sapere: un listino salvato dall'admin SENZA `asOf` resta a mano (prezzi automatici spenti). Basta un "Salva" nella scheda admin del Fanta per riaccenderli. Non verificato sul Firestore vero.
 - Prove: `test/unit/fanta-budget.test.js` (6), `test/e2e/run104-fanta-budget.js` (1), più run14-18, run62, run78, run99 verdi.
+
+
+## 14/11: accesso più svelto (tester: "accesso lento, a un certo punto si blocca")
+
+- Causa (dal codice): dopo Authentication c'erano tre letture di Firestore una dopo l'altra (`users/<email>`, poi `admins/<email>`, poi di nuovo `users/<email>` per i dati personali); all'iscrizione cinque giri (controllo, scrittura, rilettura del profilo appena scritto, admin, dati personali). A ogni accesso si rileggeva anche tutta la chat Generale (`migrateLegacy`).
+- `src/services/account.js`: `loadProfile` legge profilo e admin insieme; dopo l'iscrizione il profilo appena scritto non si rilegge (`loadProfile(em, uid, profile)`). Profilo perso: la scrittura si aspetta al massimo 4 s.
+- `src/services/appdata.js`: `userDataOf(app2)`; `src/App.jsx`: `enterAccount(email, seed)` prende i dati personali dal profilo appena letto (`account.app2`), senza rileggere. Dopo: 2 letture in parallelo invece di 3 in fila.
+- `src/services/chat.js`: `migrateLegacy` una volta per telefono (`bt_bt-chat-migrated`).
+- `src/App.jsx`: la chat non si rilegge con l'app non in vista (`document.hidden`), tornando in vista si rilegge subito; due tocchi insieme su ACCEDI non fanno due accessi (`sending` ref).
+- `public/index.html`: `preconnect` ai server di Firebase.
+- Non fatto (da decidere con Edoardo): la chat rilegge tutta la stanza ogni 4 s per ogni telefono (lista chat: 5 stanze ogni 6 s). Col piano gratis di Firestore (50.000 letture al giorno) bastano poche decine di persone in chat durante una gara per finire le letture: dopo, accessi e dati falliscono per tutti fino al giorno dopo. Rimedio vero: ascolto in tempo reale (`onSnapshot`) o una lettura sola che dice "c'è del nuovo". Altro: l'SDK di Firebase si scarica da gstatic a ogni primo avvio (meglio dentro l'APK).
+- Prove: `test/unit/account.test.js` (+3), `appdata.test.js` (+1), `chat.test.js` (+1), `test/e2e/run105-accesso-svelto.js` (3). Il finto Firestore segna le letture (`__fake.reads`).
+- Prove vecchie aggiornate (fallivano già dall'8/11, non per questo lavoro): `run50-colori.js` e `run10.js` (i preferiti ora stanno in "Profilo pubblico"), `run88-nascita.js` (il Garage a icone scorre meno).
+- Prove "ballerine" dopo un ricarico (run33, revisione-b, run53): trovata la causa. Nel browser delle prove (pagine `file://`) ricaricando la pagina il localStorage a volte torna vuoto senza che l'app cancelli niente (sessione persa → schermata di accesso). `test/e2e/helpers.js`: `p.reload()` mette da parte il localStorage in `window.name` e uno script lo rimette se la pagina nuova lo trova vuoto. Dopo: run53 6 su 6, run33 e revisione-b verdi. Da guardare sul telefono (non verificabile da qui): chiudere e riaprire l'app subito dopo i video del primo avvio non deve farli rivedere.
+
+
+## 14/11: Fanta, domande di storia del weekend (automatiche) con animazione; admin
+
+- `src/logic/history-quiz.js` (nuovo): tre domande per weekend dai dati veri di `src/data/circuit-info.json` (primo GP o anno di nascita; record sul giro: chi o che anno; curve o giri), una per gruppo, a rotazione col round. Id `auto:<gara>:h-<tipo>`: restano legate alla gara come le previsioni automatiche (i punti di chi ha risposto restano). Dato mancante → niente domanda.
+- `src/App.jsx`: `histQs` dentro `allPredictions`; in lista nel Fanta solo quelle del GP non concluso, non tolte dall'admin (`flags.hiddenQs`) e non `off`. Anche le domande di storia scritte dall'admin ora hanno `raceId` e escono col loro GP.
+- Animazione della risposta (`PredictionCard`, classi `.quiz-*` in `src/App.css`): giusta = cinque luci verdi in fila, bandiera a scacchi, coriandoli, "+1"; sbagliata = cinque luci rosse che lampeggiano, scossa, velo rosso, pulsa la giusta. Solo transform e opacità; con "Rimuovi animazioni" resta l'esito fermo. Parte solo se la risposta è stata appena toccata.
+- Admin, scheda PREVISIONI: le previsioni dei GP conclusi non sono più in lista (riga "N di GP conclusi" + Mostra; restano salvate, valgono i punti); nuova parte "DOMANDE DI STORIA": le automatiche del weekend con TOGLI/RIMETTI (salvato in `shared/bt-flags.hiddenQs`, nessuna lettura in più), quelle scritte a mano con TOGLI (`off: true`, non si cancellano). Una previsione salvata senza `about` non rompe più la scheda.
+- `src/services/appdata.js`: `cleanFlags` tiene `hiddenQs`.
+- Prove: `test/unit/history-quiz.test.js` (6), `test/e2e/run106-storia-weekend.js` (5).
+- Da sapere: i dati del circuito sono quelli già mostrati nell'app; se un record cambia va aggiornato `circuit-info.json`.

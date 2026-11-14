@@ -58,6 +58,7 @@ import { buildStartGrid } from "./logic/start-grid";
 import Calcolatrice from "./mondiale/Calcolatrice";
 import { createPitWall } from "./logic/pit-wall";
 import AutoPred from "./logic/auto-predictions";
+import HistoryQuiz from "./logic/history-quiz";
 import AutoNews from "./logic/auto-news";
 import FantaPrices from "./logic/fanta-prices";
 import { createHighlights } from "./services/highlights";
@@ -1805,10 +1806,12 @@ function LoginScreen({ auth, onDone, onGuest, onBack, onDoor, reason, onHold, in
   const offTrack = !isLogin && pw2 !== "" && pw !== pw2 && (pw2.length >= pw.length || kerbTried);
   const typePw = v => { setPw(v); if (aborts) setAborts(0); };
 
+  const sending = useRef(false);   // 13/11: due tocchi nello stesso istante su ACCEDI (busy arriva al disegno dopo)
   const submit = async () => {
-    if (busy) return;
+    if (busy || sending.current) return;
     if (!isLogin && pw && pw2 && pw !== pw2) { setKerbTried(true); setErr(""); fx.buzz("error"); return; }
     if (!isLogin && name.trim() && email.trim() && pw && pw2 && pw === pw2 && pw.length >= 6 && !fan) { setErr("Scegli che tifoso sei."); return; }
+    sending.current = true;
     setErr(""); setInfo(""); setBusy(true); setAborts(0);
     if (onHold) onHold(true);   // l'app aspetta la fine della Shift Light prima di entrare
     try {
@@ -1816,10 +1819,11 @@ function LoginScreen({ auth, onDone, onGuest, onBack, onDoor, reason, onHold, in
       else await auth.register({ name, email, pw, pw2, about: { birth: birth ? Number(birth.slice(0, 4)) : null, follow: followOf(years), fan, years, ...(birth ? { birthDate: birth } : {}) } });   // 8/11: l'età dalla data
       setShiftDone(true); fx.play("done"); fx.buzz("success");
       await new Promise(r => setTimeout(r, SHIFT_DONE_MS));
-      setBusy(false); setShiftDone(false);
+      setBusy(false); setShiftDone(false); sending.current = false;
       if (onHold) onHold(false);
       onDone && onDone({ created: !isLogin });
     } catch (e) {
+      sending.current = false;
       if (onHold) onHold(false);
       setBusy(false); setErr(messageOf(e));
       if (isLogin && e && e.code === "wrong-password") { setAborts(n => n + 1); fx.buzz("error"); fx.play("abort"); }
@@ -7952,7 +7956,26 @@ function NumPad({ value, onChange, onOk, okLabel = "Invia", onCancel, max = 3 })
   );
 }
 
+// 13/11 (Edoardo): la risposta a una domanda di storia ha la sua animazione (App.css, .quiz-*): giusta = cinque luci
+// verdi, bandiera a scacchi, coriandoli e "+1"; sbagliata = cinque luci rosse che lampeggiano, scossa e la giusta che
+// pulsa. Parte solo se la risposta l'hai appena toccata tu (non quando arriva dall'account). Coriandoli: direzioni fisse.
+const QUIZ_BURST_MS = 1900;
+const QUIZ_BITS = Array.from({ length: 12 }, (_, i) => {
+  const a = (i / 12) * Math.PI * 2 + (i % 2 ? .22 : -.12), r = 56 + (i % 3) * 24;
+  return { dx: Math.round(Math.cos(a) * r), dy: Math.round(Math.sin(a) * r * .8) - 12, rot: (i % 2 ? 1 : -1) * (160 + i * 23), tone: i % 3, delay: (i % 4) * 30 };
+});
 function PredictionCard({ q, answer, lock, onAnswer }) {
+  const [burst, setBurst] = useState(null);   // "right" | "wrong" finché gira l'animazione della risposta appena data
+  const tapAt = useRef(0), prevAnswer = useRef(answer);
+  useEffect(() => {
+    const was = prevAnswer.current; prevAnswer.current = answer;
+    if (q.kind !== "history" || was != null || answer == null || Date.now() - tapAt.current > 1500) return undefined;
+    const ok = BtLogic.predictionCorrect(q, answer) === true;
+    setBurst(ok ? "right" : "wrong");
+    fx.play(ok ? "flag" : "abort"); fx.buzz(ok ? "success" : "error");
+    const t = setTimeout(() => setBurst(null), QUIZ_BURST_MS);
+    return () => clearTimeout(t);
+  }, [answer]);   // eslint-disable-line react-hooks/exhaustive-deps
   const [picking, setPicking] = useState(false);
   const [pad, setPad] = useState(null);   // numero che si sta scrivendo (null = tastierino chiuso)
   useBack(picking, () => setPicking(false));
@@ -7968,8 +7991,11 @@ function PredictionCard({ q, answer, lock, onAnswer }) {
   const d = q.kind === "driver" && answer ? driverById(answer) : null, t = q.kind === "team" && answer ? teamById(answer) : null;
   const openBtn = { display: "flex", alignItems: "center", gap: 10, width: "100%", padding: "9px 11px", borderRadius: 12, textAlign: "left", background: "rgba(255,255,255,.05)", border: `1px solid ${answer != null ? C.accentInk : C.border}`, opacity: done ? .6 : 1 };
   return (
-    <div data-prediction={q.id} style={{ padding: "13px 14px", borderRadius: 16, background: C.card, border: `1px solid ${res === true ? "rgba(62,214,107,.5)" : C.border}`, marginBottom: 10 }}>
-      <span style={{ display: "inline-block", padding: "2px 7px", borderRadius: 6, background: badge[1] + "22", fontFamily: F_HEAD, fontWeight: 800, fontSize: 9.5, letterSpacing: .6, color: badge[1] }}>{badge[0]}</span>
+    <div data-prediction={q.id} data-quiz-burst={burst || undefined} className={burst === "wrong" ? "quiz-shake" : undefined} style={{ position: "relative", padding: "13px 14px", borderRadius: 16, background: C.card, border: `1px solid ${res === true ? "rgba(62,214,107,.5)" : burst === "wrong" ? "rgba(255,24,1,.55)" : C.border}`, marginBottom: 10 }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
+        <span style={{ display: "inline-block", padding: "2px 7px", borderRadius: 6, background: badge[1] + "22", fontFamily: F_HEAD, fontWeight: 800, fontSize: 9.5, letterSpacing: .6, color: badge[1] }}>{q.badge || badge[0]}</span>
+        {burst && <span aria-hidden="true" className={burst === "right" ? "quiz-leds-right" : "quiz-leds-wrong"} style={{ display: "flex", gap: 4 }}>{[0, 1, 2, 3, 4].map(i => <span key={i} className="quiz-led" style={{ background: burst === "right" ? TIMING.green : "#FF1801", animationDelay: burst === "right" ? i * 90 + "ms" : undefined }} />)}</span>}
+      </div>
       <div style={{ margin: "7px 0 10px", fontFamily: F_HEAD, fontWeight: 800, fontSize: 14, color: C.text, lineHeight: 1.3 }}>{q.q}</div>
       <div style={{ position: "relative", overflow: "hidden", borderRadius: 10, minHeight: parcFerme ? 54 : 0 }}>
       {parcFerme && <ParcFerme kind="prediction" at={lock.lockAt != null && lock.lockAt <= nowMs() ? lock.lockAt : null} compact />}
@@ -7978,7 +8004,7 @@ function PredictionCard({ q, answer, lock, onAnswer }) {
           {q.options.map(([id, l]) => {
             const isMine = answer === id, isRight = q.answer === id && (history ? answer != null : true);
             const show = done && q.answer != null;
-            return <button key={id} data-option={id} className="press" disabled={done} aria-pressed={isMine ? "true" : "false"} onClick={() => onAnswer(id)}
+            return <button key={id} data-option={id} data-pred-right={show && isRight ? "" : undefined} className={"press" + (burst && isMine ? (burst === "right" ? " quiz-pop" : " quiz-shake") : burst === "wrong" && isRight ? " quiz-reveal" : "")} disabled={done} aria-pressed={isMine ? "true" : "false"} onClick={() => { if (history) tapAt.current = Date.now(); onAnswer(id); }}
               style={{ padding: "9px 8px", borderRadius: 10, textAlign: "center", fontFamily: F_BODY, fontWeight: 700, fontSize: 12, color: C.text, background: show && isRight ? "rgba(62,214,107,.18)" : isMine ? alpha(C.accentInk, .16) : "rgba(255,255,255,.05)", border: `1px solid ${show && isRight ? "rgba(62,214,107,.6)" : isMine ? C.accentInk : C.border}` }}>{l}</button>;
           })}
         </div>
@@ -8000,6 +8026,17 @@ function PredictionCard({ q, answer, lock, onAnswer }) {
       )}
       </div>
       {picking && <EntityPicker id={q.id} kind={q.kind === "team" ? "team" : "driver"} title={q.q} selected={answer} onPick={v => { onAnswer(v); setPicking(false); }} onClose={() => setPicking(false)} />}
+      {burst && (
+        <div className="quiz-fx" aria-hidden="true">
+          {burst === "right" ? (
+            <>
+              <span className="quiz-flag" />
+              {QUIZ_BITS.map((b, i) => <span key={i} className="quiz-bit" style={{ "--dx": b.dx + "px", "--dy": b.dy + "px", "--rot": b.rot + "deg", background: b.tone === 0 ? TIMING.green : b.tone === 1 ? "#F4F2EF" : C.accent, animationDelay: b.delay + "ms" }} />)}
+              <span className="quiz-plus" style={{ fontFamily: F_HEAD, fontWeight: 900, fontSize: 26, color: TIMING.green }}>+1</span>
+            </>
+          ) : <span className="quiz-red" />}
+        </div>
+      )}
       <p role="status" style={{ margin: "9px 0 0", fontFamily: F_BODY, fontSize: 11.5, color: C.muted, lineHeight: 1.45 }}>
         {res === true ? <b style={{ color: TIMING.green }}>Giusto! +1 punto FantaF1.</b>
           : res === false ? <span>Non era giusta: la risposta esatta è <b style={{ color: C.text }}>{right}</b>.</span>
@@ -9037,7 +9074,12 @@ function AdminFantaTab({ fantaStats, setFantaStats, onToast, latestRound = null 
 // Previsioni avanzate: l'admin segna le risposte esatte (chi ha indovinato prende +1) e ne aggiunge di nuove.
 // Anche qui tutto a risposta chiusa: si sceglie il pilota o la scuderia dall'elenco, il numero col tastierino.
 const aOpenBtn = { display: "inline-flex", alignItems: "center", gap: 7, padding: "9px 13px", borderRadius: 10, background: "rgba(255,255,255,.07)", border: `1px solid ${C.border}`, fontFamily: F_BODY, fontWeight: 700, fontSize: 12, color: C.text };
-function AdminPredictionsTab({ predictions, setPredictions, answers, races, onToast }) {
+// 13/11: (1) le previsioni dei GP già corsi escono dalla lista (restano salvate: valgono i punti; "Mostra" le fa
+// rivedere); (2) le domande di storia: quelle del weekend le fa l'app dai dati del circuito e l'admin le può togliere
+// o rimettere (hiddenQs nelle funzioni); quelle scritte a mano valgono per il weekend in corso e si possono togliere
+// (off: restano salvate, chi aveva risposto tiene il punto).
+function AdminPredictionsTab({ predictions, setPredictions, answers, races, onToast, histAuto = [], hiddenQs = [], onHideQ = null }) {
+  const [showOld, setShowOld] = useState(false);
   const [kind, setKind] = useState("poll");
   const [text, setText] = useState("");
   const [opts, setOpts] = useState(["", "", "", ""]);
@@ -9056,18 +9098,32 @@ function AdminPredictionsTab({ predictions, setPredictions, answers, races, onTo
     if (needsOptions && options.length < 2) { onToast("Servono almeno due risposte"); return; }
     const item = { id: "p" + Date.now(), kind, cat: (PRED_KINDS.find(k => k[0] === kind) || [0, "Domanda"])[1], q, answer: kind === "history" ? (options[Math.min(histAns, options.length - 1)] || [])[0] : null };
     if (options.length) item.options = options;
-    if (kind !== "history") { item.about = about; item.raceId = next.id; }
+    if (kind !== "history") item.about = about;
+    item.raceId = next.id;   // 13/11: anche la domanda di storia vale per il weekend in corso, poi esce da sola
     setPredictions(ps => [...ps, item]).then(ok => {
       if (!ok) return;
       setText(""); setOpts(["", "", "", ""]); setHistAns(0);
       onToast("Previsione aggiunta nel FantaF1");
     });
   };
-  const open = predictions.filter(q => q.kind !== "history");
+  const raceStatus = new Map(races.map(r => [r.id, r.status]));
+  const isOld = q => !!q.raceId && raceStatus.get(q.raceId) === "CONCLUSA";
+  const live = predictions.filter(q => q.kind !== "history" && !isOld(q)), old = predictions.filter(q => q.kind !== "history" && isOld(q));
+  const open = showOld ? [...live, ...old] : live;
+  const ownHist = predictions.filter(q => q.kind === "history" && !q.off && !isOld(q));
+  const hidden = new Set(hiddenQs);
+  const dropOwn = q => { setPredictions(ps => ps.map(x => x.id === q.id ? { ...x, off: true } : x)).then(ok => ok && onToast("Domanda tolta dal FantaF1")); };
+  const histRow = { display: "flex", alignItems: "center", gap: 10, padding: "9px 0", borderTop: `1px solid ${C.border}` };
   const pickQ = picking ? predictions.find(q => q.id === picking) : null;
   return (
     <div>
       <div style={aTitle}>RISPOSTE ESATTE ({open.length})</div>
+      {old.length > 0 && (
+        <div data-pred-admin-old="" style={{ ...aCard, marginBottom: 8, display: "flex", alignItems: "center", gap: 10 }}>
+          <span style={{ flex: 1, fontFamily: F_BODY, fontSize: 11.5, color: C.muted, lineHeight: 1.4 }}>{old.length === 1 ? "1 previsione di un GP concluso" : old.length + " previsioni di GP conclusi"}: {showOld ? "sono qui sotto." : "non sono in lista, i punti restano."}</span>
+          <button className="press" aria-pressed={showOld ? "true" : "false"} onClick={() => setShowOld(v => !v)} style={aChip(showOld)}>{showOld ? "Nascondi" : "Mostra"}</button>
+        </div>
+      )}
       <p style={{ margin: "0 2px 12px", fontFamily: F_BODY, fontSize: 11.5, color: C.muted, lineHeight: 1.5 }}>Quando il risultato è noto, segna la risposta esatta: chi ha indovinato prende +1 punto FantaF1. Le domande di storia hanno già la risposta.</p>
       {open.map(q => {
         const mine = answers[q.id];
@@ -9075,7 +9131,7 @@ function AdminPredictionsTab({ predictions, setPredictions, answers, races, onTo
         const kindLabel = (PRED_KINDS.find(k => k[0] === q.kind) || [0, q.cat || "Domanda"])[1];
         return (
           <div key={q.id} data-pred-admin={q.id} style={{ ...aCard, marginBottom: 8 }}>
-            <div style={{ fontFamily: F_BODY, fontWeight: 700, fontSize: 10, color: C.dim, letterSpacing: .8, marginBottom: 3 }}>{kindLabel.toUpperCase()} · {sessionLabelIt(q.about).toUpperCase()}</div>
+            <div style={{ fontFamily: F_BODY, fontWeight: 700, fontSize: 10, color: C.dim, letterSpacing: .8, marginBottom: 3 }}>{kindLabel.toUpperCase()}{sessionLabelIt(q.about) ? " · " + String(sessionLabelIt(q.about)).toUpperCase() : ""}{isOld(q) ? " · GP CONCLUSO" : ""}</div>
             <div style={{ fontFamily: F_HEAD, fontWeight: 800, fontSize: 14, color: C.text, marginBottom: 8 }}>{q.q}</div>
             {q.kind === "poll" ? (
               <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
@@ -9094,6 +9150,32 @@ function AdminPredictionsTab({ predictions, setPredictions, answers, races, onTo
         );
       })}
       {pickQ && <EntityPicker id={"admin-" + pickQ.id} kind={pickQ.kind === "team" ? "team" : "driver"} title={pickQ.q} selected={pickQ.answer} onPick={v => { setAnswer(pickQ, v); setPicking(null); }} onClose={() => setPicking(null)} />}
+      <div style={aTitle}>DOMANDE DI STORIA ({histAuto.filter(q => !hidden.has(q.id)).length + ownHist.length})</div>
+      <div style={aCard}>
+        <p style={{ margin: "0 0 4px", fontFamily: F_BODY, fontSize: 11.5, color: C.muted, lineHeight: 1.5 }}>Quelle del weekend le fa l'app coi dati del circuito{next ? ` (${next.name})` : ""} e cambiano da sole a ogni GP. Puoi toglierle, rimetterle o aggiungerne di tue qui sotto con "Storia".</p>
+        {histAuto.length === 0 && ownHist.length === 0 && <p style={{ margin: "8px 0 0", fontFamily: F_BODY, fontSize: 11.5, color: C.dim }}>Per questo weekend non ce ne sono.</p>}
+        {histAuto.map(q => {
+          const off = hidden.has(q.id);
+          return (
+            <div key={q.id} data-hist-auto={q.id} style={histRow}>
+              <div style={{ flex: 1, minWidth: 0, opacity: off ? .5 : 1 }}>
+                <div style={{ fontFamily: F_BODY, fontWeight: 700, fontSize: 12.5, color: C.text, lineHeight: 1.35 }}>{q.q}</div>
+                <div style={{ marginTop: 2, fontFamily: F_BODY, fontSize: 11, color: C.dim }}>Automatica · giusta: {predLabel(q, q.answer)}</div>
+              </div>
+              <button className="press" aria-pressed={off ? "true" : "false"} disabled={!onHideQ} onClick={() => onHideQ && onHideQ(q.id, !off)} style={aChip(off)}>{off ? "RIMETTI" : "TOGLI"}</button>
+            </div>
+          );
+        })}
+        {ownHist.map(q => (
+          <div key={q.id} data-hist-own={q.id} style={histRow}>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontFamily: F_BODY, fontWeight: 700, fontSize: 12.5, color: C.text, lineHeight: 1.35 }}>{q.q}</div>
+              <div style={{ marginTop: 2, fontFamily: F_BODY, fontSize: 11, color: C.dim }}>Scritta da te · giusta: {predLabel(q, q.answer)}</div>
+            </div>
+            <button className="press" onClick={() => dropOwn(q)} style={aChip(false)}>TOGLI</button>
+          </div>
+        ))}
+      </div>
       <div style={aTitle}>NUOVA PREVISIONE</div>
       <div style={aCard}>
         <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 10 }}>
@@ -9122,6 +9204,7 @@ function AdminPredictionsTab({ predictions, setPredictions, answers, races, onTo
             <p style={{ margin: "0 0 10px", fontFamily: F_BODY, fontSize: 11, color: C.dim }}>Per il weekend di: {next ? next.name : "–"}</p>
           </>
         )}
+        {kind === "history" && <p style={{ margin: "0 0 10px", fontFamily: F_BODY, fontSize: 11, color: C.dim }}>Vale per il weekend di: {next ? next.name : "–"}. Finito il GP esce da sola.</p>}
         <ABtn onClick={add} disabled={!text.trim()}>AGGIUNGI PREVISIONE</ABtn>
       </div>
     </div>
@@ -9573,7 +9656,7 @@ function AdminChatTab({ chats, reports, banned, onDeleteMsg, onSuspend, onUnsusp
 // Impronta di un valore: le schede con la bozza (classifiche, prezzi FantaF1, Instagram) si rifanno da capo quando i
 // dati sotto cambiano (riletti da Firebase o appena salvati), così SALVA non riscrive valori vecchi (revisione Fase B, C2).
 const versionOf = v => { const s = JSON.stringify(v) || ""; let h = 5381; for (let i = 0; i < s.length; i++) h = (Math.imul(h, 33) + s.charCodeAt(i)) | 0; return (h >>> 0).toString(36) + "." + s.length; };
-function AdminScreen({ flags = null, onFlags = null, takes = [], onTakes = null, photos, setPhotos, silly = {}, onSilly, highlights = [], setHighlights, onBack, onPublish, articles, setArticles, fantaStats, fantaLatestRound = null, setFantaStats, standings, setStandings, races, setRaces, extraRaces = [], setExtraRaces, ig, setIg, sentNotifs, onSendNotif, onDeleteNotif, onToast, tab, setTab, chats, reports, banned, onDeleteMsg, onSuspend, onUnsuspend, onIgnoreReport, liveProps = {}, polls = [], votes = {}, onPollAnswer, predictions = [], setPredictions, predAnswers = {}, holidayCfg = null, onHolidays = null, holiday = null }) {
+function AdminScreen({ histAuto = [], hiddenQs = [], onHideQ = null, flags = null, onFlags = null, takes = [], onTakes = null, photos, setPhotos, silly = {}, onSilly, highlights = [], setHighlights, onBack, onPublish, articles, setArticles, fantaStats, fantaLatestRound = null, setFantaStats, standings, setStandings, races, setRaces, extraRaces = [], setExtraRaces, ig, setIg, sentNotifs, onSendNotif, onDeleteNotif, onToast, tab, setTab, chats, reports, banned, onDeleteMsg, onSuspend, onUnsuspend, onIgnoreReport, liveProps = {}, polls = [], votes = {}, onPollAnswer, predictions = [], setPredictions, predAnswers = {}, holidayCfg = null, onHolidays = null, holiday = null }) {
   return (
     <div className="scrollcol" style={{ height: "100%" }}>
       <SubHeader title="PANNELLO ADMIN" onBack={onBack} />
@@ -9587,7 +9670,7 @@ function AdminScreen({ flags = null, onFlags = null, takes = [], onTakes = null,
         {tab === "FUNZIONI" && <AdminFlagsTab flags={flags} onSave={onFlags} />}
         {tab === "TEMI" && <AdminHolidaysTab cfg={holidayCfg} active={holiday} onSave={v => onHolidays && onHolidays(v)} />}
         {tab === "OPINIONI" && <AdminTakesTab takes={takes} onSave={v => onTakes && onTakes(v)} />}
-        {tab === "PREVISIONI" && <AdminPredictionsTab predictions={predictions} setPredictions={setPredictions} answers={predAnswers} races={races} onToast={onToast} />}
+        {tab === "PREVISIONI" && <AdminPredictionsTab predictions={predictions} setPredictions={setPredictions} answers={predAnswers} races={races} onToast={onToast} histAuto={histAuto} hiddenQs={hiddenQs} onHideQ={onHideQ} />}
         {tab === "CLASSIFICHE" && <AdminStandingsTab key={"st:" + versionOf(standings)} standings={standings} setStandings={setStandings} onToast={onToast} />}
         {tab === "GARA LIVE" && <AdminRacesTab races={races} setRaces={setRaces} extra={extraRaces} setExtra={setExtraRaces} onToast={onToast} {...liveProps} />}
         {tab === "INSTAGRAM" && <AdminInstagramTab key={"ig:" + versionOf(ig)} ig={ig} setIg={setIg} onToast={onToast} />}
@@ -11015,7 +11098,8 @@ function App() {
     squadLog: v => setSquadLog(FantaSeason.cleanLog(v).slice(-80)), leagues: v => setLeagueCodes(Array.isArray(v) ? v.filter(c => /^BT-[A-Z0-9]{4,6}$/.test(c)).slice(0, 10) : []) };
   // Dati dell'account arrivati (per quale email): finché non arrivano, il colore dell'app resta quello del telefono.
   const [userLoaded, setUserLoaded] = useState(null);
-  const loadUser = em => AppData.loadUserData(em).then(data => {
+  // 13/11 (accesso lento): seed = app2 del profilo che l'accesso ha appena letto; con quello non si rilegge users/<email>.
+  const loadUser = (em, seed) => (seed ? Promise.resolve(AppData.userDataOf(seed)) : AppData.loadUserData(em)).then(data => {
     if (userEmailRef.current !== em) return;   // intanto si è usciti, o è entrato un altro account
     const cur = userValsRef.current;
     AppData.USER_KEYS.forEach(k => { if (data[k] !== undefined) userSet[k](data[k]); });
@@ -11110,11 +11194,11 @@ function App() {
     evs.forEach(e => window.addEventListener(e, go, true));
     return off;
   }, []);
-  const enterAccount = email => {
+  const enterAccount = (email, seed) => {
     const em = String(email || "").trim().toLowerCase();
     if (!em) return;
     userEmailRef.current = em; userReady.current = false; setUserEmail(em);
-    loadUser(em);
+    loadUser(em, seed);
   };
   const resetUser = () => { userEmailRef.current = null; userReady.current = false; setEggFound(false); setUserEmail(null); setUserLoaded(null); AppData.USER_KEYS.forEach(k => { if (!PHONE_KEYS.includes(k)) userSet[k](USER_INIT[k]); }); };
   // Dati personali non ancora letti da Firebase (avvio senza rete): finché non arrivano non si cambiano, altrimenti la
@@ -11139,7 +11223,7 @@ function App() {
   // L'account di Authentication decide di chi sono i dati personali.
   const accountEmail = account ? account.email : null;
   useEffect(() => {
-    if (accountEmail && accountEmail !== userEmailRef.current) enterAccount(accountEmail);
+    if (accountEmail && accountEmail !== userEmailRef.current) enterAccount(accountEmail, account.loaded ? account.app2 : null);
     else if (!accountEmail && userEmailRef.current) resetUser();
     // Entrato come ospite mentre la sessione salvata arrivava (rete lenta): ora è il suo account (revisione Fase B, I3).
     if (accountEmail) { setGuest(false); setLoginOpen(false); }
@@ -11160,10 +11244,13 @@ function App() {
   const chatEvery = view === "chats" || chatAdmin ? CHAT_LIST_MS : CHAT_ROOM_MS;
   useEffect(() => {
     if (!chatRooms.length) return;
-    const load = () => { chatRooms.forEach(loadRoomMsgs); if (chatAdmin) reloadModeration(); };
+    // 13/11: con l'app non in vista (telefono bloccato, altra app) la chat non si rilegge: erano letture di Firebase
+    // buttate, ogni 4 secondi per ogni telefono. Tornando in vista si rilegge subito.
+    const load = () => { if (document.hidden) return; chatRooms.forEach(loadRoomMsgs); if (chatAdmin) reloadModeration(); };
     load();
     const iv = setInterval(load, chatEvery);
-    return () => clearInterval(iv);
+    document.addEventListener("visibilitychange", load);
+    return () => { clearInterval(iv); document.removeEventListener("visibilitychange", load); };
   }, [chatRooms.join(), chatAdmin, chatEvery, accountEmail, chatTick]);
   // Letti: la stanza aperta segna come visto il suo ultimo messaggio (bt-chat-seen-<stanza>, solo sul telefono).
   const threadMsgs = view === "chatThread" && chatId ? chatMsgs[chatId] : null;
@@ -12029,7 +12116,11 @@ function App() {
     if (!autoNew) return;
     setAutoAns(m => { const n = { ...m }; autoQs.forEach(q => { if (q.answer != null) n[q.id] = q.answer; }); local.set("bt-auto-answers", n); return n; });
   }, [autoNew]);   // eslint-disable-line react-hooks/exhaustive-deps
-  const allPredictions = [...predictions, ...autoQs];
+  // 13/11 (Edoardo): domande di storia del weekend, fatte dall'app coi dati veri del circuito (src/logic/history-quiz.js).
+  // Come le previsioni automatiche restano legate alla gara: quelle a cui hai risposto contano i punti anche dopo.
+  const histQs = AutoPred.racesToAsk(races, { current: weekendRace(races), answered: predAnswers }).flatMap(r => HistoryQuiz.questionsFor(r, CIRCUIT_INFO, { season: new Date(nowMs()).getFullYear() }));
+  const hiddenQs = (flags && Array.isArray(flags.hiddenQs) ? flags.hiddenQs : []);
+  const allPredictions = [...predictions, ...autoQs, ...histQs];
   // 8/11: highlights ufficiali F1 dal canale YouTube (api/highlights.js), ogni 30 minuti; senza rete gli ultimi letti.
   const ytHL = React.useMemo(() => createHighlights({ store: local }), []);
   const [ytHighlights, setYtHighlights] = useState(() => { const v = local.get("bt-yt-highlights"); return v && Array.isArray(v.items) ? v.items : []; });
@@ -12446,7 +12537,9 @@ function App() {
   // Quello che si può mandare in chat come link (ChatLinkPicker) e le foto delle miniature.
   // 31/10 sera (Edoardo): finita la gara (stato CONCLUSA del calendario) i sondaggi e le previsioni di quel weekend
   // spariscono da soli da FANTA e dai link della chat; restano nei dati, così i punti presi non si perdono.
-  const predictionsOpen = allPredictions.filter(q => q.kind === "history" || !q.raceId || (races.find(r => r.id === q.raceId) || {}).status !== "CONCLUSA");
+  // 13/11: anche le domande di storia escono col loro GP; l'admin può toglierle (off le sue, hiddenQs le automatiche).
+  const hiddenSet = new Set(hiddenQs), raceStatus = new Map(races.map(r => [r.id, r.status]));   // ricerche dirette, non una scansione per domanda
+  const predictionsOpen = allPredictions.filter(q => !q.off && !hiddenSet.has(q.id) && (!q.raceId || raceStatus.get(q.raceId) !== "CONCLUSA"));
   const chatShareCtx = { share: shareToChat, sources: {
     articles, races, predictions: predictionsOpen, predAnswers, squad, trophyList, trophies, pitBest, sillyPreds, stratPreds,
     me: account ? { name: account.name, team: favTeam, driver: favDriver, fan: aboutMe && aboutMe.fan } : null,
@@ -12513,7 +12606,7 @@ function App() {
   if (view === "article" && activeArticle) body = <ArticleScreen article={activeArticle} onBack={viewBack.article} isPremium={isPaid || adNews.includes(activeArticle.id)} onAdUnlock={Ads.canReward() ? () => watchAdNews(activeArticle.id) : null} adBusy={adBusy} onPremium={() => setPremiumOpen(true)} onTag={filterByTag} saved={saved.includes(activeArticle.id)} onToggleSave={() => toggleSave(activeArticle.id)} onShare={() => setShareId(activeArticle.id)} vote={votes["art-" + activeArticle.id] || null} onVote={castVote} />;
   else if (view === "circuit" && circuitId) body = <CircuitScreen circuitId={circuitId} races={races} articles={newsAll} onBack={viewBack.circuit} onTag={filterByTag} onOpenArticle={openArticle} />;
   else if (view === "adminLock") body = <AdminKeypad onOk={() => { setAdminUnlocked(true); setView("admin"); }} onCancel={viewBack.adminLock} />;
-  else if (view === "admin" && adminUnlocked && Account.isAdmin()) body = <AdminScreen flags={flags} onFlags={v => commitShared("flags", () => v).then(ok => { if (ok) showToast(v.pitSwipe ? "Pit Swipe acceso per tutti" : "Pit Swipe spento per tutti"); })} takes={takes} onTakes={v => commitShared("takes", () => v).then(ok => { if (ok) showToast("Opinioni salvate"); })} holidayCfg={holidayCfg} holiday={holiday} onHolidays={v => commitShared("holidays", () => v).then(ok => { if (ok) showToast("Temi delle feste salvati"); })} photos={commonsPhotos} setPhotos={adminSet.commonsPhotos} silly={sillyOfficial} onSilly={officialSeat} highlights={highlights} setHighlights={adminSet.highlights} onBack={viewBack.admin} onPublish={publishArticle} articles={articles} setArticles={adminSet.articles} fantaStats={shownFantaStats} fantaLatestRound={latestRaceRound} setFantaStats={adminSet.fantaStats} standings={standings} setStandings={adminSet.standings} races={races} setRaces={adminSet.races} extraRaces={racesDoc.extra} setExtraRaces={adminSet.extraRaces} ig={ig} setIg={adminSet.ig} sentNotifs={sentNotifs} onSendNotif={sendNotif} onDeleteNotif={deleteNotif} onToast={showToast} tab={adminTab} setTab={setAdminTab} chats={chats} reports={reports} banned={banned} onDeleteMsg={deleteChatMsg} onSuspend={suspendUser} onUnsuspend={unsuspendUser} onIgnoreReport={ignoreReport} liveProps={liveProps} polls={allPolls} votes={votes} onPollAnswer={setPollAnswer} predictions={predictions} setPredictions={adminSet.predictions} predAnswers={predAnswers} />;
+  else if (view === "admin" && adminUnlocked && Account.isAdmin()) body = <AdminScreen histAuto={histQs.filter(q => q.raceId === (weekendRace(races) || {}).id)} hiddenQs={hiddenQs} onHideQ={(id, hide) => commitShared("flags", latest => { const cur = latest && Array.isArray(latest.hiddenQs) ? latest.hiddenQs : []; return { ...latest, hiddenQs: hide ? [...cur.filter(x => x !== id), id] : cur.filter(x => x !== id) }; }).then(ok => { if (ok) showToast(hide ? "Domanda tolta dal FantaF1 per tutti" : "Domanda rimessa nel FantaF1"); })} flags={flags} onFlags={v => commitShared("flags", () => v).then(ok => { if (ok) showToast(v.pitSwipe ? "Pit Swipe acceso per tutti" : "Pit Swipe spento per tutti"); })} takes={takes} onTakes={v => commitShared("takes", () => v).then(ok => { if (ok) showToast("Opinioni salvate"); })} holidayCfg={holidayCfg} holiday={holiday} onHolidays={v => commitShared("holidays", () => v).then(ok => { if (ok) showToast("Temi delle feste salvati"); })} photos={commonsPhotos} setPhotos={adminSet.commonsPhotos} silly={sillyOfficial} onSilly={officialSeat} highlights={highlights} setHighlights={adminSet.highlights} onBack={viewBack.admin} onPublish={publishArticle} articles={articles} setArticles={adminSet.articles} fantaStats={shownFantaStats} fantaLatestRound={latestRaceRound} setFantaStats={adminSet.fantaStats} standings={standings} setStandings={adminSet.standings} races={races} setRaces={adminSet.races} extraRaces={racesDoc.extra} setExtraRaces={adminSet.extraRaces} ig={ig} setIg={adminSet.ig} sentNotifs={sentNotifs} onSendNotif={sendNotif} onDeleteNotif={deleteNotif} onToast={showToast} tab={adminTab} setTab={setAdminTab} chats={chats} reports={reports} banned={banned} onDeleteMsg={deleteChatMsg} onSuspend={suspendUser} onUnsuspend={unsuspendUser} onIgnoreReport={ignoreReport} liveProps={liveProps} polls={allPolls} votes={votes} onPollAnswer={setPollAnswer} predictions={predictions} setPredictions={adminSet.predictions} predAnswers={predAnswers} />;
   else if (view === "chatThread" && activeChat) body = <ChatThreadScreen since={chatSince(activeChat && activeChat.id)} chat={activeChat} onBack={viewBack.chatThread} onSend={guest ? () => needLogin("Per scrivere in chat serve un account.") : sendMessage} isPremium={isPremium} blocked={blocked} onReport={guest ? () => needLogin("Per segnalare un messaggio serve un account.") : reportMessage} onBlock={blockUser} onReact={guest ? () => needLogin("Per reagire ai messaggi serve un account.") : reactMessage} trophyList={trophyList} myWon={trophies} pendingLink={pendingLink} onPendingUsed={() => setPendingLink(null)} onOpenLink={openLink} liveRace={races.find(r => r.status === "LIVE") || null} />;
   else if (view === "instagram") body = <InstagramView ig={ig} onToast={showToast} onBack={viewBack.instagram} />;
   else if (view === "ghost") body = <GhostLap key={ghostInit ? JSON.stringify(ghostInit) : "ghost"} init={ghostInit} onBack={viewBack.ghost} />;

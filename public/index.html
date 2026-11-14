@@ -7,6 +7,11 @@
     <meta name="description" content="Sector 4 - Il punto di riferimento dei tifosi di Formula 1" />
     <title>Sector 4</title>
     <!-- I caratteri (Titillium Web e Work Sans, licenza OFL) sono dentro l'app (src/fonts): niente richieste a Google. -->
+    <!-- 14/11 (accesso lento): il collegamento ai server di Firebase (gli stessi che l'app chiama comunque all'avvio per
+         account e dati) si apre subito, mentre l'app parte, invece che alla prima richiesta. -->
+    <link rel="preconnect" href="https://www.gstatic.com" />
+    <link rel="preconnect" href="https://firestore.googleapis.com" />
+    <link rel="preconnect" href="https://identitytoolkit.googleapis.com" />
     <style>
       * { margin: 0; padding: 0; box-sizing: border-box; }
       body { background: #0d0d0d; font-family: system-ui, -apple-system, sans-serif; }

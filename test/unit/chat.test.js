@@ -128,6 +128,17 @@ t('non letti: i messaggi degli altri dopo l\'ultimo visto (bt-chat-seen-<chiave 
   assert.strictEqual(c.chat.unread('fanta', await c.chat.loadRoom('fanta', ME)), 1);
 });
 
+t('13/11 migrateLegacy: vista la Generale, su questo telefono il controllo non si rifà (una lettura in meno a ogni accesso)', async () => {
+  setupWindow({ seed: { addDocs: { 'shared/bt-chat-generale': { __arr: [{ id: 'n1', user: 'Fabio', txt: 'nuova', t: 2 }] } } } });
+  let reads = 0;
+  const chat = createChat({ ...F, sgStrict: k => { reads++; return F.sgStrict(k); } });
+  await chat.migrateLegacy();
+  assert.strictEqual(reads, 1, 'la prima volta si guarda se la Generale c\'è');
+  await chat.migrateLegacy();
+  await createChat({ ...F, sgStrict: k => { reads++; return F.sgStrict(k); } }).migrateLegacy();   // app riaperta
+  assert.strictEqual(reads, 1, 'poi non si rilegge più');
+});
+
 t('migrateLegacy: bt-chat copiato solo se la Generale non esiste', async () => {
   const old = { __arr: [{ id: 'o1', user: 'Edo', txt: 'chat vecchia', t: 1 }] };
   let c = ctx({ 'shared/bt-chat': old });

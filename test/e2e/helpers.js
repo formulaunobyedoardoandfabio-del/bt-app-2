@@ -15,6 +15,20 @@ const NOW = '2026-10-07T10:00:00Z';
 // welcome: il telefono non ha mai visto le schede di benvenuto (7/11); di serie sì, e chi non è entrato vede Accedi.
 async function open(b, { now = NOW, width = 390, height = 844, seed, query = '', routes = {}, capacitor, waitSplash = true, waitUntil = 'load', page, acceptTerms = /(^|[?&])nofake\b/.test(query), reducedMotion, init, welcome = false } = {}) {
   const ctx = await b.newContext({ viewport: { width, height }, hasTouch: true, isMobile: true, ...(reducedMotion ? { reducedMotion } : {}) });
+  // 14/11: nel browser delle prove (pagine file://) ricaricando la pagina il localStorage a volte torna VUOTO, senza
+  // che l'app cancelli niente (visto con run53: dopo il ricarico 0 chiavi, "bt-opens" di nuovo a 1). Era la causa delle
+  // prove "ballerine" dopo un ricarico: sessione persa → schermata di accesso (run33, revisione-b), video rivisti (run53).
+  // Rimedio: p.reload() mette da parte il localStorage in window.name (resta nella stessa scheda) e, se la pagina nuova
+  // lo trova vuoto, questo script lo rimette prima che parta l'app. Se il browser non l'ha perso non fa niente.
+  await ctx.addInitScript(() => {
+    try {
+      if (String(window.name || '').startsWith('BTKEEP:')) {
+        const kept = JSON.parse(window.name.slice(7));
+        window.name = '';
+        if (!localStorage.length) Object.keys(kept).forEach(k => localStorage.setItem(k, kept[k]));
+      }
+    } catch (e) {}
+  });
   if (init) await ctx.addInitScript(init);   // script da far girare prima dell'app (per esempio: il telefono ha già visto i video)
   await ctx.addInitScript(({ now, seed }) => {
     window.__btNow = Date.parse(now);
@@ -38,6 +52,14 @@ async function open(b, { now = NOW, width = 390, height = 844, seed, query = '',
   const p = await ctx.newPage();
   const errs = [];
   p.on('pageerror', e => errs.push(e.message));
+  // 14/11: vedi sopra (localStorage perso al ricarico): prima di ricaricare lo si mette da parte in window.name.
+  const reload0 = p.reload.bind(p);
+  p.reload = async (...args) => {
+    await p.evaluate(() => {
+      try { const o = {}; for (let i = 0; i < localStorage.length; i++) { const k = localStorage.key(i); o[k] = localStorage.getItem(k); } window.name = 'BTKEEP:' + JSON.stringify(o); } catch (e) {}
+    }).catch(() => {});
+    return reload0(...args);
+  };
   await p.goto((page ? 'file://' + path.join(__dirname, page) : PAGE) + query, { waitUntil });   // 'domcontentloaded' quando uno script (Firebase) non arriva mai
   await p.waitForTimeout(400);
   if (waitSplash) await p.waitForFunction(() => !document.querySelector('[data-splash]'), null, { timeout: 8000 }).catch(() => {});

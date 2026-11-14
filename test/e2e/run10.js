@@ -98,6 +98,7 @@ const tests = {
     const { ctx, p } = await open(b); await login(p);
     await tapSel(p, saveBtn(HADJAR)); await w(p);
     await tapSel(p, '[aria-label="Profilo"]'); await w(p);
+    await tapText(p, 'Profilo pubblico'); await w(p, 400);   // 14/11: dall'8/11 i preferiti stanno in "Profilo pubblico"
     const prof = await text(p);
     await tapText(p, 'Articoli salvati'); await w(p);
     const titles = await shownTitles(p); await ctx.close();

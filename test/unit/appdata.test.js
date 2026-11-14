@@ -327,6 +327,25 @@ t('saveUserData: dopo 800 ms un solo salvataggio con le modifiche unite, nel cam
   assert.strictEqual(u.name, 'Tester', 'gli altri campi dell\'account restano');
 });
 
+t('14/11 funzioni: hiddenQs tiene solo gli id delle domande di storia automatiche, senza doppioni', () => {
+  const { KINDS } = require('../../src/services/appdata');
+  const out = KINDS.flags.to({ pitSwipe: true, hiddenQs: ['auto:r21:h-first', 'auto:r21:h-first', 'auto:r21:win', 'x', 5, 'auto:r20:h-rec'] });
+  assert.deepStrictEqual(out, { 'bt-flags': { pitSwipe: true, hiddenQs: ['auto:r21:h-first', 'auto:r20:h-rec'] } });
+  assert.deepStrictEqual(KINDS.flags.from({ 'bt-flags': null }), { pitSwipe: false, hiddenQs: [] });
+  assert.deepStrictEqual(KINDS.flags.from({ 'bt-flags': { pitSwipe: true } }), { pitSwipe: true, hiddenQs: [] }, 'documento di prima: nessuna domanda tolta');
+});
+
+t('13/11 userDataOf: i dati personali dal profilo già letto, solo le chiavi note e in copia', () => {
+  const { userDataOf } = require('../../src/services/appdata');
+  const app2 = { saved: ['n1'], votes: { home: 'norris' }, altro: 1 };
+  const out = userDataOf(app2);
+  assert.deepStrictEqual(out, { saved: ['n1'], votes: { home: 'norris' } });
+  out.saved.push('n2');
+  assert.deepStrictEqual(app2.saved, ['n1'], 'copia: cambiare il risultato non tocca il profilo');
+  assert.deepStrictEqual(userDataOf(null), {});
+  assert.deepStrictEqual(userDataOf('x'), {});
+});
+
 t('loadUserData: solo le chiavi dei dati personali; flushUserData salva subito', async () => {
   const { firebase } = setupWindow();
   firebase.__fake.setDoc('users/a@b.it', { name: 'Tester', app2: { saved: ['n1'], votes: { home: 'norris' }, strano: 1 } });

@@ -405,6 +405,53 @@ t('"Su di te": gli anni da tifoso esatti (years) restano accanto alla fascia di 
   assert.deepStrictEqual(A.current().about, { birth: 2001, follow: 2, fan: 'vivo' }, 'chi non manda years (l\'app di oggi) non lo tocca');
 });
 
+// 13/11 (tester: "accesso lento, si blocca"): dopo Authentication c'erano tre letture una dopo l'altra (profilo, admin,
+// poi di nuovo il profilo per i dati personali). Ora profilo e admin partono insieme e il profilo si legge una volta.
+// spy: dbGet finto che segna le letture e risponde solo quando lo dice la prova (release).
+function spyGet() {
+  const calls = [], waiting = [];
+  const dbGet = (col, id) => new Promise((res, rej) => { calls.push(col + '/' + id); waiting.push(() => F.dbGet(col, id).then(res, rej)); });
+  return { calls, dbGet, release: () => { waiting.splice(0).forEach(go => go()); } };
+}
+const tick = () => new Promise(r => setTimeout(r, 0));
+
+t('13/11 accesso svelto: profilo e admin si leggono insieme (non uno dopo l\'altro)', async () => {
+  ctx({ docs: { 'users/q@b.it': { email: 'q@b.it', name: 'Qui', about: {}, app2: { saved: ['n1'] } }, 'admins/q@b.it': { on: true } }, users: { 'q@b.it': { pw: 'abcdef12', uid: 'uid-q' } } });
+  const spy = spyGet();
+  const A = make({ dbGet: spy.dbGet });
+  const done = A.login('q@b.it', 'abcdef12');
+  for (let i = 0; i < 20 && spy.calls.length < 2; i++) await tick();
+  assert.deepStrictEqual(spy.calls.slice().sort(), ['admins/q@b.it', 'users/q@b.it'], 'le due letture partono prima che una risponda');
+  spy.release();
+  const u = await done;
+  assert.strictEqual(u.name, 'Qui');
+  assert.strictEqual(A.isAdmin(), true);
+  assert.deepStrictEqual(u.app2, { saved: ['n1'] }, 'i dati personali arrivano già col profilo');
+  assert.strictEqual(spy.calls.length, 2, 'due letture in tutto');
+});
+
+t('13/11 iscrizione svelta: il profilo appena scritto non si rilegge', async () => {
+  const c = ctx();
+  const calls = [];
+  const A = make({ dbGet: (col, id) => { calls.push(col + '/' + id); return F.dbGet(col, id); } });
+  const u = await A.register({ name: 'Fabio', email: 'f@b.it', pw: 'abcdef12', pw2: 'abcdef12', about: { birth: 1990, birthDate: '1990-05-01', follow: 1, fan: 'vivo' } });
+  assert.strictEqual(u.name, 'Fabio');
+  assert.strictEqual(u.loaded, true);
+  assert.strictEqual(c.fs('users/f@b.it').name, 'Fabio');
+  assert.deepStrictEqual(u.about.birthDate, '1990-05-01');
+  assert.strictEqual(calls.filter(x => x === 'users/f@b.it').length, 1, 'users/<email> letto una volta sola (per vedere se c\'era già): ' + calls.join(', '));
+  assert.strictEqual(calls.filter(x => x === 'admins/f@b.it').length, 1);
+});
+
+t('13/11 accesso svelto: senza rete sul profilo resta loaded false e non admin, anche se admins risponde', async () => {
+  ctx({ docs: { 'users/q@b.it': { email: 'q@b.it', name: 'Qui', about: {}, app2: {} }, 'admins/q@b.it': { on: true } }, users: { 'q@b.it': { pw: 'abcdef12', uid: 'uid-q' } } });
+  const A = make({ dbGet: (col, id) => (col === 'users' ? Promise.reject(Object.assign(new Error('unavailable'), { code: 'unavailable' })) : F.dbGet(col, id)) });
+  const u = await A.login('q@b.it', 'abcdef12');
+  assert.strictEqual(u.loaded, false);
+  assert.strictEqual(u.name, '');
+  assert.strictEqual(A.isAdmin(), false);
+});
+
 (async () => {
   const filter = process.argv[2] ? new RegExp(process.argv[2], 'i') : null;
   for (const [name, fn] of tests) {

@@ -74,8 +74,11 @@ run({
     const before = norm(await inner(p, '[data-theme-sheet]'));
     const teamOn1 = await p.evaluate(() => { const e = document.querySelector('[data-theme-team]'); return e && e.getAttribute('aria-pressed'); });
     await tapSel(p, '[data-theme-sheet] [aria-label="Chiudi"]'); await w(p);
+    // 14/11: dall'8/11 i preferiti stanno nella pagina "Profilo pubblico"; poi si torna al Profilo.
+    await tapText(p, 'Profilo pubblico'); await w(p, 400);
     await tapText(p, 'Scuderia del cuore'); await w(p);
     await tapText(p, 'Ferrari'); await w(p, 500);
+    await tapSel(p, '[data-profile-public] [aria-label="Indietro"]'); await w(p, 400);
     const avatar = await p.evaluate(() => { const e = document.querySelector('[data-profile-avatar]'); return e ? getComputedStyle(e).backgroundColor : null; });
     await tapText(p, "Colori dell'app"); await w(p, 400);
     const after = norm(await inner(p, '[data-theme-sheet]'));

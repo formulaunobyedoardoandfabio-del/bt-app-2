@@ -137,9 +137,13 @@ function createAccount({
   // Dopo l'accesso: profilo (users/<email>) e admin (admins/<email>). Se il profilo manca se ne crea uno minimo.
   // Senza rete (l'account c'è, il profilo no) current ha loaded: false e nessun nome: mai la parte dell'email prima
   // della @, che finirebbe nei messaggi della chat (revisione della Fase B, C1). retry() lo rilegge.
-  async function loadProfile(email, uid) {
+  // 13/11 (accesso lento): profilo e admin si leggono insieme (prima uno dopo l'altro: un giro di rete in più); known =
+  // il profilo appena scritto dall'iscrizione, che non si rilegge.
+  async function loadProfile(email, uid, known) {
+    const adminRead = dbGet("admins", email).then(v => ({ ok: true, on: !!v }), () => ({ ok: false, on: false }));
     let doc;
-    try { doc = await dbGet("users", email); } catch (e) { doc = undefined; }
+    if (known) doc = known;
+    else { try { doc = await dbGet("users", email); } catch (e) { doc = undefined; } }
     const aid = C.authorId(email);
     if (doc === undefined) {
       admin = false; adminKnown = false;
@@ -151,12 +155,16 @@ function createAccount({
     if (doc === null) {
       const nm = "Tifoso " + aid.slice(1, 5).toUpperCase();
       doc = { name: nm, email, ts: Date.now(), uid: uid || null, about: cleanAbout(null), app2: {} };   // 31/10: un campo per cosa
-      dbSet("users", email, doc).catch(() => {});
+      // Caso raro (profilo perso): la scrittura si aspetta, ma al massimo 4 secondi, così l'accesso non resta fermo.
+      let timer;
+      await Promise.race([dbSet("users", email, doc).catch(() => {}), new Promise(r => { timer = setTimeout(r, 4000); })]);
+      clearTimeout(timer);
     } else if (doc.pw != null) {
       dbSet("users", email, { migrated: Date.now() }, { remove: ["pw"] }).catch(() => {});   // passaggio rimasto a metà
     }
     if (doc) doc = tidyProfile(email, doc);
-    await readAdmin(email);
+    const adm = await adminRead;
+    admin = adm.on; adminKnown = adm.ok;
     current = { ...C.profileFromStore(doc), email, aid, uid: uid || doc.uid || null, loaded: true };
     remember(current);
     notify();
@@ -249,7 +257,7 @@ function createAccount({
       try { if (auth.currentUser) await auth.currentUser.delete(); } catch (e2) {}
       throw mkErr("offline", "profilo/" + ((saveErr && (saveErr.code || saveErr.message)) || "errore"));
     }
-    return loadProfile(em, uid);
+    return loadProfile(em, uid, profile);
   }
 
   async function resetPassword(email) {

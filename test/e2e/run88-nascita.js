@@ -123,7 +123,8 @@ run({
     const after = await p.evaluate(() => { const el = document.querySelector('[data-tab-page="garage"]:not([data-tab-neighbor]) .scrollcol'); return el ? el.scrollTop : null; });
     await ctx.close();
     // 7/11: il Garage a piastrelle è più corto di prima (scorre circa 140 px): basta che scorra un po'.
-    assert(saved > 100, 'la pagina GARAGE non scorre abbastanza per la prova: ' + saved);
+    // 14/11: dall'8/11 le piastrelle sono a sola icona e scorre circa 90 px; resta una prova vera (non è zero).
+    assert(saved > 60, 'la pagina GARAGE non scorre abbastanza per la prova: ' + saved);
     assert(half !== null && Math.abs(half - saved) <= 3, 'a metà swipe GARAGE riparte dall\'inizio: ' + JSON.stringify({ saved, half }));
     assert(after !== null && Math.abs(after - saved) <= 3, 'arrivati su GARAGE il punto è cambiato: ' + JSON.stringify({ saved, after }));
     assert(!errs.length, errs.join(' | '));
