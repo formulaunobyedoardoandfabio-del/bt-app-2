@@ -203,7 +203,7 @@ const tests = {
   },
   async 'immagine: usa il nome Instagram scelto dall\'admin'(b) {
     const { ctx, p } = await open(b); await login(p);
-    await p.evaluate(() => { if (!window.firebase.__fake.doc('admins/a@b.it')) window.firebase.__fake.setDoc('admins/a@b.it', { ruolo: 'admin' }); }); await tapSel(p, '[aria-label="Profilo"]'); await w(p); await tapText(p, 'Pannello Admin'); await w(p);
+    await p.evaluate(() => { if (!window.firebase.__fake.doc('admins/a@b.it')) window.firebase.__fake.setDoc('admins/a@b.it', { ruolo: 'admin' }); }); await tapSel(p, '[aria-label="Profilo"]'); await w(p); await require('./helpers').tapSel(p, '[data-hack-open]'); await w(p);
     await require('./helpers').enterAdminCode(p);
     await w(p, 900); await tapText(p, 'INSTAGRAM', { exact: true }); await w(p, 300);
     await p.fill('#igHandle', 'bt_prova'); await w(p, 150); await tapText(p, 'SALVA TUTTO'); await w(p, 300);

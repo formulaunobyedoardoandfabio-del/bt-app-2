@@ -33,7 +33,7 @@ const SEED_20 = require('../fixtures/seed-2.0.json');
   await p.screenshot({ path: 'n7-premium.png' }); await sel('[aria-label="Chiudi"]');
   await p.evaluate(() => { if (!window.firebase.__fake.doc('admins/a@b.it')) window.firebase.__fake.setDoc('admins/a@b.it', { ruolo: 'admin' }); });
   await sel('[aria-label="Indietro"]'); await sel('[aria-label="Profilo"]'); await w();
-  await tap('Pannello Admin'); await require('./helpers').enterAdminCode(p); await w(900);
+  await require('./helpers').tapSel(p, '[data-hack-open]'); await require('./helpers').enterAdminCode(p); await w(900);
   for (const t of ['FANTA F1', 'CLASSIFICHE', 'GARA LIVE', 'INSTAGRAM', 'NOTIFICHE', 'NEWS', 'CHAT']) await tap(t, true);
   await p.screenshot({ path: 'n8-admin-chat.png' });
   console.log('errori JS:', errs.length ? errs.join(' | ') : 'nessuno');

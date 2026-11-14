@@ -1,6 +1,6 @@
 // Sector 4 (la B&T App 2.0). Generato una volta da tools/port-2.0.js (anteprima 2.0, app-preview/index.html, versione 25);
 // da qui in avanti è il sorgente vero e si modifica a mano.
-import React, { useState, useRef, useEffect, useLayoutEffect } from "react";
+import React, { useState, useRef, useEffect, useLayoutEffect, useMemo } from "react";
 import "./App.css";
 import CIRCUITS from "./data/circuits.json";
 import CIRCUIT_INFO from "./data/circuit-info.json";
@@ -18,6 +18,8 @@ import BtWk from "./logic/bt-weekend";
 import BtHolidays from "./logic/holidays";
 import BtSwipe from "./logic/pitswipe";
 import BtElo from "./logic/elo";
+import BtReplay from "./logic/replay";
+import { createArchive } from "./services/archive";
 import BtTrophyPro from "./logic/trophypro";
 import { createSwipeVotes } from "./services/swipevotes";
 import Reminders from "./services/reminders";
@@ -489,6 +491,8 @@ const Meteo = createMeteo({ store: local, now: nowMs });
 // Dati F1 che si aggiornano da soli (25/10, src/services/f1data.js): Ghost Lap delle ultime qualifiche, gare, qualifiche e
 // prove libere, rigenerati ogni ora nei weekend da GitHub (tools/make_live_data.py) e pubblicati su Vercel.
 const F1Data = createF1Data({ store: local, now: nowMs });
+// 14/11: archivio storico dei GP da FastF1 (src/services/archive.js, public/data/archivio sul sito).
+const Archive = createArchive();
 // Post ufficiali di Instagram e X (7/11, src/services/social.js): public/data/social.json scritto dal workflow social.yml.
 const SocialFeed = createSocial({ store: local, now: nowMs });
 const MET_LICENSE_URL = "https://api.met.no/doc/License";
@@ -2196,7 +2200,7 @@ function TyreFilter({ value, onChange }) {
   );
 }
 
-function HomeScreen({ holidayTop = null, pitSwipe = null, social = [], onOpenSocial = null, ig, onOpenIg, highlights = [], ytHighlights = [], articles, tagFilter, onTag, onClearTag, onOpenArticle, isPremium, onPremium, onToast, onLiveTrack, onGoFanta, saved = [], onToggleSave, savedOnly = false, setSavedOnly, onOpenCircuit, homePoll = null, homeVote = null, onVote, hidden = [], onHide, onUnhideAll, onSwipeSave, onRefresh }) {
+function HomeScreen({ onOpenArchive = null, holidayTop = null, pitSwipe = null, social = [], onOpenSocial = null, ig, onOpenIg, highlights = [], ytHighlights = [], articles, tagFilter, onTag, onClearTag, onOpenArticle, isPremium, onPremium, onToast, onLiveTrack, onGoFanta, saved = [], onToggleSave, savedOnly = false, setSavedOnly, onOpenCircuit, homePoll = null, homeVote = null, onVote, hidden = [], onHide, onUnhideAll, onSwipeSave, onRefresh }) {
   const [q, setQ] = useState("");
   const homeRef = useRef(null);
   const pullRev = usePullRefresh(homeRef, onRefresh);
@@ -2252,6 +2256,9 @@ function HomeScreen({ holidayTop = null, pitSwipe = null, social = [], onOpenSoc
   const hiddenCount = published.length - visible.length;
   const byTag = tagFilter ? visible.filter(a => articleTags(a).some(t => t.key === tagFilter.key)) : visible;
   const bySaved = savedOnly ? byTag.filter(a => saved.includes(a.id)) : byTag;
+  // 14/11: i salvati a piastrelle come il Garage, o a lista; la scelta resta su questo telefono.
+  const [savedView, setSavedView] = useState(() => (local.get("bt-saved-view") === "lista" ? "lista" : "griglia"));
+  const pickSavedView = v => { setSavedView(v); local.set("bt-saved-view", v); fx.play("tick"); };
   const byPit = filterNews(bySaved, { tyre, lane, now: nowMs() });
   const nq = normText(q.trim());
   // "#soggetto" (18/10): le notizie con quell'hashtag (pilota, scuderia, circuito) e quelle che lo nominano nel testo,
@@ -2269,12 +2276,6 @@ function HomeScreen({ holidayTop = null, pitSwipe = null, social = [], onOpenSoc
   const featured = listMode ? null : sorted[0] || null;
   const featuredImg = useImageSrc(featured ? featured.image : "");   // finché la foto non arriva, il riquadro B&T
   const rest = listMode ? sorted : sorted.slice(1);
-  const ARCHIVE = [
-    { name: "GP d'Australia 2025", winner: "L. Norris" },
-    { name: "GP di Cina 2025", winner: "O. Piastri" },
-    { name: "GP del Giappone 2025", winner: "M. Verstappen" },
-    { name: "GP del Bahrain 2025", winner: "O. Piastri" },
-  ];
   return (
     <div data-news-look="" style={{ position: "relative", height: "100%", overflow: "hidden" }}>
     <div aria-hidden="true" data-news-ambient={amb[amb.on] || ""} style={{ position: "absolute", inset: 0, overflow: "hidden", pointerEvents: "none" }}>
@@ -2300,6 +2301,14 @@ function HomeScreen({ holidayTop = null, pitSwipe = null, social = [], onOpenSoc
       {/* 7/11 sera (Edoardo): tolti dalla Home la Pit Lane e le gomme (filtri G09 e G10); i filtri restano spenti. */}
       <div style={{ display: "flex", gap: 8, margin: "0 16px 14px" }}>
         <button className="press" aria-pressed={savedOnly ? "true" : "false"} onClick={() => setSavedOnly && setSavedOnly(!savedOnly)} style={aChip(savedOnly, C.gold)}><Icon name={savedOnly ? "bookmark-fill" : "bookmark"} size={12} color={savedOnly ? C.gold : C.muted} /> Salvati{saved.length ? ` · ${saved.length}` : ""}</button>
+        {savedOnly && <div role="group" aria-label="Come vedere i salvati" style={{ display: "flex", gap: 6, marginLeft: "auto" }}>
+          {[["griglia", "Salvati a piastrelle", <><rect x="4" y="4" width="7" height="7" rx="1.5" /><rect x="13" y="4" width="7" height="7" rx="1.5" /><rect x="4" y="13" width="7" height="7" rx="1.5" /><rect x="13" y="13" width="7" height="7" rx="1.5" /></>], ["lista", "Salvati a lista", <path d="M9 6h11M9 12h11M9 18h11M4.5 6h.01M4.5 12h.01M4.5 18h.01" />]].map(([id, label, glyph]) => (
+            <button key={id} type="button" className="press" data-saved-view={id} aria-label={label} aria-pressed={savedView === id ? "true" : "false"} onClick={() => pickSavedView(id)}
+              style={{ width: 44, height: 44, borderRadius: 12, display: "flex", alignItems: "center", justifyContent: "center", background: savedView === id ? C.accent : C.card, border: `1px solid ${savedView === id ? C.accent : C.border}` }}>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{glyph}</svg>
+            </button>
+          ))}
+        </div>}
       </div>
       {nq && matches.length > 0 && <p style={{ margin: "0 16px 12px", fontFamily: F_BODY, fontSize: 12, color: C.dim }}>{matches.length} {matches.length === 1 ? "risultato" : "risultati"} per “{q.trim()}”</p>}
       {circuitHits.length > 0 && (
@@ -2344,7 +2353,7 @@ function HomeScreen({ holidayTop = null, pitSwipe = null, social = [], onOpenSoc
         <button className="press" data-featured={featured.id} onClick={() => onOpenArticle(featured.id)} style={{ display: "block", textAlign: "left", width: "calc(100% - 32px)", margin: "0 16px 14px", borderRadius: 18, overflow: "hidden", background: C.card, border: `1px solid ${C.border}` }}>
           {/* La foto si vede intera, con le sue proporzioni: niente ritagli. */}
           <div style={{ minHeight: featuredImg ? 0 : 170, position: "relative", background: featuredImg ? "#111" : `linear-gradient(155deg,${shade(C.accent, .25)} 0%,#0f0f12 65%)` }}>
-            {featuredImg && <img data-news-img="" src={featuredImg} alt="" style={{ display: "block", width: "100%", height: "auto", maxHeight: 440, objectFit: "contain", background: "#111" }} />}
+            {featuredImg && <img data-news-img="" src={featuredImg} alt="" fetchpriority="high" decoding="async" style={{ display: "block", width: "100%", height: "auto", maxHeight: 440, objectFit: "contain", background: "#111" }} />}
             <span style={{ position: "absolute", top: 14, left: 14, padding: "5px 11px", borderRadius: 7, background: C.accent, fontFamily: F_HEAD, fontWeight: 800, fontSize: 10, letterSpacing: 1, color: "#fff" }}>{featured.cat}</span>
             {!featuredImg && (
               <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden" }}>
@@ -2364,13 +2373,14 @@ function HomeScreen({ holidayTop = null, pitSwipe = null, social = [], onOpenSoc
       )}
       {pitSwipe /* 1/11: al posto del riquadro di Instagram (che resta nel Profilo) */}
 
+      {savedOnly && !nq && savedView === "griglia" && rest.length > 0 ? <SavedTiles items={rest} onOpen={onOpenArticle} /> : (
       <div data-news-list="list">
       {rest.map(a => (
         <SwipeRow key={a.id} id={a.id} onSave={onSwipeSave} onHide={onHide}>
         <SaveBtn a={a} saved={saved.includes(a.id)} onToggle={onToggleSave} style={{ top: 8, right: 24 }} />
         <button className="press" data-news-item={a.id} data-age={String(BtLogic.newsAge(a))} onClick={() => onOpenArticle(a.id)} style={{ scrollSnapAlign: "center", display: "flex", textAlign: "left", width: "calc(100% - 32px)", margin: "0 16px 12px", borderRadius: 16, overflow: "hidden", background: C.card, border: `1px solid ${C.border}` }}>
           <div style={{ width: 92, minHeight: 92, flexShrink: 0, position: "relative", background: a.image ? "#111" : "linear-gradient(155deg,#1a1a2e 0%,#0f0f12 70%)" }}>
-            {a.image && <StoredImg data-news-img="" src={a.image} style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "contain" }} />}
+            {a.image && <StoredImg data-news-img="" src={a.image} loading="lazy" decoding="async" style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "contain" }} />}
             <span style={{ position: "absolute", top: 8, left: 8, padding: "3px 8px", borderRadius: 6, background: a.premium ? "rgba(231,179,76,.2)" : "rgba(255,255,255,.12)", fontFamily: F_HEAD, fontWeight: 800, fontSize: 8, letterSpacing: .8, color: a.premium ? C.gold : "#fff" }}>{a.cat}</span>
           </div>
           <div style={{ flex: 1, padding: "12px 52px 12px 14px", display: "flex", flexDirection: "column", justifyContent: "center", minWidth: 0 }}>
@@ -2382,6 +2392,7 @@ function HomeScreen({ holidayTop = null, pitSwipe = null, social = [], onOpenSoc
         </SwipeRow>
       ))}
       </div>
+      )}
       {hiddenCount > 0 && (
         <p data-hidden-footer="" style={{ margin: "0 16px 18px", fontFamily: F_BODY, fontSize: 12, color: C.dim, textAlign: "center" }}>
           Notizie nascoste: {hiddenCount} · <button className="press" onClick={() => onUnhideAll && onUnhideAll()} style={{ display: "inline", fontFamily: F_BODY, fontWeight: 700, fontSize: 12, color: C.accentInk, textDecoration: "underline" }}>Mostra</button>
@@ -2404,15 +2415,9 @@ function HomeScreen({ holidayTop = null, pitSwipe = null, social = [], onOpenSoc
 
         {isPremium ? (
           <div style={{ padding: 16, borderRadius: 16, background: C.card, border: `1px solid ${C.border}` }}>
-            <span style={{ display: "block", fontFamily: F_BODY, fontWeight: 700, fontSize: 11, color: C.dim, letterSpacing: 1, marginBottom: 10 }}>ARCHIVIO STORICO GP</span>
-            <div className="scrollcol" style={{ display: "flex", gap: 8, overflowX: "auto", paddingBottom: 2 }}>
-              {ARCHIVE.map(g => (
-                <button key={g.name} className="press" onClick={() => onToast("Apri " + g.name + " (demo)")} style={{ flexShrink: 0, width: 148, padding: 12, borderRadius: 12, background: "rgba(255,255,255,.04)", border: `1px solid ${C.border}`, textAlign: "left" }}>
-                  <span style={{ display: "block", fontFamily: F_HEAD, fontWeight: 700, fontSize: 12, color: C.text, marginBottom: 4 }}>{g.name}</span>
-                  <span style={{ display: "block", fontFamily: F_BODY, fontSize: 10.5, color: C.dim }}>Vinto da {g.winner}</span>
-                </button>
-              ))}
-            </div>
+            <span style={{ display: "block", fontFamily: F_BODY, fontWeight: 700, fontSize: 11, color: C.dim, letterSpacing: 1, marginBottom: 6 }}>ARCHIVIO STORICO GP</span>
+            <p style={{ margin: "0 0 10px", fontFamily: F_BODY, fontSize: 12.5, color: C.muted, lineHeight: 1.45 }}>Classifiche e gare giro per giro, dai dati del live timing di Formula 1.</p>
+            <button type="button" className="press" data-archive-open="" onClick={() => onOpenArchive && onOpenArchive()} style={{ width: "100%", minHeight: 46, borderRadius: 12, background: C.accent, border: "none", fontFamily: F_HEAD, fontWeight: 800, fontSize: 13.5, color: "#fff" }}>Apri l'archivio</button>
           </div>
         ) : (
           <PremiumLockCard icon="history" title="Archivio storico dei GP" desc="Rivivi risultati e highlights di tutte le gare passate." onPremium={onPremium} />
@@ -6310,6 +6315,243 @@ function GarageScreen({ openGame = null, onGameOpened = null, races, pitBest, on
   );
 }
 
+// 14/11 (Edoardo: "se uno visualizza i propri salvati mettili nello stesso modo stile appwatch lo stesso del Garage"):
+// gli articoli salvati a piastrelle come il Garage (mattoncino, righe dispari spostate di mezza piastrella), con la foto
+// dell'articolo e il titolo in basso. Si trascina di lato come il Garage; tocchi e si apre l'articolo.
+function SavedTiles({ items, onOpen }) {
+  const vw = typeof window !== "undefined" ? window.innerWidth || 390 : 390;
+  const T = Math.round(Math.min(124, Math.max(88, (vw - 32 - 2 * GARAGE_GAP) / 3.3))), STEP = T + GARAGE_GAP, PAD = 16;
+  const at = i => { const row = Math.floor(i / GARAGE_COLS), col = i % GARAGE_COLS; return { left: PAD + col * STEP + (row % 2 ? STEP / 2 : 0), top: 4 + row * STEP }; };
+  const rowsN = Math.ceil(items.length / GARAGE_COLS);
+  const W = PAD * 2 + Math.min(items.length, GARAGE_COLS) * STEP - GARAGE_GAP + (rowsN > 1 ? STEP / 2 : 0), H = 4 + rowsN * STEP - GARAGE_GAP + 16;
+  const R = Math.round(T * 0.24);
+  const empty = `linear-gradient(155deg, ${shade(C.accent, .25)} 0%, #0f0f12 72%)`;
+  return (
+    <div className="scrollcol" data-saved-canvas="" style={{ overflowX: "auto", overflowY: "hidden", overscrollBehaviorX: "contain", scrollbarWidth: "none" }}>
+      <div data-saved-grid="" style={{ position: "relative", width: Math.max(W, 1), height: H }}>
+        {items.map((a, i) => {
+          const pos = at(i);
+          return (
+            <button key={a.id} type="button" className="press garage-tile" data-saved-tile={a.id} aria-label={a.title} onClick={() => onOpen(a.id)}
+              style={{ position: "absolute", left: pos.left, top: pos.top, width: T, height: T, boxSizing: "border-box", padding: 0, borderRadius: R, overflow: "hidden", background: "#111", border: "1px solid rgba(255,255,255,.14)", boxShadow: "inset 0 1px 0 rgba(255,255,255,.22), 0 8px 18px rgba(0,0,0,.4)", textAlign: "left" }}>
+              <StoredBg as="span" data-saved-photo="" src={a.image} empty={empty} style={{ position: "absolute", inset: 0 }} />
+              {!a.image && <span aria-hidden="true" style={{ position: "absolute", top: 8, left: 0, right: 0, textAlign: "center", fontFamily: F_HEAD, fontWeight: 900, fontStyle: "italic", fontSize: Math.round(T * 0.26), color: "rgba(255,255,255,.12)" }}>B&amp;T</span>}
+              <h3 style={{ position: "absolute", left: 0, right: 0, bottom: 0, margin: 0, padding: "16px 8px 7px", background: "linear-gradient(180deg, rgba(0,0,0,0), rgba(0,0,0,.85) 55%)", fontFamily: F_HEAD, fontWeight: 800, fontSize: 9.5, lineHeight: 1.22, color: "#fff" }}><span style={{ display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{a.title}</span></h3>
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+// 14/11 (Edoardo: "se non c'è connessione la funzione offline dove mostra tutto quello che può fare offline l'app e
+// basta ma se l'utente vuole può sempre riprovare a riconnettersi"). Senza rete al posto delle schede: le notizie già
+// scaricate, i salvati, la classifica dell'ultima copia e gli strumenti del Garage che non scaricano niente.
+const OFFLINE_GAMES = [["pitstop", "Pit Stop Challenge", "Cambia le 4 gomme a tempo di record."], ["aero", "Drag vs Downforce", "Ala e altezza da terra per la prossima pista."], ["guide", "Guida 2D dei tracciati", "Curve, marce e punti di staccata."], ["clash", "Circuit Spec Clash", "Due piste a confronto."]];
+function OfflineScreen({ news = [], saved = [], standings = null, races = [], pitBest = null, onPitResult, onOpenArticle, onRetry, tryState = "idle", onClose = null }) {
+  const [game, setGame] = useState(null);
+  const back = () => setGame(null);
+  useBack(!!game, back);
+  useBack(!game && !!onClose, () => { if (onClose) onClose(); });
+  if (game === "pitstop") return <PitStopGame best={pitBest} onResult={onPitResult} onBack={back} />;
+  if (game === "aero") return <AeroCalc races={races} onBack={back} />;
+  if (game === "guide") return <GuideTool races={races} onBack={back} />;
+  if (game === "clash") return <ClashTool races={races} onBack={back} />;
+  const shown = news.filter(a => a && a.published !== false && a.title);
+  const list = shown.slice(0, 10), mine = shown.filter(a => saved.includes(a.id));
+  const top = standings && Array.isArray(standings.drivers) ? standings.drivers.slice().sort((x, y) => x.position - y.position).slice(0, 10) : [];
+  const head = t => <div style={{ margin: "18px 18px 8px", fontFamily: F_BODY, fontWeight: 700, fontSize: 11, letterSpacing: 1.2, color: C.gold }}>{t}</div>;
+  const card = { margin: "0 16px", borderRadius: 16, background: C.card, border: `1px solid ${C.border}`, overflow: "hidden" };
+  const trying = tryState === "trying";
+  return (
+    <div data-offline-mode="" className="scrollcol" style={{ height: "100%", overflowY: "auto", overscrollBehavior: "contain", paddingBottom: 24 }}>
+      <div style={{ padding: "18px 16px 4px" }}>
+        <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke={C.gold} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M2 8.8a15 15 0 0 1 20 0M5 12.5a10 10 0 0 1 14 0M8.5 16a5 5 0 0 1 7 0" /><path d="M12 20h.01" /><path d="M3 3l18 18" /></svg>
+        <h1 style={{ margin: "8px 0 0", fontFamily: F_HEAD, fontWeight: 900, fontStyle: "italic", fontSize: 24, color: C.text }}>SENZA RETE</h1>
+        <p style={{ margin: "6px 0 0", fontFamily: F_BODY, fontSize: 13, color: C.muted, lineHeight: 1.5 }}>Niente connessione: qui c'è quello che l'app fa anche così. Notizie, chat, Fanta e dirette tornano con la rete.</p>
+        <button type="button" className="press" data-offline-retry="" disabled={trying} onClick={onRetry}
+          style={{ marginTop: 14, width: "100%", minHeight: 48, borderRadius: 14, background: C.accent, border: "none", fontFamily: F_HEAD, fontWeight: 800, fontSize: 14, letterSpacing: .4, color: "#fff", opacity: trying ? .7 : 1 }}>
+          {trying ? "Provo a collegarmi…" : "Riprova a collegarti"}
+        </button>
+        {tryState === "failed" && <p role="status" data-offline-still="" style={{ margin: "8px 2px 0", fontFamily: F_BODY, fontSize: 12, color: C.gold }}>Ancora niente rete. Riprova quando vuoi.</p>}
+        {onClose && <button type="button" className="press" data-offline-close="" onClick={onClose} style={{ marginTop: 8, width: "100%", minHeight: 44, borderRadius: 14, background: "transparent", border: `1px solid ${C.border}`, fontFamily: F_BODY, fontWeight: 700, fontSize: 13, color: C.text }}>Torna all'app</button>}
+      </div>
+      {list.length > 0 && <>
+        {head("NOTIZIE SCARICATE · " + shown.length)}
+        <div style={card}>
+          {list.map((a, i) => (
+            <button key={a.id} type="button" className="press" data-offline-news={a.id} onClick={() => onOpenArticle(a.id)} style={{ display: "flex", alignItems: "center", gap: 10, width: "100%", minHeight: 52, padding: "10px 14px", background: "transparent", border: "none", borderTop: i ? `1px solid ${C.divider}` : "none", textAlign: "left" }}>
+              <span style={{ flex: 1, minWidth: 0 }}>
+                <span style={{ display: "block", fontFamily: F_HEAD, fontWeight: 700, fontSize: 13.5, color: C.text, lineHeight: 1.3 }}>{a.title}</span>
+                {a.time && <span style={{ display: "block", marginTop: 2, fontFamily: F_BODY, fontSize: 11, color: C.dim }}>{a.time}</span>}
+              </span>
+              <Icon name="chevron" size={14} color={C.dim} />
+            </button>
+          ))}
+        </div>
+      </>}
+      {mine.length > 0 && <>
+        {head("I TUOI SALVATI · " + mine.length)}
+        <SavedTiles items={mine} onOpen={onOpenArticle} />
+      </>}
+      {top.length > 0 && <>
+        {head("CLASSIFICA PILOTI · ULTIMA COPIA")}
+        <div data-offline-standings="" style={{ ...card, padding: "4px 14px" }}>
+          {top.map((r, i) => { const d = standingsDriver(r.id); return (
+            <div key={r.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 0", borderTop: i ? `1px solid ${C.divider}` : "none" }}>
+              <span style={{ width: 22, fontFamily: F_HEAD, fontWeight: 800, fontSize: 13, color: r.position <= 3 ? C.gold : C.text }}>{r.position}</span>
+              <span style={{ flex: 1, fontFamily: F_BODY, fontWeight: 600, fontSize: 12.5, color: C.text }}>{d ? d.full : r.id}</span>
+              <span style={{ fontFamily: F_HEAD, fontWeight: 800, fontSize: 12.5, color: C.muted }}>{r.points} pt</span>
+            </div>
+          ); })}
+        </div>
+      </>}
+      {head("GIOCHI SENZA RETE")}
+      <div style={card}>
+        {OFFLINE_GAMES.map(([id, title, sub], i) => (
+          <button key={id} type="button" className="press" data-offline-game={id} onClick={() => { setGame(id); fx.play("tick"); }} style={{ display: "flex", alignItems: "center", gap: 12, width: "100%", minHeight: 60, padding: "10px 14px", background: "transparent", border: "none", borderTop: i ? `1px solid ${C.divider}` : "none", textAlign: "left" }}>
+            <GarageIcon id={id} size={40} />
+            <span style={{ flex: 1, minWidth: 0 }}>
+              <span style={{ display: "block", fontFamily: F_HEAD, fontWeight: 800, fontStyle: "italic", fontSize: 14, color: C.text }}>{title}</span>
+              <span style={{ display: "block", marginTop: 2, fontFamily: F_BODY, fontSize: 11.5, color: C.muted }}>{sub}</span>
+            </span>
+            <Icon name="chevron" size={14} color={C.dim} />
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// 14/11 (Edoardo: "nell'archivio storico GP prendi dati da FastF1 e rendi possibile riguardare la gara dalla sezione
+// race se l'utente vuole"). Anni passati da FastF1 (src/services/archive.js), il 2026 dai dati già nell'app
+// (BtWeekend.races); ogni gara: classifica e "Riguarda la gara" giro per giro (src/logic/replay.js).
+const replayName = (code, d) => (d && d.name) || ((DRIVERS.find(x => driverCode(x) === code) || {}).full) || code;
+const replayColor = team => (teamById(team) || {}).color || "#8E8E96";
+const REPLAY_FLAG = { sc: "SAFETY CAR", vsc: "VIRTUAL SAFETY CAR", red: "BANDIERA ROSSA" };
+function RaceReplay({ race, title, onBack }) {
+  const frames = useMemo(() => BtReplay.frames(race), [race]);
+  const L = frames.length;
+  const [lap, setLap] = useState(1), [playing, setPlaying] = useState(false), [speed, setSpeed] = useState(1);
+  useEffect(() => {
+    if (!playing) return undefined;
+    if (lap >= L) { setPlaying(false); return undefined; }
+    const id = setTimeout(() => setLap(l => Math.min(L, l + 1)), 1000 / speed);
+    return () => clearTimeout(id);
+  }, [playing, lap, speed, L]);
+  if (!L) return <div data-race-replay="" style={{ height: "100%" }}><SubHeader title={title} onBack={onBack} /><p style={{ margin: "0 16px", fontFamily: F_BODY, fontSize: 13, color: C.muted }}>Per questa gara non ci sono i giri.</p></div>;
+  const f = frames[Math.min(lap, L) - 1], flag = BtReplay.flagAt(race, lap), ROW = 36;
+  const byCode = {}; f.rows.forEach(r => { byCode[r.code] = r; });
+  const codes = Object.keys(byCode).sort();
+  const move = prefersReduced() ? "none" : "transform .45s cubic-bezier(.2,.8,.2,1)";
+  const gapText = r => (r.gap === 0 ? "Leader" : r.gap != null ? "+" + (r.gap / 1000).toFixed(1).replace(".", ",") : r.out ? "RIT" : r.down ? `+${r.down} ${r.down === 1 ? "giro" : "giri"}` : "");
+  const btn = { minHeight: 44, padding: "0 14px", borderRadius: 12, background: C.card, border: `1px solid ${C.border}`, fontFamily: F_HEAD, fontWeight: 800, fontSize: 13, color: C.text };
+  return (
+    <div data-race-replay="" style={{ height: "100%", display: "flex", flexDirection: "column" }}>
+      <SubHeader title={title} onBack={onBack} />
+      <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "0 16px 10px", flexShrink: 0 }}>
+        <span data-replay-lap="" style={{ fontFamily: F_HEAD, fontWeight: 900, fontStyle: "italic", fontSize: 16, color: C.text }}>GIRO {lap}/{L}</span>
+        {flag && <span data-replay-flag="" style={{ padding: "4px 9px", borderRadius: 8, background: flag === "red" ? "#E10600" : "#E7B34C", fontFamily: F_HEAD, fontWeight: 800, fontSize: 10.5, letterSpacing: .6, color: flag === "red" ? "#fff" : "#111" }}>{REPLAY_FLAG[flag]}</span>}
+      </div>
+      <div className="scrollcol" style={{ flex: 1, minHeight: 0, overflowY: "auto", padding: "0 16px" }}>
+        <div style={{ position: "relative", height: codes.length * ROW }}>
+          {codes.map(code => { const r = byCode[code], d = race.drivers[code] || {}; return (
+            <div key={code} data-replay-row={code} data-pos={r.pos} style={{ position: "absolute", left: 0, right: 0, top: 0, height: ROW - 4, transform: `translateY(${(r.pos - 1) * ROW}px)`, transition: move, display: "flex", alignItems: "center", gap: 10, padding: "0 10px", borderRadius: 10, background: C.card, opacity: r.out ? .5 : 1 }}>
+              <span style={{ width: 22, fontFamily: F_HEAD, fontWeight: 800, fontSize: 13, color: r.pos <= 3 ? C.gold : C.text }}>{r.pos}</span>
+              <span aria-hidden="true" style={{ width: 4, height: 18, borderRadius: 2, background: replayColor(d.team) }} />
+              <span style={{ width: 38, fontFamily: F_HEAD, fontWeight: 800, fontSize: 13, color: C.text }}>{code}</span>
+              <span style={{ flex: 1, minWidth: 0, fontFamily: F_BODY, fontSize: 12, color: C.muted, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{replayName(code, d)}</span>
+              <span style={{ fontFamily: F_HEAD, fontWeight: 700, fontSize: 12, color: r.out ? "#FF5A5F" : C.muted }}>{gapText(r)}</span>
+            </div>
+          ); })}
+        </div>
+      </div>
+      <div style={{ padding: "10px 16px 14px", flexShrink: 0 }}>
+        <input type="range" data-replay-slider="" aria-label="Giro" min={1} max={L} value={lap} onChange={e => { setLap(Math.max(1, Math.min(L, +e.target.value || 1))); setPlaying(false); }} style={{ width: "100%", accentColor: C.accent }} />
+        <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
+          <button type="button" className="press" data-replay-play="" onClick={() => { if (lap >= L) setLap(1); setPlaying(v => !v); fx.play("tick"); }} style={{ ...btn, flex: 1, background: C.accent, border: "none", color: "#fff" }}>{playing ? "Pausa" : lap >= L ? "Da capo" : "Play"}</button>
+          <button type="button" className="press" data-replay-speed="" aria-label={`Velocità ×${speed}: tocca per cambiarla`} onClick={() => setSpeed(v => (v === 1 ? 4 : v === 4 ? 10 : 1))} style={btn}>×{speed}</button>
+          <button type="button" className="press" data-replay-end="" onClick={() => { setPlaying(false); setLap(L); }} style={btn}>Fine</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ArchiveScreen({ archive, weekend, calendar = [], onBack }) {
+  const now26 = (weekend && Array.isArray(weekend.races) ? weekend.races : []).filter(r => r && r.drivers);
+  const [years, setYears] = useState(null);           // null = si carica; [] = niente dal sito
+  const [year, setYear] = useState(now26.length ? 2026 : null);
+  const [season, setSeason] = useState({ year: null, races: null, status: "idle" });
+  const [pick, setPick] = useState(null), [replay, setReplay] = useState(false);
+  useEffect(() => { let on = true; archive.index().then(list => { if (on) setYears((list || []).filter(y => y.year < 2026)); }); return () => { on = false; }; }, []);
+  useEffect(() => {
+    if (year == null && years && years.length) setYear(years[0].year);
+    if (year == null || year === 2026) return undefined;
+    let on = true;
+    setSeason({ year, races: null, status: "loading" });
+    archive.season(year).then(j => { if (on) setSeason({ year, races: j ? j.races : null, status: j ? "ok" : "error" }); });
+    return () => { on = false; };
+  }, [year, years]);
+  useBack(replay, () => setReplay(false));
+  useBack(!!pick && !replay, () => setPick(null));
+  const nameOf = r => r.name || ((calendar.find(c => c.round === r.round) || {}).name) || "Round " + r.round;
+  const label = r => `${nameOf(r)} ${year}`;
+  if (pick && replay) return <RaceReplay race={pick} title={label(pick)} onBack={() => setReplay(false)} />;
+  const allYears = [...(now26.length ? [2026] : []), ...((years || []).map(y => y.year))];
+  const list = year === 2026 ? now26.slice().sort((a, b) => b.round - a.round) : season.year === year && season.races ? season.races.slice().sort((a, b) => b.round - a.round) : [];
+  const chip = on => ({ minHeight: 40, padding: "0 14px", borderRadius: 20, background: on ? C.accent : C.card, border: `1px solid ${on ? C.accent : C.border}`, fontFamily: F_HEAD, fontWeight: 800, fontSize: 13, color: "#fff", flexShrink: 0 });
+  if (pick) {
+    const ds = pick.drivers || {}, rows = Object.keys(ds).sort((a, b) => (ds[a].pos == null) - (ds[b].pos == null) || (ds[a].pos || 0) - (ds[b].pos || 0) || (ds[b].n || 0) - (ds[a].n || 0));
+    return (
+      <div data-archive="" data-archive-detail="" style={{ height: "100%", display: "flex", flexDirection: "column" }}>
+        <SubHeader title={label(pick)} onBack={() => setPick(null)} />
+        <div className="scrollcol" style={{ flex: 1, minHeight: 0, overflowY: "auto", padding: "0 16px 20px" }}>
+          <button type="button" className="press" data-replay-open="" onClick={() => { setReplay(true); fx.play("tick"); }} style={{ width: "100%", minHeight: 50, marginBottom: 14, borderRadius: 14, background: C.accent, border: "none", fontFamily: F_HEAD, fontWeight: 800, fontSize: 14, color: "#fff" }}>Riguarda la gara · {pick.laps || "?"} giri</button>
+          <div style={{ borderRadius: 16, background: C.card, border: `1px solid ${C.border}`, padding: "2px 14px" }}>
+            {rows.map((code, i) => { const d = ds[code]; return (
+              <div key={code} data-archive-row={code} style={{ display: "flex", alignItems: "center", gap: 10, padding: "9px 0", borderTop: i ? `1px solid ${C.divider}` : "none" }}>
+                <span style={{ width: 28, fontFamily: F_HEAD, fontWeight: 800, fontSize: 13, color: d.pos && d.pos <= 3 ? C.gold : C.text }}>{d.pos || "RIT"}</span>
+                <span aria-hidden="true" style={{ width: 4, height: 18, borderRadius: 2, background: replayColor(d.team) }} />
+                <span style={{ flex: 1, minWidth: 0 }}>
+                  <span style={{ display: "block", fontFamily: F_BODY, fontWeight: 600, fontSize: 12.5, color: C.text }}>{code} · {replayName(code, d)}</span>
+                  <span style={{ display: "block", fontFamily: F_BODY, fontSize: 11, color: C.dim }}>{d.tn || (teamById(d.team) || {}).name || ""}{d.pos == null ? " · Ritirato" : ""}</span>
+                </span>
+                <span style={{ fontFamily: F_BODY, fontSize: 11, color: C.dim }}>{d.n || 0} giri</span>
+              </div>
+            ); })}
+          </div>
+          <p style={{ margin: "10px 2px 0", fontFamily: F_BODY, fontSize: 10.5, color: C.dim }}>Dati: {year === 2026 ? "live timing di Formula 1 (FastF1, TracingInsights)" : "FastF1, dal live timing di Formula 1"}.</p>
+        </div>
+      </div>
+    );
+  }
+  return (
+    <div data-archive="" style={{ height: "100%", display: "flex", flexDirection: "column" }}>
+      <SubHeader title="ARCHIVIO STORICO GP" onBack={onBack} />
+      <div className="scrollcol" style={{ display: "flex", gap: 8, overflowX: "auto", padding: "0 16px 12px", flexShrink: 0, scrollbarWidth: "none" }}>
+        {allYears.map(y => <button key={y} type="button" className="press" data-archive-year={y} aria-pressed={y === year ? "true" : "false"} onClick={() => { setYear(y); fx.play("tick"); }} style={chip(y === year)}>{y}</button>)}
+      </div>
+      <div className="scrollcol" style={{ flex: 1, minHeight: 0, overflowY: "auto", padding: "0 16px 20px" }}>
+        {years && !years.length && <p data-archive-none="" style={{ margin: "0 2px 12px", fontFamily: F_BODY, fontSize: 12, color: C.dim, lineHeight: 1.5 }}>Gli anni prima del 2026 non sono ancora nell'archivio: arrivano da FastF1 appena sono pronti.</p>}
+        {year !== 2026 && season.status === "loading" && <p style={{ margin: "0 2px", fontFamily: F_BODY, fontSize: 12.5, color: C.muted }}>Carico le gare del {year}…</p>}
+        {year !== 2026 && season.status === "error" && <p style={{ margin: "0 2px", fontFamily: F_BODY, fontSize: 12.5, color: C.muted }}>Le gare del {year} non sono arrivate. Riprova tra poco.</p>}
+        {list.map(r => { const pod = BtReplay.podium(r); return (
+          <button key={r.round} type="button" className="press" data-archive-race={year + "-" + r.round} onClick={() => { setPick(r); fx.play("tick"); }} style={{ display: "flex", alignItems: "center", gap: 12, width: "100%", minHeight: 60, marginBottom: 8, padding: "10px 14px", borderRadius: 14, background: C.card, border: `1px solid ${C.border}`, textAlign: "left" }}>
+            <span style={{ width: 30, fontFamily: F_HEAD, fontWeight: 800, fontSize: 12, color: C.dim }}>R{r.round}</span>
+            <span style={{ flex: 1, minWidth: 0 }}>
+              <span style={{ display: "block", fontFamily: F_HEAD, fontWeight: 800, fontSize: 13.5, color: C.text }}>{nameOf(r)}</span>
+              <span style={{ display: "block", marginTop: 2, fontFamily: F_BODY, fontSize: 11.5, color: C.muted }}>{pod.length ? "Podio: " + pod.join(" · ") : ""}{r.place ? (pod.length ? " · " : "") + r.place : ""}</span>
+            </span>
+            <Icon name="chevron" size={14} color={C.dim} />
+          </button>
+        ); })}
+      </div>
+    </div>
+  );
+}
+
 // Pannello Admin → MERCATO: comunicati ufficiali dei sedili (danno i punti della Silly Season).
 function AdminSillyTab({ official = {}, onOfficial, onToast }) {
   const [seat, setSeat] = useState("russell"), [drv, setDrv] = useState("russell");
@@ -6677,7 +6919,7 @@ function EndSpy({ onEnd }) {
   }, []);
   return <div ref={ref} data-end-spy="" aria-hidden="true" style={{ height: 1 }} />;
 }
-function RaceScreen({ champion = null, proUnlocked = [], proHint = null, proOk = true, onProAd = null, proBusy = false, onStandingsEnd = null, isPremium, onPremium, onSelectDriver, races, standings, live, liveSt, onExpandMap, onTelemetry, onOpenCircuit, wxGuess, wxResult, onGuessWeather, onLapTimes, onSecondScreen, lastRace, dotdVote, onDotdVote, ratings = {}, onRate, onOpenChats, onOpenGhost, of1 = null, onOf1Refresh, replay = null, favDriver = null, of1Sessions = null, onOf1Pick = null, sessionNote = null, trophies = null, onHideTrophies = null, onReplayAt = null, onShareTrophy = null, startGrid = null, pitWall = null, pitPlays = {}, onPitSave = null, onSharePit = null }) {
+function RaceScreen({ onOpenArchive = null, champion = null, proUnlocked = [], proHint = null, proOk = true, onProAd = null, proBusy = false, onStandingsEnd = null, isPremium, onPremium, onSelectDriver, races, standings, live, liveSt, onExpandMap, onTelemetry, onOpenCircuit, wxGuess, wxResult, onGuessWeather, onLapTimes, onSecondScreen, lastRace, dotdVote, onDotdVote, ratings = {}, onRate, onOpenChats, onOpenGhost, of1 = null, onOf1Refresh, replay = null, favDriver = null, of1Sessions = null, onOf1Pick = null, sessionNote = null, trophies = null, onHideTrophies = null, onReplayAt = null, onShareTrophy = null, startGrid = null, pitWall = null, pitPlays = {}, onPitSave = null, onSharePit = null }) {
   const [pitOpen, setPitOpen] = useState(null);   // 1/11 notte: pilota con le gomme dei pit aperte (scheda Gomme)
   const [trophyPage, setTrophyPage] = useState(false);   // 8/11: pagina dei B&T Trophies
   useBack(trophyPage, () => setTrophyPage(false));
@@ -6777,6 +7019,13 @@ function RaceScreen({ champion = null, proUnlocked = [], proHint = null, proOk =
         <button className="press" data-race-chat="" onClick={onOpenChats} style={{ display: "flex", alignItems: "center", gap: 10, width: "calc(100% - 32px)", margin: "0 16px 14px", padding: "11px 14px", borderRadius: 14, background: C.card, border: `1px solid ${C.border}`, textAlign: "left" }}>
           <span style={{ width: 36, height: 36, borderRadius: 12, background: alpha(C.accentInk, .16), display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}><Icon name="chat" size={18} color={C.accentInk} /></span>
           <span style={{ flex: 1, minWidth: 0 }}><b style={{ display: "block", fontFamily: F_HEAD, fontWeight: 800, fontSize: 13.5, color: C.text }}>Chat dei tifosi</b><span style={{ fontFamily: F_BODY, fontSize: 11.5, color: C.muted }}>{st ? "Commenta la diretta con la community B&T" : "Parla di F1 con la community B&T"}</span></span>
+          <Icon name="chevron" size={15} color={C.dim} />
+        </button>
+      )}
+      {onOpenArchive && (
+        <button className="press" data-race-archive="" onClick={onOpenArchive} style={{ display: "flex", alignItems: "center", gap: 10, width: "calc(100% - 32px)", margin: "0 16px 14px", padding: "11px 14px", borderRadius: 14, background: C.card, border: `1px solid ${C.border}`, textAlign: "left" }}>
+          <span style={{ width: 36, height: 36, borderRadius: 12, background: alpha(C.gold, .16), display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}><Icon name="history" size={18} color={C.gold} /></span>
+          <span style={{ flex: 1, minWidth: 0 }}><b style={{ display: "block", fontFamily: F_HEAD, fontWeight: 800, fontSize: 13.5, color: C.text }}>Riguarda una gara</b><span style={{ fontFamily: F_BODY, fontSize: 11.5, color: C.muted }}>Archivio storico: le gare giro per giro{isPremium ? "" : " · Premium"}</span></span>
           <Icon name="chevron" size={15} color={C.dim} />
         </button>
       )}
@@ -8076,16 +8325,16 @@ function FantaEloCard({ elo, meAid, people = [] }) {
               <span style={{ fontFamily: F_HEAD, fontWeight: 900, fontSize: 30, color: C.text }}><RollNumber value={me.rating} /></span>
               {me.last !== 0 && <span data-elo-last={me.last} style={{ fontFamily: F_HEAD, fontWeight: 800, fontSize: 13, color: me.last > 0 ? TIMING.green : "#FF5A5F" }}>{me.last > 0 ? "▲ +" + me.last : "▼ " + me.last}</span>}
             </div>
-            <span style={{ fontFamily: F_BODY, fontSize: 11.5, color: C.muted }}>dopo {me.games} GP{pos > 0 && ranked.length > 1 ? ` · ${pos}° di ${ranked.length} nelle tue leghe` : ""}</span>
+            <span style={{ fontFamily: F_BODY, fontSize: 11.5, color: C.muted }}>dopo {me.games} GP{pos > 0 && ranked.length > 1 ? ` · ${pos}° di ${ranked.length} ${elo.bt ? "nella lega B&T" : "nelle tue leghe"}` : ""}</span>
           </div>
           {hist.length > 1 && <svg aria-hidden="true" width="96" height="30" viewBox="0 0 100 30" preserveAspectRatio="none" style={{ flexShrink: 0 }}><polyline points={pts} fill="none" stroke={C.accent} strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" vectorEffect="non-scaling-stroke" /></svg>}
         </div>
       ) : (
-        <p style={{ margin: 0, fontFamily: F_BODY, fontSize: 12.5, color: C.muted, lineHeight: 1.5 }}>Parti da {BtElo.START}. Il tuo ELO si muove dopo ogni GP giocato con la squadra completa, contro gli amici delle tue leghe: entra in una lega con almeno un altro tifoso.</p>
+        <p style={{ margin: 0, fontFamily: F_BODY, fontSize: 12.5, color: C.muted, lineHeight: 1.5 }}>Parti da {BtElo.START}. Il tuo ELO si muove dopo ogni GP giocato con la squadra completa, contro tutti i tifosi della lega B&T.</p>
       )}
       <button className="press" data-elo-how="" aria-expanded={open} onClick={() => setOpen(o => !o)} style={{ marginTop: 10, padding: 0, fontFamily: F_BODY, fontWeight: 700, fontSize: 12, color: C.accentInk }}>{open ? "Chiudi" : "Come si calcola"}</button>
       {open && <p data-elo-rule="" style={{ margin: "8px 0 0", fontFamily: F_BODY, fontSize: 11.5, color: C.muted, lineHeight: 1.55 }}>
-        Come negli scacchi: tutti partono da {BtElo.START}. Dopo ogni GP il tuo punteggio FantaF1 si confronta con quello di ognuno degli altri delle tue leghe che hanno giocato: vincere vale 1, pareggiare ½, perdere 0. Battere chi ha l'ELO più alto fa guadagnare di più, perdere con chi ce l'ha più basso fa perdere di più. Il guadagno del GP è K × (risultato − atteso), in media sui confronti; atteso = 1 / (1 + 10^((ELO avversario − tuo ELO) / 400)). K vale 40 nei primi 3 GP, poi 24, e 16 da 1600 in su. Contano gara, qualifiche, Sprint e penalità dei cambi; i bonus dei pronostici no. Fasce: Esordiente, Pilota titolare (1150), Prima guida (1300), Campione (1450), Leggenda (1600).
+        ELO B&T: un'unica classifica per tutti i tifosi della lega B&T, come negli scacchi. Tutti partono da {BtElo.START}. Dopo ogni GP conta il tuo punteggio FantaF1 contro quello di chi ha giocato: per l'85% la posizione (davanti a tutti vale 1, ultimo 0) e per il 15% quanto sei vicino al migliore. Il risultato atteso dipende dalla media degli ELO degli altri (la formula degli scacchi, con 400): contro un campo forte serve meno per salire. La variazione è K × (risultato − atteso): K vale 48 nei primi 3 GP, 32 fino al 10°, poi 20, e 16 da 1700 in su. Contano solo i punti dei GP veri, non i bonus dei pronostici.
       </p>}
     </div>
   );
@@ -8485,7 +8734,7 @@ function ProfiloScreen({ onHack = null, onCoffee = null, coffeePrice = null, fan
       ...(onHalfway ? [{ icon: "flag", label: "Avviso a metà gara (se perdi la partenza)", toggle: { on: halfway !== false, onChange: onHalfway }, sub: true }] : []),
       ...(onTrophiesOn ? [{ icon: "trophy", label: "B&T Trophies dopo la sessione", toggle: { on: trophiesOn !== false, onChange: onTrophiesOn }, sub: true }] : []),
     ] : []),
-    ...(isAdmin ? [{ icon: "gear", label: "Pannello Admin · Pubblica notizia", onClick: onAdmin, badge: "ADMIN" }] : []),
+    // 14/11 (Edoardo: "ci sono 2 bottoni admin"): niente più riga per gli admin, si entra solo dal bottone ADMIN qui sotto.
     { icon: "help", label: "Assistenza", onClick: onHelp, chevron: true },
     { icon: "chat", label: "Invia feedback", onClick: onFeedback, chevron: true },   // come oggi, ma dal Profilo (niente pulsante fluttuante)
     // "Offrici un caffè" (1/11): Google Play nell'APK, Stripe sul sito; "in arrivo" solo nell'APK senza Google Play.
@@ -8750,7 +8999,8 @@ const HACK_BOOT = [
   "> garage B&T: serve un codice",
 ];
 const HACK_GUARD_KEY = "bt-hack-guard";
-function HackTerminal({ isAdmin, unlocks, onToggle, onAdmin, onClose, onOpenIg, telemetry }) {
+function HackTerminal({ isAdmin, unlocks, onToggle, onAdmin, onClose, onOpenIg, telemetry, panelOpen = false, onTour = null }) {
+  const [video, setVideo] = useState(false);   // 14/11: codice 01, video di presentazione dentro il terminale
   const [log, setLog] = useState([]);        // righe scritte dopo l'avvio: { id, text, tone }
   const [code, setCode] = useState("");
   const [state, setState] = useState("idle"); // idle | denied | granted | locked
@@ -8794,6 +9044,14 @@ function HackTerminal({ isAdmin, unlocks, onToggle, onAdmin, onClose, onOpenIg, 
       setTimeout(onAdmin, 1100);
       return;
     }
+    if (r.kind === "action") {
+      const act = SecretCodes.actionOf(r.id);
+      setState("granted"); fx.play("done"); fx.buzz("success");
+      say([echo, ["ESEGUITO: " + act.title.toUpperCase(), "ok"], [act.say, "dim"]]);
+      if (r.id === "video") setVideo(true);
+      if (r.id === "tour" && onTour) { opening.current = true; setTimeout(onTour, 700); }
+      return;
+    }
     const u = SecretCodes.unlockOf(r.id), turningOn = !unlocks.includes(r.id);
     onToggle(r.id);
     setState("granted"); fx.play(turningOn ? "done" : "tick"); fx.buzz("success");
@@ -8815,6 +9073,7 @@ function HackTerminal({ isAdmin, unlocks, onToggle, onAdmin, onClose, onOpenIg, 
       <div ref={bodyRef} role="log" aria-live="polite" aria-label="Terminale" style={{ flex: 1, minHeight: 0, overflowY: "auto", padding: "12px 16px 8px", position: "relative" }}>
         {HACK_BOOT.map((t, i) => <p key={"b" + i} data-hack-line="" className="hack-in" style={{ ...line, animationDelay: i * 170 + "ms", color: i === 0 ? TERM.fg : TERM.dim, fontWeight: i === 0 ? 700 : 400 }}>{t}</p>)}
         <button className="press hack-in" onClick={onOpenIg || undefined} disabled={!onOpenIg} style={{ ...line, display: "block", padding: "6px 0", textAlign: "left", background: "transparent", color: TERM.amber, animationDelay: HACK_BOOT.length * 170 + "ms" }}># gli indizi sui codici escono sulle storie Instagram di B&T</button>
+        {panelOpen && <button className="press hack-in" data-hack-panel="" onClick={onAdmin} style={{ ...line, display: "block", padding: "6px 0", textAlign: "left", background: "transparent", color: TERM.fg, fontWeight: 700, animationDelay: (HACK_BOOT.length + 1) * 170 + "ms" }}>&gt; pannello admin già sbloccato: tocca qui per aprirlo</button>}
         {log.map(l => <p key={l.id} data-hack-line="" className="hack-in" style={{ ...line, color: tone(l.tone), fontWeight: l.tone === "ok" || l.tone === "red" ? 700 : 400 }}>{l.text}</p>)}
         {state === "granted" && opening.current && <div className="hack-bar" aria-hidden="true"><span /></div>}
         {unlocks.includes("telemetry") && telemetry && (
@@ -8824,6 +9083,12 @@ function HackTerminal({ isAdmin, unlocks, onToggle, onAdmin, onClose, onOpenIg, 
           </div>
         )}
       </div>
+      {video && (
+        <div data-hack-video="" role="dialog" aria-label="Video di presentazione" style={{ position: "absolute", inset: 0, zIndex: 5, background: "#000", display: "flex", alignItems: "center", justifyContent: "center" }}>
+          <video src="videos/presentazione.mp4" poster="videos/presentazione.jpg" controls autoPlay playsInline onEnded={() => setVideo(false)} style={{ width: "100%", height: "100%", objectFit: "contain", background: "#000" }} />
+          <button className="press" aria-label="Chiudi video" onClick={() => setVideo(false)} style={{ position: "absolute", top: 14, right: 14, width: 44, height: 44, borderRadius: "50%", background: "rgba(0,0,0,.6)", border: "1px solid rgba(61,255,122,.5)", display: "flex", alignItems: "center", justifyContent: "center" }}><Icon name="close" size={18} color={TERM.fg} /></button>
+        </div>
+      )}
       <form onSubmit={e => { e.preventDefault(); submit(); }} style={{ display: "flex", alignItems: "center", gap: 8, padding: "10px 14px calc(14px + env(safe-area-inset-bottom))", borderTop: "1px solid rgba(61,255,122,.18)", position: "relative" }}>
         <span aria-hidden="true" style={{ fontFamily: F_TERM, fontSize: 16, color: TERM.fg }}>&gt;</span>
         <input ref={inputRef} data-hack-input="" aria-label="Codice" value={code} onChange={e => setCode(e.target.value.slice(0, 16))} autoFocus autoComplete="off" autoCorrect="off" autoCapitalize="characters" spellCheck={false} enterKeyHint="send" disabled={lockMs > 0}
@@ -10303,7 +10568,10 @@ const USER_INIT = {
   predAnswers: {}, sillyPreds: {}, stratPreds: {}, pitBest: null, wxGuess: {}, ratings: {}, dotd: {}, notifSeenAt: 0,
   theme: { mode: "team", color: null }, sounds: true, haptics: true, helmet: null, hidden: [], trophies: {},
   premium: { sub: false, trial: null }, squadLog: [], leagues: [], holidays: true, swipe: {},
+  autoLeagues: [],   // 14/11: leghe in cui l'app ti ha già messo da sola (una volta per account: la lega B&T)
 };
+// 14/11 (Edoardo): "tutti gli utenti in automatico nella lega B&T". Codice della lega che esiste già.
+const BT_LEAGUE = "BT-M7AS";
 // Premium dell'anteprima salvato nell'account (24/10): sub = abbonamento di prova, trial = prova per un GP { start, end }.
 const cleanPremium = v => {
   const t = v && v.trial, ok = t && isFinite(t.start) && isFinite(t.end);
@@ -10716,6 +10984,12 @@ function App() {
   const [bootCache] = useState(() => { try { return AppData.sharedCached(nowMs()); } catch (e) { return { values: {}, kinds: [], complete: false }; } });
   const [shared0] = useState(() => { const v = { ...AppData.sharedDefaults(nowMs()), ...bootCache.values }; addStandingsGuests(v.standings.guests); return v; });
   const [offline, setOffline] = useState(false);   // all'avvio qualcosa non si è potuto leggere: riga "Sei offline"
+  // 14/11: modalità senza rete. Si apre da sola quando il telefono dice che non c'è rete, oppure a mano dalla riga
+  // "Sei offline" (rete che c'è ma non risponde); "Riprova a collegarti" rilegge Firebase.
+  const netOn = useNetOnline();
+  const [offPick, setOffPick] = useState(false);
+  const [offTry, setOffTry] = useState("idle");   // idle | trying | failed
+  useEffect(() => { if (netOn && !offPick) setOffTry("idle"); }, [netOn]);
   const [pitBest, setPitBest] = useState(USER_INIT.pitBest);   // Garage: miglior tempo del Pit Stop Challenge
   const [highlights, setHighlights] = useState(shared0.highlights);   // archivio "Video HIGHLIGHTS esclusivi" (Premium)
   const [sillyPreds, setSillyPreds] = useState(USER_INIT.sillyPreds);       // Silly Season: { sedile: { pick, renew, at } }
@@ -10764,6 +11038,7 @@ function App() {
   // leagues = le leghe lette da Firebase; fantaRounds = risultati veri della stagione (Jolpica).
   const [squadLog, setSquadLog] = useState(USER_INIT.squadLog);
   const [leagueCodes, setLeagueCodes] = useState(USER_INIT.leagues);
+  const [autoLeagues, setAutoLeagues] = useState(USER_INIT.autoLeagues);
   const [leagues, setLeagues] = useState([]);
   const [fantaRounds, setFantaRounds] = useState([]);
   const [homePoll, setHomePoll] = useState(shared0.homePoll);    // sondaggio della Home (Premium); null = nessuno
@@ -10835,6 +11110,8 @@ function App() {
     ];
   };
   const isPremium = isPaid || adPro;
+  // 14/11: archivio storico dei GP (Contenuti Premium): senza Premium si apre la finestra Premium.
+  const openArchive = () => { if (!isPremium) { setPremiumOpen(true); return; } setView("archivio"); fx.play("tick"); };
   adsTestForAdmin = isAdminNow;
   adsMinor = !!account && under18(account.about, nowMs());   // 14/11: minori → annunci non personalizzati
   const [proAsk, setProAsk] = useState(null);   // foglio "Funzione Pro": { what, then }
@@ -11151,6 +11428,7 @@ function App() {
     // (senza rete) tornavano ai valori di serie e avrebbero cancellato dallo schermo la copia dell'ultima volta.
     r.fresh.forEach(k => sharedSet[k](r.values[k]));
     setOffline(r.offline);
+    return r;
   });
   // Salvataggio dell'Admin: prima Firebase, poi lo schermo (src/services/appdata.js rilegge i documenti prima di
   // scrivere). update funzione: si applica ai dati appena riletti, così non si cancella quello che intanto hanno
@@ -11182,7 +11460,7 @@ function App() {
   const userReady = useRef(false);   // dati dell'account letti: da qui in poi le modifiche si salvano
   const userSnap = useRef({});       // ultimo valore letto o salvato di ogni dato (JSON): si manda solo quello che cambia
   const userVals = { saved, favTeam, favDriver, notifPrefs, votes, squad, squadBase, freeTransfers, predAnswers, sillyPreds, stratPreds, pitBest, wxGuess, ratings, dotd, notifSeenAt,
-    theme, sounds, haptics, helmet, hidden, trophies, premium, squadLog, leagues: leagueCodes, holidays: holidaysOn, swipe };
+    theme, sounds, haptics, helmet, hidden, trophies, premium, squadLog, leagues: leagueCodes, holidays: holidaysOn, swipe, autoLeagues };
   const userValsRef = useRef(userVals);
   userValsRef.current = userVals;
   const userSet = { saved: setSaved, favTeam: setFavTeam, favDriver: setFavDriver, notifPrefs: setNotifPrefs, votes: setVotes, squad: setSquad, squadBase: setSquadBase,
@@ -11193,7 +11471,8 @@ function App() {
     swipe: v => setSwipe(v && typeof v === "object" && !Array.isArray(v) ? v : {}),
     helmet: v => setHelmet(v == null ? null : cleanHelmet(v)), hidden: v => setHidden(Array.isArray(v) ? v : []),
     trophies: v => setTrophies(cleanTrophies(v)), premium: v => setPremium(cleanPremium(v)),
-    squadLog: v => setSquadLog(FantaSeason.cleanLog(v).slice(-80)), leagues: v => setLeagueCodes(Array.isArray(v) ? v.filter(c => /^BT-[A-Z0-9]{4,6}$/.test(c)).slice(0, 10) : []) };
+    squadLog: v => setSquadLog(FantaSeason.cleanLog(v).slice(-80)), leagues: v => setLeagueCodes(Array.isArray(v) ? v.filter(c => /^BT-[A-Z0-9]{4,6}$/.test(c)).slice(0, 10) : []),
+    autoLeagues: v => setAutoLeagues(Array.isArray(v) ? v.filter(c => /^BT-[A-Z0-9]{4,6}$/.test(c)).slice(0, 10) : []) };
   // Dati dell'account arrivati (per quale email): finché non arrivano, il colore dell'app resta quello del telefono.
   const [userLoaded, setUserLoaded] = useState(null);
   // 13/11 (accesso lento): seed = app2 del profilo che l'accesso ha appena letto; con quello non si rilegge users/<email>.
@@ -11252,6 +11531,22 @@ function App() {
     if (!fantaUserReady) return;
     Promise.all(leagueCodes.map(c => FantaL.loadLeague(c).catch(() => null))).then(ls => setLeagues(ls.filter(Boolean)));
   }, [fantaUserReady, leagueCodes.join(","), tab === "fanta"]);
+  // 14/11 (Edoardo): tutti nella lega B&T, da soli. Una volta per account (autoLeagues): chi poi esce non ci torna a forza.
+  // Lega che non si trova o rete assente: non si segna, si riprova al prossimo avvio.
+  const accountReal = !!account && account.loaded === true;
+  useEffect(() => {
+    if (!fantaUserReady || !accountReal || autoLeagues.includes(BT_LEAGUE)) return undefined;
+    if (leagueCodes.includes(BT_LEAGUE)) { setAutoLeagues(a => (a.includes(BT_LEAGUE) ? a : [...a, BT_LEAGUE])); return undefined; }
+    const me = leagueMe();
+    if (!me) return undefined;
+    let gone = false;
+    FantaL.joinLeague(BT_LEAGUE, me, squadLog).then(l => {
+      if (gone || !l) return;
+      addLeague(l);
+      setAutoLeagues(a => (a.includes(BT_LEAGUE) ? a : [...a, BT_LEAGUE]));
+    }, () => {});
+    return () => { gone = true; };
+  }, [fantaUserReady, accountReal, autoLeagues.join(","), leagueCodes.join(",")]);   // eslint-disable-line react-hooks/exhaustive-deps
   // 8/11: i risultati veri servono anche alle previsioni automatiche (e ai loro punti): si leggono all'avvio (in cache 3 ore)
   // e di nuovo entrando nel FantaF1.
   const [roundsTried, setRoundsTried] = useState(!JOLPICA_ON);
@@ -12162,7 +12457,7 @@ function App() {
   const backFromLink = () => { setView(linkFrom || "tab"); setLinkFrom(null); setGhostInit(null); };
   const viewBack = {
     article: backFromLink, circuit: backFromLink, ghost: backFromLink, chats: () => setView("tab"),
-    profilo: () => setView("tab"), notifiche: () => setView("tab"), instagram: () => setView(igFrom),
+    profilo: () => setView("tab"), notifiche: () => setView("tab"), archivio: () => setView("tab"), instagram: () => setView(igFrom),
     adminLock: () => setView("profilo"), hack: () => setView("profilo"), admin: () => setView("profilo"), chatThread: () => goTab("race"), pitswipe: () => setView("tab"),
   };
   const closeLogin = () => { setLoginOpen(false); setLoginReason(null); setLoginMode("login"); };
@@ -12697,11 +12992,13 @@ function App() {
   const proHas = () => isPremium;
   const proHintOf = () => (isPremium ? null : BtTrophyPro.premiumHint(trophies, trophyList, { skip: trophySkip }));   // 8/11: tutti i trofei = Premium
   const leagueRows = leagues.map(l => ({ ...l, members: FantaL.standings(l, fantaRounds, fantaLockOf) }));
-  // 7/11: ELO del FantaF1 (src/logic/elo.js) di tutti quelli delle mie leghe, coi punti veri GP per GP.
+  // 14/11: ELO B&T (src/logic/elo.js, btElo): un'unica classifica coi membri della lega B&T (ci sono tutti), uguale su
+  // ogni telefono; finché la lega non è arrivata, quelli delle mie leghe. Punti veri GP per GP.
+  const btLeagueNow = leagues.find(l => l.code === BT_LEAGUE) || null;
   const fantaElo = (() => {
     const seen = new Map();
-    leagues.forEach(l => (l.members || []).forEach(m => { if (!seen.has(m.aid)) seen.set(m.aid, { id: m.aid, rounds: FantaSeason.seasonPoints({ log: m.log, rounds: fantaRounds, lockOf: fantaLockOf }).rounds }); }));
-    return BtElo.fantaElo([...seen.values()]);
+    (btLeagueNow ? [btLeagueNow] : leagues).forEach(l => (l.members || []).forEach(m => { if (!seen.has(m.aid)) seen.set(m.aid, { id: m.aid, rounds: FantaSeason.seasonPoints({ log: m.log, rounds: fantaRounds, lockOf: fantaLockOf }).rounds }); }));
+    return { ...BtElo.btElo([...seen.values()]), bt: !!btLeagueNow };
   })();
   const fantaSessions = fantaRace && CIRCUIT_INFO[fantaRace.circuitId] ? CIRCUIT_INFO[fantaRace.circuitId].weekend || [] : [];
   const teamLockInfo = BtLogic.teamLock({ sessions: fantaSessions, now: nowMs() });   // solo l'ora vera: la prova DEMO non blocca (D23)
@@ -12736,10 +13033,11 @@ function App() {
   let body;
   if (view === "article" && activeArticle) body = <ArticleScreen article={activeArticle} onBack={viewBack.article} isPremium={isPaid || adNews.includes(activeArticle.id)} onAdUnlock={Ads.canReward() ? () => watchAdNews(activeArticle.id) : null} adBusy={adBusy} onPremium={() => setPremiumOpen(true)} onTag={filterByTag} saved={saved.includes(activeArticle.id)} onToggleSave={() => toggleSave(activeArticle.id)} onShare={() => setShareId(activeArticle.id)} vote={votes["art-" + activeArticle.id] || null} onVote={castVote} />;
   else if (view === "circuit" && circuitId) body = <CircuitScreen circuitId={circuitId} races={races} articles={newsAll} onBack={viewBack.circuit} onTag={filterByTag} onOpenArticle={openArticle} />;
-  else if (view === "adminLock" || view === "hack") body = <HackTerminal isAdmin={!!account && Account.isAdmin()} unlocks={unlocks} onToggle={toggleUnlock} onAdmin={() => { setAdminUnlocked(true); setView("admin"); }} onClose={viewBack.hack} onOpenIg={() => { setIgFrom("profilo"); setView("instagram"); }} telemetry={hackTelemetry} />;
+  else if (view === "adminLock" || view === "hack") body = <HackTerminal isAdmin={!!account && Account.isAdmin()} unlocks={unlocks} onToggle={toggleUnlock} onAdmin={() => { setAdminUnlocked(true); setView("admin"); }} onClose={viewBack.hack} onOpenIg={() => { setIgFrom("profilo"); setView("instagram"); }} telemetry={hackTelemetry} panelOpen={adminUnlocked && !!account && Account.isAdmin()} onTour={() => { setView("tab"); setTab("home"); setTourOn(true); }} />;
   else if (view === "admin" && adminUnlocked && Account.isAdmin()) body = <AdminScreen histAuto={histQs.filter(q => q.raceId === (weekendRace(races) || {}).id)} hiddenQs={hiddenQs} onHideQ={(id, hide) => commitShared("flags", latest => { const cur = latest && Array.isArray(latest.hiddenQs) ? latest.hiddenQs : []; return { ...latest, hiddenQs: hide ? [...cur.filter(x => x !== id), id] : cur.filter(x => x !== id) }; }).then(ok => { if (ok) showToast(hide ? "Domanda tolta dal FantaF1 per tutti" : "Domanda rimessa nel FantaF1"); })} flags={flags} onFlags={v => commitShared("flags", () => v).then(ok => { if (ok) showToast(v.pitSwipe ? "Pit Swipe acceso per tutti" : "Pit Swipe spento per tutti"); })} takes={takes} onTakes={v => commitShared("takes", () => v).then(ok => { if (ok) showToast("Opinioni salvate"); })} holidayCfg={holidayCfg} holiday={holiday} onHolidays={v => commitShared("holidays", () => v).then(ok => { if (ok) showToast("Temi delle feste salvati"); })} photos={commonsPhotos} setPhotos={adminSet.commonsPhotos} silly={sillyOfficial} onSilly={officialSeat} highlights={highlights} setHighlights={adminSet.highlights} onBack={viewBack.admin} onPublish={publishArticle} articles={articles} setArticles={adminSet.articles} fantaStats={shownFantaStats} fantaLatestRound={latestRaceRound} setFantaStats={adminSet.fantaStats} standings={standings} setStandings={adminSet.standings} races={races} setRaces={adminSet.races} extraRaces={racesDoc.extra} setExtraRaces={adminSet.extraRaces} ig={ig} setIg={adminSet.ig} sentNotifs={sentNotifs} onSendNotif={sendNotif} onDeleteNotif={deleteNotif} onToast={showToast} tab={adminTab} setTab={setAdminTab} chats={chats} reports={reports} banned={banned} onDeleteMsg={deleteChatMsg} onSuspend={suspendUser} onUnsuspend={unsuspendUser} onIgnoreReport={ignoreReport} liveProps={liveProps} polls={allPolls} votes={votes} onPollAnswer={setPollAnswer} predictions={predictions} setPredictions={adminSet.predictions} predAnswers={predAnswers} />;
   else if (view === "chatThread" && activeChat) body = <ChatThreadScreen since={chatSince(activeChat && activeChat.id)} chat={activeChat} onBack={viewBack.chatThread} onSend={guest ? () => needLogin("Per scrivere in chat serve un account.") : sendMessage} isPremium={isPremium} blocked={blocked} onReport={guest ? () => needLogin("Per segnalare un messaggio serve un account.") : reportMessage} onBlock={blockUser} onReact={guest ? () => needLogin("Per reagire ai messaggi serve un account.") : reactMessage} trophyList={trophyList} myWon={trophies} pendingLink={pendingLink} onPendingUsed={() => setPendingLink(null)} onOpenLink={openLink} liveRace={races.find(r => r.status === "LIVE") || null} />;
   else if (view === "instagram") body = <InstagramView ig={ig} onToast={showToast} onBack={viewBack.instagram} />;
+  else if (view === "archivio") body = <ArchiveScreen archive={Archive} weekend={BtWeekend} calendar={races} onBack={viewBack.archivio} />;
   else if (view === "ghost") body = <GhostLap key={ghostInit ? JSON.stringify(ghostInit) : "ghost"} init={ghostInit} onBack={viewBack.ghost} />;
   else if (view === "pitswipe") body = <PitSwipeScreen cards={psCards} deck={psDeck || { i: 0, acts: {}, hist: [] }} results={psRes} onAct={psAct} onUndo={psUndo} onBack={() => setView("tab")}
     onOpenArticle={openArticle} whyOf={c => BtSwipe.whyReasons(c, { fav: { driver: favDriver, team: favTeam }, weights: swipe.w || {}, hot: ((psTally["f:" + c.id] || {}).total || 0) >= 3, labelOf: psLabelOf })}
@@ -12767,7 +13065,7 @@ function App() {
   // 7/11: il contenuto di una scheda della barra (anche di quella accanto, che si vede durante lo swipe come su WhatsApp).
   function tabBodyFor(tab) {
     let body = null;
-    if (tab === "home") body = <HomeScreen holidayTop={holiday ? <HolidayCard id={holiday} onOpen={holidayOpen(holiday)} /> : null}
+    if (tab === "home") body = <HomeScreen onOpenArchive={openArchive} holidayTop={holiday ? <HolidayCard id={holiday} onOpen={holidayOpen(holiday)} /> : null}
       social={socialPosts} onOpenSocial={p => { fx.buzz("select"); setSocialOpen(p); }}
       pitSwipe={<>
         {onboardShow && <OnboardCard steps={onboardSteps} onHide={() => setSwipe(s => ({ ...s, onb: "off" }))} />}
@@ -12776,7 +13074,7 @@ function App() {
       </>} ig={ig} highlights={highlights} ytHighlights={ytHighlights} onOpenIg={() => { setIgFrom("tab"); setView("instagram"); }} articles={newsAll} tagFilter={tagFilter} onTag={filterByTag} onClearTag={() => setTagFilter(null)} onOpenArticle={openArticle} isPremium={isPremium} onPremium={() => setPremiumOpen(true)} onToast={showToast} onLiveTrack={() => setLiveTrackOpen(true)} onGoFanta={() => goTab("fanta")}  saved={saved} onToggleSave={toggleSave} savedOnly={savedOnly} setSavedOnly={setSavedOnly} onOpenCircuit={openCircuit} homePoll={homePoll} homeVote={votes.home || null} onVote={castVote}
       hidden={hidden} onHide={hideArticle} onUnhideAll={() => { if (!userDataWait()) setHidden([]); }} onSwipeSave={saveFromSwipe}
       onRefresh={() => refreshShared(["news", "highlights", "ig", "homePoll"]).catch(() => {})} />;
-    else if (tab === "race") body = <RaceScreen champion={champion} proOk={isPremium} proHint={proHintOf} onProAd={Ads.canReward() ? () => watchAdPro() : null} proBusy={adBusy} onStandingsEnd={isPaid ? null : Ads.standingsEnd} favDriver={favDriver} dotdVote={live ? votesNow.dotd[live.raceId] : null} onDotdVote={(k, id) => live && voteDotd(live.raceId, k, id)} ratings={votesNow.ratings} onRate={rateDriver} onOpenChats={() => setView("chats")} onOpenGhost={() => setView("ghost")} races={races} standings={shownStandings} isPremium={isPremium} onPremium={() => setPremiumOpen(true)} onSelectDriver={setSelectedDriver} live={live} liveSt={liveSt} onExpandMap={() => setLiveTrackOpen(true)} onTelemetry={(carId, lapNo, sector) => proGate("telemetry", () => setTelemetry({ carId, lapNo, sector }))} onOpenCircuit={openCircuit} wxGuess={wxGuess} wxResult={wxResult} onGuessWeather={guessWeather} onLapTimes={id => proGate("laps", () => setLapList(id))} onSecondScreen={() => proGate("ss", () => setSsOpen(true))} lastRace={lastRace} of1={of1} onOf1Refresh={() => of1TickRef.current && of1TickRef.current(true)} of1Sessions={of1Sessions}
+    else if (tab === "race") body = <RaceScreen onOpenArchive={openArchive} champion={champion} proOk={isPremium} proHint={proHintOf} onProAd={Ads.canReward() ? () => watchAdPro() : null} proBusy={adBusy} onStandingsEnd={isPaid ? null : Ads.standingsEnd} favDriver={favDriver} dotdVote={live ? votesNow.dotd[live.raceId] : null} onDotdVote={(k, id) => live && voteDotd(live.raceId, k, id)} ratings={votesNow.ratings} onRate={rateDriver} onOpenChats={() => setView("chats")} onOpenGhost={() => setView("ghost")} races={races} standings={shownStandings} isPremium={isPremium} onPremium={() => setPremiumOpen(true)} onSelectDriver={setSelectedDriver} live={live} liveSt={liveSt} onExpandMap={() => setLiveTrackOpen(true)} onTelemetry={(carId, lapNo, sector) => proGate("telemetry", () => setTelemetry({ carId, lapNo, sector }))} onOpenCircuit={openCircuit} wxGuess={wxGuess} wxResult={wxResult} onGuessWeather={guessWeather} onLapTimes={id => proGate("laps", () => setLapList(id))} onSecondScreen={() => proGate("ss", () => setSsOpen(true))} lastRace={lastRace} of1={of1} onOf1Refresh={() => of1TickRef.current && of1TickRef.current(true)} of1Sessions={of1Sessions}
       onOf1Pick={key => { of1PickRef.current = key === of1Sessions.latest ? null : key; setOf1Sessions(x => ({ ...x, shown: key })); if (of1TickRef.current) of1TickRef.current(true); }}
       sessionNote={of1Live && of1Live.raw && !of1Live.raw.laps.length && of1Live.raw.session_result.length ? "I tempi giro per giro non sono ancora su OpenF1 (arrivano qualche ora dopo la fine): intanto la classifica con il miglior giro di ognuno." : null} replay={replayCtl}
       pitWall={pitWall} pitPlays={pitPlays} onPitSave={savePit} onSharePit={(label, box, red, circuitId) => shareToChat({ t: "race", id: circuitId || undefined, ti: "Muretto dei tifosi", su: label, ln: [box && box.total ? `${box.right} scelte giuste su ${box.total} a Box o fuori` : null, red && red.diff != null ? `Rossa di ${red.mins} min: sbagliato di ${red.diff}` : null].filter(Boolean) })} trophies={trophiesOff ? null : gpTrophies} onHideTrophies={() => { setTrophiesOn(false); showToast("B&T Trophies nascosti: li riaccendi da Profilo, Personalizza l'app"); }} startGrid={startGrid && startGrid.key === gridKey ? startGrid.rows : null} onReplayAt={replayAt} onShareTrophy={(it, raceName, circuitId) => shareToChat({ t: "race", id: circuitId || undefined, ti: `B&T Trophy: ${it.name}`, su: `${it.who} · ${it.stat}`, ln: [it.text] })} />;
@@ -12787,8 +13085,19 @@ function App() {
     return body;
   }
 
-  const showTopHeader = view === "tab";
-  const showBottomNav = view === "tab";
+  const offMode = view === "tab" && (!netOn || offPick);
+  const retryNet = () => {
+    if (offTry === "trying") return;
+    setOffTry("trying");
+    const done = ok => { if (ok) { setOffPick(false); setOffTry("idle"); fx.play("done"); } else { setOffTry("failed"); fx.buzz("error"); } };
+    const phoneOn = typeof navigator === "undefined" || navigator.onLine !== false;
+    if (!phoneOn) { setTimeout(() => done(false), 600); return; }
+    Account.retry().catch(() => {});
+    if (userEmailRef.current && !userReady.current) loadUser(userEmailRef.current);
+    refreshShared(["races", ...AppData.staleKinds().filter(k => k !== "races")]).then(r => done(!!r && !r.offline), () => done(false));
+  };
+  const showTopHeader = view === "tab" && !offMode;
+  const showBottomNav = view === "tab" && !offMode;
   // Schede montate (25/10): quella attiva e, durante il passaggio, quella che esce (inert: non si tocca). Sempre
   // nell'ordine della barra, così React non sposta i nodi (lo scroll della scheda resta dov'è).
   const tabPages = () => {
@@ -12808,7 +13117,7 @@ function App() {
   return shell(
       <div data-bg={pageBg || undefined} data-retro={unlocks.includes("retro") ? "" : undefined} style={{ height: "100%", display: "flex", flexDirection: "column", position: "relative", background: pageBg && PAGE_BG[pageBg] ? PAGE_BG[pageBg] : undefined, transition: "background .3s" }}>
         {showTopHeader && <TopHeader onLaunch={ok => { if (ok) { setLaunchFx(nowMs()); setTimeout(() => setLaunchFx(0), 800); psEgg("launch"); } else showToast("Anti-stallo: tieni premuto il logo per 3 secondi"); }} trialDays={trialActive ? trialDaysLeft(trial) : 0} isPremium={isPremium} unread={unreadCount} onPremium={() => setPremiumOpen(true)} onBell={() => setView("notifiche")} onProfile={() => { setView("profilo"); if (account && Account.refreshAdmin) Account.refreshAdmin().catch(() => {}); }} helmet={helmet} onTrack={isDemoLive(live) || !!sessionNow(realLiveRace, nowMs())} onLogoEgg={() => setEggFound(true)} holiday={holiday} />}
-        {showTopHeader && offline && <div role="status" data-offline="" style={{ margin: "-6px 16px 10px", padding: "8px 12px", borderRadius: 10, background: "rgba(231,179,76,.12)", border: "1px solid rgba(231,179,76,.35)", fontFamily: F_BODY, fontSize: 12, color: C.text, lineHeight: 1.4, flexShrink: 0 }}>{OFFLINE_LINE}</div>}
+        {showTopHeader && offline && <div role="status" data-offline="" style={{ margin: "-6px 16px 10px", padding: "8px 12px", borderRadius: 10, background: "rgba(231,179,76,.12)", border: "1px solid rgba(231,179,76,.35)", fontFamily: F_BODY, fontSize: 12, color: C.text, lineHeight: 1.4, flexShrink: 0 }}>{OFFLINE_LINE} <button type="button" className="press" data-offline-open="" onClick={() => { setOffPick(true); setOffTry("idle"); fx.play("tick"); }} style={{ padding: "6px 0", minHeight: 32, background: "none", border: "none", fontFamily: F_BODY, fontWeight: 700, fontSize: 12, color: C.gold, textDecoration: "underline" }}>Cosa puoi fare senza rete</button></div>}
         <div ref={swipeBoxRef} data-tab-swipe={showBottomNav ? "" : undefined} className={launchFx ? "ps-launch-zoom" : undefined} style={{ flex: 1, minHeight: 0, overflow: "hidden", position: "relative" }}
           onTouchStart={showBottomNav ? e => { const k = e.touches[0]; if (e.touches.length === 1) swipeStart(k.clientX, k.clientY, e.timeStamp, e.target, e.currentTarget); else swipeCancel(); } : undefined}
           onTouchMove={showBottomNav ? e => { const k = e.touches[0]; if (k && e.touches.length === 1) swipeMove(k.clientX, k.clientY); } : undefined}
@@ -12818,9 +13127,9 @@ function App() {
           onPointerMove={showBottomNav ? e => { if (e.pointerType === "mouse" && (e.buttons & 1)) swipeMove(e.clientX, e.clientY); } : undefined}
           onPointerUp={showBottomNav ? e => { if (e.pointerType === "mouse") swipeEnd(e.clientX, e.clientY, e.timeStamp, e.currentTarget.clientWidth, true); } : undefined}
           onClickCapture={e => { if (performance.now() - swipeClick.current < 400) { e.stopPropagation(); e.preventDefault(); } }}>
-          <ChatShare.Provider value={chatShareCtx}>{showBottomNav ? tabPages() : <div key="view" style={{ height: "100%" }}>{body}</div>}</ChatShare.Provider>
+          <ChatShare.Provider value={chatShareCtx}>{offMode ? <OfflineScreen news={newsAll} saved={saved} standings={standings} races={races} pitBest={pitBest} onPitResult={t => { if (!userDataWait()) { setPitBest(b => b == null || t < b ? t : b); psBump("pit"); } }} onOpenArticle={openArticle} onRetry={retryNet} tryState={offTry} onClose={netOn && offPick ? () => { setOffPick(false); setOffTry("idle"); } : null} /> : showBottomNav ? tabPages() : <div key="view" style={{ height: "100%" }}>{body}</div>}</ChatShare.Provider>
         </div>
-        {miniPitShow && <MiniPitBoard st={liveSt} driverId={favDriver} onOpen={() => { setView("tab"); if (tab !== "race") switchTab("race"); }} onClose={() => { setMiniPitHidden(miniPitKey); fx.play("tick"); }} onEgg={psEgg} />}
+        {miniPitShow && !offMode && <MiniPitBoard st={liveSt} driverId={favDriver} onOpen={() => { setView("tab"); if (tab !== "race") switchTab("race"); }} onClose={() => { setMiniPitHidden(miniPitKey); fx.play("tick"); }} onEgg={psEgg} />}
         {/* 29/10: lo swipe cambia scheda anche partendo dalla barra in basso. */}
         {showBottomNav && <div data-nav-swipe="" style={{ flexShrink: 0 }}
           onTouchStart={showBottomNav ? e => { const k = e.touches[0]; if (e.touches.length === 1) swipeStart(k.clientX, k.clientY, e.timeStamp, e.target, e.currentTarget); else swipeCancel(); } : undefined}
@@ -12868,7 +13177,7 @@ function App() {
         {linkShare && <ChatRoomPicker onPick={id => { setPendingLink(linkShare); setLinkShare(null); openChat(id); }} onClose={() => setLinkShare(null)} />}
         {socialOpen && <SocialSheet post={socialOpen} onClose={() => setSocialOpen(null)} />}
         <RainGlass on={rainOn} />
-        {tourOn && guest && view === "tab" && tab === "home" && <GuestTour useBack={useBack} onDone={tourEnd} onRegister={() => { tourEnd(); setLoginReason(null); setLoginMode("register"); setLoginOpen(true); }} />}
+        {tourOn && (guest || !!account) && view === "tab" && tab === "home" && <GuestTour member={!guest} useBack={useBack} onDone={tourEnd} onRegister={() => { tourEnd(); setLoginReason(null); setLoginMode("register"); setLoginOpen(true); }} />}
         {termsAccepted && termsOpen && <TermsSheet review onClose={() => setTermsOpen(false)} />}
         {feedbackOpen && <FeedbackModal onClose={() => setFeedbackOpen(false)} onSend={sendFeedback} />}
         {toast && <div className="toast" style={showBottomNav && adH > 0 ? { bottom: 104 + adH + AD_GAP } : undefined}>{toast}</div>}

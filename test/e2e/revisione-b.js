@@ -122,12 +122,13 @@ run({
     await tapSel(p, '[aria-label="Profilo"]'); await w(p, 600);
     const prof2 = norm(await text(p)); await ctx.close();
     assert(waiting && /Profilo in caricamento/.test(prof1) && !/Completa il tuo profilo/.test(prof1), 'profilo senza rete: ' + prof1.slice(0, 200));
-    assert(!/Pannello Admin/.test(prof1), 'senza sapere se è admin il Pannello non si mostra');
+    assert(!/Pannello Admin/.test(prof1), 'senza sapere se è admin il Pannello non si mostra');   // 14/11: la riga non c'è più per nessuno
     assert(/profilo non è ancora arrivato/.test(t1), 'chat senza profilo: ' + t1);
     assert(!room.some(m => m.txt === 'prima della rete'), 'il messaggio senza profilo è partito: ' + JSON.stringify(room));
     const msgs = room.filter(m => m.pe !== 1);   // 29/10: nella stanza c'è anche la voce del profilo
     assert(msgs.length === 1 && msgs[0].user === 'Tester' && msgs[0].txt === 'dopo la rete', 'messaggio dopo la rete: ' + JSON.stringify(room));
-    assert(/Tester/.test(prof2) && /Pannello Admin/.test(prof2) && !/Profilo in caricamento/.test(prof2), 'profilo dopo la rete: ' + prof2.slice(0, 200));
+    assert(/Tester/.test(prof2) && /ADMIN/.test(prof2) && !/Profilo in caricamento/.test(prof2),   // 14/11: l'admin entra dal bottone ADMIN (terminale), come tutti
+      'profilo dopo la rete: ' + prof2.slice(0, 200));
     assert(!errs.length, errs.join(' | '));
   },
   // ── I1: dati personali non ancora letti ──────────────────────────────────────────────

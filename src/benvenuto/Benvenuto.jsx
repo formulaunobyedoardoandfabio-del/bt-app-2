@@ -91,16 +91,19 @@ export function WelcomeFlow({ logo, startAt = 0, onSeen, onGuest, onRegister, on
 }
 
 // Il giro guidato: i riquadri si accendono sulle parti vere dell'app (si misurano), il cartello si sposta sopra o sotto.
-const TOUR = [
+const TOUR_GUEST = [
   { sel: "[data-home]", inset: 8, maxH: 380, r: 22, title: "Qui trovi le notizie", text: "Scorri, cerca e salva quelle che ti interessano." },
   { sel: '[data-nav-tab="race"]', pad: 4, r: 18, title: "La gara in diretta", text: "Tempi, gomme, pit stop e Team Radio, con la chat dei tifosi mentre si corre." },
   { sel: '[data-nav-tab="fanta"]', pad: 4, r: 18, title: "Il tuo FantaF1", text: "Scegli i piloti entro il budget e sfida gli amici in classifica." },
   { sel: '[data-nav-tab="garage"]', pad: 4, r: 18, title: "Il Garage", text: "Giochi e strumenti da box, per sfidarti anche tra una gara e l'altra." },
   { sel: '[aria-label="Profilo"]', pad: 6, r: 999, title: "Crea il tuo account", text: "Salvi squadra, chat e casco, e ritrovi tutto su ogni telefono." },
 ];
-export const TOUR_STEPS = TOUR.length;
+export const TOUR_STEPS = TOUR_GUEST.length;
+// 14/11: dal terminale (codice 02) il giro lo fa anche chi ha già l'account: l'ultimo passo parla del Profilo.
+const TOUR_MEMBER = [...TOUR_GUEST.slice(0, -1), { sel: '[aria-label="Profilo"]', pad: 6, r: 999, title: "Il tuo Profilo", text: "Casco, preferiti e impostazioni. In fondo c'è il terminale ADMIN: prova i codici." }];
 
-export function GuestTour({ onDone, onRegister, useBack }) {
+export function GuestTour({ onDone, onRegister, useBack, member = false }) {
+  const TOUR = member ? TOUR_MEMBER : TOUR_GUEST;
   const [i, setI] = useState(0);
   const [boxes, setBoxes] = useState([]);
   const [size, setSize] = useState({ w: 390, h: 760 });
@@ -150,8 +153,8 @@ export function GuestTour({ onDone, onRegister, useBack }) {
           </div>
         ) : (
           <div style={{ marginTop: 16, display: "flex", flexDirection: "column", gap: 4 }}>
-            <button type="button" className="wt-btn" data-tour-register="" onClick={onRegister} style={{ height: 48, border: 0, borderRadius: 14, background: WT.bg, color: WT.ink, fontFamily: WT.font, fontSize: 16, fontWeight: 800, cursor: "pointer" }}>Crea il tuo account</button>
-            <button type="button" data-tour-done="" onClick={onDone} style={{ height: 44, border: 0, background: "transparent", color: "#52525B", fontFamily: WT.font, fontSize: 15, fontWeight: 700, cursor: "pointer" }}>Continua a guardare</button>
+            {!member && <button type="button" className="wt-btn" data-tour-register="" onClick={onRegister} style={{ height: 48, border: 0, borderRadius: 14, background: WT.bg, color: WT.ink, fontFamily: WT.font, fontSize: 16, fontWeight: 800, cursor: "pointer" }}>Crea il tuo account</button>}
+            <button type="button" data-tour-done="" onClick={onDone} style={{ height: 44, border: 0, background: "transparent", color: "#52525B", fontFamily: WT.font, fontSize: 15, fontWeight: 700, cursor: "pointer" }}>{member ? "Ho capito" : "Continua a guardare"}</button>
           </div>
         )}
       </div>

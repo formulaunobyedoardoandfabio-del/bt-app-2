@@ -12,7 +12,13 @@ const UNLOCKS = [
   { id: "telemetry", code: "TELEMETRIA", title: "Telemetria", on: "Telemetria del telefono in fondo al terminale.", off: "Telemetria nascosta." },
   { id: "retro", code: "1950", title: "Modalità 1950", on: "Modalità 1950: l'app in bianco e nero, come il primo Mondiale.", off: "Modalità 1950 spenta: tornano i colori." },
 ];
+// 14/11 (Edoardo): azioni (non si accendono e non si contano): 01 video di presentazione, 02 giro guidato dell'app.
+const ACTIONS = [
+  { id: "video", code: "01", title: "Video di presentazione", say: "riproduzione: il video di presentazione dell'app" },
+  { id: "tour", code: "02", title: "Giro guidato", say: "avvio del giro guidato dell'app..." },
+];
 const BY_CODE = new Map(UNLOCKS.map(u => [u.code, u]));
+const ACTION_BY_CODE = new Map(ACTIONS.map(a => [a.code, a]));
 const IDS = new Set(UNLOCKS.map(u => u.id));
 
 const MAX_FAILS = 5, LOCK_MS = 30000;
@@ -34,6 +40,8 @@ function check(input, { adminCode, isAdmin = false, guard = null, now = Date.now
   const ms = lockedFor(guard, now);
   if (ms > 0) return { kind: "locked", ms };
   if (adminCode && c === norm(adminCode)) return isAdmin ? { kind: "admin" } : { kind: "denied" };
+  const act = ACTION_BY_CODE.get(c);
+  if (act) return { kind: "action", id: act.id };
   const u = BY_CODE.get(c);
   return u ? { kind: "unlock", id: u.id } : { kind: "denied" };
 }
@@ -41,5 +49,6 @@ function check(input, { adminCode, isAdmin = false, guard = null, now = Date.now
 const clean = list => (Array.isArray(list) ? [...new Set(list.filter(x => IDS.has(x)))] : []);
 const toggle = (list, id) => { const l = clean(list); return l.includes(id) ? l.filter(x => x !== id) : [...l, id]; };
 const unlockOf = id => UNLOCKS.find(u => u.id === id) || null;
+const actionOf = id => ACTIONS.find(a => a.id === id) || null;
 
-module.exports = { UNLOCKS, MAX_FAILS, LOCK_MS, norm, check, freshGuard, cleanGuard, lockedFor, afterTry, clean, toggle, unlockOf };
+module.exports = { UNLOCKS, ACTIONS, actionOf, MAX_FAILS, LOCK_MS, norm, check, freshGuard, cleanGuard, lockedFor, afterTry, clean, toggle, unlockOf };

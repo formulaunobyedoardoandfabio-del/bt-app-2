@@ -115,8 +115,9 @@ run({
     await login(p);
     await tapSel(p, '[aria-label="Profilo"]'); await w(p, 400);
     const admin = await text(p); await ctx.close();
-    assert(!/Pannello Admin/.test(t), 'un account non admin vede "Pannello Admin"');
-    assert(/Pannello Admin/.test(admin), 'l\'account admin (admins/a@b.it) non vede "Pannello Admin"');
+    // 14/11 (Edoardo: "ci sono 2 bottoni admin"): la riga "Pannello Admin" non c'è più per nessuno; tutti vedono lo stesso bottone ADMIN.
+    assert(!/Pannello Admin/.test(t) && !/Pannello Admin/.test(admin), 'riga Pannello Admin ancora presente');
+    assert(/ADMIN/.test(t) && /ADMIN/.test(admin), 'il bottone ADMIN c\'è per tutti');
     assert(!errs.length, errs.join(' | '));
   },
 

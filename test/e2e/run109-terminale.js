@@ -131,4 +131,36 @@ run({
     assert(opened, 'si apre il pannello admin');
     assert(!errs.length, errs.join(' | '));
   },
+
+  async '01: il video di presentazione si apre dentro il terminale e si chiude; non conta negli sblocchi'(b) {
+    const { ctx, p, errs } = await open(b, { now: NOW }); await login(p); await w(p, 800);
+    await openTerm(p);
+    await type(p, '01');
+    const v = await p.evaluate(() => { const e = document.querySelector('[data-hack-video] video'); return e && { src: e.getAttribute('src'), poster: e.getAttribute('poster'), inline: e.playsInline, controls: e.controls }; });
+    const found = await p.evaluate(() => (document.querySelector('[data-hack-found]') || {}).textContent);
+    await p.screenshot({ path: '/tmp/bt/run109-video.png' });
+    await tapSel(p, '[aria-label="Chiudi video"]'); await w(p, 300);
+    const closed = await p.evaluate(() => !document.querySelector('[data-hack-video]'));
+    await ctx.close();
+    assert(v && /videos\/presentazione\.mp4$/.test(v.src) && /presentazione\.jpg$/.test(v.poster) && v.inline && v.controls, 'video: ' + JSON.stringify(v));
+    assert(/0\/3/.test(found), 'non è uno sblocco: ' + found);
+    assert(closed, 'si chiude');
+    assert(!errs.length, errs.join(' | '));
+  },
+
+  async '02: parte il giro guidato in Home, anche con l\'account; l\'ultimo passo parla del Profilo'(b) {
+    const { ctx, p, errs } = await open(b, { now: NOW }); await login(p); await w(p, 800);
+    await openTerm(p);
+    await type(p, '02'); await w(p, 900);
+    const first = await p.evaluate(() => { const t = document.querySelector('[data-guest-tour]'); return t && { step: t.getAttribute('data-guest-tour'), term: !!document.querySelector('[data-hack-term]'), home: !!document.querySelector('[data-home]') }; });
+    for (let i = 0; i < 4; i++) { await tapSel(p, '[data-tour-next]'); await w(p, 250); }
+    const last = await p.evaluate(() => ({ text: (document.querySelector('[data-guest-tour]') || {}).innerText || '', reg: !!document.querySelector('[data-tour-register]') }));
+    await tapSel(p, '[data-tour-done]'); await w(p, 300);
+    const gone = await p.evaluate(() => !document.querySelector('[data-guest-tour]'));
+    await ctx.close();
+    assert(first && first.step === '1' && !first.term && first.home, 'giro partito in Home: ' + JSON.stringify(first));
+    assert(/Il tuo Profilo/.test(last.text) && !last.reg, 'ultimo passo per chi ha l\'account (niente "Crea il tuo account"): ' + last.text.slice(0, 160));
+    assert(gone, 'Ho capito chiude il giro');
+    assert(!errs.length, errs.join(' | '));
+  },
 });

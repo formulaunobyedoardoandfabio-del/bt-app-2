@@ -49,4 +49,46 @@ function fantaElo(players) {
   return { ratings, rounds: played };
 }
 
-module.exports = { START, TIERS, kOf, expected, tierOf, fantaElo };
+// ── ELO B&T (14/11, Edoardo: "crea nuovo modo di calcolare Elo") ──────────────────────────────────────────────
+// Il primo ELO dipendeva da chi era nelle TUE leghe: la stessa persona aveva ELO diversi su telefoni diversi. Ora tutti
+// sono nella lega B&T e c'è un'unica classifica, uguale per tutti:
+// - tutti partono da START (1200); contano i GP giocati da almeno due persone, coi punti FantaF1 veri del GP;
+// - punteggio del GP S = 85% posizione tra chi ha giocato (battuti + ½ pareggi, diviso gli altri) + 15% quanto sei
+//   vicino al migliore ((tuoi punti − minimo) / (massimo − minimo); tutti pari = ½);
+// - atteso E = 1 / (1 + 10^((media ELO degli altri − tuo ELO) / 400)): contro un campo forte serve meno per salire;
+// - variazione = K × (S − E); K = 48 nei primi 3 GP, 32 fino al 10°, poi 20, e 16 da 1700 in su;
+// - le variazioni del GP si applicano tutte insieme, con gli ELO di prima del GP.
+const btK = (games, rating) => (games < 3 ? 48 : games < 10 ? 32 : rating >= 1700 ? 16 : 20);
+function btElo(players) {
+  const st = new Map();
+  (players || []).forEach(p => {
+    if (!p || p.id == null || st.has(p.id)) return;
+    const by = new Map((p.rounds || []).filter(x => x && isFinite(x.round) && isFinite(x.pts)).map(x => [x.round, x.pts]));
+    st.set(p.id, { r: START, g: 0, last: 0, hist: [], by });
+  });
+  const ids = [...st.keys()].sort((a, b) => String(a).localeCompare(String(b)));   // stesso risultato in qualunque ordine
+  const rounds = [...new Set([...st.values()].flatMap(s => [...s.by.keys()]))].sort((a, b) => a - b);
+  const played = [];
+  rounds.forEach(round => {
+    const P = ids.map(id => st.get(id)).filter(s => s.by.has(round));
+    const n = P.length;
+    if (n < 2) return;
+    played.push(round);
+    const pts = P.map(s => s.by.get(round)), lo = Math.min(...pts), hi = Math.max(...pts);
+    const sumR = P.reduce((t, s) => t + s.r, 0);
+    const deltas = P.map((s, i) => {
+      let beat = 0;
+      pts.forEach((q, j) => { if (j !== i) beat += pts[i] > q ? 1 : pts[i] === q ? 0.5 : 0; });
+      const place = beat / (n - 1), close = hi > lo ? (pts[i] - lo) / (hi - lo) : 0.5;
+      const S = 0.85 * place + 0.15 * close;
+      const others = (sumR - s.r) / (n - 1), E = expected(s.r, others);
+      return btK(s.g, s.r) * (S - E);
+    });
+    P.forEach((s, i) => { s.r += deltas[i]; s.g += 1; s.last = deltas[i]; s.hist.push({ round, rating: Math.round(s.r) }); });
+  });
+  const ratings = {};
+  ids.forEach(id => { const s = st.get(id), rating = Math.round(s.r); ratings[id] = { rating, games: s.g, last: Math.round(s.last), history: s.hist, tier: tierOf(rating) }; });
+  return { ratings, rounds: played };
+}
+
+module.exports = { START, TIERS, kOf, expected, tierOf, fantaElo, btK, btElo };

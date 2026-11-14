@@ -1,0 +1,62 @@
+# Archivio storico dei GP (14/11). tools/fastf1_archivio.py scarica con FastF1 (dati del live timing di Formula 1) giri
+# e posizioni di tutte le gare degli anni scelti e scrive public/data/archivio/<anno>.json e index.json; se è cambiato
+# qualcosa fa il commit su tappa-3, Vercel lo pubblica e l'app lo scarica (src/services/archive.js).
+# Gli anni già corsi non cambiano: si fa girare a mano, una volta, e poi quando si vuole aggiungere un anno.
+# A mano: GitHub → Actions → "Archivio storico F1" → Run workflow (anni: per esempio 2018-2025 oppure 2024).
+# FastF1 ha giri e posizioni dal 2018. La prima volta con 8 anni ci vuole circa un'ora (poi la cache lo fa più svelto).
+# Questo file deve stare anche sul ramo principale (main), se no il bottone "Run workflow" non compare.
+name: Archivio storico F1
+
+on:
+  workflow_dispatch:
+    inputs:
+      anni:
+        description: 'Anni (dal 2018), per esempio 2018-2025 oppure 2023,2024'
+        required: true
+        default: '2018-2025'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: archivio-f1
+  cancel-in-progress: false
+
+jobs:
+  archivio:
+    runs-on: ubuntu-latest
+    timeout-minutes: 300
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: tappa-3
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Cache di FastF1
+        uses: actions/cache@v4
+        with:
+          path: ~/ff1-cache
+          key: ff1-${{ github.event.inputs.anni }}
+          restore-keys: ff1-
+      - name: FastF1
+        run: pip install --quiet fastf1
+      - name: Prove della conversione
+        run: python3 tools/fastf1_archivio_test.py
+      - name: Gare degli anni scelti (tools/fastf1_archivio.py)
+        env:
+          ANNI: ${{ github.event.inputs.anni }}
+          FF1_CACHE: ~/ff1-cache
+        run: FF1_CACHE="$HOME/ff1-cache" python3 tools/fastf1_archivio.py
+      - name: Commit su tappa-3 se è cambiato qualcosa
+        run: |
+          git add public/data/archivio
+          if git diff --cached --quiet; then echo "Niente di nuovo"; exit 0; fi
+          git config user.name 'B&T'
+          git config user.email '259185044+formulaunobyedoardoandfabio-del@users.noreply.github.com'
+          git commit -q -m "Archivio storico F1 aggiornato (${{ github.event.inputs.anni }})"
+          for i in 1 2 3; do
+            if git pull -q --rebase origin tappa-3 && git push -q origin HEAD:tappa-3; then exit 0; fi
+            sleep 10
+          done
+          exit 1

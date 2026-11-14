@@ -34,6 +34,19 @@ t('codici degli sblocchi: ognuno dà il suo; codice vuoto → niente', () => {
   assert.deepStrictEqual(S.check('   ', { adminCode: ADMIN, isAdmin: true }), { kind: 'empty' });
 });
 
+// 14/11 (Edoardo): "01" fa vedere il video di presentazione dell'app, "02" fa partire il giro guidato. Sono azioni:
+// non si accendono e non contano negli sblocchi.
+t('azioni: 01 video, 02 giro guidato; non sono sblocchi e il firewall vale anche per loro', () => {
+  assert.deepStrictEqual(S.check('01', { adminCode: ADMIN }), { kind: 'action', id: 'video' });
+  assert.deepStrictEqual(S.check(' 0 2 ', { adminCode: ADMIN }), { kind: 'action', id: 'tour' });
+  assert.ok(S.ACTIONS.every(x => x.title && x.say), 'ogni azione dice cosa fa');
+  assert.ok(!S.UNLOCKS.some(u => S.ACTIONS.some(x => x.code === u.code || x.id === u.id)), 'codici e id diversi dagli sblocchi');
+  assert.deepStrictEqual(S.clean(['video', 'tour', 'retro']), ['retro'], 'le azioni non si salvano come sblocchi');
+  let st = S.freshGuard();
+  for (let i = 0; i < 5; i++) st = S.afterTry(st, false, T0 + i);
+  assert.strictEqual(S.check('01', { adminCode: ADMIN, guard: st, now: T0 + 10 }).kind, 'locked');
+});
+
 t('toggle: lo stesso codice accende e spegne; load tiene solo sblocchi che esistono', () => {
   let list = S.toggle([], 'pitswipe');
   assert.deepStrictEqual(list, ['pitswipe']);

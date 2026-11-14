@@ -200,6 +200,10 @@ async function dbQuery(col, field, value, limit) {
 const IMG_REF = "fsimg:";
 const IMG_MAX_CHARS = 600000;     // foto compressa (base64): ben sotto il limite di 1 MB per documento
 const imgCache = new Map();       // riferimento → promessa del data URL
+// 14/11: le foto si tengono anche sul telefono (IndexedDB): dalla seconda apertura dell'app non si riscaricano.
+const { createImgStore } = require("./imgstore");
+let phoneImgs = null;
+const imgStore = () => (phoneImgs = phoneImgs || createImgStore({ backend: () => { const w = W(); return w && w.indexedDB ? require("./imgstore").idbBackend(w.indexedDB) : null; } }));
 function readAsDataURL(file) {
   return new Promise((res, rej) => { const r = new (W().FileReader)(); r.onload = () => res(r.result); r.onerror = () => rej(mkErr("lettura")); r.readAsDataURL(file); });
 }
@@ -230,12 +234,18 @@ async function uploadImage(file) {
   await track(withTimeout(d.collection("shared").doc("img-" + id).set({ data, ts: Date.now() }), WRITE_TIMEOUT));
   const ref = IMG_REF + id;
   imgCache.set(ref, Promise.resolve(data));
+  imgStore().put(ref, data);
   return ref;
 }
 function loadImage(ref) {
   if (!ref || !String(ref).startsWith(IMG_REF)) return Promise.resolve(ref || "");
   if (!imgCache.has(ref)) {
-    const p = sg("img-" + ref.slice(IMG_REF.length)).then(d => (d && d.data) || "");
+    // prima il telefono, poi Firestore (e quella scaricata si mette da parte sul telefono)
+    const p = imgStore().get(ref).then(hit => hit || sg("img-" + ref.slice(IMG_REF.length)).then(d => {
+      const u = (d && d.data) || "";
+      if (u) imgStore().put(ref, u);
+      return u;
+    }));
     imgCache.set(ref, p);
     p.then(u => { if (!u) imgCache.delete(ref); });   // non trovata o senza rete: si riprova la volta dopo
   }
@@ -244,6 +254,7 @@ function loadImage(ref) {
 async function dropImage(ref) {
   if (!ref || !String(ref).startsWith(IMG_REF)) return;
   imgCache.delete(ref);
+  imgStore().drop(ref);
   await sd("img-" + ref.slice(IMG_REF.length), true);
 }
 

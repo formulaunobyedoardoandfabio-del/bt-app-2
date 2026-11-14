@@ -99,7 +99,7 @@ run({
     });
     await ctx.close();
     assert(elo0 && elo0.v === 'none' && /Parti da 1200/.test(elo0.t), 'ELO senza leghe: ' + JSON.stringify(elo0));
-    assert(rule && /scacchi/.test(rule) && /400/.test(rule) && /K vale 40/.test(rule), 'regola dell\'ELO: ' + rule);
+    assert(rule && /scacchi/.test(rule) && /400/.test(rule) && /K vale 48/.test(rule) && /lega B&T/.test(rule), 'regola dell\'ELO (14/11: ELO B&T): ' + rule);
     // 8/11: nel mio profilo niente "Livello del tifoso" (lo vedono gli altri) né "Funzioni Pro coi trofei"; sei impostazioni in una voce
     assert(!unl.pro && !unl.level && unl.subs === 0 && /Personalizza l'app/.test(unl.group || ''), 'profilo: ' + JSON.stringify(unl));
     assert(['Colori dell\'app', 'Suoni', 'Vibrazioni', 'Temi delle feste', 'Pit Board in tutta l\'app', 'Promemoria sul telefono'].every(x => open8.some(t => t.startsWith(x))), 'dentro "Personalizza l\'app": ' + JSON.stringify(open8));

@@ -125,7 +125,7 @@ async function enterAdminCode(p) {
 async function openAdmin(p, tab) {
   await p.evaluate(() => { if (!window.firebase.__fake.doc('admins/a@b.it')) window.firebase.__fake.setDoc('admins/a@b.it', { ruolo: 'admin' }); });
   await tapSel(p, '[aria-label="Profilo"]'); await w(p);
-  await tapText(p, 'Pannello Admin'); await w(p);
+  await tapSel(p, '[data-hack-open]'); await w(p);   // 14/11: l'unico ingresso è il bottone ADMIN (terminale)
   await enterAdminCode(p);
   if (tab) { await tapText(p, tab, { exact: true }); await w(p, 300); }
 }
