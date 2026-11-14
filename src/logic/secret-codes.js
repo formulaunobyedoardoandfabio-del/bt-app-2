@@ -1,0 +1,45 @@
+// Codici del terminale del Box (14/11, Edoardo): il bottone ADMIN lo vedono tutti; il codice admin apre il pannello
+// solo a un account admin (Firestore, admins/<email>), altri codici sbloccano cose diverse su questo telefono.
+// Sicurezza: il codice admin non sta qui (lo passa l'app) e su un account non admin risponde come un codice sbagliato,
+// così il terminale non dice mai che era giusto. Dopo 5 codici sbagliati di fila il terminale si chiude per 30 secondi.
+// Il pannello admin resta protetto da Firestore: anche indovinando il codice, senza admins/<email> non si apre.
+
+const norm = s => String(s == null ? "" : s).toUpperCase().replace(/[^A-Z0-9]/g, "");
+
+// Sblocchi: cose vere dell'app. on/off = cosa scrive il terminale quando si accende o si spegne.
+const UNLOCKS = [
+  { id: "pitswipe", code: "PITWALL", title: "Pit Swipe", on: "Pit Swipe acceso su questo telefono: le notizie come carte da scorrere, in Home.", off: "Pit Swipe spento su questo telefono." },
+  { id: "telemetry", code: "TELEMETRIA", title: "Telemetria", on: "Telemetria del telefono in fondo al terminale.", off: "Telemetria nascosta." },
+  { id: "retro", code: "1950", title: "Modalità 1950", on: "Modalità 1950: l'app in bianco e nero, come il primo Mondiale.", off: "Modalità 1950 spenta: tornano i colori." },
+];
+const BY_CODE = new Map(UNLOCKS.map(u => [u.code, u]));
+const IDS = new Set(UNLOCKS.map(u => u.id));
+
+const MAX_FAILS = 5, LOCK_MS = 30000;
+const freshGuard = () => ({ fails: 0, until: 0 });
+const cleanGuard = g => (g && Number.isInteger(g.fails) && g.fails >= 0 && Number.isFinite(g.until) ? { fails: g.fails, until: g.until } : freshGuard());
+const lockedFor = (guard, now) => Math.max(0, cleanGuard(guard).until - now);
+// Dopo un tentativo: giusto → da capo; sbagliato → un errore in più, al quinto si chiude per 30 secondi.
+function afterTry(guard, ok, now) {
+  const g = cleanGuard(guard);
+  if (ok) return freshGuard();
+  const fails = (g.until && g.until <= now ? 0 : g.fails) + 1;
+  return fails >= MAX_FAILS ? { fails, until: now + LOCK_MS } : { fails, until: 0 };
+}
+
+// Che cosa fa un codice: admin | unlock (id) | denied | locked (ms) | empty.
+function check(input, { adminCode, isAdmin = false, guard = null, now = Date.now() } = {}) {
+  const c = norm(input);
+  if (!c) return { kind: "empty" };
+  const ms = lockedFor(guard, now);
+  if (ms > 0) return { kind: "locked", ms };
+  if (adminCode && c === norm(adminCode)) return isAdmin ? { kind: "admin" } : { kind: "denied" };
+  const u = BY_CODE.get(c);
+  return u ? { kind: "unlock", id: u.id } : { kind: "denied" };
+}
+
+const clean = list => (Array.isArray(list) ? [...new Set(list.filter(x => IDS.has(x)))] : []);
+const toggle = (list, id) => { const l = clean(list); return l.includes(id) ? l.filter(x => x !== id) : [...l, id]; };
+const unlockOf = id => UNLOCKS.find(u => u.id === id) || null;
+
+module.exports = { UNLOCKS, MAX_FAILS, LOCK_MS, norm, check, freshGuard, cleanGuard, lockedFor, afterTry, clean, toggle, unlockOf };

@@ -35,7 +35,7 @@ import AppData from "./services/appdata";
 import Compat from "./services/compat";
 import { createAccount, MESSAGES as ACCOUNT_MSG, messageOf, MIN_AGE, pwStrength } from "./services/account";
 import { createChat, CHAT_MSG, ROOM_IDS, nextPollDelay } from "./services/chat";
-import { createFeedback, FEEDBACK_CATS, FEEDBACK_MSG } from "./services/feedback";
+import { createFeedback, FEEDBACK_CATS, FEEDBACK_MSG, APP_VERSION } from "./services/feedback";
 import { local, IMG_REF, uploadImage, loadImage as loadStoredImage, dropImage } from "./services/firebase";
 import { generateArticle } from "./services/backend";
 import { fx } from "./services/fx";
@@ -43,7 +43,7 @@ import { createCommons, normFile as commonsFileOf } from "./services/commons";
 import { createOpenF1, buildReplay, lastRaceFromResult, sessionType as of1SessionType, sessionShort, replayTarget } from "./services/openf1";
 import { createJolpica, pick as pickStandings } from "./services/jolpica";
 import { createMeteo, sessionForecast, skyOf } from "./services/meteo";
-import { createAds } from "./services/ads";
+import { createAds, under18 } from "./services/ads";
 import { createBilling, BUY_MSG } from "./services/billing";
 import { createF1Data, apply as applyF1Data } from "./services/f1data";
 import { createSocial } from "./services/social";
@@ -59,6 +59,7 @@ import Calcolatrice from "./mondiale/Calcolatrice";
 import { createPitWall } from "./logic/pit-wall";
 import AutoPred from "./logic/auto-predictions";
 import HistoryQuiz from "./logic/history-quiz";
+import SecretCodes from "./logic/secret-codes";
 import AutoNews from "./logic/auto-news";
 import FantaPrices from "./logic/fanta-prices";
 import { createHighlights } from "./services/highlights";
@@ -505,7 +506,10 @@ const adBannerBus = { h: 0, subs: new Set(), set(h) { if (h === this.h) return; 
 // i loro tocchi non contano come clic non validi (AdMob chiude gli account che toccano i propri annunci).
 let adsTestForAdmin = false;
 const Billing = createBilling({ plugin: () => (isNativeApp() ? capPlugin("NativePurchases") : null), native: isNativeApp });
-const Ads = createAds({ plugin: adMobPlugin, test: () => ADMOB_TEST || adsTestForAdmin, now: nowMs, onBanner: h => adBannerBus.set(h) });
+// 14/11 (Prompt 1, minori): meno di 18 anni secondo "Su di te" → annunci non personalizzati (src/services/ads.js).
+// Con solo l'anno di nascita, chi compie 18 anni quest'anno conta ancora come minore (prudenza). Ospite: età non nota.
+let adsMinor = false;
+const Ads = createAds({ plugin: adMobPlugin, test: () => ADMOB_TEST || adsTestForAdmin, now: nowMs, onBanner: h => adBannerBus.set(h), minor: () => adsMinor });
 // Una finestra aperta sopra l'app (role="dialog", aria-modal o un livello a tutto schermo): il banner nativo, disegnato
 // da Android sopra la pagina, coprirebbe i suoi tasti. Solo nell'APK (on).
 const overlayOpen = () => [...document.querySelectorAll('[role="dialog"], [aria-modal="true"], [style*="inset: 0"]')]
@@ -8423,7 +8427,7 @@ function TrophyCase({ trophies = {}, helmet = null, defs = TROPHIES, onOpen }) {
   );
 }
 
-function ProfiloScreen({ onCoffee = null, coffeePrice = null, fanLevel = null, reminders = true, onReminders = null, halfway = true, onHalfway = null, news = true, onNews = null, trophiesOn = true, onTrophiesOn = null, holidays = true, onHolidays = null, miniPit = true, onMiniPit = null, ig, onOpenIg, trial = null, trialUsed = false, onBack, onNotifiche, onPremium, onAdmin, onLogout, isPremium, onAbout, onHelp, onFeedback, aboutMe, onSaveAboutMe, favTeam, favDriver, onPickTeam, onPickDriver, guest, onLogin, onTerms, blocked = [], onUnblock, onDeleteAccount, savedCount = 0, onOpenSaved, account = null, onSaveName, isAdmin = false, onTheme, sounds = true, haptics = true, onSounds, onHaptics, helmet = null, onHelmet, trophies = {}, trophyProg = {}, trophyList = TROPHIES, onAdPrivacy = null }) {
+function ProfiloScreen({ onHack = null, onCoffee = null, coffeePrice = null, fanLevel = null, reminders = true, onReminders = null, halfway = true, onHalfway = null, news = true, onNews = null, trophiesOn = true, onTrophiesOn = null, holidays = true, onHolidays = null, miniPit = true, onMiniPit = null, ig, onOpenIg, trial = null, trialUsed = false, onBack, onNotifiche, onPremium, onAdmin, onLogout, isPremium, onAbout, onHelp, onFeedback, aboutMe, onSaveAboutMe, favTeam, favDriver, onPickTeam, onPickDriver, guest, onLogin, onTerms, blocked = [], onUnblock, onDeleteAccount, savedCount = 0, onOpenSaved, account = null, onSaveName, isAdmin = false, onTheme, sounds = true, haptics = true, onSounds, onHaptics, helmet = null, onHelmet, trophies = {}, trophyProg = {}, trophyList = TROPHIES, onAdPrivacy = null }) {
   const ft = favTeam ? teamById(favTeam) : null;
   const fd = favDriver ? driverById(favDriver) : null;
   const favRows = [
@@ -8618,6 +8622,16 @@ function ProfiloScreen({ onCoffee = null, coffeePrice = null, fanLevel = null, r
         ))}
       </div>
 
+      {onHack && (
+        <button className="press" data-hack-open="" onClick={onHack} style={{ display: "flex", alignItems: "center", gap: 12, width: "calc(100% - 40px)", margin: "0 20px 10px", padding: 14, borderRadius: 18, background: "#030806", border: "1px solid rgba(61,255,122,.35)", textAlign: "left" }}>
+          <div aria-hidden="true" style={{ width: 36, height: 36, borderRadius: 10, background: "rgba(61,255,122,.08)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, fontFamily: 'ui-monospace, "Roboto Mono", monospace', fontWeight: 700, fontSize: 13, color: "#3DFF7A" }}>&gt;_</div>
+          <span style={{ flex: 1, minWidth: 0 }}>
+            <span style={{ display: "block", fontFamily: 'ui-monospace, "Roboto Mono", monospace', fontWeight: 700, fontSize: 14, color: "#3DFF7A", letterSpacing: 2 }}>ADMIN</span>
+            <span style={{ display: "block", fontFamily: F_BODY, fontSize: 11.5, color: C.muted, marginTop: 1 }}>Terminale del box. Hai un codice?</span>
+          </span>
+          <Icon name="chevron" size={16} color="rgba(61,255,122,.6)" />
+        </button>
+      )}
       <button className="press" onClick={guest ? onLogin : onLogout} style={{ display: "flex", alignItems: "center", gap: 12, width: "calc(100% - 40px)", margin: "0 20px", padding: 14, borderRadius: 18, background: C.card, border: `1px solid ${C.border}`, textAlign: "left" }}>
         <div style={{ width: 36, height: 36, borderRadius: 10, background: "rgba(255,255,255,.06)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}><Icon name="logout" size={16} /></div>
         <span style={{ flex: 1, fontFamily: F_BODY, fontWeight: 600, fontSize: 14, color: C.text }}>{guest ? "Accedi" : "Esci"}</span>
@@ -8720,43 +8734,103 @@ function NotificheScreen({ onBack, notifs, onReadAll, isPremium, onPremium, favT
 // Stesso codice di accesso del pannello admin dell'app vera
 const ADMIN_CODE = "080824";
 
-function AdminKeypad({ onOk, onCancel }) {
+/* ── TERMINALE DEL BOX (14/11, Edoardo) ─────────────────────────────────
+   Il bottone ADMIN lo vedono tutti (Profilo, prima di Esci): apre un terminale "da hacker". Il codice admin apre il
+   pannello solo a un account admin (Firestore: admins/<email>); su un altro account risponde come un codice sbagliato.
+   Altri codici sbloccano cose su questo telefono (src/logic/secret-codes.js). 5 codici sbagliati → firewall 30 s.
+   Animazioni: solo opacità e transform (App.css, .hack-*); con "Rimuovi animazioni" il testo c'è subito. */
+const F_TERM = 'ui-monospace, "SFMono-Regular", "Roboto Mono", "Droid Sans Mono", Menlo, monospace';
+const TERM = { bg: "#030806", fg: "#3DFF7A", dim: "rgba(61,255,122,.6)", red: "#FF4D3D", amber: "#FFC23D" };
+const HACK_BOOT = [
+  "B&T OS " + APP_VERSION + " · BOX TERMINAL",
+  "> collegamento al muretto box ........ OK",
+  "> aggancio della telemetria .......... OK",
+  "> decrittazione radio del team ....... OK",
+  "> bypass del firewall del paddock .... OK",
+  "> garage B&T: serve un codice",
+];
+const HACK_GUARD_KEY = "bt-hack-guard";
+function HackTerminal({ isAdmin, unlocks, onToggle, onAdmin, onClose, onOpenIg, telemetry }) {
+  const [log, setLog] = useState([]);        // righe scritte dopo l'avvio: { id, text, tone }
   const [code, setCode] = useState("");
-  const [err, setErr] = useState(false);
-  const [ok, setOk] = useState(false);
-  const press = (d) => {
-    if (code.length >= 6 || ok) return;
-    const nc = code + d; setCode(nc); setErr(false);
-    if (nc.length === 6) {
-      if (nc === ADMIN_CODE) { setOk(true); setTimeout(onOk, 450); }
-      else setTimeout(() => { setCode(""); setErr(true); setTimeout(() => setErr(false), 1200); }, 300);
+  const [state, setState] = useState("idle"); // idle | denied | granted | locked
+  const [shake, setShake] = useState(false);   // scossa e lampo rosso del codice sbagliato (si riaccende a ogni errore)
+  const [guard, setGuard] = useState(() => SecretCodes.cleanGuard(local.get(HACK_GUARD_KEY)));
+  const [, setTick] = useState(0);
+  const inputRef = useRef(null), bodyRef = useRef(null), nextId = useRef(0), opening = useRef(false);
+  const lockMs = SecretCodes.lockedFor(guard, nowMs());
+  useEffect(() => { if (!lockMs) return undefined; const t = setTimeout(() => setTick(n => n + 1), Math.min(lockMs, 1000)); return () => clearTimeout(t); });
+  useEffect(() => { if (state === "locked" && !lockMs) setState("idle"); }, [lockMs, state]);
+  useEffect(() => { const b = bodyRef.current; if (b) b.scrollTop = b.scrollHeight; }, [log.length, unlocks.length]);
+  const say = lines => setLog(l => [...l, ...lines.map(([text, tone]) => ({ id: nextId.current++, text, tone }))].slice(-40));
+  const keepGuard = g => { setGuard(g); local.set(HACK_GUARD_KEY, g); };
+  const submit = () => {
+    if (opening.current) return;
+    const now = nowMs(), typed = SecretCodes.norm(code);
+    const r = SecretCodes.check(code, { adminCode: ADMIN_CODE, isAdmin, guard, now });
+    if (r.kind === "empty") return;
+    setCode("");
+    const echo = ["> " + "*".repeat(Math.min(typed.length, 12)), "cmd"];
+    if (r.kind === "locked") {
+      setState("locked"); fx.buzz("error");
+      say([echo, ["FIREWALL ATTIVO: riprova tra " + Math.ceil(r.ms / 1000) + " s", "red"]]);
+      return;
     }
+    if (r.kind === "denied") {
+      const g = SecretCodes.afterTry(guard, false, now);
+      keepGuard(g);
+      const left = SecretCodes.MAX_FAILS - g.fails;
+      setState(g.until > now ? "locked" : "denied");
+      setShake(false); requestAnimationFrame(() => setShake(true)); setTimeout(() => setShake(false), 520);
+      fx.play("abort"); fx.buzz("error");
+      say([echo, ["ACCESSO NEGATO: codice non riconosciuto", "red"], g.until > now ? ["FIREWALL ATTIVO: terminale chiuso per 30 s", "red"] : ["tentativi prima del firewall: " + left, "dim"]]);
+      return;
+    }
+    keepGuard(SecretCodes.afterTry(guard, true, now));
+    if (r.kind === "admin") {
+      opening.current = true;
+      setState("granted"); fx.play("go"); fx.buzz("success");
+      say([echo, ["ACCESSO CONSENTITO", "ok"], ["apertura del pannello admin...", "dim"]]);
+      setTimeout(onAdmin, 1100);
+      return;
+    }
+    const u = SecretCodes.unlockOf(r.id), turningOn = !unlocks.includes(r.id);
+    onToggle(r.id);
+    setState("granted"); fx.play(turningOn ? "done" : "tick"); fx.buzz("success");
+    say([echo, [turningOn ? "SBLOCCATO: " + u.title.toUpperCase() : "BLOCCATO DI NUOVO: " + u.title.toUpperCase(), "ok"], [turningOn ? u.on : u.off, "dim"]]);
   };
-  const del = () => { if (!ok) { setCode(c => c.slice(0, -1)); setErr(false); } };
-  const glow = err ? "#ff2020" : ok ? C.green : "#3aa0ff";
-  const key = { width: 72, height: 58, borderRadius: 12, background: "linear-gradient(160deg,#4a4a4f,#2c2c30 60%,#38383d)", border: "1px solid #57575c", boxShadow: "0 5px 12px rgba(0,0,0,.7), inset 0 1px 0 rgba(255,255,255,.12)", color: "#ececec", fontFamily: F_BODY, fontSize: 22, fontWeight: 300, display: "flex", alignItems: "center", justifyContent: "center" };
+  const tone = t => (t === "red" ? TERM.red : t === "ok" ? TERM.fg : t === "cmd" ? "#E8FFE9" : TERM.dim);
+  const line = { margin: 0, fontFamily: F_TERM, fontSize: 12.5, lineHeight: 1.6, whiteSpace: "pre-wrap", wordBreak: "break-word" };
+  const found = SecretCodes.clean(unlocks).length, total = SecretCodes.UNLOCKS.length;
   return (
-    <div style={{ height: "100%", background: "#060606", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: 24, position: "relative" }}>
-      <button className="press" aria-label="Indietro" onClick={onCancel} style={{ position: "absolute", top: 18, left: 16, width: 38, height: 38, borderRadius: "50%", background: C.card, border: `1px solid ${C.border}`, display: "flex", alignItems: "center", justifyContent: "center" }}>
-        <Icon name="back" size={17} />
-      </button>
-      <div style={{ width: 54, height: 54, borderRadius: 16, background: alpha(C.accentInk, .12), display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 14 }}><Icon name="lock" size={24} color={C.accentInk} /></div>
-      <h2 style={{ fontFamily: F_HEAD, fontWeight: 900, fontStyle: "italic", fontSize: 19, color: "#fff", margin: "0 0 4px" }}>PANNELLO ADMIN</h2>
-      <p role="status" style={{ fontFamily: F_BODY, fontSize: 13, color: err ? "#ff5a5a" : "#6b6b70", margin: "0 0 24px" }}>{err ? "Codice errato, riprova" : ok ? "Accesso consentito" : "Inserisci il codice di accesso"}</p>
-      <div aria-label={`${code.length} cifre su 6`} style={{ display: "flex", gap: 12, marginBottom: 28 }}>
-        {[0, 1, 2, 3, 4, 5].map(i => (
-          <span key={i} style={{ width: 13, height: 13, borderRadius: "50%", transition: "all .15s", background: err ? "#ff2020" : ok ? C.green : i < code.length ? "#fff" : "#26262a", boxShadow: i < code.length ? `0 0 12px ${glow}` : "none" }} />
-        ))}
+    <div data-hack-term="" data-hack-state={lockMs > 0 ? "locked" : state} className={shake ? "hack-glitch" : undefined} style={{ height: "100%", background: TERM.bg, color: TERM.fg, display: "flex", flexDirection: "column", position: "relative", overflow: "hidden" }}>
+      <div className="hack-scanlines" aria-hidden="true" />
+      <div className="hack-scan" aria-hidden="true" />
+      {shake && <div className="hack-red" aria-hidden="true" />}
+      <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "14px 14px 8px", borderBottom: "1px solid rgba(61,255,122,.18)", position: "relative" }}>
+        <button className="press" aria-label="Indietro" onClick={onClose} style={{ width: 44, height: 44, borderRadius: 10, border: "1px solid rgba(61,255,122,.35)", display: "flex", alignItems: "center", justifyContent: "center", background: "transparent" }}><Icon name="back" size={17} color={TERM.fg} /></button>
+        <div style={{ flex: 1, minWidth: 0, fontFamily: F_TERM, fontSize: 12, color: TERM.dim, letterSpacing: .5 }}>root@box-bt:~$</div>
+        <span data-hack-found="" style={{ fontFamily: F_TERM, fontSize: 11, color: found ? TERM.fg : TERM.dim }}>SBLOCCHI {found}/{total}</span>
       </div>
-      <div style={{ background: "linear-gradient(160deg,#3a3a3e,#242428,#303034)", borderRadius: 16, padding: 18, border: "1px solid #48484c", boxShadow: `0 14px 50px rgba(0,0,0,.9), 0 0 60px ${glow}33` }}>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(3,72px)", gap: 9 }}>
-          {[1, 2, 3, 4, 5, 6, 7, 8, 9, null, 0, "del"].map((d, i) => {
-            if (d === null) return <span key={i} />;
-            if (d === "del") return <button key={i} className="press" aria-label="Cancella" onClick={del} style={{ ...key, background: "transparent", border: "none", boxShadow: "none" }}><Icon name="back" size={20} color="#bbb" /></button>;
-            return <button key={i} className="press" onClick={() => press(String(d))} style={key}>{d}</button>;
-          })}
-        </div>
+      <div ref={bodyRef} role="log" aria-live="polite" aria-label="Terminale" style={{ flex: 1, minHeight: 0, overflowY: "auto", padding: "12px 16px 8px", position: "relative" }}>
+        {HACK_BOOT.map((t, i) => <p key={"b" + i} data-hack-line="" className="hack-in" style={{ ...line, animationDelay: i * 170 + "ms", color: i === 0 ? TERM.fg : TERM.dim, fontWeight: i === 0 ? 700 : 400 }}>{t}</p>)}
+        <button className="press hack-in" onClick={onOpenIg || undefined} disabled={!onOpenIg} style={{ ...line, display: "block", padding: "6px 0", textAlign: "left", background: "transparent", color: TERM.amber, animationDelay: HACK_BOOT.length * 170 + "ms" }}># gli indizi sui codici escono sulle storie Instagram di B&T</button>
+        {log.map(l => <p key={l.id} data-hack-line="" className="hack-in" style={{ ...line, color: tone(l.tone), fontWeight: l.tone === "ok" || l.tone === "red" ? 700 : 400 }}>{l.text}</p>)}
+        {state === "granted" && opening.current && <div className="hack-bar" aria-hidden="true"><span /></div>}
+        {unlocks.includes("telemetry") && telemetry && (
+          <div data-hack-telemetry="" style={{ marginTop: 12, paddingTop: 10, borderTop: "1px dashed rgba(61,255,122,.3)" }}>
+            <p style={{ ...line, color: TERM.fg, fontWeight: 700 }}>TELEMETRIA DEL TELEFONO</p>
+            {telemetry().map(([k, v]) => <p key={k} style={{ ...line, color: TERM.dim }}>{(k + " ").padEnd(16, ".")} <span style={{ color: TERM.fg }}>{v}</span></p>)}
+          </div>
+        )}
       </div>
+      <form onSubmit={e => { e.preventDefault(); submit(); }} style={{ display: "flex", alignItems: "center", gap: 8, padding: "10px 14px calc(14px + env(safe-area-inset-bottom))", borderTop: "1px solid rgba(61,255,122,.18)", position: "relative" }}>
+        <span aria-hidden="true" style={{ fontFamily: F_TERM, fontSize: 16, color: TERM.fg }}>&gt;</span>
+        <input ref={inputRef} data-hack-input="" aria-label="Codice" value={code} onChange={e => setCode(e.target.value.slice(0, 16))} autoFocus autoComplete="off" autoCorrect="off" autoCapitalize="characters" spellCheck={false} enterKeyHint="send" disabled={lockMs > 0}
+          placeholder={lockMs > 0 ? "firewall: " + Math.ceil(lockMs / 1000) + " s" : "inserisci il codice"}
+          style={{ flex: 1, minWidth: 0, height: 44, background: "transparent", border: "none", outline: "none", color: "#E8FFE9", caretColor: TERM.fg, fontFamily: F_TERM, fontSize: 16, letterSpacing: 2, textTransform: "uppercase" }} />
+        <button type="submit" data-hack-send="" className="press" disabled={!code.trim()} style={{ height: 44, padding: "0 14px", borderRadius: 10, border: `1px solid ${TERM.fg}`, background: "rgba(61,255,122,.08)", color: TERM.fg, fontFamily: F_TERM, fontWeight: 700, fontSize: 12, letterSpacing: 1, opacity: code.trim() ? 1 : .45 }}>INVIO</button>
+      </form>
     </div>
   );
 }
@@ -10740,10 +10814,29 @@ function App() {
   // 8/11 (Edoardo: "solo chi ha ottenuto tutti i trofei può avere il premium"): vinti tutti i trofei che si possono vincere
   // adesso (senza Pit Swipe acceso non contano i suoi), l'app dà il Premium (src/logic/trophypro.js).
   const trophySkip = flags && flags.pitSwipe ? [] : BtTrophyPro.PIT_SWIPE_TROPHIES;
+  // 14/11: sblocchi del terminale del box, solo su questo telefono (src/logic/secret-codes.js). Pit Swipe acceso da un
+  // codice non cambia la regola del Premium coi trofei (trophySkip resta quello dell'admin).
+  const [unlocks, setUnlocks] = useState(() => SecretCodes.clean(local.get("bt-unlocks")));
+  const toggleUnlock = id => setUnlocks(l => { const next = SecretCodes.toggle(l, id); local.set("bt-unlocks", next); return next; });
   const trophyAll = BtTrophyPro.allDone(trophies, trophyDefs(trophyCfg), { skip: trophySkip });
   const isPaid = accPaid || accEcho || premium.sub || (!!trial && nowMs() < trial.end) || isAdminNow || trophyAll;
+  // 14/11: TELEMETRIA nel terminale del box: solo cose vere di questo telefono e di questa sessione.
+  const hackTelemetry = () => {
+    const sizes = local.get("bt-sc-sizes"), kinds = sizes && typeof sizes === "object" ? Object.keys(sizes) : [];
+    const kb = Math.round(kinds.reduce((n, k) => n + (Number(sizes[k]) || 0), 0) / 1024);
+    const online = typeof navigator === "undefined" || navigator.onLine !== false;
+    return [
+      ["VERSIONE", APP_VERSION],
+      ["RETE", !online ? "OFFLINE" : offline ? "LENTA (qualcosa non è arrivato)" : "ONLINE"],
+      ["ACCOUNT", guest || !account ? "OSPITE" : account.loaded ? "ENTRATO" : "ENTRATO (profilo dell'ultima volta)"],
+      ["PREMIUM", isPaid ? "SÌ" : "NO"],
+      ["COPIA SUL TEL", kinds.length + " contenuti, " + kb + " KB"],
+      ["ORA DI ROMA", fmtRome(nowMs())],
+    ];
+  };
   const isPremium = isPaid || adPro;
   adsTestForAdmin = isAdminNow;
+  adsMinor = !!account && under18(account.about, nowMs());   // 14/11: minori → annunci non personalizzati
   const [proAsk, setProAsk] = useState(null);   // foglio "Funzione Pro": { what, then }
   const [champSeen, setChampSeen] = useState(false);
   const [payFail, setPayFail] = useState(false);   // 4/11: carta che si gira se il pagamento non va   // 2/11: schermata del campione chiusa in questa apertura
@@ -11239,7 +11332,7 @@ function App() {
     // Cambia l'account (anche per un'uscita decisa da Firebase): il Pannello Admin si richiude e chiede di nuovo il
     // codice (revisione Fase B, minore 7).
     setAdminUnlocked(false);
-    setView(v => (v === "admin" || v === "adminLock" ? "tab" : v));
+    setView(v => (v === "admin" || v === "adminLock" || v === "hack" ? "tab" : v));
   }, [accountEmail]);
 
   // ── Chat (Firebase, src/services/chat.js): si leggono solo le stanze che si vedono, come l'app di oggi ──
@@ -12070,7 +12163,7 @@ function App() {
   const viewBack = {
     article: backFromLink, circuit: backFromLink, ghost: backFromLink, chats: () => setView("tab"),
     profilo: () => setView("tab"), notifiche: () => setView("tab"), instagram: () => setView(igFrom),
-    adminLock: () => setView("profilo"), admin: () => setView("profilo"), chatThread: () => goTab("race"), pitswipe: () => setView("tab"),
+    adminLock: () => setView("profilo"), hack: () => setView("profilo"), admin: () => setView("profilo"), chatThread: () => goTab("race"), pitswipe: () => setView("tab"),
   };
   const closeLogin = () => { setLoginOpen(false); setLoginReason(null); setLoginMode("login"); };
   const inApp = authed || guest;
@@ -12343,7 +12436,7 @@ function App() {
   const psTrophies = trophyList.filter(t => trophies[t.id]).length;
   const psLevel = BtSwipe.levelOf(BtSwipe.xpOf(swipe.tot || {}, psTrophies));
   const psNextText = (() => { const h = Number(memoFmt("en-GB", { timeZone: "Europe/Rome", hour: "2-digit", hourCycle: "h23" }).format(new Date(nowMs()))); return h < 8 ? "oggi alle 8:00" : "domani alle 8:00, o dopo la prossima sessione"; })();
-  const pitSwipeOn = !!(flags && flags.pitSwipe);   // 7/11 (Edoardo): Pit Swipe c'è solo se l'admin lo accende
+  const pitSwipeOn = !!(flags && flags.pitSwipe) || unlocks.includes("pitswipe");   // 7/11: solo se l'admin lo accende; 14/11: o col codice del terminale (solo su questo telefono)
   const openPitSwipe = () => {
     if (!pitSwipeOn) return;
     if (!psDeck) setSwipe(s => ({ ...s, deck: { key: psKey, cards: psFresh.map(c => ({ k: c.kind, id: c.id })), i: 0, acts: {}, hist: [], seen: [], fast: null, done: false, ok: 0 } }));
@@ -12643,7 +12736,7 @@ function App() {
   let body;
   if (view === "article" && activeArticle) body = <ArticleScreen article={activeArticle} onBack={viewBack.article} isPremium={isPaid || adNews.includes(activeArticle.id)} onAdUnlock={Ads.canReward() ? () => watchAdNews(activeArticle.id) : null} adBusy={adBusy} onPremium={() => setPremiumOpen(true)} onTag={filterByTag} saved={saved.includes(activeArticle.id)} onToggleSave={() => toggleSave(activeArticle.id)} onShare={() => setShareId(activeArticle.id)} vote={votes["art-" + activeArticle.id] || null} onVote={castVote} />;
   else if (view === "circuit" && circuitId) body = <CircuitScreen circuitId={circuitId} races={races} articles={newsAll} onBack={viewBack.circuit} onTag={filterByTag} onOpenArticle={openArticle} />;
-  else if (view === "adminLock") body = <AdminKeypad onOk={() => { setAdminUnlocked(true); setView("admin"); }} onCancel={viewBack.adminLock} />;
+  else if (view === "adminLock" || view === "hack") body = <HackTerminal isAdmin={!!account && Account.isAdmin()} unlocks={unlocks} onToggle={toggleUnlock} onAdmin={() => { setAdminUnlocked(true); setView("admin"); }} onClose={viewBack.hack} onOpenIg={() => { setIgFrom("profilo"); setView("instagram"); }} telemetry={hackTelemetry} />;
   else if (view === "admin" && adminUnlocked && Account.isAdmin()) body = <AdminScreen histAuto={histQs.filter(q => q.raceId === (weekendRace(races) || {}).id)} hiddenQs={hiddenQs} onHideQ={(id, hide) => commitShared("flags", latest => { const cur = latest && Array.isArray(latest.hiddenQs) ? latest.hiddenQs : []; return { ...latest, hiddenQs: hide ? [...cur.filter(x => x !== id), id] : cur.filter(x => x !== id) }; }).then(ok => { if (ok) showToast(hide ? "Domanda tolta dal FantaF1 per tutti" : "Domanda rimessa nel FantaF1"); })} flags={flags} onFlags={v => commitShared("flags", () => v).then(ok => { if (ok) showToast(v.pitSwipe ? "Pit Swipe acceso per tutti" : "Pit Swipe spento per tutti"); })} takes={takes} onTakes={v => commitShared("takes", () => v).then(ok => { if (ok) showToast("Opinioni salvate"); })} holidayCfg={holidayCfg} holiday={holiday} onHolidays={v => commitShared("holidays", () => v).then(ok => { if (ok) showToast("Temi delle feste salvati"); })} photos={commonsPhotos} setPhotos={adminSet.commonsPhotos} silly={sillyOfficial} onSilly={officialSeat} highlights={highlights} setHighlights={adminSet.highlights} onBack={viewBack.admin} onPublish={publishArticle} articles={articles} setArticles={adminSet.articles} fantaStats={shownFantaStats} fantaLatestRound={latestRaceRound} setFantaStats={adminSet.fantaStats} standings={standings} setStandings={adminSet.standings} races={races} setRaces={adminSet.races} extraRaces={racesDoc.extra} setExtraRaces={adminSet.extraRaces} ig={ig} setIg={adminSet.ig} sentNotifs={sentNotifs} onSendNotif={sendNotif} onDeleteNotif={deleteNotif} onToast={showToast} tab={adminTab} setTab={setAdminTab} chats={chats} reports={reports} banned={banned} onDeleteMsg={deleteChatMsg} onSuspend={suspendUser} onUnsuspend={unsuspendUser} onIgnoreReport={ignoreReport} liveProps={liveProps} polls={allPolls} votes={votes} onPollAnswer={setPollAnswer} predictions={predictions} setPredictions={adminSet.predictions} predAnswers={predAnswers} />;
   else if (view === "chatThread" && activeChat) body = <ChatThreadScreen since={chatSince(activeChat && activeChat.id)} chat={activeChat} onBack={viewBack.chatThread} onSend={guest ? () => needLogin("Per scrivere in chat serve un account.") : sendMessage} isPremium={isPremium} blocked={blocked} onReport={guest ? () => needLogin("Per segnalare un messaggio serve un account.") : reportMessage} onBlock={blockUser} onReact={guest ? () => needLogin("Per reagire ai messaggi serve un account.") : reactMessage} trophyList={trophyList} myWon={trophies} pendingLink={pendingLink} onPendingUsed={() => setPendingLink(null)} onOpenLink={openLink} liveRace={races.find(r => r.status === "LIVE") || null} />;
   else if (view === "instagram") body = <InstagramView ig={ig} onToast={showToast} onBack={viewBack.instagram} />;
@@ -12654,7 +12747,7 @@ function App() {
     mode={swipe.mode || "taste"} onMode={m => { if (!guest && !userDataWait()) setSwipe(s => ({ ...s, mode: m })); }} rain={psRain} onEgg={psEgg} streak={{ n: (swipe.streak || {}).n || 0 }}
     endInfo={psEndInfo} onSaved={() => { setSavedOnly(true); setView("tab"); goTab("home"); }} onShare={psShare} onDuel={!guest ? sendDuel : null} />;
   else if (view === "chats") body = <ChatsView chats={chats} onOpen={openChat} blocked={blocked} onBack={viewBack.chats} unreadOf={(id, ms) => Chat.unread(id, ms)} />;
-  else if (view === "profilo") body = <ProfiloScreen onCoffee={Billing.where() ? buyCoffee : null} coffeePrice={playPrices.coffee || null} ig={ig} onOpenIg={() => { setIgFrom("profilo"); setView("instagram"); }} aboutMe={aboutMe} onSaveAboutMe={a => Account.updateAbout(a).catch(e => showToast(e && (e.code === "too-young" || e.code === "not-loaded") ? messageOf(e) : NOT_SAVED))} account={account} onSaveName={n => Account.updateName(n)} isAdmin={Account.isAdmin()} trial={trialActive ? trial : null} trialUsed={!!trial} onBack={viewBack.profilo} onNotifiche={() => setView("notifiche")} onPremium={() => setPremiumOpen(true)} onAdmin={() => guest ? needLogin("Accedi per usare il pannello admin.") : setView(adminUnlocked ? "admin" : "adminLock")} onLogout={logout} isPremium={isPremium} onAbout={() => setInfoModal({ title: "Info su B&T", body: ABOUT_TEXT, credits: true })} onFeedback={() => setFeedbackOpen(true)} onHelp={() => setInfoModal({ title: "Assistenza", body: HELP_TEXT })} favTeam={favTeam} favDriver={favDriver} onPickTeam={() => guest ? needLogin("Per scegliere scuderia e pilota del cuore serve un account.") : setPicker("team")} onPickDriver={() => guest ? needLogin("Per scegliere scuderia e pilota del cuore serve un account.") : setPicker("driver")} guest={guest} onLogin={() => needLogin(null)} onTerms={() => setTermsOpen(true)} blocked={blocked} onUnblock={unblockUser} onDeleteAccount={deleteAccount} savedCount={saved.length} onOpenSaved={openSaved} onTheme={() => setThemeOpen(true)} helmet={helmet} onHelmet={() => setHelmetOpen(true)} trophies={trophies} trophyProg={trophyProg} trophyList={trophyList}
+  else if (view === "profilo") body = <ProfiloScreen onCoffee={Billing.where() ? buyCoffee : null} coffeePrice={playPrices.coffee || null} ig={ig} onOpenIg={() => { setIgFrom("profilo"); setView("instagram"); }} aboutMe={aboutMe} onSaveAboutMe={a => Account.updateAbout(a).catch(e => showToast(e && (e.code === "too-young" || e.code === "not-loaded") ? messageOf(e) : NOT_SAVED))} account={account} onSaveName={n => Account.updateName(n)} isAdmin={Account.isAdmin()} trial={trialActive ? trial : null} trialUsed={!!trial} onBack={viewBack.profilo} onNotifiche={() => setView("notifiche")} onPremium={() => setPremiumOpen(true)} onAdmin={() => guest ? needLogin("Accedi per usare il pannello admin.") : setView(adminUnlocked ? "admin" : "hack")} onHack={() => { setView("hack"); if (account && Account.refreshAdmin) Account.refreshAdmin().catch(() => {}); }} onLogout={logout} isPremium={isPremium} onAbout={() => setInfoModal({ title: "Info su B&T", body: ABOUT_TEXT, credits: true })} onFeedback={() => setFeedbackOpen(true)} onHelp={() => setInfoModal({ title: "Assistenza", body: HELP_TEXT })} favTeam={favTeam} favDriver={favDriver} onPickTeam={() => guest ? needLogin("Per scegliere scuderia e pilota del cuore serve un account.") : setPicker("team")} onPickDriver={() => guest ? needLogin("Per scegliere scuderia e pilota del cuore serve un account.") : setPicker("driver")} guest={guest} onLogin={() => needLogin(null)} onTerms={() => setTermsOpen(true)} blocked={blocked} onUnblock={unblockUser} onDeleteAccount={deleteAccount} savedCount={saved.length} onOpenSaved={openSaved} onTheme={() => setThemeOpen(true)} helmet={helmet} onHelmet={() => setHelmetOpen(true)} trophies={trophies} trophyProg={trophyProg} trophyList={trophyList}
     onAdPrivacy={Ads.privacyRequired() ? () => Ads.openPrivacy().catch(() => showToast("Le preferenze sulla privacy degli annunci non sono disponibili in questo momento.")) : null}
     sounds={sounds} haptics={haptics} onSounds={v => { if (userDataWait()) return; setSounds(v); fx.setSounds(v); if (v) fx.play("tick"); }} onHaptics={v => { if (userDataWait()) return; setHaptics(v); fx.setHaptics(v); if (v) fx.buzz("light"); }}
     holidays={holidaysOn} onHolidays={v => { if (userDataWait()) return; setHolidaysOn(v); local.set("bt-holidays-on", v); fx.play("tick"); }}
@@ -12713,7 +12806,7 @@ function App() {
   };
 
   return shell(
-      <div data-bg={pageBg || undefined} style={{ height: "100%", display: "flex", flexDirection: "column", position: "relative", background: pageBg && PAGE_BG[pageBg] ? PAGE_BG[pageBg] : undefined, transition: "background .3s" }}>
+      <div data-bg={pageBg || undefined} data-retro={unlocks.includes("retro") ? "" : undefined} style={{ height: "100%", display: "flex", flexDirection: "column", position: "relative", background: pageBg && PAGE_BG[pageBg] ? PAGE_BG[pageBg] : undefined, transition: "background .3s" }}>
         {showTopHeader && <TopHeader onLaunch={ok => { if (ok) { setLaunchFx(nowMs()); setTimeout(() => setLaunchFx(0), 800); psEgg("launch"); } else showToast("Anti-stallo: tieni premuto il logo per 3 secondi"); }} trialDays={trialActive ? trialDaysLeft(trial) : 0} isPremium={isPremium} unread={unreadCount} onPremium={() => setPremiumOpen(true)} onBell={() => setView("notifiche")} onProfile={() => { setView("profilo"); if (account && Account.refreshAdmin) Account.refreshAdmin().catch(() => {}); }} helmet={helmet} onTrack={isDemoLive(live) || !!sessionNow(realLiveRace, nowMs())} onLogoEgg={() => setEggFound(true)} holiday={holiday} />}
         {showTopHeader && offline && <div role="status" data-offline="" style={{ margin: "-6px 16px 10px", padding: "8px 12px", borderRadius: 10, background: "rgba(231,179,76,.12)", border: "1px solid rgba(231,179,76,.35)", fontFamily: F_BODY, fontSize: 12, color: C.text, lineHeight: 1.4, flexShrink: 0 }}>{OFFLINE_LINE}</div>}
         <div ref={swipeBoxRef} data-tab-swipe={showBottomNav ? "" : undefined} className={launchFx ? "ps-launch-zoom" : undefined} style={{ flex: 1, minHeight: 0, overflow: "hidden", position: "relative" }}

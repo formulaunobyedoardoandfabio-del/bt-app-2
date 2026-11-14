@@ -121,6 +121,25 @@
   .abort-yellow{ opacity:0; animation:abortblink 1.6s linear .35s forwards; }
   @keyframes abortblink{ 0%,12%{ opacity:1; } 13%,25%{ opacity:0; } 26%,38%{ opacity:1; } 39%,51%{ opacity:0; } 52%,64%{ opacity:1; } 65%,77%{ opacity:0; } 78%,100%{ opacity:1; } }
   .abort-shake{ animation:abortshake .42s cubic-bezier(.36,.07,.19,.97); }
+  /* 14/11 (Edoardo): terminale del box "da hacker". Righe che entrano una dopo l'altra, linee del vecchio monitor (ferme),
+     una banda di luce che scende (transform), cursore e barra di apertura (transform). Codice sbagliato: scossa e lampo
+     rosso. Con "Rimuovi animazioni": niente movimento, il testo c'è subito. */
+  .hack-in{ animation:hackin .2s ease-out both; }
+  @keyframes hackin{ from{ opacity:0; transform:translateX(-6px); } to{ opacity:1; transform:none; } }
+  .hack-scanlines{ position:absolute; inset:0; pointer-events:none; z-index:2; background:repeating-linear-gradient(0deg, rgba(0,0,0,.28) 0 1px, transparent 1px 3px); }
+  .hack-scan{ position:absolute; left:0; right:0; top:0; height:140px; pointer-events:none; z-index:2; background:linear-gradient(180deg, rgba(61,255,122,0), rgba(61,255,122,.06), rgba(61,255,122,0)); animation:hackscan 5.5s linear infinite; }
+  @keyframes hackscan{ from{ transform:translateY(-140px); } to{ transform:translateY(110vh); } }
+  .hack-glitch{ animation:hackglitch .42s steps(2) 1; }
+  @keyframes hackglitch{ 0%{ transform:translate(0,0); } 20%{ transform:translate(-4px,1px) skewX(-2deg); } 40%{ transform:translate(3px,-1px); } 60%{ transform:translate(-2px,0) skewX(1deg); } 80%{ transform:translate(2px,1px); } 100%{ transform:none; } }
+  .hack-red{ position:absolute; inset:0; pointer-events:none; z-index:3; background:#FF4D3D; opacity:0; animation:hackred .5s ease-out 1; }
+  @keyframes hackred{ 0%{ opacity:0; } 15%{ opacity:.22; } 100%{ opacity:0; } }
+  .hack-bar{ height:4px; margin:8px 0 2px; background:rgba(61,255,122,.15); overflow:hidden; border-radius:2px; }
+  .hack-bar span{ display:block; height:100%; background:#3DFF7A; transform-origin:left; animation:hackbar 1s ease-in-out both; }
+  @keyframes hackbar{ from{ transform:scaleX(0); } to{ transform:scaleX(1); } }
+  [data-hack-term] input::placeholder{ color:rgba(61,255,122,.4); letter-spacing:1px; text-transform:none; }
+  [data-hack-term] button:focus-visible, [data-hack-term] input:focus-visible{ outline:2px solid #3DFF7A; outline-offset:2px; }
+  [data-retro]{ filter:grayscale(1) contrast(1.06); }
+  @media (prefers-reduced-motion:reduce){ .hack-in, .hack-glitch, .hack-red, .hack-bar span{ animation:none; } .hack-scan{ display:none; } .hack-red{ display:none; } }
   /* 13/11 (Edoardo): risposta a una domanda di storia del Fanta. Giusta: cinque luci verdi che si accendono in fila,
      bandiera a scacchi che attraversa la scheda, coriandoli e "+1" che sale. Sbagliata: cinque luci rosse che
      lampeggiano (partenza annullata), scossa e velo rosso, poi pulsa la risposta giusta. Solo transform e opacità;

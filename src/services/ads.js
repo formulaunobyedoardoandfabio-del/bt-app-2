@@ -32,8 +32,12 @@ const OP_TIMEOUT_MS = 10000;
 const withTimeout = (p, ms) => Promise.race([Promise.resolve(p), new Promise((_, rej) => setTimeout(() => rej(new Error("AdMob: tempo scaduto")), ms))]);
 
 // test: true/false oppure una funzione (1/11: annunci di prova per gli admin, che si sa chi sono solo dopo l'accesso).
-function createAds({ plugin = () => null, test = false, now = () => Date.now(), onBanner = () => {} } = {}) {
+// minor (14/11): true se chi usa l'app ha meno di 18 anni ("Su di te"). Allora ogni richiesta chiede annunci non
+// personalizzati (npa), come vuole il regolamento UE sui servizi digitali (art. 28: niente profilazione ai minori).
+function createAds({ plugin = () => null, test = false, now = () => Date.now(), onBanner = () => {}, minor = () => false } = {}) {
   const isTest = () => { try { return typeof test === "function" ? !!test() : !!test; } catch (e) { return true; } };
+  const isMinor = () => { try { return !!minor(); } catch (e) { return true; } };   // controllo rotto: prudenza
+  const kid = o => (isMinor() ? { ...o, npa: true } : o);
   const startedAt = now();
   let readyP = null, privacy = false;
   function ready() {
@@ -73,7 +77,7 @@ function createAds({ plugin = () => null, test = false, now = () => Date.now(), 
     }
     const slot = want;
     if (!slot || !(await ready()) || want !== slot) return;
-    await withTimeout(A.showBanner({ adId: isTest() ? TEST_UNITS.banner : UNITS.banner[slot], adSize: "ADAPTIVE_BANNER", position: "BOTTOM_CENTER", margin: 0, isTesting: isTest() }), OP_TIMEOUT_MS)
+    await withTimeout(A.showBanner(kid({ adId: isTest() ? TEST_UNITS.banner : UNITS.banner[slot], adSize: "ADAPTIVE_BANNER", position: "BOTTOM_CENTER", margin: 0, isTesting: isTest() })), OP_TIMEOUT_MS)
       .then(() => { shown = slot; }, () => {});
   };
   const setBanner = slot => {
@@ -90,7 +94,7 @@ function createAds({ plugin = () => null, test = false, now = () => Date.now(), 
     const A = plugin();
     if (!A || loaded || loading || sLoaded || sinceLast < INTERSTITIAL_AFTER || !timeOk()) return;
     loading = true;
-    ready().then(ok => (ok ? withTimeout(A.prepareInterstitial({ adId: isTest() ? TEST_UNITS.interstitial : UNITS.interstitial.news, isTesting: isTest() }), 30000).then(() => { loaded = true; }) : null))
+    ready().then(ok => (ok ? withTimeout(A.prepareInterstitial(kid({ adId: isTest() ? TEST_UNITS.interstitial : UNITS.interstitial.news, isTesting: isTest() })), 30000).then(() => { loaded = true; }) : null))
       .catch(() => {})   // Google senza annunci da mostrare: si riprova più avanti
       .then(() => { loading = false; });
   }
@@ -114,7 +118,7 @@ function createAds({ plugin = () => null, test = false, now = () => Date.now(), 
     }
     if (sLoading || loaded || now() - startedAt < QUIET_START_MS) return;
     sLoading = true;
-    ready().then(ok => (ok ? withTimeout(A.prepareInterstitial({ adId: isTest() ? TEST_UNITS.interstitial : UNITS.interstitial.standings, isTesting: isTest() }), 30000).then(() => { sLoaded = true; }) : null))
+    ready().then(ok => (ok ? withTimeout(A.prepareInterstitial(kid({ adId: isTest() ? TEST_UNITS.interstitial : UNITS.interstitial.standings, isTesting: isTest() })), 30000).then(() => { sLoaded = true; }) : null))
       .catch(() => {}).then(() => { sLoading = false; });
   }
 
@@ -128,7 +132,7 @@ function createAds({ plugin = () => null, test = false, now = () => Date.now(), 
       if (!A || !(await ready())) return "unavailable";
       let loadedUnit = null;
       for (const adId of isTest() ? [TEST_UNITS.rewarded] : UNITS.rewarded) {
-        try { await withTimeout(A.prepareRewardVideoAd({ adId, isTesting: isTest() }), 30000); loadedUnit = adId; break; } catch (e) {}
+        try { await withTimeout(A.prepareRewardVideoAd(kid({ adId, isTesting: isTest() })), 30000); loadedUnit = adId; break; } catch (e) {}
       }
       if (!loadedUnit) return "unavailable";
       let earned = false, closed;
@@ -155,7 +159,16 @@ function createAds({ plugin = () => null, test = false, now = () => Date.now(), 
     return true;
   }
 
-  return { ready, setBanner, articleOpened, articleClosed, standingsEnd, canReward, showRewarded, privacyRequired, openPrivacy };
+  return { isMinor, ready, setBanner, articleOpened, articleClosed, standingsEnd, canReward, showRewarded, privacyRequired, openPrivacy };
 }
 
-module.exports = { createAds, UNITS, TEST_UNITS, INTERSTITIAL_AFTER, INTERSTITIAL_GAP_MS, QUIET_START_MS };
+// Meno di 18 anni secondo "Su di te" (data di nascita; con solo l'anno, chi compie 18 anni quest'anno conta ancora come minore).
+const under18 = (about, now) => {
+  const d = new Date(now), y = d.getFullYear(), m = d.getMonth() + 1, day = d.getDate();
+  const bd = about && typeof about.birthDate === "string" && /^\d{4}-\d{2}-\d{2}$/.test(about.birthDate) ? about.birthDate.split("-").map(Number) : null;
+  if (bd) return y - bd[0] - (m < bd[1] || (m === bd[1] && day < bd[2]) ? 1 : 0) < 18;
+  const by = about ? Number(about.birth) : NaN;
+  return Number.isInteger(by) && by > 1900 ? y - by <= 18 : false;
+};
+
+module.exports = { createAds, under18, UNITS, TEST_UNITS, INTERSTITIAL_AFTER, INTERSTITIAL_GAP_MS, QUIET_START_MS };

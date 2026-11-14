@@ -43,7 +43,7 @@ const goRace = async p => { await tapText(p, 'RACE', { exact: true }); await w(p
 async function openAdminLive(p) {
   await p.evaluate(() => { if (!window.firebase.__fake.doc('admins/a@b.it')) window.firebase.__fake.setDoc('admins/a@b.it', { ruolo: 'admin' }); }); await tapSel(p, '[aria-label="Profilo"]'); await w(p); await tapText(p, 'Pannello Admin'); await w(p);
   const keypad = await p.evaluate(() => [...document.querySelectorAll('button')].some(b => b.textContent.trim() === '8'));
-  if (keypad) { for (const d of '080824') { await tapText(p, d, { exact: true }); await w(p, 60); } await w(p, 900); }   // il codice serve solo la prima volta
+  await require('./helpers').enterAdminCode(p);   // il codice serve solo la prima volta
   await tapText(p, 'GARA LIVE', { exact: true }); await w(p, 300);
 }
 const backHome = async p => { await tapSel(p, '[aria-label="Indietro"]'); await w(p); await tapSel(p, '[aria-label="Indietro"]'); await w(p); };

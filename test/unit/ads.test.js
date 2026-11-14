@@ -2,7 +2,7 @@
 // chiamate: consenso UE prima di tutto, banner uno alla volta, interstitial con il limite, annunci di prova.
 // Uso: node test/unit/ads.test.js [filtro]
 const assert = require('assert');
-const { createAds, UNITS, TEST_UNITS } = require('../../src/services/ads');
+const { createAds, UNITS, TEST_UNITS, under18 } = require('../../src/services/ads');
 
 // Plugin finto. consent: risposta di requestConsentInfo; failInit: initialize rifiuta; noFill: niente interstitial.
 function fakeAdMob({ consent = { status: 'NOT_REQUIRED', isConsentFormAvailable: false, canRequestAds: true, privacyOptionsRequirementStatus: 'NOT_REQUIRED' }, afterForm = null, failInit = false, noFill = false } = {}) {
@@ -30,6 +30,43 @@ const settle = async () => { for (let i = 0; i < 8; i++) await tick(); };
 let pass = 0, fail = 0;
 const tests = [];
 const t = (name, fn) => tests.push([name, fn]);
+
+// 14/11 (Prompt 1, minori): l'app sa chi ha meno di 18 anni (data di nascita in "Su di te"). A loro niente annunci
+// basati sulla profilazione (regolamento UE sui servizi digitali, art. 28): ogni richiesta ad AdMob chiede npa (non
+// personalizzati). Se il controllo dell'età si rompe, per prudenza vale come minore.
+t('14/11 under18: con la data di nascita conta il compleanno; con solo l\'anno prudenza; senza età no', async () => {
+  const now = Date.parse('2026-11-14T12:00:00Z');
+  assert.strictEqual(under18({ birthDate: '2008-11-15' }, now), true, 'compie 18 anni domani');
+  assert.strictEqual(under18({ birthDate: '2008-11-14' }, now), false, 'compie 18 anni oggi');
+  assert.strictEqual(under18({ birthDate: '1990-01-01' }, now), false);
+  assert.strictEqual(under18({ birth: 2008 }, now), true, 'solo l\'anno: potrebbe averne ancora 17');
+  assert.strictEqual(under18({ birth: 2007 }, now), false);
+  assert.strictEqual(under18({}, now), false);
+  assert.strictEqual(under18(null, now), false);
+  assert.strictEqual(under18({ birthDate: 'boh', birth: 2010 }, now), true, 'data rovinata: si guarda l\'anno');
+});
+
+t('14/11 minori: banner, interstitial e video premio chiedono annunci non personalizzati; agli adulti no', async () => {
+  let minor = true;
+  const p = fakeAdMob();
+  const A = createAds({ plugin: () => p, test: true, minor: () => minor });
+  A.setBanner('home'); await settle();
+  for (let i = 0; i < 3; i++) { A.articleOpened(); A.articleClosed(); }
+  await settle();
+  p.prepareRewardVideoAd = o => { p.calls.push('prepareRewardVideoAd:' + JSON.stringify(o)); return Promise.resolve({ adUnitId: o.adId }); };
+  p.showRewardVideoAd = () => Promise.resolve({ type: 'coin', amount: 1 });
+  await A.showRewarded().catch(() => {});
+  const asks = p.calls.filter(c => /^(showBanner|prepareInterstitial|prepareRewardVideoAd):/.test(c));
+  assert.ok(asks.length >= 2, asks.join(' '));
+  assert.ok(asks.every(c => c.includes('"npa":true')), 'ogni richiesta con npa: ' + asks.join(' '));
+  minor = false;
+  const q = fakeAdMob();
+  const B = createAds({ plugin: () => q, test: true, minor: () => minor });
+  B.setBanner('home'); await settle();
+  assert.ok(q.calls.some(c => c.startsWith('showBanner:')) && !q.calls.some(c => c.includes('"npa"')), q.calls.join(' '));
+  const C = createAds({ plugin: () => fakeAdMob(), test: true, minor: () => { throw new Error('rotto'); } });
+  assert.strictEqual(C.isMinor(), true, 'controllo rotto → prudenza');
+});
 
 t('pubblicità: prima il consenso (UE), poi il banner; con il modulo di Google se serve', async () => {
   const p = fakeAdMob({ consent: { status: 'REQUIRED', isConsentFormAvailable: true, canRequestAds: false, privacyOptionsRequirementStatus: 'REQUIRED' } });

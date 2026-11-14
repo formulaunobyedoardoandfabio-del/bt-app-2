@@ -108,12 +108,25 @@ async function login(p, { email = 'a@b.it', pw = 'x' } = {}) {
 }
 // 31/10: a@b.it non è admin di serie (gli admin hanno Premium e tutti i trofei): lo diventa qui (l'app lo rilegge
 // aprendo il Profilo).
+// 14/11: il pannello si apre dal terminale del box (codice scritto e Invio); il codice si legge dall'app, non si ripete qui.
+const ADMIN_CODE_APP = (require('fs').readFileSync(require('path').join(__dirname, '../../src/App.jsx'), 'utf8').match(/const ADMIN_CODE = "([0-9]+)"/) || [])[1];
+// 14/11: scrive il codice admin dove c'è da scriverlo: nel terminale del box (oggi) o, se ci fosse, nel tastierino di prima.
+async function enterAdminCode(p) {
+  if (await p.$('[data-hack-input]')) {
+    await p.fill('[data-hack-input]', ADMIN_CODE_APP);
+    await p.press('[data-hack-input]', 'Enter');
+    await p.waitForFunction(() => !document.querySelector('[data-hack-term]'), null, { timeout: 6000 }).catch(() => {});
+    await w(p, 300);
+    return;
+  }
+  const keypad = await p.evaluate(() => [...document.querySelectorAll('button')].some(b => b.textContent.trim() === '8'));
+  if (keypad) { for (const d of ADMIN_CODE_APP) { await tapText(p, d, { exact: true }); await w(p, 60); } await w(p, 900); }
+}
 async function openAdmin(p, tab) {
   await p.evaluate(() => { if (!window.firebase.__fake.doc('admins/a@b.it')) window.firebase.__fake.setDoc('admins/a@b.it', { ruolo: 'admin' }); });
   await tapSel(p, '[aria-label="Profilo"]'); await w(p);
   await tapText(p, 'Pannello Admin'); await w(p);
-  const keypad = await p.evaluate(() => [...document.querySelectorAll('button')].some(b => b.textContent.trim() === '8'));
-  if (keypad) { for (const d of '080824') { await tapText(p, d, { exact: true }); await w(p, 60); } await w(p, 900); }
+  await enterAdminCode(p);
   if (tab) { await tapText(p, tab, { exact: true }); await w(p, 300); }
 }
 
@@ -136,4 +149,4 @@ async function run(tests) {
   process.exit(fail ? 1 : 0);
 }
 
-module.exports = { EXE, PAGE, NOW, open, w, text, norm, inner, inners, count, has, tapText, tapSel, goTab, login, openAdmin, assert, run };
+module.exports = { EXE, PAGE, NOW, open, w, text, norm, inner, inners, count, has, tapText, tapSel, goTab, login, openAdmin, enterAdminCode, assert, run };
