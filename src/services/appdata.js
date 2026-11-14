@@ -121,7 +121,32 @@ const pickUser = v => { const out = {}; if (isObj(v)) USER_KEYS.forEach(k => { i
 // prende da lì invece di rileggere lo stesso documento. In copia: cambiarli non tocca il profilo.
 const userDataOf = app2 => pickUser(isObj(app2) ? clone(app2) : null);
 
+// 14/11 (avvio lento): copia sul telefono dei documenti condivisi letti da Firebase. A ogni avvio l'app aspettava
+// Firebase prima di togliere lo splash (18 documenti, fino a 15 secondi con la rete lenta); ora dal secondo avvio parte
+// dalla copia e Firebase la aggiorna appena risponde. Si tiene il documento com'è su Firebase ({ v: documento }, null =
+// su Firebase non c'è), così all'avvio passa dagli stessi controlli di una lettura vera (KINDS[...].from). Un documento
+// più grande di SHARED_CACHE_DOC_MAX caratteri (foto) non si copia; in tutto al massimo SHARED_CACHE_TOTAL_MAX.
+const SHARED_CACHE_KEY = d => "bt-sc:" + d, SHARED_CACHE_SIZES = "bt-sc-sizes";
+const SHARED_CACHE_DOC_MAX = 200000, SHARED_CACHE_TOTAL_MAX = 1200000;
+
 function createAppData({ fb = FB } = {}) {
+  const store = fb.local && fb.local.putRaw ? fb.local : null;   // senza telefono (prove con un Firebase su misura): niente copia
+  const cacheSizes = () => { const v = store ? store.get(SHARED_CACHE_SIZES) : null; return isObj(v) ? v : {}; };
+  const cachePut = (doc, raw) => {
+    if (!store) return;
+    const sizes = cacheSizes(), text = JSON.stringify({ v: raw == null ? null : raw });
+    const others = Object.keys(sizes).reduce((n, k) => n + (k === doc ? 0 : Number(sizes[k]) || 0), 0);
+    const fits = text.length <= SHARED_CACHE_DOC_MAX && others + text.length <= SHARED_CACHE_TOTAL_MAX;
+    if (fits && store.getRaw(SHARED_CACHE_KEY(doc)) === text) return;          // uguale a prima: niente da scrivere
+    if (fits && store.putRaw(SHARED_CACHE_KEY(doc), text)) sizes[doc] = text.length;
+    else { store.del(SHARED_CACHE_KEY(doc)); delete sizes[doc]; }
+    store.set(SHARED_CACHE_SIZES, sizes);
+  };
+  // Copia di un documento: { v } se c'è ed è leggibile, undefined se manca o è rovinata.
+  const cacheGet = doc => {
+    if (!store) return undefined;
+    try { const o = JSON.parse(store.getRaw(SHARED_CACHE_KEY(doc)) || "null"); return isObj(o) && "v" in o ? o : undefined; } catch (e) { return undefined; }
+  };
   // Ultima versione di ogni documento letta da Firebase (o scritta) da questo telefono: null = il documento non c'è.
   // Un documento che non c'è in base non si è mai potuto leggere.
   const base = new Map();
@@ -147,9 +172,21 @@ function createAppData({ fb = FB } = {}) {
         ok.add(k); base.set(k, clone(raw[k]));
       } catch (e) { raw[k] = null; }
     }));
+    ok.forEach(k => cachePut(k, raw[k]));   // 14/11: quello che si è letto davvero si mette da parte per l'avvio dopo
     const values = {};
     kinds.forEach(kind => { values[kind] = valueOf(kind, raw, now); });
     return { values, offline: ok.size < docs.length, fresh: kinds.filter(k => KINDS[k].docs.every(d => ok.has(d))) };
+  }
+  // 14/11: i contenuti dell'ultima volta, dalla copia sul telefono (senza Firebase). values: solo i contenuti che hanno
+  // la copia di tutti i loro documenti; kinds: quali; complete: ci sono tutti (l'app può aprirsi senza aspettare).
+  function sharedCached(now = Date.now()) {
+    const values = {}, kinds = [];
+    Object.keys(KINDS).forEach(kind => {
+      const raw = {};
+      for (const d of KINDS[kind].docs) { const c = cacheGet(d); if (!c) return; raw[d] = c.v; }
+      try { values[kind] = valueOf(kind, raw, now); kinds.push(kind); } catch (e) { delete values[kind]; }
+    });
+    return { values, kinds, complete: kinds.length === Object.keys(KINDS).length };
   }
   const staleKinds = () => Object.keys(KINDS).filter(k => !isFresh(k));
 
@@ -239,7 +276,9 @@ function createAppData({ fb = FB } = {}) {
     if (!p) return;
     pending.delete(email); clearTimeout(p.timer);
     try {
-      await fb.dbSet("users", email, { app2: p.patch });
+      // 14/11: ogni chiave dei dati personali si scrive intera (mergeFields), così quello che si toglie sparisce davvero.
+      const keys = Object.keys(p.patch), plain = keys.every(k => /^[A-Za-z_][A-Za-z0-9_]*$/.test(k));
+      await fb.dbSet("users", email, { app2: p.patch }, plain && keys.length ? { fields: keys.map(k => "app2." + k) } : {});
       p.waiters.forEach(w => w.res());
     } catch (e) {
       const cur = pending.get(email);   // modifiche arrivate intanto: le più nuove valgono di più
@@ -263,7 +302,7 @@ function createAppData({ fb = FB } = {}) {
     await fb.dbSet("users", email, { app2: {} });
   }
 
-  return { loadShared, staleKinds, saveShared, ensureTrophyDoc, appendNotif, removeNotif, loadBluff, tagBluff, untagBluff, loadUserData, saveUserData, flushUserData, cancelUserData, clearUserData };
+  return { loadShared, sharedCached, staleKinds, saveShared, ensureTrophyDoc, appendNotif, removeNotif, loadBluff, tagBluff, untagBluff, loadUserData, saveUserData, flushUserData, cancelUserData, clearUserData };
 }
 
 // I valori di serie di tutti i contenuti, già convertiti per l'app: quelli che si vedono finché Firebase non risponde.
@@ -273,4 +312,4 @@ function sharedDefaults(now = Date.now()) {
   return values;
 }
 
-module.exports = { D_NEWS, SHARED_DOCS, KINDS, USER_KEYS, USER_SAVE_MS, sharedDefaults, userDataOf, createAppData, ...createAppData() };
+module.exports = { D_NEWS, SHARED_DOCS, KINDS, USER_KEYS, USER_SAVE_MS, SHARED_CACHE_DOC_MAX, sharedDefaults, userDataOf, createAppData, ...createAppData() };

@@ -7,6 +7,19 @@ let pass = 0, fail = 0;
 const tests = [];
 const t = (name, fn) => tests.push([name, fn]);
 
+t('14/11 mergeFields come Firestore: i campi indicati si sostituiscono interi, gli altri restano', async () => {
+  const { firebase } = setupWindow();
+  firebase.initializeApp({ projectId: 'prova' });
+  const db = firebase.firestore();
+  const ref = db.collection('users').doc('a@b.it');
+  await ref.set({ name: 'A', app2: { squad: { paid: { x: 1, y: 2 } }, saved: ['n1'] } });
+  await ref.set({ app2: { squad: { paid: { y: 2 } }, ignorato: 1 } }, { mergeFields: ['app2.squad'] });
+  assert.deepStrictEqual((await ref.get()).data(), { name: 'A', app2: { squad: { paid: { y: 2 } }, saved: ['n1'] } }, 'x sparisce, saved e name restano, i campi non indicati non si scrivono');
+  await db.collection('users').doc('nuovo').set({ app2: { squad: { a: 1 } } }, { mergeFields: ['app2.squad'] });
+  assert.deepStrictEqual((await db.collection('users').doc('nuovo').get()).data(), { app2: { squad: { a: 1 } } }, 'documento che non c\'era: si crea');
+  await assert.rejects(ref.set({ app2: {} }, { mergeFields: ['app2.manca'] }), e => e.code === 'invalid-argument', 'campo indicato ma assente: Firestore rifiuta');
+});
+
 t('il Firebase finto salva e rilegge un documento (merge)', async () => {
   const { firebase } = setupWindow();
   firebase.initializeApp({ projectId: 'prova' });

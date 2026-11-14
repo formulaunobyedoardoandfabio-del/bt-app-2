@@ -77,8 +77,11 @@
   .live-notice{ transform-origin:50% 0; animation:noticein .7s cubic-bezier(.25,.8,.3,1) both; }
   @keyframes noticein{ 0%{ opacity:0; transform:perspective(700px) rotateX(-92deg); } 40%{ opacity:1; transform:perspective(700px) rotateX(16deg); } 62%{ transform:perspective(700px) rotateX(-7deg); } 80%{ transform:perspective(700px) rotateX(3deg); } 100%{ opacity:1; transform:perspective(700px) rotateX(0deg); } }
   /* Invito "Esplora il circuito": un riflesso di luce che passa ogni tanto. */
-  .cta-shine::after{ content:""; position:absolute; top:0; bottom:0; left:-45%; width:32%; background:linear-gradient(100deg, rgba(255,255,255,0), rgba(255,255,255,.26), rgba(255,255,255,0)); transform:skewX(-18deg); animation:ctashine 3.4s ease-in-out infinite; pointer-events:none; }
-  @keyframes ctashine{ 0%{ left:-45%; } 55%,100%{ left:135%; } }
+  /* 14/11: il riflesso si spostava animando "left": il telefono rifaceva l'impaginazione a ogni fotogramma (misurato:
+     circa 34 volte al secondo su Home, Fanta e Race, anche col tasto fuori schermo). Ora si sposta con transform: stesso
+     percorso (da -45% a 135% del tasto = 562,5% della sua larghezza, che è il 32% del tasto), nessuna impaginazione. */
+  .cta-shine::after{ content:""; position:absolute; top:0; bottom:0; left:-45%; width:32%; background:linear-gradient(100deg, rgba(255,255,255,0), rgba(255,255,255,.26), rgba(255,255,255,0)); transform:translateX(0) skewX(-18deg); animation:ctashine 3.4s ease-in-out infinite; pointer-events:none; }
+  @keyframes ctashine{ 0%{ transform:translateX(0) skewX(-18deg); } 55%,100%{ transform:translateX(562.5%) skewX(-18deg); } }
   /* Tappa 3 (G06, G25): la luce posteriore a LED; "seq" = si accendono una riga alla volta. */
   .led-seq > span{ animation:ledseq .84s linear infinite both; }
   @keyframes ledseq{ 0%{ opacity:.16; } 10%,45%{ opacity:1; } 62%,100%{ opacity:.16; } }

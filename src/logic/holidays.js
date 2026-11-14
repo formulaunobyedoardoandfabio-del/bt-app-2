@@ -20,9 +20,11 @@
   };
   const IDS = Object.keys(HOLIDAYS);
   // Data di Roma: [anno, mese, giorno].
+  // 14/11: il formattatore si crea una volta sola (crearlo a ogni richiesta è la parte lenta, e si chiede a ogni disegno).
+  let romeFmt = null;
   function romeParts(now) {
-    const f = new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Rome", year: "numeric", month: "2-digit", day: "2-digit" });
-    const [y, m, d] = f.format(new Date(now)).split("-").map(Number);
+    if (!romeFmt) romeFmt = new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Rome", year: "numeric", month: "2-digit", day: "2-digit" });
+    const [y, m, d] = romeFmt.format(new Date(now)).split("-").map(Number);
     return [y, m, d];
   }
   const romeDay = now => { const [y, m, d] = romeParts(now); return `${y}-${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")}`; };

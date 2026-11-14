@@ -128,6 +128,21 @@ t('non letti: i messaggi degli altri dopo l\'ultimo visto (bt-chat-seen-<chiave 
   assert.strictEqual(c.chat.unread('fanta', await c.chat.loadRoom('fanta', ME)), 1);
 });
 
+// 14/11 (ottimizzazione): ogni telefono con una stanza aperta la rileggeva intera ogni 4 secondi anche se nessuno
+// scriveva (in elenco: 5 stanze ogni 6 secondi). Ora, se non arriva niente, si aspetta un po' di più a ogni giro (fino a
+// 15 secondi nella stanza, 30 in elenco); appena arriva un messaggio si torna subito a 4 (o 6).
+t('14/11 nextPollDelay: senza novità rallenta fino al massimo, con una novità torna alla base', () => {
+  const { nextPollDelay } = require('../../src/services/chat');
+  const seq = []; let d = 4000;
+  for (let i = 0; i < 6; i++) { d = nextPollDelay(d, false, 4000); seq.push(d); }
+  assert.deepStrictEqual(seq, [6000, 9000, 13500, 15000, 15000, 15000]);
+  assert.strictEqual(nextPollDelay(15000, true, 4000), 4000, 'novità: subito alla base');
+  assert.strictEqual(nextPollDelay(6000, false, 6000), 9000, 'elenco: base 6 s');
+  let l = 6000; for (let i = 0; i < 10; i++) l = nextPollDelay(l, false, 6000);
+  assert.strictEqual(l, 30000, 'elenco: al massimo 30 s');
+  assert.strictEqual(nextPollDelay(NaN, false, 4000), 6000, 'valore rotto: si riparte dalla base');
+});
+
 t('13/11 migrateLegacy: vista la Generale, su questo telefono il controllo non si rifà (una lettura in meno a ogni accesso)', async () => {
   setupWindow({ seed: { addDocs: { 'shared/bt-chat-generale': { __arr: [{ id: 'n1', user: 'Fabio', txt: 'nuova', t: 2 }] } } } });
   let reads = 0;

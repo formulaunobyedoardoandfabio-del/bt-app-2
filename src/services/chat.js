@@ -168,4 +168,13 @@ function createChat({ sg = FB.sg, sgStrict = FB.sgStrict, ss = FB.ss, sharedAppe
   return { loadRoom, send, announce, react, report, loadReports, loadBanned, deleteMessage, suspend, unsuspend, ignoreReport, block, unblock, blocked, unread, markSeen, migrateLegacy, cleanupFor };
 }
 
-module.exports = { CHAT_MSG, ROOM_IDS, createChat };
+// 14/11 (ottimizzazione): ogni quanto rileggere la chat. Senza novità si aspetta una volta e mezza il giro prima (fino a
+// 15 s nella stanza, 30 s in elenco: base 4 s e 6 s); con una novità si torna subito alla base. Una stanza viva resta
+// a 4 secondi; una ferma costa circa un terzo delle letture di Firebase.
+function nextPollDelay(cur, changed, base) {
+  const max = base <= 4000 ? 15000 : 30000;
+  if (changed || !(cur > 0)) return changed ? base : Math.min(max, Math.round(base * 1.5));
+  return Math.min(max, Math.round(cur * 1.5));
+}
+
+module.exports = { CHAT_MSG, ROOM_IDS, createChat, nextPollDelay };

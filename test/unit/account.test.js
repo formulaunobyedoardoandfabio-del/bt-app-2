@@ -246,26 +246,36 @@ t('sessione: ricaricando la pagina l\'account torna da Authentication (dopo il p
   await A.start();
   assert.strictEqual(A.current().email, 'a@b.it');
   assert.strictEqual(A.current().name, 'Tester');
-  assert.deepStrictEqual(seen, ['a@b.it']);
+  // 14/11: start() risponde subito col profilo dell'ultima volta; quello vero (e admin) arriva appena Firestore risponde.
+  await A.retry();
+  assert.strictEqual(A.current().loaded, true);
+  assert.deepStrictEqual(seen, ['a@b.it', 'a@b.it']);
   assert.strictEqual(A.isAdmin(), true);
 });
 
 // Revisione della Fase B (C1): sessione salvata, SDK nella memoria del telefono ma Firestore irraggiungibile.
-async function offlineStart() {
+async function offlineStart({ forget = false } = {}) {
   const first = setupWindow();
   await make().login('a@b.it', 'x');
+  if (forget) first.localStorage.removeItem('bt_bt-last-profile');   // telefono senza il profilo messo da parte
   const again = setupWindow({ storage: first.localStorage });   // l'app riaperta senza rete
   again.firebase.__fake.offline = true;
   const A = make();
   await A.start();
   return { A, fake: again.firebase.__fake };
 }
+t('sessione senza rete e senza profilo sul telefono: nessun nome (mai preso dall\'email)', async () => {
+  const { A } = await offlineStart({ forget: true });
+  assert.strictEqual(A.current().loaded, false);
+  assert.strictEqual(A.current().name, '', 'il nome non deve venire dall\'email: ' + A.current().name);
+});
 t('sessione senza rete: profilo "non letto", nessun nome preso dall\'email; retry lo legge quando torna la rete', async () => {
   const { A, fake } = await offlineStart();
   const u = A.current();
   assert.strictEqual(u.email, 'a@b.it');
   assert.strictEqual(u.loaded, false);
-  assert.strictEqual(u.name, '', 'il nome non deve venire dall\'email: ' + u.name);
+  // 14/11: il nome è quello dell'ultima volta visto su questo telefono (profilo messo da parte), mai preso dall'email.
+  assert.strictEqual(u.name, 'Tester', 'il nome dell\'ultima volta: ' + u.name);
   assert.ok(/^u[0-9a-f]{16}$/.test(u.aid));
   assert.strictEqual(A.isAdmin(), false);
   await A.retry();                       // ancora senza rete: resta non letto
@@ -450,6 +460,73 @@ t('13/11 accesso svelto: senza rete sul profilo resta loaded false e non admin, 
   assert.strictEqual(u.loaded, false);
   assert.strictEqual(u.name, '');
   assert.strictEqual(A.isAdmin(), false);
+});
+
+// 14/11 (avvio lento): a ogni avvio, con la sessione salvata, l'app aspettava il profilo da Firestore prima di togliere
+// lo splash. Ora il profilo dell'ultima volta resta sul telefono (nome, "su di te", Premium di una volta; mai i dati
+// personali): start() risponde subito con quello (loaded: false, quick: true) e il profilo vero arriva appena Firestore
+// risponde. Senza profilo sul telefono (o di un altro account) si aspetta come prima.
+const QDOCS = { 'users/q@b.it': { email: 'q@b.it', name: 'Qui', about: { fan: 'vivo' }, app2: { saved: ['n1'] } }, 'admins/q@b.it': { on: true } };
+const QUSERS = { 'q@b.it': { pw: 'abcdef12', uid: 'uid-q' } };
+async function loggedOnce() { ctx({ docs: QDOCS, users: QUSERS }); await make().login('q@b.it', 'abcdef12'); }
+
+t('14/11 avvio svelto: sessione salvata e profilo dell\'ultima volta → start() risponde senza aspettare Firestore, poi arriva quello vero', async () => {
+  await loggedOnce();
+  const spy = spyGet(), seen = [];
+  const A = make({ dbGet: spy.dbGet });
+  A.onChange(u => seen.push(u ? [u.name, u.loaded] : null));
+  const u = await A.start();                                   // Firestore non ha ancora risposto (spy trattiene le letture)
+  assert.strictEqual(u.email, 'q@b.it');
+  assert.strictEqual(u.name, 'Qui', 'il nome dell\'ultima volta');
+  assert.strictEqual(u.loaded, false, 'profilo non ancora confermato: nome e "su di te" non si cambiano');
+  assert.strictEqual(u.quick, true);
+  assert.deepStrictEqual(u.app2, {}, 'i dati personali non stanno nella copia');
+  assert.strictEqual(A.isAdmin(), false, 'admin solo quando Firestore lo dice');
+  spy.release();
+  for (let i = 0; i < 30 && !(A.current() && A.current().loaded); i++) await tick();
+  assert.strictEqual(A.current().loaded, true);
+  assert.deepStrictEqual(A.current().app2, { saved: ['n1'] });
+  assert.strictEqual(A.isAdmin(), true);
+  assert.deepStrictEqual(seen, [['Qui', false], ['Qui', true]], 'due avvisi: subito, poi col profilo vero');
+  assert.strictEqual(spy.calls.filter(x => x === 'users/q@b.it').length, 1, 'profilo letto una volta: ' + spy.calls.join(', '));
+});
+
+t('14/11 avvio svelto: retry() mentre il profilo sta arrivando non fa una seconda lettura', async () => {
+  await loggedOnce();
+  const spy = spyGet();
+  const A = make({ dbGet: spy.dbGet });
+  await A.start();
+  const again = A.retry();
+  spy.release();
+  await again;
+  assert.strictEqual(A.current().loaded, true);
+  assert.strictEqual(spy.calls.filter(x => x === 'users/q@b.it').length, 1, spy.calls.join(', '));
+});
+
+t('14/11 avvio svelto: senza profilo sul telefono (o di un altro account) si aspetta Firestore come prima', async () => {
+  await loggedOnce();
+  window.localStorage.removeItem('bt_bt-last-profile');
+  let spy = spyGet(), A = make({ dbGet: spy.dbGet }), done = false;
+  let st = A.start().then(u => { done = true; return u; });
+  for (let i = 0; i < 10; i++) await tick();
+  assert.strictEqual(done, false, 'niente copia: start() aspetta');
+  spy.release();
+  assert.strictEqual((await st).loaded, true);
+  // copia di un altro account
+  window.localStorage.setItem('bt_bt-last-profile', JSON.stringify({ email: 'altro@b.it', name: 'Altro', about: {}, isPremium: true }));
+  spy = spyGet(); A = make({ dbGet: spy.dbGet }); done = false;
+  st = A.start().then(u => { done = true; return u; });
+  for (let i = 0; i < 10; i++) await tick();
+  assert.strictEqual(done, false, 'la copia è di un altro: non si usa');
+  spy.release();
+  assert.strictEqual((await st).name, 'Qui');
+});
+
+t('14/11 avvio svelto: Esci dimentica il profilo sul telefono', async () => {
+  await loggedOnce();
+  assert.ok(JSON.parse(window.localStorage.getItem('bt_bt-last-profile')).name === 'Qui');
+  const A = make(); await A.start(); await A.logout();
+  assert.strictEqual(window.localStorage.getItem('bt_bt-last-profile'), null);
 });
 
 (async () => {

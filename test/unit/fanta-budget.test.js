@@ -15,6 +15,20 @@ const NOW = mk({ a: 30, b: 29, c: 10, d: 5, e: 3, f: 3 }, { merc: 36, ferr: 31, 
 const SQUAD = { name: 'x', drivers: ['a', 'b', 'c', 'd', 'e'], teams: ['merc', 'haas'], boost: 'a' };   // 108 al listino, 118 oggi
 const B = 108.1;
 
+// 14/11 (scimmia sul Fanta): dopo "Svuota" il 2X restava spento anche con piloti di nuovo in squadra (prima il controllo
+// era drivers.includes(boost): con un posto vuoto includes(null) è vero e non si riassegnava). I punti doppi si perdevano.
+t('14/11 2X: dopo Svuota il primo pilota rimesso prende il 2X; Completa lo dà; tolto chi lo aveva passa a un altro', () => {
+  const empty = L.clearSquad(SQUAD, NOW, LIST);
+  assert.strictEqual(empty.boost, null, 'squadra vuota: nessun 2X');
+  const one = L.fixBoost(L.place(empty, NOW, 'drivers', 2, 'c', LIST));
+  assert.strictEqual(one.boost, 'c');
+  const full = L.fixBoost(L.autoFill(empty, NOW, B, LIST));
+  assert.ok(full.drivers.includes(full.boost), 'completata: il 2X è su uno dei piloti: ' + full.boost);
+  const gone = L.fixBoost(L.place(SQUAD, NOW, 'drivers', 0, null, LIST));
+  assert.strictEqual(gone.boost, 'b', 'tolto a (che aveva il 2X): passa al primo rimasto');
+  assert.strictEqual(L.fixBoost(SQUAD), SQUAD, 'già a posto: stessa squadra');
+});
+
 t('bank: soldi liberi = budget − quanto hai pagato (non il prezzo di oggi)', () => {
   assert.strictEqual(L.bank(SQUAD, NOW, B, LIST), 0.1);
   assert.strictEqual(L.squadValue(SQUAD, NOW), 118, 'il valore di oggi resta quello vero');

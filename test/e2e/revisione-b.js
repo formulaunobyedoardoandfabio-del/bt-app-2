@@ -33,6 +33,12 @@ async function reopenFlaky(ctx, p, flaky) {
 
 // Riapre l'app (la sessione resta) con Firestore irraggiungibile dal primo istante: SDK nella memoria del telefono,
 // letture che falliscono, scritture in sospeso. back() fa tornare la rete con l'evento "online" del telefono.
+// 14/11: dal secondo avvio l'app parte dai contenuti e dal profilo dell'ultima volta messi da parte sul telefono (prova:
+// run107-fluidita.js), senza aspettare Firebase. Le prove qui sotto che guardano "Firebase lentissimo → dopo 15 secondi
+// si entra da ospite coi contenuti di serie" valgono per un telefono senza quelle copie (primo avvio): le si toglie.
+const forgetCopies = p => p.evaluate(() => {
+  Object.keys(localStorage).filter(k => k.startsWith('bt_bt-sc') || k === 'bt_bt-last-profile').forEach(k => localStorage.removeItem(k));
+});
 async function reopenOffline(ctx, p, mode = 'offline') {
   await ctx.addInitScript(m => {
     let fb;
@@ -146,6 +152,7 @@ run({
       let fb;
       Object.defineProperty(window, 'firebase', { configurable: true, get: () => fb, set: v => { fb = v; if (v && v.__fake) v.__fake.holdReads = true; } });
     });
+    await forgetCopies(p);   // 14/11: telefono senza le copie dell'ultima volta (vedi sopra)
     await p.reload();
     await p.waitForFunction(() => !document.querySelector('[data-splash]') && /ENTRA COME OSPITE/.test(document.body.innerText), null, { timeout: 30000 });
     await tapText(p, 'ENTRA COME OSPITE'); await w(p, 500);
@@ -200,6 +207,7 @@ run({
   },
   async 'minore 10: rete lentissima all\'avvio: finito lo splash coi contenuti di serie c\'è la riga "Sei offline"; poi sparisce'(b) {
     const { ctx, p, errs } = await open(b); await login(p);
+    await forgetCopies(p);                                    // 14/11: telefono senza le copie dell'ultima volta (vedi sopra)
     await reopenOffline(ctx, p, 'holdReads');                 // dopo 15 secondi lo splash se ne va: si entra da ospite
     await p.waitForFunction(() => /ENTRA COME OSPITE/.test(document.body.innerText), null, { timeout: 20000 });
     await tapText(p, 'ENTRA COME OSPITE'); await w(p, 500);

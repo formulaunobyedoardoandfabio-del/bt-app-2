@@ -65,7 +65,7 @@ run({
     await w(p, 800);
     const back = count(await reads(p), 'shared/bt-chat-generale');
     await ctx.close();
-    assert(seen >= 2, 'in vista si rilegge ogni 4 secondi: ' + seen);
+    assert(seen >= 1, 'in vista si rilegge (14/11: stanza ferma → giro che si allunga, prova in run107): ' + seen);
     assert(hidden === 0, 'non in vista non si rilegge: ' + hidden);
     assert(back >= 1, 'tornando in vista si rilegge subito: ' + back);
     assert(!errs.length, errs.join(' | '));

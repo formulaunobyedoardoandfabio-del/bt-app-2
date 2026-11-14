@@ -108,6 +108,9 @@ async function needDb() {
 const local = {
   get(k) { try { const v = W().localStorage.getItem("bt_" + k); return v ? JSON.parse(v) : null; } catch (e) { return null; } },
   set(k, v) { try { W().localStorage.setItem("bt_" + k, JSON.stringify(v)); } catch (e) {} },
+  // 14/11: come set ma scrive il testo già pronto e dice se è riuscita (spazio del telefono finito → false).
+  putRaw(k, text) { try { W().localStorage.setItem("bt_" + k, text); return true; } catch (e) { return false; } },
+  getRaw(k) { try { return W().localStorage.getItem("bt_" + k); } catch (e) { return null; } },
   del(k) { try { W().localStorage.removeItem("bt_" + k); } catch (e) {} },
 };
 
@@ -169,11 +172,14 @@ async function dbGet(col, id) {
   return snap.exists ? snap.data() : null;
 }
 // remove: campi da togliere dal documento nella stessa scrittura (FieldValue.delete), per esempio la vecchia pw.
-async function dbSet(col, id, data, { remove = [] } = {}) {
+// fields (14/11): percorsi ("app2.squad") da scrivere ognuno INTERO, lasciando com'è il resto del documento. Con merge
+// semplice Firestore fonde le mappe in profondità e una chiave tolta (un pilota venduto) non sparisce mai.
+async function dbSet(col, id, data, { remove = [], fields = null } = {}) {
   const d = await needDb();
   const payload = clone(data);
   if (remove.length) { const FieldValue = W().firebase.firestore.FieldValue; remove.forEach(f => { payload[f] = FieldValue.delete(); }); }
-  await track(withTimeout(d.collection(col).doc(id).set(payload, { merge: true }), WRITE_TIMEOUT));
+  const opts = Array.isArray(fields) && fields.length ? { mergeFields: fields.concat(remove) } : { merge: true };
+  await track(withTimeout(d.collection(col).doc(id).set(payload, opts), WRITE_TIMEOUT));
 }
 async function dbDelete(col, id) {
   const d = await needDb();

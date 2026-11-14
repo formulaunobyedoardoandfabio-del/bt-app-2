@@ -41,6 +41,10 @@ const pwStrength = pw => {
   return (s.length >= 12 || /[^a-z0-9]/i.test(s)) && /[a-z]/.test(s) && /[A-Z]/.test(s) ? 3 : 2;
 };
 const LAST_KEY = "bt-last-account", LOGOUT_KEY = "bt-logout-pending";
+// 14/11 (avvio lento): profilo dell'ultima volta sul telefono (nome, "su di te", Premium di una volta; mai i dati
+// personali né la password). All'avvio, con la sessione salvata, l'app parte subito con questo e il profilo vero arriva
+// appena Firestore risponde. "Esci" e "Elimina account" lo dimenticano.
+const PROFILE_KEY = "bt-last-profile";
 // Con "Errore di connessione" si scrive anche il codice vero (raw), quando c'è: sul telefono di Edoardo l'accesso lo
 // diceva sempre con la rete che funzionava (11/10), e senza il codice non si capisce cosa risponde Firebase.
 const messageOf = e => {
@@ -147,7 +151,8 @@ function createAccount({
     const aid = C.authorId(email);
     if (doc === undefined) {
       admin = false; adminKnown = false;
-      current = { name: "", nick: "", email, about: cleanAbout(null), app2: {}, isPremium: false, aid, uid: uid || null, loaded: false };
+      // 14/11: senza rete resta il profilo dell'ultima volta visto su questo telefono, se c'è (mai un nome preso dall'email).
+      current = quickUser(email, uid) || { name: "", nick: "", email, about: cleanAbout(null), app2: {}, isPremium: false, aid, uid: uid || null, loaded: false };
       remember(current);
       notify();
       return current;
@@ -167,8 +172,17 @@ function createAccount({
     admin = adm.on; adminKnown = adm.ok;
     current = { ...C.profileFromStore(doc), email, aid, uid: uid || doc.uid || null, loaded: true };
     remember(current);
+    try { local.set(PROFILE_KEY, { email, name: current.name || "", nick: current.nick || "", about: current.about, isPremium: !!current.isPremium }); } catch (e) {}
     notify();
     return current;
+  }
+  // Account provvisorio dall'ultimo profilo visto su questo telefono (solo se è dello stesso account): loaded false
+  // finché Firestore non conferma (nome e "su di te" non si cambiano, admin no), quick true.
+  function quickUser(email, uid) {
+    const c = local.get(PROFILE_KEY);
+    if (!c || typeof c !== "object" || normEmail(c.email) !== email) return null;
+    const name = typeof c.name === "string" ? c.name : "";
+    return { name, nick: typeof c.nick === "string" && c.nick ? c.nick : name, email, about: cleanAbout(c.about), app2: {}, isPremium: c.isPremium === true, aid: C.authorId(email), uid: uid || null, loaded: false, quick: true };
   }
   // Ultimo account usato su questo telefono (solo email e ID, niente password): senza rete all'avvio l'SDK di Firebase
   // non arriva e la sessione salvata non si legge; si resta dentro con questo account (offline) finché torna la rete
@@ -281,7 +295,7 @@ function createAccount({
     const auth = await getAuth();
     if (auth) { try { await auth.signOut(); } catch (e) {} }
     else local.set(LOGOUT_KEY, true);   // senza rete: la sessione di Firebase si chiude alla prossima apertura
-    local.del(LAST_KEY);
+    local.del(LAST_KEY); local.del(PROFILE_KEY);
     current = null; admin = false; adminKnown = false;
     notify();
   }
@@ -306,7 +320,7 @@ function createAccount({
     } catch (e) { throw mkErr("delete-failed"); }
     try { await fbUser.delete(); } catch (e) { throw mkErr("delete-failed"); }
     local.del("bt-blocked");
-    local.del(LAST_KEY);
+    local.del(LAST_KEY); local.del(PROFILE_KEY);
     const ls = storage();
     if (ls) {
       const keys = [];
@@ -331,7 +345,22 @@ function createAccount({
         auth.onAuthStateChanged(async fbUser => {
           if (busy && !first) return;
           const email = fbUser && fbUser.email ? normEmail(fbUser.email) : null;
-          if (email && (!current || current.email !== email || current.offline)) await loadProfile(email, fbUser.uid);
+          if (email && (!current || current.email !== email || current.offline)) {
+            // 14/11: col profilo dell'ultima volta sul telefono l'app parte subito; quello vero arriva dopo (stessa
+            // lettura che usa retry(), così chi riprova intanto non ne fa partire un'altra).
+            const quick = first && !current ? quickUser(email, fbUser.uid) : null;
+            if (quick) {
+              current = quick; admin = false; adminKnown = false;
+              notify();
+              first = false; res();
+              const load = loadProfile(email, fbUser.uid);
+              const mine = load.finally(() => { if (retrying === mine) retrying = null; });
+              retrying = mine;
+              await mine.catch(() => {});
+              return;
+            }
+            await loadProfile(email, fbUser.uid);
+          }
           else if (!email && current) { current = null; admin = false; adminKnown = false; notify(); }
           else if (first && !email) notify();
           if (first) { first = false; res(); }

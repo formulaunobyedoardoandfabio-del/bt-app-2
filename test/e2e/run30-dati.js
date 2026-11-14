@@ -62,6 +62,7 @@ run({
     await login(p);
     const back = await p.evaluate(t => !!document.querySelector(`[aria-label="Togli dai preferiti: ${t}"]`), WELCOME);
     await tapSel(p, '[aria-label="Profilo"]'); await w(p);
+    await tapText(p, 'Profilo pubblico'); await w(p, 400);   // 14/11: dall'8/11 i preferiti stanno in "Profilo pubblico"
     const prof = await text(p); await ctx.close();
     assert(user && user.app2 && Array.isArray(user.app2.saved) && user.app2.saved.length === 1, 'users/a@b.it.app2: ' + JSON.stringify(user && user.app2));
     assert(user.name === 'Tester', 'l\'account ha perso i suoi campi: ' + JSON.stringify(user));

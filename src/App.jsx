@@ -34,7 +34,7 @@ import F1 from "./data/f1-2026";
 import AppData from "./services/appdata";
 import Compat from "./services/compat";
 import { createAccount, MESSAGES as ACCOUNT_MSG, messageOf, MIN_AGE, pwStrength } from "./services/account";
-import { createChat, CHAT_MSG, ROOM_IDS } from "./services/chat";
+import { createChat, CHAT_MSG, ROOM_IDS, nextPollDelay } from "./services/chat";
 import { createFeedback, FEEDBACK_CATS, FEEDBACK_MSG } from "./services/feedback";
 import { local, IMG_REF, uploadImage, loadImage as loadStoredImage, dropImage } from "./services/firebase";
 import { generateArticle } from "./services/backend";
@@ -140,7 +140,11 @@ const MONTH_PRICE = 0.99;   // 7/11: piano Mensile (piano base "mese" di Google 
 // "Offrici un caffè" (1/11): nell'APK con Google Play (prodotto "caffe"), sul sito con Stripe (src/services/billing.js).
 const premiumOffer = ({ trialUsed, isPremium }) => isPremium ? "premium" : trialUsed ? "subscribe" : "trial";
 const trialDaysLeft = trial => trial ? Math.max(0, Math.ceil((trial.end - nowMs()) / 86400000)) : 0;
-const fmtDay = ms => new Date(ms).toLocaleDateString("it-IT", { day: "numeric", month: "long", year: "numeric" });
+// 14/11 (ottimizzazione): i formattatori delle date si creano una volta sola e si riusano (prima uno nuovo a ogni data
+// scritta a schermo: è la parte lenta, soprattutto nelle liste). memoFmt: uno per ogni combinazione di opzioni.
+const FMT_CACHE = new Map();
+const memoFmt = (locale, opts) => { const k = locale + JSON.stringify(opts); let f = FMT_CACHE.get(k); if (!f) { f = new Intl.DateTimeFormat(locale, opts); FMT_CACHE.set(k, f); } return f; };
+const fmtDay = ms => memoFmt("it-IT", { day: "numeric", month: "long", year: "numeric" }).format(new Date(ms));
 // Apre un link fuori dall'app: nell'APK col browser di sistema, sul web in una nuova scheda.
 const openUrl = url => {
   try { const B = window.Capacitor?.Plugins?.Browser; if (window.Capacitor?.isNativePlatform?.() && B) { B.open({ url }); return; } } catch (e) {}
@@ -7464,7 +7468,7 @@ const MEMBER_COLORS = ["#2E9E8F", "#3B6FD4", "#E8842C", "#7B5FC4", "#D9B830", "#
 const sessionLabelIt = type => LiveSim.SESSION_LABEL[type] || type;
 // "fino alla fine delle FP3", "fino all'inizio delle qualifiche"...
 const SESSION_DEL = { FP1: "delle FP1", FP2: "delle FP2", FP3: "delle FP3", SQ: "delle Qualifiche Sprint", SPRINT: "della Sprint", QUALI: "delle qualifiche", RACE: "della gara" };
-const fmtRome = ms => new Intl.DateTimeFormat("it-IT", { timeZone: "Europe/Rome", weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).format(new Date(ms));
+const fmtRome = ms => memoFmt("it-IT", { timeZone: "Europe/Rome", weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).format(new Date(ms));
 const initialsOf = u => String(u.me ? "Tu" : (u.nick || u.name || "?")).replace("@", "").split(/[ ._]+/).filter(Boolean).map(w => w[0]).slice(0, 2).join("").toUpperCase();
 
 /* ── PODIO ─────────────────────────────────────────────────────────── */
@@ -7789,11 +7793,7 @@ function FantaSquadCard({ squad, setSquad, base, freeTransfers, budget, stats, l
   const tr = BtLogic.transfers(base, squad, freeTransfers);
   const locked = lock.locked;
   const guard = fn => (...a) => { if (needAccount()) return; if (locked) { onToast(`Squadra bloccata fino alla fine della gara`); return; } fn(...a); };
-  const setSlot = (kind, slot, id) => setSquad(s => {
-    const next = { ...BtLogic.place(s, stats, kind, slot, id, listing) };
-    if (kind === "drivers" && !next.drivers.includes(next.boost)) next.boost = next.drivers.find(Boolean) || null;
-    return next;
-  });
+  const setSlot = (kind, slot, id) => setSquad(s => BtLogic.fixBoost(BtLogic.place(s, stats, kind, slot, id, listing)));   // 14/11: 2X sempre su un pilota
   const complete = squad.drivers.every(Boolean) && squad.teams.every(Boolean);
   const cd = lock.lockAt ? BtLogic.countdown(lock.lockAt - nowMs()) : null;
   const pad = n => String(n).padStart(2, "0");
@@ -7855,7 +7855,7 @@ function FantaSquadCard({ squad, setSquad, base, freeTransfers, budget, stats, l
           <div style={{ height: 4, width: 150, marginTop: 5, borderRadius: 2, background: "rgba(255,255,255,.1)", overflow: "hidden" }}><div style={{ height: "100%", width: Math.max(0, Math.min(100, left / budget * 100)) + "%", background: left < 0 ? C.red : TIMING.green }} /></div>
         </div>
         <button className="press" disabled={locked} onClick={guard(() => { setSquad(s => BtLogic.clearSquad(s, stats, listing)); onToast("Squadra svuotata: scegli piloti e scuderie"); })} style={{ padding: "8px 10px", fontFamily: F_HEAD, fontWeight: 800, fontSize: 13, color: C.muted, textDecoration: "underline", opacity: locked ? .45 : 1 }}>Reset</button>
-        <button className="press" disabled={locked || complete} onClick={guard(() => { setSquad(s => BtLogic.autoFill(s, stats, budget, listing)); onToast("Squadra completata: la combinazione con più punti in stagione che entra nel budget"); })} style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "9px 14px", borderRadius: 999, background: locked || complete ? "rgba(255,255,255,.12)" : "#fff", fontFamily: F_HEAD, fontWeight: 900, fontSize: 13, color: locked || complete ? C.dim : "#111" }}><Icon name="sparkle" size={14} color={locked || complete ? C.dim : "#111"} />Riempi</button>
+        <button className="press" disabled={locked || complete} onClick={guard(() => { setSquad(s => BtLogic.fixBoost(BtLogic.autoFill(s, stats, budget, listing))); onToast("Squadra completata: la combinazione con più punti in stagione che entra nel budget"); })} style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "9px 14px", borderRadius: 999, background: locked || complete ? "rgba(255,255,255,.12)" : "#fff", fontFamily: F_HEAD, fontWeight: 900, fontSize: 13, color: locked || complete ? C.dim : "#111" }}><Icon name="sparkle" size={14} color={locked || complete ? C.dim : "#111"} />Riempi</button>
       </div>
       <p style={{ margin: "2px 14px 0", fontFamily: F_BODY, fontSize: 10.5, color: C.dim }}>Budget totale {fmtM(budget, true)} · squadra {fmtM(value, true)} · tocca "2X" per raddoppiare i punti di un pilota.</p>
 
@@ -10637,7 +10637,10 @@ function App() {
   const [view, setView] = useState("tab");
   const [igFrom, setIgFrom] = useState("tab");   // da dove si è aperta la pagina Instagram (Home o Profilo)
   // Contenuti condivisi (Firebase, shared/*): valori di serie finché Firebase non risponde (src/services/appdata.js).
-  const [shared0] = useState(() => { const v = AppData.sharedDefaults(nowMs()); addStandingsGuests(v.standings.guests); return v; });
+  // 14/11 (avvio lento): dal secondo avvio si parte dai contenuti dell'ultima volta, messi da parte sul telefono
+  // (AppData.sharedCached), invece di aspettare Firebase con lo splash davanti; Firebase li aggiorna appena risponde.
+  const [bootCache] = useState(() => { try { return AppData.sharedCached(nowMs()); } catch (e) { return { values: {}, kinds: [], complete: false }; } });
+  const [shared0] = useState(() => { const v = { ...AppData.sharedDefaults(nowMs()), ...bootCache.values }; addStandingsGuests(v.standings.guests); return v; });
   const [offline, setOffline] = useState(false);   // all'avvio qualcosa non si è potuto leggere: riga "Sei offline"
   const [pitBest, setPitBest] = useState(USER_INIT.pitBest);   // Garage: miglior tempo del Pit Stop Challenge
   const [highlights, setHighlights] = useState(shared0.highlights);   // archivio "Video HIGHLIGHTS esclusivi" (Premium)
@@ -11051,7 +11054,9 @@ function App() {
   };
   // Rilegge i contenuti indicati (tutti, all'avvio) e mette nello stato quelli letti davvero.
   const refreshShared = kinds => AppData.loadShared(nowMs(), kinds ? { kinds } : undefined).then(r => {
-    (kinds ? r.fresh : Object.keys(r.values)).forEach(k => sharedSet[k](r.values[k]));
+    // 14/11: nello stato vanno solo i contenuti letti davvero. Prima all'avvio ci andavano tutti: quelli non letti
+    // (senza rete) tornavano ai valori di serie e avrebbero cancellato dallo schermo la copia dell'ultima volta.
+    r.fresh.forEach(k => sharedSet[k](r.values[k]));
     setOffline(r.offline);
   });
   // Salvataggio dell'Admin: prima Firebase, poi lo schermo (src/services/appdata.js rilegge i documenti prima di
@@ -11194,11 +11199,15 @@ function App() {
     evs.forEach(e => window.addEventListener(e, go, true));
     return off;
   }, []);
-  const enterAccount = (email, seed) => {
+  // 14/11 (avvio lento): wait = l'account è quello provvisorio dell'avvio (profilo dell'ultima volta sul telefono): i
+  // dati personali arrivano col profilo vero che Account sta già leggendo, senza un'altra lettura (effetto più sotto).
+  const waitProfile = useRef(null);
+  const enterAccount = (email, seed, wait) => {
     const em = String(email || "").trim().toLowerCase();
     if (!em) return;
     userEmailRef.current = em; userReady.current = false; setUserEmail(em);
-    loadUser(em, seed);
+    waitProfile.current = wait ? em : null;
+    if (!wait) loadUser(em, seed);
   };
   const resetUser = () => { userEmailRef.current = null; userReady.current = false; setEggFound(false); setUserEmail(null); setUserLoaded(null); AppData.USER_KEYS.forEach(k => { if (!PHONE_KEYS.includes(k)) userSet[k](USER_INIT[k]); }); };
   // Dati personali non ancora letti da Firebase (avvio senza rete): finché non arrivano non si cambiano, altrimenti la
@@ -11223,7 +11232,7 @@ function App() {
   // L'account di Authentication decide di chi sono i dati personali.
   const accountEmail = account ? account.email : null;
   useEffect(() => {
-    if (accountEmail && accountEmail !== userEmailRef.current) enterAccount(accountEmail, account.loaded ? account.app2 : null);
+    if (accountEmail && accountEmail !== userEmailRef.current) enterAccount(accountEmail, account.loaded ? account.app2 : null, !account.loaded && account.quick === true);
     else if (!accountEmail && userEmailRef.current) resetUser();
     // Entrato come ospite mentre la sessione salvata arrivava (rete lenta): ora è il suo account (revisione Fase B, I3).
     if (accountEmail) { setGuest(false); setLoginOpen(false); }
@@ -11238,7 +11247,14 @@ function App() {
   const chatMeRef = useRef(null);
   chatMeRef.current = account ? { name: account.name, aid: account.aid } : null;
   const chatMe = () => chatMeRef.current;
-  const loadRoomMsgs = id => Chat.loadRoom(id, chatMeRef.current).then(ms => setChatMsgs(x => (sameJson(x[id], ms) ? x : { ...x, [id]: ms })), () => {});   // senza rete restano quelli di prima
+  const chatMsgsRef = useRef(chatMsgs);
+  chatMsgsRef.current = chatMsgs;
+  // Risponde true se la stanza è cambiata rispetto a quella sullo schermo (14/11: serve per rallentare quando è ferma).
+  const loadRoomMsgs = id => Chat.loadRoom(id, chatMeRef.current).then(ms => {
+    const changed = !sameJson(chatMsgsRef.current[id], ms);
+    if (changed) setChatMsgs(x => (sameJson(x[id], ms) ? x : { ...x, [id]: ms }));
+    return changed;
+  }, () => false);   // senza rete restano quelli di prima
   const chatAdmin = view === "admin" && adminTab === "CHAT";
   const chatRooms = view === "chatThread" && chatId ? [chatId] : (view === "chats" || chatAdmin) ? ROOM_IDS : ssOpen ? ["generale"] : [];
   const chatEvery = view === "chats" || chatAdmin ? CHAT_LIST_MS : CHAT_ROOM_MS;
@@ -11246,11 +11262,23 @@ function App() {
     if (!chatRooms.length) return;
     // 13/11: con l'app non in vista (telefono bloccato, altra app) la chat non si rilegge: erano letture di Firebase
     // buttate, ogni 4 secondi per ogni telefono. Tornando in vista si rilegge subito.
-    const load = () => { if (document.hidden) return; chatRooms.forEach(loadRoomMsgs); if (chatAdmin) reloadModeration(); };
-    load();
-    const iv = setInterval(load, chatEvery);
-    document.addEventListener("visibilitychange", load);
-    return () => { clearInterval(iv); document.removeEventListener("visibilitychange", load); };
+    // 14/11: niente giro fisso. Se non arriva niente si aspetta un po' di più ogni volta (nextPollDelay: fino a 15 s nella
+    // stanza, 30 s in elenco); un messaggio nuovo, un invio o il ritorno in vista riportano subito al giro di base.
+    let delay = chatEvery, timer = null, stop = false;
+    const load = () => {
+      if (document.hidden) return Promise.resolve(false);
+      if (chatAdmin) reloadModeration();
+      return Promise.all(chatRooms.map(loadRoomMsgs)).then(r => r.some(Boolean), () => false);
+    };
+    const tick = () => load().then(changed => {
+      if (stop) return;
+      delay = nextPollDelay(delay, changed, chatEvery);
+      timer = setTimeout(tick, delay);
+    });
+    const onVis = () => { if (document.hidden || stop) return; clearTimeout(timer); delay = chatEvery; tick(); };
+    tick();
+    document.addEventListener("visibilitychange", onVis);
+    return () => { stop = true; clearTimeout(timer); document.removeEventListener("visibilitychange", onVis); };
   }, [chatRooms.join(), chatAdmin, chatEvery, accountEmail, chatTick]);
   // Letti: la stanza aperta segna come visto il suo ultimo messaggio (bt-chat-seen-<stanza>, solo sul telefono).
   const threadMsgs = view === "chatThread" && chatId ? chatMsgs[chatId] : null;
@@ -11284,7 +11312,16 @@ function App() {
   }, []);
   // Finito lo splash con le letture di Firebase ancora in corso (rete lentissima) si vedono i contenuti di serie: lo dice
   // la riga "Sei offline", finché non arrivano (revisione Fase B, minore 10).
-  useEffect(() => { if (!splash && !sharedReady) setOffline(true); }, [splash, sharedReady]);
+  // 14/11: con la copia dell'ultima volta a schermo la riga non serve finché Firebase non ha detto che non risponde.
+  useEffect(() => { if (!splash && !sharedReady && !bootCache.complete) setOffline(true); }, [splash, sharedReady]);
+  // 14/11: avvio svelto. Arrivato il profilo vero, i dati personali si prendono da lì (se intanto non sono già arrivati
+  // da un'altra strada, per esempio la rilettura al ritorno della rete).
+  const accountLoaded = !!account && account.loaded === true;
+  useEffect(() => {
+    if (!accountLoaded || waitProfile.current !== account.email) return;
+    waitProfile.current = null;
+    if (userEmailRef.current === account.email && !userReady.current) loadUser(account.email, account.app2);
+  }, [accountLoaded]);
   // Aprendo il Profilo con il profilo non ancora arrivato si riprova subito.
   useEffect(() => { if (view === "profilo" && account && account.loaded === false) Account.retry().catch(() => {}); }, [view]);
 
@@ -11818,6 +11855,7 @@ function App() {
     return Chat.send(id, text, me, link).then(m => {
       fx.play("radio"); fx.buzz("light");
       setChatMsgs(x => ({ ...x, [id]: (x[id] || []).map(y => (y.id === temp.id ? m : y)) }));
+      setChatTick(n => n + 1);   // 14/11: dopo un invio la chat torna al giro di base (vedi nextPollDelay)
       return true;
     }, e => {
       setChatMsgs(x => ({ ...x, [id]: (x[id] || []).filter(y => y.id !== temp.id) }));
@@ -12097,7 +12135,7 @@ function App() {
         {content}
         {!termsAccepted && <TermsSheet onAccept={acceptTerms} />}
       </div>
-      {splash && <SplashScreen holiday={holiday} ready={sharedReady && account !== undefined} onDone={() => setSplash(false)} />}
+      {splash && <SplashScreen holiday={holiday} ready={(sharedReady || bootCache.complete) && account !== undefined} onDone={() => setSplash(false)} />}
     </div>
   );
 
@@ -12304,7 +12342,7 @@ function App() {
   const psStreak = BtSwipe.streakNow(swipe.streak, { round: BtSwipe.roundOf(races, nowMs()), rounds: psRounds });
   const psTrophies = trophyList.filter(t => trophies[t.id]).length;
   const psLevel = BtSwipe.levelOf(BtSwipe.xpOf(swipe.tot || {}, psTrophies));
-  const psNextText = (() => { const h = Number(new Intl.DateTimeFormat("en-GB", { timeZone: "Europe/Rome", hour: "2-digit", hourCycle: "h23" }).format(new Date(nowMs()))); return h < 8 ? "oggi alle 8:00" : "domani alle 8:00, o dopo la prossima sessione"; })();
+  const psNextText = (() => { const h = Number(memoFmt("en-GB", { timeZone: "Europe/Rome", hour: "2-digit", hourCycle: "h23" }).format(new Date(nowMs()))); return h < 8 ? "oggi alle 8:00" : "domani alle 8:00, o dopo la prossima sessione"; })();
   const pitSwipeOn = !!(flags && flags.pitSwipe);   // 7/11 (Edoardo): Pit Swipe c'è solo se l'admin lo accende
   const openPitSwipe = () => {
     if (!pitSwipeOn) return;

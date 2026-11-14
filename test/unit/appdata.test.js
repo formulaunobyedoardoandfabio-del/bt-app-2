@@ -327,6 +327,70 @@ t('saveUserData: dopo 800 ms un solo salvataggio con le modifiche unite, nel cam
   assert.strictEqual(u.name, 'Tester', 'gli altri campi dell\'account restano');
 });
 
+// 14/11 (avvio lento): a ogni avvio l'app aspettava Firebase prima di togliere lo splash (18 documenti, fino a 15 s).
+// Ora i documenti letti si mettono da parte sul telefono e all'avvio dopo l'app parte da quelli (sharedCached), mentre
+// Firebase li rilegge. Si tiene il documento com'è su Firebase, così passa dagli stessi controlli di una lettura vera.
+t('14/11 copia sul telefono: dopo una lettura riuscita, all\'avvio dopo sharedCached ridà gli stessi contenuti senza Firebase', async () => {
+  seed({ 'shared/bt-news': S['bt-news'], 'shared/bt-races': S['bt-races'], 'shared/bt-flags': { pitSwipe: true } });
+  const first = await D.createAppData().loadShared(NOW);
+  window.firebase.__fake.offline = true;                 // app riaperta senza rete
+  const A = D.createAppData();
+  const c = A.sharedCached(NOW);
+  assert.strictEqual(c.complete, true, 'tutti i contenuti hanno la loro copia');
+  assert.deepStrictEqual(c.values.news, first.values.news);
+  assert.deepStrictEqual(c.values.races, first.values.races);
+  assert.deepStrictEqual(c.values.flags, { pitSwipe: true, hiddenQs: [] });
+  assert.deepStrictEqual(c.values.predictions.map(q => q.id), ['h1', 'h2', 'h3', 'h4'], 'documento che su Firebase non c\'è: vale quello di serie');
+  // la lettura che fallisce non cancella la copia
+  const r = await A.loadShared(NOW);
+  assert.strictEqual(r.offline, true);
+  assert.deepStrictEqual(D.createAppData().sharedCached(NOW).values.news, first.values.news);
+});
+
+t('14/11 copia sul telefono: mai letto niente → complete false e valori di serie', () => {
+  setupWindow();
+  const c = D.createAppData().sharedCached(NOW);
+  assert.strictEqual(c.complete, false);
+  assert.deepStrictEqual(c.kinds, []);
+  assert.deepStrictEqual(c.values, {});
+});
+
+t('14/11 copia sul telefono: un documento troppo grande non si mette da parte (gli altri sì) e la copia vecchia si toglie', async () => {
+  seed({ 'shared/bt-flags': { pitSwipe: true } });
+  await D.createAppData().loadShared(NOW);
+  assert.ok(D.createAppData().sharedCached(NOW).kinds.includes('driverPhotos'));
+  window.firebase.__fake.setDoc('shared/bt-driver-photos', { russell: 'data:image/jpeg;base64,' + 'A'.repeat(D.SHARED_CACHE_DOC_MAX + 10) });
+  await D.createAppData().loadShared(NOW);
+  const c = D.createAppData().sharedCached(NOW);
+  assert.ok(!c.kinds.includes('driverPhotos'), 'le foto troppo grandi non stanno nella copia');
+  assert.strictEqual(c.complete, false);
+  assert.ok(c.kinds.includes('flags') && c.kinds.includes('news'));
+  assert.strictEqual(window.localStorage.getItem('bt_bt-sc:bt-driver-photos'), null, 'niente copia vecchia rimasta');
+});
+
+t('14/11 copia sul telefono: una copia rovinata non rompe l\'avvio', async () => {
+  seed({ 'shared/bt-flags': { pitSwipe: true } });
+  await D.createAppData().loadShared(NOW);
+  window.localStorage.setItem('bt_bt-sc:bt-news', '{"v":');          // scritta a metà
+  window.localStorage.setItem('bt_bt-sc:bt-races', JSON.stringify({ v: 'boh' }));
+  const c = D.createAppData().sharedCached(NOW);
+  assert.ok(!c.kinds.includes('news'), 'copia illeggibile: quel contenuto aspetta Firebase');
+  assert.strictEqual(c.values.races.races.length, 23, 'forma sbagliata: passa dai controlli e torna il calendario di serie');
+});
+
+// 14/11 (scimmia sul Fanta): i dati personali si salvavano con set({app2}, {merge: true}), che in Firestore fonde le
+// mappe in profondità: una chiave tolta (un pilota venduto in squad.paid) non spariva mai e tornava a ogni avvio.
+t('14/11 saveUserData: ogni chiave salvata si sostituisce intera (un pilota venduto sparisce da paid), le altre restano', async () => {
+  seed({ 'users/a@b.it': { email: 'a@b.it', name: 'A', app2: { saved: ['n1'], squad: { drivers: ['x'], paid: { drivers: { x: 10, y: 9 } } } } } });
+  const A = D.createAppData();
+  A.saveUserData('a@b.it', { squad: { drivers: ['z'], paid: { drivers: { z: 4 } } } }, 0);
+  await A.flushUserData();
+  const doc = window.firebase.__fake.doc('users/a@b.it');
+  assert.deepStrictEqual(doc.app2.squad, { drivers: ['z'], paid: { drivers: { z: 4 } } }, 'x e y non ci sono più');
+  assert.deepStrictEqual(doc.app2.saved, ['n1'], 'gli altri dati personali restano');
+  assert.strictEqual(doc.name, 'A');
+});
+
 t('14/11 funzioni: hiddenQs tiene solo gli id delle domande di storia automatiche, senza doppioni', () => {
   const { KINDS } = require('../../src/services/appdata');
   const out = KINDS.flags.to({ pitSwipe: true, hiddenQs: ['auto:r21:h-first', 'auto:r21:h-first', 'auto:r21:win', 'x', 5, 'auto:r20:h-rec'] });

@@ -122,7 +122,23 @@
     return clone(data);
   }
   // Le scritture lavorano su una copia di tutti i documenti (all): una transazione la salva una volta sola alla fine.
+  // 14/11: mergeFields come Firestore: solo i campi indicati ("a.b") si scrivono, ognuno sostituito intero; gli altri
+  // campi del documento restano; un campo indicato che nei dati manca è un errore.
+  function applyMergeFields(all, path, data, fields) {
+    const val = validate(data, path), doc = all[path] === undefined ? {} : clone(all[path]);
+    for (const f of fields) {
+      const parts = String(f).split('.');
+      let src = val;
+      for (const p of parts) { if (!isMap(src) || !(p in src)) throw err('invalid-argument', `Field '${f}' is specified in your field mask but missing from your input data (${path})`); src = src[p]; }
+      let node = doc;
+      for (const p of parts.slice(0, -1)) { if (!isMap(node[p])) node[p] = {}; node = node[p]; }
+      const last = parts[parts.length - 1];
+      if (isDel(src)) delete node[last]; else node[last] = dropDeletes(applyFieldValues(clone(src), {}));
+    }
+    all[path] = doc;
+  }
   function applySet(all, path, data, opts) {
+    if (opts && Array.isArray(opts.mergeFields)) return applyMergeFields(all, path, data, opts.mergeFields);
     // Come Firestore: FieldValue.delete() solo con set({...}, {merge: true}) o con update.
     if (!(opts && opts.merge) && hasDel(data)) throw err('invalid-argument', 'FieldValue.delete() cannot be used with set() unless you pass {merge:true} (' + path + ')');
     const cur = all[path], val = validate(data, path);

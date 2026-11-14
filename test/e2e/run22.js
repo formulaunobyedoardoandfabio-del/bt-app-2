@@ -122,6 +122,8 @@ const tests = {
   },
   async 'garage: gruppo Tracciati con la Guida 2D e il Circuit Spec Clash'(b) {
     const { ctx, p, errs } = await open(b); await login(p); await goTab(p, 'GARAGE');
+    // 14/11: dall'8/11 la vista a piastrelle è a sole icone senza gruppi (richiesta di Edoardo): i gruppi si vedono nella vista a lista.
+    await tapSel(p, '[data-garage-view="lista"]'); await w(p, 400);
     const t = norm(await text(p)), games = await attrs(p, '[data-game]', 'data-game'); await ctx.close();
     assert(/TRACCIATI/.test(t) && games.includes('guide') && games.includes('clash'), 'garage: ' + games.join(','));
     assert(!errs.length, errs.join(' | '));

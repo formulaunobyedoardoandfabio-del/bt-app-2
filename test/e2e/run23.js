@@ -62,6 +62,8 @@ const openTool = async (p, id) => { await goTab(p, 'GARAGE'); await tapSel(p, `[
 const tests = {
   async 'garage: gruppo Weekend di gara con i cinque strumenti'(b) {
     const { ctx, p, errs } = await open(b); await login(p); await goTab(p, 'GARAGE');
+    // 14/11: dall'8/11 la vista a piastrelle è a sole icone senza gruppi (richiesta di Edoardo): i gruppi si vedono nella vista a lista.
+    await tapSel(p, '[data-garage-view="lista"]'); await w(p, 400);
     const t = norm(await text(p)), games = await attrs(p, '[data-game]', 'data-game'); await ctx.close();
     assert(/WEEKEND DI GARA/.test(t), 'manca il gruppo');
     for (const g of ['setup', 'strategy', 'deg', 'mates', 'bluff']) assert(games.includes(g), 'manca ' + g + ': ' + games.join(','));

@@ -4,9 +4,11 @@
 // pit stop, missioni della settimana, livello del tifoso. Niente leghe a livelli (Edoardo, 1/11: no).
 (function (root) {
   const DAY = 86400000, HOUR = 3600000;
+  // 14/11: il formattatore si crea una volta sola (crearlo a ogni richiesta è la parte lenta, e si chiede a ogni disegno).
+  let romeFmt = null;
   function romeParts(now) {
-    const f = new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Rome", year: "numeric", month: "2-digit", day: "2-digit" });
-    const [y, m, d] = f.format(new Date(now)).split("-").map(Number);
+    if (!romeFmt) romeFmt = new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Rome", year: "numeric", month: "2-digit", day: "2-digit" });
+    const [y, m, d] = romeFmt.format(new Date(now)).split("-").map(Number);
     return [y, m, d];
   }
   const pad = n => String(n).padStart(2, "0");

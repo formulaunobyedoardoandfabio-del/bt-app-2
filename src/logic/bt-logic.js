@@ -163,6 +163,14 @@
     if (id) paid[kind][id] = priceOf(stats, kind, id);
     return { ...squad, [kind]: squad[kind].map((x, i) => (i === slot ? id || null : x)), paid, gain };
   }
+  // 14/11: il 2X sta sempre su uno dei piloti in squadra (se ce n'è almeno uno). Prima si controllava
+  // drivers.includes(boost): con un posto vuoto includes(null) è vero, e dopo "Svuota" il 2X restava spento.
+  function fixBoost(squad) {
+    if (!squad || !Array.isArray(squad.drivers)) return squad;
+    if (squad.boost && squad.drivers.includes(squad.boost)) return squad;
+    const next = squad.drivers.find(Boolean) || null;
+    return (squad.boost || null) === next ? squad : { ...squad, boost: next };
+  }
   // Svuota la squadra vendendo tutti al prezzo di oggi (i guadagni restano).
   function clearSquad(squad, stats, listing) {
     let s = squad;
@@ -332,6 +340,6 @@
     return { vmax: Math.round(v.vmax), vcorner: Math.round(v.vcorner), lapDelta: Math.round(pen * lapTime) / 100, ideal: { wing: iw, ride: ir, vmax: Math.round(vi.vmax), vcorner: Math.round(vi.vcorner) }, warnings };
   }
 
-  return { SESSION_MIN, startOf, endOf, wxLock, teamLock, countdown, RULES, aeroModel, sessionPoints, squadScore, transfers, nextFree, squadValue, canAfford, autoFill, bank, place, withPaid, clearSquad, norm, predictionCorrect, newsAge, newestFirst, RATING_PARAMS, communityRatings,
+  return { SESSION_MIN, startOf, endOf, wxLock, teamLock, countdown, RULES, aeroModel, sessionPoints, squadScore, transfers, nextFree, squadValue, canAfford, autoFill, bank, place, withPaid, clearSquad, fixBoost, norm, predictionCorrect, newsAge, newestFirst, RATING_PARAMS, communityRatings,
     PIT_WHEELS, PIT_STEPS, PIT_RULES, pitNew, pitLights, pitGo, pitTap, pitRating, SILLY_RULES, sillyPoints, SILLY_FANS, sillyBoard };
 });
