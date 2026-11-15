@@ -16,6 +16,8 @@ const UNLOCKS = [
 const ACTIONS = [
   { id: "video", code: "01", title: "Video di presentazione", say: "riproduzione: il video di presentazione dell'app" },
   { id: "tour", code: "02", title: "Giro guidato", say: "avvio del giro guidato dell'app..." },
+  // 15/11: gara di prova (DEMO) già al 5° giro, a velocità 30x
+  { id: "demo", code: "03", title: "Gara demo dal 5° giro", say: "avvio della gara di prova: dal 5° giro, velocità 30x" },
 ];
 const BY_CODE = new Map(UNLOCKS.map(u => [u.code, u]));
 const ACTION_BY_CODE = new Map(ACTIONS.map(a => [a.code, a]));

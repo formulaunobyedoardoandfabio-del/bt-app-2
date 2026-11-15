@@ -20,7 +20,7 @@ run({
     const off = await lastEnzo(p);
     await tapSel(p, '[data-enzo-close]'); await w(p, 400);
     const bye = await lastEnzo(p);
-    await w(p, 3400);
+    await w(p, 7000);   // 15/11: Enzo saluta più piano, per dare il tempo di leggere
     const gone = await p.evaluate(() => !document.querySelector('[data-enzo]'));
     await ctx.close();
     assert(/sono Enzo/.test(hi), 'saluto di Enzo: ' + hi);

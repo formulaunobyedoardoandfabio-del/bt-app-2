@@ -39,6 +39,8 @@ t('codici degli sblocchi: ognuno dà il suo; codice vuoto → niente', () => {
 t('azioni: 01 video, 02 giro guidato; non sono sblocchi e il firewall vale anche per loro', () => {
   assert.deepStrictEqual(S.check('01', { adminCode: ADMIN }), { kind: 'action', id: 'video' });
   assert.deepStrictEqual(S.check(' 0 2 ', { adminCode: ADMIN }), { kind: 'action', id: 'tour' });
+  // 15/11: "03" fa partire la gara demo dal 5° giro a 30x
+  assert.deepStrictEqual(S.check('03', { adminCode: ADMIN }), { kind: 'action', id: 'demo' });
   assert.ok(S.ACTIONS.every(x => x.title && x.say), 'ogni azione dice cosa fa');
   assert.ok(!S.UNLOCKS.some(u => S.ACTIONS.some(x => x.code === u.code || x.id === u.id)), 'codici e id diversi dagli sblocchi');
   assert.deepStrictEqual(S.clean(['video', 'tour', 'retro']), ['retro'], 'le azioni non si salvano come sblocchi');

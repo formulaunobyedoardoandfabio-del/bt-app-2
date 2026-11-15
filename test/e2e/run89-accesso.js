@@ -85,7 +85,7 @@ run({
     assert(!errs.length, errs.join(' | '));
   },
 
-  async 'giro guidato: Crea il tuo account apre la registrazione; ENTRA COME OSPITE da Accedi non fa il giro'(b) {
+  async 'giro guidato: Registrati apre la registrazione; ENTRA COME OSPITE da Accedi fa il giro (15/11)'(b) {
     const { ctx, p, errs } = await open(b, { welcome: true, init: () => { try { localStorage.setItem('bt_bt-entry', JSON.stringify('door')); } catch (e) {} } });
     await tapSel(p, '[data-door-guest]'); await w(p, 600);
     for (let i = 0; i < 30 && !(await has(p, '[data-tour-register]')); i++) { await tapSel(p, '[data-tour-next]'); await w(p, 900); }
@@ -97,7 +97,7 @@ run({
     const tour2 = await has(two.p, '[data-guest-tour]'), home2 = await has(two.p, '[data-home]');
     await two.ctx.close();
     assert(mode === 'register', 'dal giro si apre REGISTRATI: ' + mode);
-    assert(!tour2 && home2, 'da Accedi l\'ospite entra senza giro: ' + JSON.stringify({ tour2, home2 }));
+    assert(tour2, '15/11: anche ENTRA COME OSPITE da Accedi fa partire il giro guidato col pallino (Edoardo)');
     assert(!errs.length && !two.errs.length, errs.concat(two.errs).join(' | '));
   },
 

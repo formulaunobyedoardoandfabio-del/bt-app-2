@@ -3227,7 +3227,7 @@ function LiveCard({ race, st, track, source, onExpand, replay }) {
   const lastMsg = st.messages[st.messages.length - 1];
   const rbtn = { padding: "7px 11px", borderRadius: 9, background: "rgba(255,255,255,.07)", border: `1px solid ${C.border}`, fontFamily: F_HEAD, fontWeight: 800, fontSize: 11.5, color: C.text, whiteSpace: "nowrap" };
   return (
-    <div data-live-card="" data-live-source={source} style={{ margin: "4px 16px 14px", padding: "14px 14px 12px", borderRadius: 18, background: C.card, border: `1px solid ${C.border}` }}>
+    <div data-live-card="" data-live-source={source} data-live-lap={st ? (st.lap != null ? st.lap : Math.max(0, ...(st.cars || []).map(c => c.lap || 0))) : undefined} style={{ margin: "4px 16px 14px", padding: "14px 14px 12px", borderRadius: 18, background: C.card, border: `1px solid ${C.border}` }}>
       <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
         <span style={{ width: 7, height: 7, borderRadius: "50%", background: of1 ? C.gold : C.accentInk }} />
         <span style={{ fontFamily: F_BODY, fontWeight: 700, fontSize: 11, color: of1 ? C.gold : C.accentInk, letterSpacing: 1.2 }}>{of1 ? "SESSIONE RIVISTA" : "IN DIRETTA"} · {sessionName(st.type)}</span>
@@ -7148,7 +7148,7 @@ function RaceScreen({ onOpenArchive = null, champion = null, proUnlocked = [], p
       ); })()}
       {st && liveRace && isRaceType(st.type) && <InsightsCard live={live} st={st} race={liveRace} />}
 
-      <button className="press" onClick={() => onSecondScreen && onSecondScreen()} style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 6, width: "calc(100% - 32px)", margin: "0 16px 14px", padding: "11px 14px", borderRadius: 12, background: `linear-gradient(rgba(231,179,76,.1), rgba(231,179,76,.1)) ${C.bg}`, border: "1px solid rgba(231,179,76,.3)" }}>
+      <button className="press" data-second-screen-open="" onClick={() => onSecondScreen && onSecondScreen()} style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 6, width: "calc(100% - 32px)", margin: "0 16px 14px", padding: "11px 14px", borderRadius: 12, background: `linear-gradient(rgba(231,179,76,.1), rgba(231,179,76,.1)) ${C.bg}`, border: "1px solid rgba(231,179,76,.3)" }}>
         <Icon name="grid" size={14} color={C.gold} />
         <span style={{ fontFamily: F_HEAD, fontWeight: 800, fontSize: 12, color: C.gold }}>Modalità Second Screen</span>
         <span style={{ fontFamily: F_BODY, fontSize: 10.5, color: C.muted }}>· in orizzontale</span>
@@ -9156,16 +9156,19 @@ const APP_TOUR = [
   { area: "Home", tab: "home", sel: "[data-news-item]", title: "Tutte le notizie", text: "Sotto, le altre notizie del paddock, dalla più nuova. Scorri col dito." },
   { area: "Home", tab: "home", sel: "[data-ig-big]", title: "Instagram di B&T", text: "Le storie e i post di B&T Motorsport, anche gli indizi sui codici segreti." },
   { area: "Home", tab: "home", sel: '[aria-label="Notifiche"]', r: 999, title: "Notifiche", text: "Qui arrivano gli avvisi del team: inizio sessione, notizie importanti, risultati." },
+  { area: "Profilo", tab: "home", sel: '[aria-label="Profilo"]', r: 999, title: "Il tuo Profilo", text: "Qui ci sono casco, nome, trofei e impostazioni. Da ospite ti registri qui per salvare tutto." },
   { area: "Fanta", tab: "fanta", sel: "[data-squad-area]", title: "La tua squadra", text: "Scegli piloti e scuderie col budget: fanno punti coi risultati veri di ogni GP." },
   { area: "Fanta", tab: "fanta", sel: "[data-league-new]", title: "Leghe", text: "Crea una lega con gli amici o entra con un codice. Nella lega B&T ci sei già." },
   { area: "Fanta", tab: "fanta", sel: "[data-fanta-elo]", title: "ELO B&T", text: "La tua forza nel Fanta, come negli scacchi: sale se batti chi è più forte di te." },
   { area: "Race", tab: "race", live: true, sel: "[data-live-card]", title: "Diretta della sessione", text: "Durante prove, qualifiche e gara qui c'è la diretta. Ora non si corre: questa è una prova (DEMO), la vedi solo tu." },
   { area: "Race", tab: "race", live: true, sel: "[data-live-map]", title: "Mappa live", text: "Le auto sul tracciato vero. Il tracciato si colora con le bandiere: giallo, Safety Car, rosso." },
   { area: "Race", tab: "race", live: true, sel: "[data-session-picker]", title: "Sessioni", text: "Passi da una sessione all'altra del weekend: prove libere, qualifiche, gara." },
+  { area: "Race", tab: "race", live: true, sel: "[data-second-screen-open]", title: "Second Screen", text: "Metti il telefono in orizzontale accanto alla TV: mappa, tempi e chat insieme, durante la gara." },
   { area: "Race", tab: "race", live: true, sel: "[data-race-chat]", title: "Chat dei tifosi", text: "La community di B&T: commenti la gara in diretta con gli altri tifosi." },
   { area: "Race", tab: "race", live: true, sel: "[data-race-archive]", title: "Riguarda una gara", text: "Le gare finite si riguardano sulla mappa, secondo per secondo, con gomme e distacchi." },
   { area: "Garage", tab: "garage", sel: "[data-garage-canvas]", title: "Garage", text: "Giochi e strumenti: Pit Stop, Ghost Lap, strategie, assetto, tracciati. Trascina per vederli tutti." },
   { area: "Garage", tab: "garage", sel: "[data-garage-view]", title: "Griglia o lista", text: "Le piastrelle come un orologio, oppure l'elenco coi nomi. La scelta resta sul telefono." },
+  { area: "Profilo", view: "profilo", sel: "[data-trophies]", title: "B&T Trophies", text: "I trofei che vinci usando l'app: pronostici giusti, giochi, sfide. Toccane uno per vedere come si prende." },
   { area: "Profilo", view: "profilo", sel: "[data-changelog]", title: "Novità", text: "Tutto quello che cambia nell'app, dalla più nuova." },
   { area: "Profilo", view: "profilo", sel: "[data-hack-open]", title: "Terminale del box", text: "Il terminale ADMIN: prova i codici segreti che escono sulle storie Instagram." },
   { area: "Enzo", tab: "home", sel: '[data-nav-tab="home"]', r: 999, title: "E poi c'è Enzo", text: "Tocca tre volte la scheda dove sei già: arriva Enzo, l'assistente. Non ha voglia di lavorare, ma ti aiuta." },
@@ -9191,7 +9194,7 @@ const CHANGELOG = [
   { date: "08/11", title: "B&T Trophies a fine sessione" },
 ];
 
-function HackTerminal({ isAdmin, unlocks, onToggle, onAdmin, onClose, onOpenIg, telemetry, panelOpen = false, onTour = null }) {
+function HackTerminal({ isAdmin, unlocks, onToggle, onAdmin, onClose, onOpenIg, telemetry, panelOpen = false, onTour = null, onDemoRace = null }) {
   const [video, setVideo] = useState(false);
   const [wrap, setWrap] = useState(true), [copied, setCopied] = useState(false);   // 15/11: blocco di codice   // 14/11: codice 01, video di presentazione dentro il terminale
   const [log, setLog] = useState([]);        // righe scritte dopo l'avvio: { id, text, tone }
@@ -9243,6 +9246,7 @@ function HackTerminal({ isAdmin, unlocks, onToggle, onAdmin, onClose, onOpenIg, 
       say([echo, ["ESEGUITO: " + act.title.toUpperCase(), "ok"], [act.say, "dim"]]);
       if (r.id === "video") setVideo(true);
       if (r.id === "tour" && onTour) { opening.current = true; setTimeout(onTour, 700); }
+      if (r.id === "demo" && onDemoRace) { opening.current = true; setTimeout(onDemoRace, 700); }
       return;
     }
     const u = SecretCodes.unlockOf(r.id), turningOn = !unlocks.includes(r.id);
@@ -12402,6 +12406,15 @@ function App() {
     setDemoLive({ raceId, type, sim, track, source: "demo" }); setLapList(null); setTelemetry(null);
     setDemoVotes({ ratings: {}, dotd: {} });
     showToast(`Prova diretta (DEMO): ${sessionName(type)}. La vedi solo tu.`);
+    return sim;
+  };
+  // 15/11: "03" nel terminale: gara di prova già al 5° giro, a 30x
+  const demoFromLap5 = () => {
+    const r = races.find(x => x.status !== "DONE" && CIRCUITS[x.circuitId]) || races.find(x => CIRCUITS[x.circuitId]);
+    const sim = r && startLive(r.id, "race");
+    const leadLap = () => { const st = sim.state(); return st.lap != null ? st.lap : Math.max(0, ...(st.cars || []).map(c => c.lap || 0)); };
+    if (sim) for (let k = 0; k < 400 && leadLap() < 5; k++) sim.advance(5);
+    setLiveSpeed(30); setView("tab"); setTab("race");
   };
   // 15/11: giro guidato che si muove nell'app; senza una sessione vera le tappe "live" usano la prova diretta (DEMO).
   const tourGo = st => {
@@ -13133,7 +13146,8 @@ function App() {
     );
   }
   if ((!authed || loginHold) && !guest) {
-    const guestIn = fromDoor => { setGuest(true); if (fromDoor && !local.get(TOUR_KEY)) setTourOn(true); else showToast("Stai navigando come ospite"); };
+    // 15/11: chi entra come ospite (dall'Entrata o da Accedi) ha il giro guidato col pallino, una volta per telefono
+    const guestIn = () => { setGuest(true); if (!local.get(TOUR_KEY)) setTourOn(true); else showToast("Stai navigando come ospite"); };
     if (entryView !== "form" && !loginHold) return shell(
       <WelcomeFlow logo={BT_LOGO} startAt={entryView === "door" ? 99 : 0} useBack={useBack}
         onSeen={() => { if (!local.get(ENTRY_KEY)) local.set(ENTRY_KEY, "door"); }}
@@ -13252,7 +13266,7 @@ function App() {
   let body;
   if (view === "article" && activeArticle) body = <ArticleScreen article={activeArticle} onBack={viewBack.article} isPremium={isPaid || adNews.includes(activeArticle.id)} onAdUnlock={Ads.canReward() ? () => watchAdNews(activeArticle.id) : null} adBusy={adBusy} onPremium={() => setPremiumOpen(true)} onTag={filterByTag} saved={saved.includes(activeArticle.id)} onToggleSave={() => toggleSave(activeArticle.id)} onShare={() => setShareId(activeArticle.id)} vote={votes["art-" + activeArticle.id] || null} onVote={castVote} />;
   else if (view === "circuit" && circuitId) body = <CircuitScreen circuitId={circuitId} races={races} articles={newsAll} onBack={viewBack.circuit} onTag={filterByTag} onOpenArticle={openArticle} />;
-  else if (view === "adminLock" || view === "hack") body = <HackTerminal isAdmin={!!account && Account.isAdmin()} unlocks={unlocks} onToggle={toggleUnlock} onAdmin={() => { setAdminUnlocked(true); setView("admin"); }} onClose={viewBack.hack} onOpenIg={() => { setIgFrom("profilo"); setView("instagram"); }} telemetry={hackTelemetry} panelOpen={adminUnlocked && !!account && Account.isAdmin()} onTour={() => { setView("tab"); setTab("home"); setTourOn(true); }} />;
+  else if (view === "adminLock" || view === "hack") body = <HackTerminal isAdmin={!!account && Account.isAdmin()} unlocks={unlocks} onToggle={toggleUnlock} onAdmin={() => { setAdminUnlocked(true); setView("admin"); }} onClose={viewBack.hack} onOpenIg={() => { setIgFrom("profilo"); setView("instagram"); }} telemetry={hackTelemetry} panelOpen={adminUnlocked && !!account && Account.isAdmin()} onTour={() => { setView("tab"); setTab("home"); setTourOn(true); }} onDemoRace={demoFromLap5} />;
   else if (view === "admin" && adminUnlocked && Account.isAdmin()) body = <AdminScreen histAuto={histQs.filter(q => q.raceId === (weekendRace(races) || {}).id)} hiddenQs={hiddenQs} onHideQ={(id, hide) => commitShared("flags", latest => { const cur = latest && Array.isArray(latest.hiddenQs) ? latest.hiddenQs : []; return { ...latest, hiddenQs: hide ? [...cur.filter(x => x !== id), id] : cur.filter(x => x !== id) }; }).then(ok => { if (ok) showToast(hide ? "Domanda tolta dal FantaF1 per tutti" : "Domanda rimessa nel FantaF1"); })} flags={flags} onFlags={v => commitShared("flags", () => v).then(ok => { if (ok) showToast(v.pitSwipe ? "Pit Swipe acceso per tutti" : "Pit Swipe spento per tutti"); })} takes={takes} onTakes={v => commitShared("takes", () => v).then(ok => { if (ok) showToast("Opinioni salvate"); })} holidayCfg={holidayCfg} holiday={holiday} onHolidays={v => commitShared("holidays", () => v).then(ok => { if (ok) showToast("Temi delle feste salvati"); })} photos={commonsPhotos} setPhotos={adminSet.commonsPhotos} silly={sillyOfficial} onSilly={officialSeat} highlights={highlights} setHighlights={adminSet.highlights} onBack={viewBack.admin} onPublish={publishArticle} articles={articles} setArticles={adminSet.articles} fantaStats={shownFantaStats} fantaLatestRound={latestRaceRound} setFantaStats={adminSet.fantaStats} standings={standings} setStandings={adminSet.standings} races={races} setRaces={adminSet.races} extraRaces={racesDoc.extra} setExtraRaces={adminSet.extraRaces} ig={ig} setIg={adminSet.ig} sentNotifs={sentNotifs} onSendNotif={sendNotif} onDeleteNotif={deleteNotif} onToast={showToast} tab={adminTab} setTab={setAdminTab} chats={chats} reports={reports} banned={banned} onDeleteMsg={deleteChatMsg} onSuspend={suspendUser} onUnsuspend={unsuspendUser} onIgnoreReport={ignoreReport} liveProps={liveProps} polls={allPolls} votes={votes} onPollAnswer={setPollAnswer} predictions={predictions} setPredictions={adminSet.predictions} predAnswers={predAnswers} />;
   else if (view === "chatThread" && activeChat) body = <ChatThreadScreen since={chatSince(activeChat && activeChat.id)} chat={activeChat} onBack={viewBack.chatThread} onSend={guest ? () => needLogin("Per scrivere in chat serve un account.") : sendMessage} isPremium={isPremium} blocked={blocked} onReport={guest ? () => needLogin("Per segnalare un messaggio serve un account.") : reportMessage} onBlock={blockUser} onReact={guest ? () => needLogin("Per reagire ai messaggi serve un account.") : reactMessage} trophyList={trophyList} myWon={trophies} pendingLink={pendingLink} onPendingUsed={() => setPendingLink(null)} onOpenLink={openLink} liveRace={races.find(r => r.status === "LIVE") || null} />;
   else if (view === "instagram") body = <InstagramView ig={ig} onToast={showToast} onBack={viewBack.instagram} />;
@@ -13397,7 +13411,7 @@ function App() {
         {linkShare && <ChatRoomPicker onPick={id => { setPendingLink(linkShare); setLinkShare(null); openChat(id); }} onClose={() => setLinkShare(null)} />}
         {socialOpen && <SocialSheet post={socialOpen} onClose={() => setSocialOpen(null)} />}
         <RainGlass on={rainOn} />
-        {tourOn && (guest || !!account) && <AppGuide steps={APP_TOUR} useBack={useBack} onGo={tourGo} onDone={tourDone} onRegister={guest ? () => { tourDone(); setLoginReason(null); setLoginMode("register"); setLoginOpen(true); } : null} />}
+        {tourOn && (guest || !!account) && <AppGuide steps={APP_TOUR} where={view + ":" + tab} useBack={useBack} onGo={tourGo} onDone={tourDone} onRegister={guest ? () => { tourDone(); setLoginReason(null); setLoginMode("register"); setLoginOpen(true); } : null} />}
         {termsAccepted && termsOpen && <TermsSheet review onClose={() => setTermsOpen(false)} />}
         {feedbackOpen && <FeedbackModal onClose={() => setFeedbackOpen(false)} onSend={sendFeedback} />}
         {toast && <div className="toast" style={showBottomNav && adH > 0 ? { bottom: 104 + adH + AD_GAP } : undefined}>{toast}</div>}

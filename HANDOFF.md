@@ -1058,3 +1058,14 @@ Misure prima del lavoro (pagina di prova, CPU rallentata 4x come un telefono med
 - Prove: `test/e2e/run117-enzo-giro.js` (2); aggiornate (non cancellate) `run89-accesso`, `run109-terminale`, `run116-effetti` al giro nuovo e a Enzo.
 - Replay 2026: 13 gare su 20 pubblicate. `tools/openf1_replay.py` `quality()` (prove +3): si pubblica solo se i giri di ognuno tornano (80%) e l'arrivo dai dati è come quello ufficiale (al massimo 25% diverso). Tolte: Ungheria (tracciato sbagliato, giri 0/22), Gran Bretagna, Olanda, Azerbaigian, Città del Messico, Bahrein (arrivo troppo diverso); Monaco non convertita (errore); 2 gare senza giri (mai corse). Per quelle resta il giro per giro.
 - Da capire (prossimo passo): perché in quelle gare l'ordine non torna (probabile proiezione sulla pista sbagliata in alcuni punti, es. corsia box o curve vicine).
+
+
+## 15/11 (12:00): giro guidato che si tocca, ospite col giro, tappe nuove, "03" gara demo
+
+- Richiesta di Edoardo (11:35), prima parte. `AppGuide` (src/ui/guida.jsx): il pezzo acceso si può toccare (fuori dal pezzo i tocchi si fermano con 4 bordi trasparenti); toccandolo resta solo il pallino che galleggia (`data-tour-float`, su e giù piano) e guarda i tocchi, col bottone "Torna al giro"; quando si torna dove si era (vista e scheda, prop `where`) torna il riquadro della stessa tappa.
+- Testo che si scrive più piano: giro guidato 45 caratteri al secondo, Enzo 50; Enzo prima di andare via aspetta il tempo di leggere il congedo (fino a 6,5 s).
+- Ospite: da Accedi e dall'Entrata parte il giro col pallino (una volta per telefono). Cambiata la vecchia regola (prima solo dall'Entrata): aggiornata `run89-accesso`.
+- Tappe nuove in `APP_TOUR` (22): "Il tuo Profilo" (bottone in alto, anche per l'ospite), "Second Screen" (con la gara demo), "B&T Trophies" (nel Profilo).
+- Terminale "03" (`secret-codes.js` ACTIONS): gara demo dal 5° giro a 30x (`demoFromLap5`: `startLive` ora restituisce la simulazione; avanti finché il primo è al 5° giro; `setLiveSpeed(30)`; scheda Race). `data-live-lap` sulla scheda della diretta (giro del primo: `st.lap` è vuoto quando la sessione non sa i giri totali).
+- Prove: unit `secret-codes` (+03); e2e `run118-giro-tocchi.js` (3); aggiornate `run89-accesso`, `run117-enzo-giro` (tempi).
+- Da fare (stessa richiesta): Enzo come palla che galleggia con accanto il testo, che nasce dalla barra in basso; bottone Novità in Home con Dot e Enzo che presentano le novità; codici del terminale aggiunti dall'admin.
