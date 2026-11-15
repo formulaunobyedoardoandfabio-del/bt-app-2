@@ -6,3 +6,13 @@
 .tp-seg-btn, .tp-back { cursor: pointer; }
 .tp-seg-btn:focus-visible, .tp-back:focus-visible { outline: 2px solid #F4F4F5; outline-offset: 2px; }
 @media (prefers-reduced-motion: reduce) { .tp-seg-pill { transition: none; } .tp-bar { animation: none; } }
+
+/* 15/11: piastrelle che si toccano, scheda del trofeo con i coriandoli e il disegno che salta */
+.tp-tile { cursor: pointer; transition: transform 120ms ease-out; }
+.tp-tile:active { transform: scale(.97); }
+.tp-tile:focus-visible { outline: 2px solid #F4F4F5; outline-offset: 2px; }
+@keyframes tp-conf { 0% { transform: translate(0, 0) rotate(0deg); opacity: 1; } 100% { transform: translate(var(--dx), var(--dy)) rotate(var(--r)); opacity: 0; } }
+.tp-conf { animation: tp-conf 1100ms cubic-bezier(.2, .7, .3, 1) both; }
+@keyframes tp-pop { 0% { transform: scale(.6); } 60% { transform: scale(1.18); } 100% { transform: scale(1); } }
+.tp-pop { animation: tp-pop 520ms cubic-bezier(.2, .8, .2, 1.2) both; }
+@media (prefers-reduced-motion: reduce) { .tp-tile { transition: none; } .tp-conf { display: none; animation: none; } .tp-pop { animation: none; } }

@@ -53,6 +53,21 @@ function Glyph({ name, won }) {
     </span>
   );
 }
+// 15/11 (Edoardo): coriandoli per i trofei (scheda del trofeo vinto, avviso "Trofeo sbloccato"): pezzetti che partono
+// dal centro e cadono (solo transform/opacity, posizioni fisse); con "Rimuovi animazioni" non ci sono. small = pochi e
+// vicini (trofei ancora da vincere).
+const CONF_COLORS = ["#EDC55C", "#F4F4F5", "#E10600", "#27F4D2", "#FF8000", "#C0C0C8"];
+export function TpConfetti({ small = false, n = small ? 10 : 26 }) {
+  return (
+    <span aria-hidden="true" data-tp-confetti={small ? "small" : "big"} style={{ position: "absolute", left: "50%", top: small ? "40%" : "34%", width: 0, height: 0, pointerEvents: "none" }}>
+      {Array.from({ length: n }, (_, k) => {
+        const a = (k / n) * Math.PI * 2 + (k % 3) * 0.4, d = (small ? 46 : 110) + (k * 37) % (small ? 24 : 70);
+        return <span key={k} className="tp-conf" style={{ position: "absolute", width: k % 2 ? 6 : 8, height: k % 2 ? 10 : 6, borderRadius: k % 4 === 0 ? "50%" : 2, background: CONF_COLORS[k % CONF_COLORS.length],
+          "--dx": `${Math.round(Math.cos(a) * d)}px`, "--dy": `${Math.round(Math.sin(a) * d * 0.7 + (small ? 30 : 90))}px`, "--r": `${(k * 67) % 360}deg`, animationDelay: `${(k % 5) * 40}ms` }} />;
+      })}
+    </span>
+  );
+}
 function Bar({ ratio, grow = false }) {
   return (
     <div style={{ marginTop: 8, height: 6, borderRadius: 3, background: TP.segOn, overflow: "hidden" }}>
@@ -63,6 +78,7 @@ function Bar({ ratio, grow = false }) {
 
 export default function TrofeiPage({ items = [], onBack, now = Date.now() }) {
   const [view, setView] = useState("won");
+  const [open, setOpen] = useState(null);   // 15/11: trofeo toccato (scheda con come si vince / come l'hai vinto)
   const won = items.filter(t => t.won).sort((a, b) => (b.at || 0) - (a.at || 0));
   const todo = items.filter(t => !t.won);
   const next = todo.filter(t => t.ratio != null && t.ratio > 0 && t.ratio < 1).sort((a, b) => b.ratio - a.ratio)[0] || null;
@@ -72,14 +88,14 @@ export default function TrofeiPage({ items = [], onBack, now = Date.now() }) {
   const year = new Date(now).getFullYear();
   const day = ms => new Date(ms).toLocaleDateString("it-IT", new Date(ms).getFullYear() === year ? { day: "numeric", month: "long" } : { day: "numeric", month: "long", year: "numeric" });
   const tile = (t, opts = {}) => (
-    <div key={t.id} data-trophy={t.id} data-won={t.won ? "1" : "0"} data-tp-next={opts.wide ? "" : undefined}
-      style={{ boxSizing: "border-box", padding: 14, minHeight: 112, borderRadius: 18, background: TP.card, border: `1px solid ${t.won ? TP.lineOn : TP.line}`, minWidth: 0, gridColumn: opts.wide ? "span 2" : undefined }}>
+    <button type="button" key={t.id} data-trophy={t.id} data-won={t.won ? "1" : "0"} data-tp-next={opts.wide ? "" : undefined} className="tp-tile" onClick={() => setOpen(t)} aria-label={t.name + (t.won ? ", vinto" : ", da vincere") + ": tocca per i dettagli"}
+      style={{ boxSizing: "border-box", padding: 14, minHeight: 112, borderRadius: 18, background: TP.card, border: `1px solid ${t.won ? TP.lineOn : TP.line}`, minWidth: 0, gridColumn: opts.wide ? "span 2" : undefined, textAlign: "left", color: TP.ink, fontFamily: TP.font }}>
       <Glyph name={t.hidden ? "lock" : GLYPH_OF[t.id]} won={t.won} />
       <div style={{ marginTop: 10, fontSize: 15, fontWeight: 800, overflowWrap: "break-word" }}>{t.name}</div>
       <div style={{ marginTop: 2, fontSize: 12, fontWeight: 600, color: TP.muted, lineHeight: 1.35 }}>{t.won ? day(t.at) : t.how}</div>
       {!t.won && t.extra && <div style={{ marginTop: 4, fontSize: 12, fontWeight: 800, color: TP.ink, fontVariantNumeric: "tabular-nums" }}>{t.extra}</div>}
       {!t.won && t.ratio != null && <Bar ratio={t.ratio} />}
-    </div>
+    </button>
   );
   const tab = (id, label) => (
     <button key={id} type="button" className="tp-seg-btn" data-tp-view={id} aria-pressed={view === id} onClick={() => setView(id)}
@@ -121,6 +137,23 @@ export default function TrofeiPage({ items = [], onBack, now = Date.now() }) {
           {view === "todo" && !todo.length && <p data-tp-empty="" style={{ gridColumn: "span 2", margin: "6px 2px", fontSize: 13, fontWeight: 600, lineHeight: 1.5, color: TP.muted }}>Li hai vinti tutti.</p>}
         </div>
       </div>
+      {open && (
+        <div data-tp-sheet={open.id} role="dialog" aria-modal="true" aria-label={open.name} onClick={e => { if (e.target === e.currentTarget) setOpen(null); }}
+          style={{ position: "fixed", inset: 0, zIndex: 700, background: "rgba(0,0,0,.72)", display: "flex", alignItems: "flex-end" }}>
+          <div style={{ position: "relative", width: "100%", boxSizing: "border-box", padding: "26px 20px 22px", borderRadius: "24px 24px 0 0", background: TP.card, borderTop: `1px solid ${TP.lineOn}`, textAlign: "center", overflow: "hidden" }}>
+            <TpConfetti key={open.id} small={!open.won} />
+            <div className="tp-pop" style={{ display: "inline-flex" }}><Glyph name={open.hidden ? "lock" : GLYPH_OF[open.id]} won={open.won} /></div>
+            <div style={{ marginTop: 10, fontSize: 21, fontWeight: 800 }}>{open.name}</div>
+            <div data-tp-when="" style={{ marginTop: 4, fontSize: 13, fontWeight: 700, color: open.won ? "#EDC55C" : TP.muted }}>{open.won ? `Vinto il ${day(open.at)}` : "Ancora da vincere"}</div>
+            <div data-tp-how="" style={{ marginTop: 12, fontSize: 14, fontWeight: 600, lineHeight: 1.5, color: TP.ink }}>
+              <span style={{ color: TP.muted }}>{open.won ? "Come l'hai vinto: " : "Come si vince: "}</span>{open.how}
+            </div>
+            {!open.won && open.extra && <div style={{ marginTop: 8, fontSize: 13, fontWeight: 800, fontVariantNumeric: "tabular-nums" }}>{open.extra}</div>}
+            {!open.won && open.ratio != null && <Bar ratio={open.ratio} grow />}
+            <button type="button" data-tp-close="" onClick={() => setOpen(null)} style={{ marginTop: 18, width: "100%", minHeight: 48, borderRadius: 14, border: 0, background: TP.ink, color: "#000", fontFamily: TP.font, fontSize: 15, fontWeight: 800 }}>{open.won ? "Grande!" : "Ci provo"}</button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

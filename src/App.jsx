@@ -77,7 +77,7 @@ import HalfW from "./logic/halfway";
 import Oled from "./logic/oled";
 import PitWallResult, { BoxOrOut, RedPlay, PitWallCard } from "./gara/PitWall";
 import { eventsLeft as champEventsLeft } from "./logic/champ-calc";
-import TrofeiPage from "./profilo/TrofeiPage";
+import TrofeiPage, { TpConfetti } from "./profilo/TrofeiPage";
 import FantaSeason from "./logic/fanta-season";
 import { createFantaLeague } from "./services/fantaleague";
 import { createProfiles } from "./services/profiles";
@@ -620,6 +620,10 @@ const LAST_RACE_INIT = { raceId: "r15", name: "GP dell'Azerbaigian", type: "RACE
 // FantaF1 come il gioco ufficiale F1 Fantasy: prezzi (milioni di $), variazione e punti della stagione. Stanno in
 // shared/bt-fanta-stats (valori di partenza dopo il GP dell'Azerbaigian in src/data/f1-2026.js); dopo ogni gara si
 // aggiornano dal pannello admin (FANTA F1).
+// 15/11 (Edoardo: "nelle scritte piccole dell'app metti sempre come ultima cosa #madebyhuman"; scelta sua, dopo avergli
+// detto che l'app è scritta in gran parte con l'IA): in fondo alle note piccole (avviso F1, fonte dei prezzi del Fanta).
+const MADE_TAG = "#madebyhuman";
+const madeTag = () => <span data-made-tag="" style={{ whiteSpace: "nowrap" }}> {MADE_TAG}</span>;
 const FANTASY_SOURCE = "Prezzi e punti del gioco ufficiale F1 Fantasy dopo il GP dell'Azerbaigian (30/09/2026)";
 const TEAM_OF = Object.fromEntries(DRIVERS.map(d => [d.id, d.teamId]));
 // La tua squadra (demo): 5 piloti, 2 scuderie e il 2X. Budget = 100 M$ di partenza più il valore guadagnato in stagione.
@@ -2456,7 +2460,7 @@ function HomeScreen({ onNovita = null, novitaNew = false, onOpenArchive = null, 
           <PremiumLockCard icon="play" title="Video highlights esclusivi" desc="I momenti migliori di ogni gara, montati solo per te." onPremium={onPremium} />
         )}
       </div>
-      <p style={{ fontFamily: F_BODY, fontSize: 10, color: C.dim, lineHeight: 1.55, textAlign: "center", margin: "18px 24px 6px" }}>{F1_DISCLAIMER}</p>
+      <p style={{ fontFamily: F_BODY, fontSize: 10, color: C.dim, lineHeight: 1.55, textAlign: "center", margin: "18px 24px 6px" }}>{F1_DISCLAIMER}{madeTag()}</p>
       <div style={{ height: 8 }} />
       </div>
       </div>
@@ -8188,7 +8192,7 @@ function FantaPicker({ kind, slot, squad, stats, budget, listing = null, onPick,
               </button>
             );
           })}
-          <p style={{ margin: "8px 18px 0", fontFamily: F_BODY, fontSize: 10.5, color: C.dim, lineHeight: 1.45 }}>{FANTASY_SOURCE}.</p>
+          <p style={{ margin: "8px 18px 0", fontFamily: F_BODY, fontSize: 10.5, color: C.dim, lineHeight: 1.45 }}>{FANTASY_SOURCE}.{madeTag()}</p>
         </div>
       </div>
     </div>
@@ -8279,7 +8283,7 @@ function ChessDriverPicker({ slot, squad, stats, budget, listing = null, onPick,
               </div>
             ))}
           </div>
-          <p style={{ margin: "10px 6px 0", fontFamily: F_BODY, fontSize: 10.5, color: C.dim, lineHeight: 1.45 }}>{FANTASY_SOURCE}.</p>
+          <p style={{ margin: "10px 6px 0", fontFamily: F_BODY, fontSize: 10.5, color: C.dim, lineHeight: 1.45 }}>{FANTASY_SOURCE}.{madeTag()}</p>
         </div>
         <div style={{ padding: "10px 16px 16px", borderTop: `1px solid ${C.border}`, background: C.card }}>
           {s.why && !s.isCur && <div data-chess-why="" role="status" style={{ fontFamily: F_BODY, fontSize: 12, color: s.off ? "#FF5A5F" : C.muted, textAlign: "center", marginBottom: 8 }}>{s.why}</div>}
@@ -8634,7 +8638,7 @@ function FantaRules() {
             `Pit stop: ${R.pitStops.map(([t, p]) => `${t} +${p}`).join(", ")}; il più veloce della gara +${R.fastestStop}; nuovo record +${R.recordStop}.`])}
           {h("Bonus B&T")}
           {list([`Meteo indovinato (pioggia sì o no): +${R.wxBonus}.`, `Sondaggio indovinato: +${R.pollBonus}.`, `Previsione avanzata giusta: +${R.predictionBonus}.`])}
-          <p style={{ margin: 0, fontFamily: F_BODY, fontSize: 11, color: C.dim, lineHeight: 1.5 }}>Nella demo i punti del weekend si calcolano dalla diretta demo: posizioni, posizioni guadagnate e giro più veloce (sorpassi, pilota del giorno e pit stop non ci sono). I chip del gioco ufficiale (3X, Wildcard, Limitless…) non ci sono. {FANTASY_SOURCE}.</p>
+          <p style={{ margin: 0, fontFamily: F_BODY, fontSize: 11, color: C.dim, lineHeight: 1.5 }}>Nella demo i punti del weekend si calcolano dalla diretta demo: posizioni, posizioni guadagnate e giro più veloce (sorpassi, pilota del giorno e pit stop non ci sono). I chip del gioco ufficiale (3X, Wildcard, Limitless…) non ci sono. {FANTASY_SOURCE}.{madeTag()}</p>
         </div>
       )}
     </div>
@@ -8883,7 +8887,7 @@ function TrophyNotice({ n }) {
   return (
     <div key={n.key} className="live-notice" data-trophy-notice={n.ids.join(",")} role="status" aria-label={title + ": " + n.names.join(", ")}
       style={{ position: "absolute", top: 10, left: 10, right: 10, zIndex: 900, pointerEvents: "none", display: "flex", alignItems: "center", gap: 10, padding: "9px 12px 9px 9px", borderRadius: 16, background: "linear-gradient(100deg, #1C1810 0%, #2B2314 100%)", border: "1px solid rgba(231,179,76,.5)", boxShadow: "0 14px 30px -12px rgba(0,0,0,.75)" }}>
-      <span style={{ width: 38, height: 38, borderRadius: 12, background: "rgba(231,179,76,.16)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}><Icon name="trophy" size={20} color={C.gold} sw={2} /></span>
+      <span className="tp-pop" style={{ position: "relative", width: 38, height: 38, borderRadius: 12, background: "rgba(231,179,76,.16)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}><Icon name="trophy" size={20} color={C.gold} sw={2} /><TpConfetti n={16} /></span>
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ fontFamily: F_HEAD, fontWeight: 900, fontStyle: "italic", fontSize: 12, letterSpacing: .6, color: C.gold }}>{title}</div>
         <div style={{ fontFamily: F_HEAD, fontWeight: 800, fontSize: 15, color: "#fff", marginTop: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{n.names.join(", ")}</div>
@@ -9157,7 +9161,7 @@ function ProfiloScreen({ tv = false, onTv = null, onChangelog = null, onHack = n
           <span style={{ flex: 1, fontFamily: F_BODY, fontWeight: 600, fontSize: 14, color: C.muted }}>Elimina account</span>
         </button>
       )}
-      <p style={{ textAlign: "center", fontFamily: F_BODY, fontSize: 10, color: C.dim, lineHeight: 1.55, padding: "18px 28px 22px", margin: 0 }}>{F1_DISCLAIMER}</p>
+      <p style={{ textAlign: "center", fontFamily: F_BODY, fontSize: 10, color: C.dim, lineHeight: 1.55, padding: "18px 28px 22px", margin: 0 }}>{F1_DISCLAIMER}{madeTag()}</p>
       {confirmDel && (
         <div style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,.85)", zIndex: 650, display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}>
           <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 20, padding: "26px 22px 18px", maxWidth: 330, width: "100%", textAlign: "center" }}>

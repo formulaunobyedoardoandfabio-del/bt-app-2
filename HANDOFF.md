@@ -1152,3 +1152,10 @@ Misure prima del lavoro (pagina di prova, CPU rallentata 4x come un telefono med
   errlog (2), appdata (+1); e2e run124 (4), aggiornata run119 (scheda TERMINALE = elenco).
 - Lingue (tutta l'app in qualsiasi lingua): rimandate con Edoardo a una sessione nuova con un piano (app da 13.600 righe
   tutte in italiano).
+- Trofei (Edoardo: "se clicchi su quelli ottenuti: descrizione e come lo hai ottenuto; animazione più festiva"): nella
+  pagina "I miei trofei" le piastrelle si toccano e aprono la scheda del trofeo: vinto = "Vinto il <data>" e "Come
+  l'hai vinto: <regola>", coriandoli grandi; da vincere = "Come si vince" e quanto manca, coriandoli piccoli
+  (`TpConfetti` in src/profilo/TrofeiPage.jsx, solo transform/opacity, niente con "Rimuovi animazioni"). Anche l'avviso
+  "Trofeo sbloccato" ha i coriandoli e la coppa che salta. Prova: run93 (+1).
+- `#madebyhuman` in fondo alle scritte piccole (avviso F1 in Home e Profilo, fonte dei prezzi del Fanta): scelta di
+  Edoardo, dopo avergli detto che l'app è scritta in gran parte con l'IA (`MADE_TAG`, `madeTag()`).

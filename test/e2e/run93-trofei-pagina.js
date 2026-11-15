@@ -20,6 +20,29 @@ const page = p => p.evaluate(() => {
 });
 
 run({
+  // 15/11 (Edoardo): "nei trofei, se clicchi su quelli già ottenuti: descrizione del trofeo e come lo hai ottenuto; e
+  // animazione più festiva". Scheda del trofeo toccato: vinto = data e come l'hai vinto, coriandoli; da vincere = come
+  // si vince (e quanto manca), coriandoli piccoli.
+  async 'toccando un trofeo: vinto = data e come l\'hai vinto coi coriandoli; da vincere = come si vince'(b) {
+    const { ctx, p } = await open(b, { seed: { addDocs: USER({ trophies: WON }) } }); await login(p); await w(p, 800);
+    await tapSel(p, '[aria-label="Profilo"]'); await w(p, 600);
+    await tapSel(p, '[data-trophies-open]'); await w(p, 600);
+    const sheet = () => p.evaluate(() => { const s = document.querySelector('[data-tp-sheet]'); return s && { id: s.getAttribute('data-tp-sheet'), when: s.querySelector('[data-tp-when]').innerText, how: s.querySelector('[data-tp-how]').innerText, conf: (s.querySelector('[data-tp-confetti]') || { getAttribute: () => null }).getAttribute('data-tp-confetti') }; });
+    await tapSel(p, '[data-trophy="casco"]'); await w(p, 400);
+    const s1 = await sheet();
+    await tapSel(p, '[data-tp-close]'); await w(p, 300);
+    const closed = await p.evaluate(() => !document.querySelector('[data-tp-sheet]'));
+    await tapSel(p, '[data-tp-view="todo"]'); await w(p, 400);
+    const todoId = await p.evaluate(() => document.querySelector('[data-tp-grid="todo"] [data-trophy]').getAttribute('data-trophy'));
+    await tapSel(p, `[data-trophy="${todoId}"]`); await w(p, 400);
+    const s2 = await sheet();
+    await ctx.close();
+    const casco = TROPHIES.find(t => t.id === 'casco');
+    assert(s1 && s1.id === 'casco' && /^Vinto il 12 ottobre/.test(s1.when) && s1.how.includes("Come l'hai vinto: " + casco.how) && s1.conf === 'big', 'trofeo vinto: data, come l\'hai vinto, coriandoli: ' + JSON.stringify(s1));
+    assert(closed, 'si chiude');
+    assert(s2 && s2.id === todoId && /Ancora da vincere/.test(s2.when) && /^Come si vince: /.test(s2.how) && s2.conf === 'small', 'trofeo da vincere: come si vince: ' + JSON.stringify(s2));
+  },
+
   async 'si apre solo dal bottone: medaglia, Vinti e Da vincere, la prossima larga con la barra, Indietro torna al Profilo'(b) {
     const { ctx, p, errs } = await open(b, { seed: { addDocs: USER({ trophies: WON, saved: ['n1', 'n2', 'n3'] }) } }); await login(p); await w(p, 800);
     await tapSel(p, '[aria-label="Profilo"]'); await w(p, 600);
