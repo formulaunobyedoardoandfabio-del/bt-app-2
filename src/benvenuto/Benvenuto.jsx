@@ -10,6 +10,7 @@ import React, { useState, useEffect, useLayoutEffect, useRef } from "react";
 import "./disegni.css";
 import "./Benvenuto.css";
 import { SLIDE_TEXT as DESIGN_TEXT, SLIDE_ART, DoorArt, OrbitArt } from "./disegni";
+import { LiveOrb } from "../ui/effetti";   // 15/11: il pallino guida del giro (variante Auto: nera sul riquadro chiaro)
 
 // 7/11 sera: in Home non c'è più il filtro a gomma (Edoardo l'ha tolto): la prima scheda non lo promette più.
 const SLIDE_TEXT = DESIGN_TEXT.map((s, i) => (i === 0 ? { ...s, text: "Cerca, salva con uno swipe e leggi senza rumore." } : s));
@@ -143,7 +144,10 @@ export function GuestTour({ onDone, onRegister, useBack, member = false }) {
         <div key={k} aria-hidden="true" data-tour-spot={k === i ? "on" : undefined} style={{ position: "absolute", left: boxes[k].left, top: boxes[k].top, width: boxes[k].width, height: boxes[k].height, borderRadius: s.r, boxShadow: "0 0 0 2000px rgba(0,0,0,.74)", opacity: k === i ? 1 : 0, transition: "opacity 240ms ease-out", pointerEvents: "none" }} />
       ))}
       <div ref={tipRef} role="dialog" aria-label="Giro guidato" style={{ position: "absolute", left: 24, right: 24, top: 0, boxSizing: "border-box", padding: 20, borderRadius: 22, background: WT.ink, color: WT.bg, transform: `translateY(${Math.round(y)}px)`, transition: "transform 260ms ease-out" }}>
-        <div style={{ fontSize: 13, fontWeight: 700, color: "#52525B" }}>{i + 1} di {TOUR.length}</div>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+          <div style={{ fontSize: 13, fontWeight: 700, color: "#52525B" }}>{i + 1} di {TOUR.length}</div>
+          <LiveOrb size={38} on="light" data-tour-orb="" label="Pallino guida" />
+        </div>
         <div style={{ marginTop: 6, fontSize: 22, lineHeight: "26px", fontWeight: 800, letterSpacing: -0.3 }}>{st.title}</div>
         <div style={{ marginTop: 6, fontSize: 15, lineHeight: "22px", fontWeight: 500, color: "#3F3F46" }}>{st.text}</div>
         {!last ? (

@@ -20,6 +20,7 @@ import BtSwipe from "./logic/pitswipe";
 import BtElo from "./logic/elo";
 import BtReplay from "./logic/replay";
 import TrackReplay from "./logic/track-replay";
+import { LiveOrb, TypeText, ChangelogCard, VanishCanvas } from "./ui/effetti";
 import { createArchive, findReplay } from "./services/archive";
 import BtTrophyPro from "./logic/trophypro";
 import { createSwipeVotes } from "./services/swipevotes";
@@ -811,7 +812,8 @@ const navGlow = c => (/^#[0-9a-f]{6}$/i.test(c || "") ? c + "59" : "rgba(255,24,
 const NavGlyph = ({ name, color }) => (
   <svg width="22" height="22" viewBox="0 0 24 24" aria-hidden="true" style={{ display: "block", flex: "none" }} fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d={NAV_PATH[name]} /></svg>
 );
-function BottomNav({ active, onChange, pillRef }) {
+function BottomNav({ active, onChange, pillRef, onTriple = null }) {
+  const taps = useRef({ n: 0, t: 0 });   // 15/11: tre tocchi sulla scheda dove sei già → pallino rosso
   const idx = Math.max(0, TAB_IDS.indexOf(active)), cur = TABS[idx];
   const move = { position: "absolute", top: 0, left: 0, width: 100 / TABS.length + "%", transform: "translateX(calc((var(--nav-i) + var(--nav-drag, 0)) * 100%))" };
   return (
@@ -835,7 +837,7 @@ function BottomNav({ active, onChange, pillRef }) {
           {TABS.map(t => {
             const on = t.id === active;
             return (
-              <button key={t.id} className="press" data-nav-tab={t.id} aria-current={on ? "page" : undefined} onClick={() => onChange(t.id)} style={{ position: "relative", flex: 1, height: "100%", padding: 0, background: "transparent", border: 0 }}>
+              <button key={t.id} className="press" data-nav-tab={t.id} aria-current={on ? "page" : undefined} onClick={() => { const r = taps.current, now = Date.now(); if (on && onTriple) { r.n = now - r.t < 700 ? r.n + 1 : 1; r.t = now; if (r.n >= 3) { r.n = 0; onTriple(t.id); return; } } else { r.n = 0; } onChange(t.id); }} style={{ position: "relative", flex: 1, height: "100%", padding: 0, background: "transparent", border: 0 }}>
                 <span className="nav-ico" style={{ position: "absolute", left: "50%", top: NAV_H / 2 - 11, marginLeft: -11, opacity: on ? 0 : 1 }}><NavGlyph name={t.icon} color={NAV_OFF} /></span>
                 {on && <span key={"r" + active} aria-hidden="true" className="nav-ripple" style={{ position: "absolute", left: "50%", top: NAV_H / 2 - 20, width: 40, height: 40, marginLeft: -20, borderRadius: "50%", boxShadow: "inset 0 0 0 2px rgba(255,255,255,.55)" }} />}
                 <span key={on ? "on" : "off"} className={on ? "nav-label" : ""} style={{ position: "absolute", left: 0, right: 0, bottom: 7, textAlign: "center", fontFamily: NAV_FONT, fontWeight: 800, fontSize: 11, lineHeight: 1.2, color: NAV_ON, opacity: on ? 1 : 0 }}>{t.label}</span>
@@ -1820,11 +1822,13 @@ function LoginScreen({ auth, onDone, onGuest, onBack, onDoor, reason, onHold, in
   const typePw = v => { setPw(v); if (aborts) setAborts(0); };
 
   const sending = useRef(false);   // 13/11: due tocchi nello stesso istante su ACCEDI (busy arriva al disegno dopo)
+  const [vanish, setVanish] = useState(0), [vanishing, setVanishing] = useState(false), pwRef = useRef(null);   // 15/11: password in particelle
   const submit = async () => {
     if (busy || sending.current) return;
     if (!isLogin && pw && pw2 && pw !== pw2) { setKerbTried(true); setErr(""); fx.buzz("error"); return; }
     if (!isLogin && name.trim() && email.trim() && pw && pw2 && pw === pw2 && pw.length >= 6 && !fan) { setErr("Scegli che tifoso sei."); return; }
     sending.current = true;
+    if (pw) { setVanish(v => v + 1); setVanishing(true); }
     setErr(""); setInfo(""); setBusy(true); setAborts(0);
     if (onHold) onHold(true);   // l'app aspetta la fine della Shift Light prima di entrare
     try {
@@ -1902,7 +1906,7 @@ function LoginScreen({ auth, onDone, onGuest, onBack, onDoor, reason, onHold, in
         </div>
         <div style={{ marginBottom: 14 }}>
           <label style={labelStyle} htmlFor="authPw">Password</label>
-          <div style={fieldStyle}><Icon name="lock" size={16} color={WT.muted} /><input id="authPw" type={showPw ? "text" : "password"} style={showPw ? { ...inputStyle, ...PW_SHOWN } : inputStyle} placeholder="••••••••" value={pw} onChange={e => typePw(e.target.value)} /><PwEye on={showPw} onToggle={setShowPw} /></div>
+          <div style={{ ...fieldStyle, position: "relative" }} data-vanish-count={vanish}><Icon name="lock" size={16} color={WT.muted} /><input ref={pwRef} id="authPw" type={showPw ? "text" : "password"} style={{ ...(showPw ? { ...inputStyle, ...PW_SHOWN } : inputStyle), ...(vanishing ? { WebkitTextFillColor: "transparent" } : null) }} placeholder="••••••••" value={pw} onChange={e => typePw(e.target.value)} /><PwEye on={showPw} onToggle={setShowPw} />{vanishing && <VanishCanvas key={vanish} input={pwRef} text={showPw ? pw : "•".repeat(pw.length)} onDone={() => setVanishing(false)} />}</div>
           {!isLogin && pw && <PwMeter level={pwStrength(pw)} />}
         </div>
         {!isLogin && (
@@ -9011,6 +9015,8 @@ function ProfiloScreen({ onHack = null, onCoffee = null, coffeePrice = null, fan
         ))}
       </div>
 
+      <div style={{ margin: "0 20px 14px" }}><ChangelogCard releases={CHANGELOG} fontHead={F_HEAD} fontBody={F_BODY} colors={{ card: C.card, border: C.border, text: C.text, muted: C.muted, accent: C.accent }} /></div>
+
       {onHack && (
         <button className="press" data-hack-open="" onClick={onHack} style={{ display: "flex", alignItems: "center", gap: 12, width: "calc(100% - 40px)", margin: "0 20px 10px", padding: 14, borderRadius: 18, background: "#030806", border: "1px solid rgba(61,255,122,.35)", textAlign: "left" }}>
           <div aria-hidden="true" style={{ width: 36, height: 36, borderRadius: 10, background: "rgba(61,255,122,.08)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, fontFamily: 'ui-monospace, "Roboto Mono", monospace', fontWeight: 700, fontSize: 13, color: "#3DFF7A" }}>&gt;_</div>
@@ -9139,8 +9145,29 @@ const HACK_BOOT = [
   "> garage B&T: serve un codice",
 ];
 const HACK_GUARD_KEY = "bt-hack-guard";
+// 15/11: registro delle novità del Profilo (Edoardo: scheda compatta per un Changelog). Dati veri: i commit dell'app.
+const CHANGELOG = [
+  { date: "15/11", title: "Riguarda la gara sulla mappa", tag: "Nuovo" },
+  { date: "15/11", title: "Modalità senza rete", tag: "Nuovo" },
+  { date: "15/11", title: "Archivio storico dei GP", tag: "Nuovo" },
+  { date: "15/11", title: "ELO B&T e lega B&T per tutti" },
+  { date: "15/11", title: "Salvati a piastrelle e foto più veloci" },
+  { date: "14/11", title: "Terminale del box (ADMIN)", tag: "Nuovo" },
+  { date: "14/11", title: "Avvio senza aspettare la rete" },
+  { date: "14/11", title: "Accesso più svelto" },
+  { date: "13/11", title: "Fanta: budget sul prezzo pagato" },
+  { date: "13/11", title: "Notifiche del team", tag: "Nuovo" },
+  { date: "08/11", title: "Premium col nuovo design" },
+  { date: "08/11", title: "Previsioni del weekend automatiche" },
+  { date: "08/11", title: "Muretto dei tifosi sotto Safety Car" },
+  { date: "08/11", title: "Calcolatrice del Mondiale" },
+  { date: "08/11", title: "Griglia di partenza con le penalità" },
+  { date: "08/11", title: "B&T Trophies a fine sessione" },
+];
+
 function HackTerminal({ isAdmin, unlocks, onToggle, onAdmin, onClose, onOpenIg, telemetry, panelOpen = false, onTour = null }) {
-  const [video, setVideo] = useState(false);   // 14/11: codice 01, video di presentazione dentro il terminale
+  const [video, setVideo] = useState(false);
+  const [wrap, setWrap] = useState(true), [copied, setCopied] = useState(false);   // 15/11: blocco di codice   // 14/11: codice 01, video di presentazione dentro il terminale
   const [log, setLog] = useState([]);        // righe scritte dopo l'avvio: { id, text, tone }
   const [code, setCode] = useState("");
   const [state, setState] = useState("idle"); // idle | denied | granted | locked
@@ -9198,7 +9225,15 @@ function HackTerminal({ isAdmin, unlocks, onToggle, onAdmin, onClose, onOpenIg, 
     say([echo, [turningOn ? "SBLOCCATO: " + u.title.toUpperCase() : "BLOCCATO DI NUOVO: " + u.title.toUpperCase(), "ok"], [turningOn ? u.on : u.off, "dim"]]);
   };
   const tone = t => (t === "red" ? TERM.red : t === "ok" ? TERM.fg : t === "cmd" ? "#E8FFE9" : TERM.dim);
-  const line = { margin: 0, fontFamily: F_TERM, fontSize: 12.5, lineHeight: 1.6, whiteSpace: "pre-wrap", wordBreak: "break-word" };
+  const line = { margin: 0, fontFamily: F_TERM, fontSize: 12.5, lineHeight: 1.6, whiteSpace: wrap ? "pre-wrap" : "pre", wordBreak: wrap ? "break-word" : "normal" };
+  const ln = n => <span data-code-ln="" aria-hidden="true" style={{ display: "inline-block", flexShrink: 0, width: 22, marginRight: 10, textAlign: "right", color: "rgba(61,255,122,.32)", userSelect: "none" }}>{n}</span>;
+  const lastId = log.length ? log[log.length - 1].id : null;
+  const copyLog = () => {
+    const txt = [...HACK_BOOT, ...log.map(l => l.text)].join("\n");
+    const ok = () => { setCopied(true); fx.play("tick"); setTimeout(() => setCopied(false), 2000); };
+    try { navigator.clipboard.writeText(txt).then(ok, () => {}); } catch (e) { /* niente appunti */ }
+  };
+  const hdrBtn = { width: 34, height: 34, borderRadius: 8, display: "flex", alignItems: "center", justifyContent: "center", background: "transparent", border: "1px solid rgba(61,255,122,.22)" };
   const found = SecretCodes.clean(unlocks).length, total = SecretCodes.UNLOCKS.length;
   return (
     <div data-hack-term="" data-hack-state={lockMs > 0 ? "locked" : state} className={shake ? "hack-glitch" : undefined} style={{ height: "100%", background: TERM.bg, color: TERM.fg, display: "flex", flexDirection: "column", position: "relative", overflow: "hidden" }}>
@@ -9210,11 +9245,18 @@ function HackTerminal({ isAdmin, unlocks, onToggle, onAdmin, onClose, onOpenIg, 
         <div style={{ flex: 1, minWidth: 0, fontFamily: F_TERM, fontSize: 12, color: TERM.dim, letterSpacing: .5 }}>root@box-bt:~$</div>
         <span data-hack-found="" style={{ fontFamily: F_TERM, fontSize: 11, color: found ? TERM.fg : TERM.dim }}>SBLOCCHI {found}/{total}</span>
       </div>
-      <div ref={bodyRef} role="log" aria-live="polite" aria-label="Terminale" style={{ flex: 1, minHeight: 0, overflowY: "auto", padding: "12px 16px 8px", position: "relative" }}>
-        {HACK_BOOT.map((t, i) => <p key={"b" + i} data-hack-line="" className="hack-in" style={{ ...line, animationDelay: i * 170 + "ms", color: i === 0 ? TERM.fg : TERM.dim, fontWeight: i === 0 ? 700 : 400 }}>{t}</p>)}
+      <div data-code-block="" style={{ display: "flex", alignItems: "center", gap: 8, margin: "10px 12px 0", padding: "6px 8px 6px 12px", borderRadius: "12px 12px 0 0", background: "rgba(61,255,122,.06)", border: "1px solid rgba(61,255,122,.2)", borderBottom: "none", position: "relative" }}>
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke={TERM.fg} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z" /><path d="M14 3v5h5M10 13l-2 2 2 2M14 13l2 2-2 2" /></svg>
+        <span data-code-title="" style={{ flex: 1, minWidth: 0, fontFamily: F_TERM, fontSize: 12, color: TERM.fg, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>box-bt/terminale.sh</span>
+        <button type="button" className="press" data-code-wrap="" aria-label="Vai a capo" aria-pressed={wrap ? "true" : "false"} onClick={() => setWrap(v => !v)} style={{ ...hdrBtn, background: wrap ? "rgba(61,255,122,.14)" : "transparent" }}><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke={TERM.fg} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M3 6h18M3 12h15a3 3 0 0 1 0 6h-4M3 18h7" /><path d="M16 16l-2 2 2 2" /></svg></button>
+        <button type="button" className="press" data-code-copy="" aria-label={copied ? "Copiato" : "Copia il terminale"} onClick={copyLog} style={hdrBtn}>{copied ? <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke={TERM.fg} strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M5 12l5 5 9-10" /></svg> : <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke={TERM.fg} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><rect x="9" y="9" width="12" height="12" rx="2" /><path d="M5 15V5a2 2 0 0 1 2-2h10" /></svg>}</button>
+        <span aria-live="polite" style={{ position: "absolute", width: 1, height: 1, overflow: "hidden", clip: "rect(0 0 0 0)" }}>{copied ? "Copiato" : ""}</span>
+      </div>
+      <div ref={bodyRef} role="log" aria-live="polite" aria-label="Terminale" style={{ flex: 1, minHeight: 0, overflowY: "auto", overflowX: wrap ? "hidden" : "auto", margin: "0 12px 10px", padding: "10px 12px 8px", position: "relative", border: "1px solid rgba(61,255,122,.2)", borderTop: "none", borderRadius: "0 0 12px 12px", background: "rgba(61,255,122,.025)" }}>
+        {HACK_BOOT.map((t, i) => <p key={"b" + i} data-hack-line="" className="hack-in" style={{ ...line, display: "flex", animationDelay: i * 170 + "ms", color: i === 0 ? TERM.fg : TERM.dim, fontWeight: i === 0 ? 700 : 400 }}>{ln(i + 1)}<span style={{ flex: 1, minWidth: 0 }}>{t}</span></p>)}
         <button className="press hack-in" onClick={onOpenIg || undefined} disabled={!onOpenIg} style={{ ...line, display: "block", padding: "6px 0", textAlign: "left", background: "transparent", color: TERM.amber, animationDelay: HACK_BOOT.length * 170 + "ms" }}># gli indizi sui codici escono sulle storie Instagram di B&T</button>
         {panelOpen && <button className="press hack-in" data-hack-panel="" onClick={onAdmin} style={{ ...line, display: "block", padding: "6px 0", textAlign: "left", background: "transparent", color: TERM.fg, fontWeight: 700, animationDelay: (HACK_BOOT.length + 1) * 170 + "ms" }}>&gt; pannello admin già sbloccato: tocca qui per aprirlo</button>}
-        {log.map(l => <p key={l.id} data-hack-line="" className="hack-in" style={{ ...line, color: tone(l.tone), fontWeight: l.tone === "ok" || l.tone === "red" ? 700 : 400 }}>{l.text}</p>)}
+        {log.map((l, k) => <p key={l.id} data-hack-line="" className="hack-in" style={{ ...line, color: tone(l.tone), fontWeight: l.tone === "ok" || l.tone === "red" ? 700 : 400, background: l.tone === "ok" ? "rgba(61,255,122,.08)" : l.tone === "red" ? "rgba(255,59,59,.1)" : "transparent", borderRadius: 4, display: "flex" }}>{ln(HACK_BOOT.length + k + 1)}<span style={{ flex: 1, minWidth: 0 }}>{l.id === lastId ? <TypeText key={l.id} text={l.text} cursorColor={tone(l.tone)} /> : l.text}</span></p>)}
         {state === "granted" && opening.current && <div className="hack-bar" aria-hidden="true"><span /></div>}
         {unlocks.includes("telemetry") && telemetry && (
           <div data-hack-telemetry="" style={{ marginTop: 12, paddingTop: 10, borderTop: "1px dashed rgba(61,255,122,.3)" }}>
@@ -11123,6 +11165,7 @@ function App() {
   // (AppData.sharedCached), invece di aspettare Firebase con lo splash davanti; Firebase li aggiorna appena risponde.
   const [bootCache] = useState(() => { try { return AppData.sharedCached(nowMs()); } catch (e) { return { values: {}, kinds: [], complete: false }; } });
   const [shared0] = useState(() => { const v = { ...AppData.sharedDefaults(nowMs()), ...bootCache.values }; addStandingsGuests(v.standings.guests); return v; });
+  const [redOrb, setRedOrb] = useState(false);   // 15/11: pallino rosso (tre tocchi sulla stessa scheda)
   const [offline, setOffline] = useState(false);   // all'avvio qualcosa non si è potuto leggere: riga "Sei offline"
   // 14/11: modalità senza rete. Si apre da sola quando il telefono dice che non c'è rete, oppure a mano dalla riga
   // "Sei offline" (rete che c'è ma non risponde); "Riprova a collegarti" rilegge Firebase.
@@ -13280,7 +13323,8 @@ function App() {
           onPointerMove={showBottomNav ? e => { if (e.pointerType === "mouse" && (e.buttons & 1)) swipeMove(e.clientX, e.clientY); } : undefined}
           onPointerUp={showBottomNav ? e => { if (e.pointerType === "mouse") swipeEnd(e.clientX, e.clientY, e.timeStamp, e.currentTarget.clientWidth, true); } : undefined}
           onClickCapture={e => { if (performance.now() - swipeClick.current < 400) { e.stopPropagation(); e.preventDefault(); } }}>
-          <BottomNav active={tab} pillRef={navPillRef} onChange={t => switchTab(t)} /></div>}
+          <BottomNav active={tab} pillRef={navPillRef} onChange={t => switchTab(t)} onTriple={() => { setRedOrb(true); fx.play("tick"); fx.buzz("success"); }} /></div>}
+      {redOrb && <div data-red-orb="" role="dialog" aria-label="Pallino rosso" onClick={() => setRedOrb(false)} style={{ position: "fixed", inset: 0, zIndex: 90, background: "rgba(0,0,0,.6)", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 18 }}><LiveOrb size={150} variant="red" label="Pallino rosso" /><span style={{ fontFamily: F_BODY, fontSize: 12, color: "rgba(255,255,255,.62)" }}>Tocca per chiudere</span></div>}
         {showBottomNav && adH > 0 && <div data-ad-space="" aria-hidden="true" style={{ height: adH + AD_GAP, flexShrink: 0 }} />}
         {pumpkinAt && holiday === "halloween" && view === "tab" && pumpkinAt.tab === tab && (
           <button className="press hol-wob" data-pumpkin={pumpkinAt.spot} aria-label="Una zucca!" onClick={() => {

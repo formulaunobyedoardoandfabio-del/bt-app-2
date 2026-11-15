@@ -1038,3 +1038,14 @@ Misure prima del lavoro (pagina di prova, CPU rallentata 4x come un telefono med
 - Workflow `.github/workflows/replay-f1.yml`: lunedì e martedì mattina aggiunge le gare nuove; a mano per gli anni 2023-2025. Deve stare anche su main.
 - Prova e2e `test/e2e/run115-replay-mappa.js` (2) col file vero di São Paulo.
 - Da fare a mano (Edoardo): copiare `replay-f1.yml` su main; lanciarlo una volta con anni 2023-2025 se si vogliono anche gli anni passati.
+
+
+## 15/11 (mattina): terminale a blocco di codice, Novità nel Profilo, password in particelle, pallino guida e pallino rosso
+
+- Richiesta di Edoardo (10:12): 4 componenti presi da siti di esempio, rifatti a mano senza librerie in `src/ui/effetti.jsx` (React puro, solo transform/opacity/canvas, fermi con "Rimuovi animazioni").
+- Terminale (`HackTerminal`): blocco di codice con titolo `box-bt/terminale.sh`, righe numerate, la riga nuova si scrive da sola col cursore (`TypeText`: il testo intero c'è già, la parte non scritta è trasparente, quindi le prove e i lettori di schermo lo leggono subito), righe evidenziate (verde accesso, rosso negato), bottoni "Vai a capo" e "Copia il terminale".
+- Profilo: `ChangelogCard` "Novità" sopra il bottone ADMIN, coi bordi che sfumano quando si scorre. Dati veri: `CHANGELOG` in App.jsx, presi dai commit (date e titoli). Va aggiornato a mano a ogni versione.
+- Accesso: premendo Accedi/Registrati la password si sbriciola in particelle (`VanishCanvas`, come "Devouring details sign in" di Skiper UI, che è un campo che si dissolve all'Invio); il valore resta (se l'accesso fallisce la password è ancora lì).
+- Pallino (`LiveOrb`, dalla descrizione di "Live Orb": sfera con due occhi a capsula che seguono il dito e sbattono le palpebre; il codice originale non era pubblico): variante Auto (nera sul riquadro chiaro del giro guidato, bianca su sfondo scuro) nel giro guidato; rosso con tre tocchi sulla scheda dove sei già (`BottomNav` `onTriple`), si chiude toccandolo.
+- Cosa devono fare il pallino rosso e quello normale: da chiedere a Edoardo (l'ha chiesto lui).
+- Prova e2e `test/e2e/run116-effetti.js` (4); vista fallire sulla versione di prima.
