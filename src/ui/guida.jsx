@@ -113,14 +113,40 @@ export function AppGuide({ steps, onGo, onDone, onRegister = null, useBack = nul
   );
 }
 
+// 15/11: la barra in basso si stacca e diventa Enzo (e al congedo torna barra). Solo transform/opacity: la barra è fatta di
+// due tappi tondi e un pezzo in mezzo; i tappi vanno al centro e il pezzo si stringe → resta un cerchio, che diventa
+// rosso e vola al posto di Enzo (e al contrario quando se ne va).
+function BarMorph({ from, to, size, barColor, accent, back = false, onDone }) {
+  const [go, setGo] = useState(back);
+  useEffect(() => {
+    const id = requestAnimationFrame(() => requestAnimationFrame(() => setGo(!back)));
+    const tm = setTimeout(onDone, reduced() ? 0 : 560);
+    return () => { cancelAnimationFrame(id); clearTimeout(tm); };
+  }, []);
+  const h = from.height, w = from.width, cx = from.left + w / 2, cy = from.top + h / 2;
+  const s = size / h, tx = to.x + size / 2 - cx, ty = to.y + size / 2 - cy;
+  const ease = reduced() ? "none" : "transform 520ms cubic-bezier(.6,0,.2,1), opacity 520ms ease";
+  const piece = { position: "absolute", top: -h / 2, height: h, background: barColor, transition: ease };
+  return (
+    <div data-enzo-morph={back ? "back" : "in"} aria-hidden="true" style={{ position: "fixed", left: cx, top: cy, width: 0, height: 0, zIndex: 97, pointerEvents: "none", transform: go ? `translate(${tx}px, ${ty}px) scale(${s})` : "none", transition: ease }}>
+      <div style={{ ...piece, left: -w / 2, width: h, borderRadius: "50%", transform: go ? `translateX(${w / 2 - h / 2}px)` : "none" }} />
+      <div style={{ ...piece, left: -w / 2 + h / 2, width: Math.max(0, w - h), transformOrigin: "center", transform: go ? "scaleX(0)" : "none" }} />
+      <div style={{ ...piece, left: w / 2 - h, width: h, borderRadius: "50%", transform: go ? `translateX(${-(w / 2 - h / 2)}px)` : "none" }} />
+      <div style={{ ...piece, left: -h / 2, width: h, borderRadius: "50%", background: accent, opacity: go ? 1 : 0 }} />
+    </div>
+  );
+}
+
 const CHIPS = [["Live Telemetry", "Live Telemetry"], ["Fanta F1", "Fanta F1"], ["News", "News"], ["Community", "Community"]];
-export function EnzoChat({ raceToday = false, offline = false, onDemo, onClose, accent = "#E10600" }) {
+export function EnzoChat({ raceToday = false, offline = false, onDemo, onClose, accent = "#E10600", fromRect = null, barColor = "#1B1B20" }) {
+  const [phase, setPhase] = useState(fromRect && !reduced() ? "in" : "on");   // in → on → out
   const [msgs, setMsgs] = useState([]), [input, setInput] = useState(""), [spot, setSpot] = useState(null), [leaving, setLeaving] = useState(false);
   const streak = useRef(0), id = useRef(0), list = useRef(null);
   const say = (who, text) => setMsgs(m => [...m, { who, text, id: ++id.current }]);
   useEffect(() => { say("enzo", Enzo.greeting({ raceToday })); if (offline) say("enzo", Enzo.BUG); }, []);
   useEffect(() => { const el = list.current; if (el) el.scrollTop = el.scrollHeight; });
-  const leave = text => { if (leaving) return; setLeaving(true); setSpot(null); say("enzo", text || Enzo.closing()); setTimeout(onClose, reduced() ? 0 : Math.min(6500, 1500 + (text || "").length * 22)); };   // tempo per leggere
+  const bye = () => (fromRect && !reduced() ? setPhase("out") : onClose());
+  const leave = text => { if (leaving) return; setLeaving(true); setSpot(null); const t = text || Enzo.closing(); say("enzo", t); setTimeout(bye, reduced() ? 0 : Math.min(6500, 1500 + t.length * 22)); };   // tempo per leggere
   const send = raw => {
     const r = Enzo.reply(raw, { streak: streak.current });
     if (!r || leaving) return;
@@ -134,19 +160,25 @@ export function EnzoChat({ raceToday = false, offline = false, onDemo, onClose, 
   const lastEnzo = [...msgs].reverse().find(m => m.who === "enzo");
   // il pezzo da mostrare sta in basso (sotto il foglio): il foglio di Enzo va in alto
   const top = !!rect && rect.top + rect.height > vh() * 0.52;
+  const BALL = 58, ballAt = { x: 14, y: top ? 64 : vh() - BALL - 26 };
+  if (phase === "in") return <BarMorph from={fromRect} to={ballAt} size={BALL} barColor={barColor} accent={accent} onDone={() => setPhase("on")} />;
+  if (phase === "out") return <BarMorph back from={fromRect} to={ballAt} size={BALL} barColor={barColor} accent={accent} onDone={onClose} />;
   return (
     <>
       {rect && <div data-enzo-spot="" aria-hidden="true" style={{ position: "fixed", left: 0, top: 0, zIndex: 94, width: rect.width + 12, height: rect.height + 12, transform: `translate(${rect.left - 6}px, ${rect.top - 6}px)`, borderRadius: 14, border: `3px solid ${accent}`, boxShadow: `0 0 0 6px ${accent}40, 0 0 30px ${accent}80`, pointerEvents: "none", transition: reduced() ? "none" : "transform 300ms ease-out" }} />}
-      <section data-enzo="" data-red-orb="" data-enzo-dock={top ? "top" : "bottom"} role="dialog" aria-label="Enzo, l'assistente di Sector 4" style={{ position: "fixed", left: 0, right: 0, ...(top ? { top: 0, borderBottom: `1px solid ${accent}55`, borderRadius: "0 0 22px 22px", boxShadow: "0 18px 40px rgba(0,0,0,.55)" } : { bottom: 0, borderTop: `1px solid ${accent}55`, borderRadius: "22px 22px 0 0", boxShadow: "0 -18px 40px rgba(0,0,0,.55)" }), zIndex: 96, height: "46vh", minHeight: 300, display: "flex", flexDirection: "column", background: "#0F0F12", fontFamily: FONT }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 12px 8px 16px" }}>
-          <LiveOrb size={40} variant="red" label="Enzo" lookAt={rect ? { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 } : null} />
+      <style>{BOB_CSS}</style>
+      <div data-enzo-ball="" className="bt-dot-bob" style={{ position: "fixed", left: ballAt.x, top: ballAt.y, zIndex: 97 }}>
+        <LiveOrb size={BALL} variant="red" label="Enzo" lookAt={rect ? { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 } : null} />
+      </div>
+      <section data-enzo="" data-red-orb="" data-enzo-dock={top ? "top" : "bottom"} role="dialog" aria-label="Enzo, l'assistente di Sector 4" style={{ position: "fixed", left: ballAt.x + BALL + 10, right: 12, ...(top ? { top: ballAt.y } : { bottom: vh() - ballAt.y - BALL }), zIndex: 96, maxHeight: "48vh", display: "flex", flexDirection: "column", background: "#0F0F12", border: `1px solid ${accent}55`, borderRadius: top ? "6px 20px 20px 20px" : "20px 20px 20px 6px", boxShadow: "0 18px 40px rgba(0,0,0,.55)", fontFamily: FONT }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 8px 6px 14px" }}>
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ fontWeight: 800, fontSize: 16, color: "#fff" }}>Enzo</div>
             <div style={{ fontSize: 11.5, color: "#8E8E96" }}>assistente di Sector 4, di malavoglia</div>
           </div>
           <button type="button" data-enzo-close="" aria-label="Chiudi Enzo" onClick={() => leave()} style={{ width: 44, height: 44, borderRadius: 12, background: "#1B1B20", border: "1px solid #2A2A30", color: "#fff", fontSize: 18, lineHeight: 1 }}>×</button>
         </div>
-        <div ref={list} data-enzo-list="" aria-live="polite" style={{ flex: 1, minHeight: 0, overflowY: "auto", padding: "4px 16px 8px", display: "flex", flexDirection: "column", gap: 8 }}>
+        <div ref={list} data-enzo-list="" aria-live="polite" style={{ flex: 1, minHeight: 90, overflowY: "auto", padding: "4px 12px 8px", display: "flex", flexDirection: "column", gap: 8 }}>
           {msgs.map(m => (
             <div key={m.id} data-enzo-msg={m.who} style={{ alignSelf: m.who === "me" ? "flex-end" : "flex-start", maxWidth: "86%", padding: "9px 12px", borderRadius: m.who === "me" ? "14px 14px 4px 14px" : "14px 14px 14px 4px", background: m.who === "me" ? accent : "#1B1B20", color: "#fff", fontSize: 14, lineHeight: "20px" }}>
               {m.who === "enzo" && lastEnzo && m.id === lastEnzo.id ? <TypeText key={m.id} text={m.text} cps={50} cursorColor={accent} /> : m.text}

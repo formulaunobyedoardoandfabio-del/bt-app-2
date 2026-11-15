@@ -1069,3 +1069,11 @@ Misure prima del lavoro (pagina di prova, CPU rallentata 4x come un telefono med
 - Terminale "03" (`secret-codes.js` ACTIONS): gara demo dal 5° giro a 30x (`demoFromLap5`: `startLive` ora restituisce la simulazione; avanti finché il primo è al 5° giro; `setLiveSpeed(30)`; scheda Race). `data-live-lap` sulla scheda della diretta (giro del primo: `st.lap` è vuoto quando la sessione non sa i giri totali).
 - Prove: unit `secret-codes` (+03); e2e `run118-giro-tocchi.js` (3); aggiornate `run89-accesso`, `run117-enzo-giro` (tempi).
 - Da fare (stessa richiesta): Enzo come palla che galleggia con accanto il testo, che nasce dalla barra in basso; bottone Novità in Home con Dot e Enzo che presentano le novità; codici del terminale aggiunti dall'admin.
+
+
+## 15/11 (12:30): Enzo è una palla che galleggia, nata dalla barra in basso
+
+- Richiesta di Edoardo (11:35), seconda parte. `EnzoChat` (src/ui/guida.jsx): Enzo è una palla rossa che galleggia (`data-enzo-ball`, 58 px, in basso a sinistra; in alto quando il pezzo da mostrare è nella metà bassa) con accanto il riquadro del testo (`data-enzo`, angolo verso la palla). Attributi di prima tenuti: `data-red-orb`, `data-enzo-dock`, chip, campo, Chiudi.
+- Animazione `BarMorph`: al terzo tocco la barra in basso si stacca (i due tappi tondi vanno al centro, il pezzo in mezzo si stringe), diventa un cerchio rosso e vola dove sta la palla (520 ms, solo transform/opacity; niente con riduzione movimento). Al congedo lo stesso al contrario e la barra torna. Mentre c'è Enzo la barra è nascosta (`BottomNav` prop `hidden`). App passa a `EnzoChat` la posizione della barra (`fromRect`) e il colore (`barColor`).
+- Prove aggiornate: `run117-enzo-giro` (attese, palla rossa e barra nascosta, barra che torna), `run116-effetti` (attese).
+- Da fare (stessa richiesta): bottone Novità in Home con Dot ed Enzo; codici del terminale aggiunti dall'admin.

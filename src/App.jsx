@@ -813,12 +813,12 @@ const navGlow = c => (/^#[0-9a-f]{6}$/i.test(c || "") ? c + "59" : "rgba(255,24,
 const NavGlyph = ({ name, color }) => (
   <svg width="22" height="22" viewBox="0 0 24 24" aria-hidden="true" style={{ display: "block", flex: "none" }} fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d={NAV_PATH[name]} /></svg>
 );
-function BottomNav({ active, onChange, pillRef, onTriple = null }) {
+function BottomNav({ active, onChange, pillRef, onTriple = null, hidden = false }) {
   const taps = useRef({ n: 0, t: 0 });   // 15/11: tre tocchi sulla scheda dove sei già → pallino rosso
   const idx = Math.max(0, TAB_IDS.indexOf(active)), cur = TABS[idx];
   const move = { position: "absolute", top: 0, left: 0, width: 100 / TABS.length + "%", transform: "translateX(calc((var(--nav-i) + var(--nav-drag, 0)) * 100%))" };
   return (
-    <nav ref={pillRef} aria-label="Sezioni" data-bottom-nav="" data-nav-pill="" className="nav-root" style={{ "--nav-i": idx, position: "relative", zIndex: 2, padding: "14px 12px 10px", background: "#000000", flexShrink: 0 }}>
+    <nav ref={pillRef} aria-label="Sezioni" data-bottom-nav="" data-nav-pill="" className="nav-root" aria-hidden={hidden ? "true" : undefined} style={{ opacity: hidden ? 0 : 1, pointerEvents: hidden ? "none" : undefined, transition: "opacity 160ms ease", "--nav-i": idx, position: "relative", zIndex: 2, padding: "14px 12px 10px", background: "#000000", flexShrink: 0 }}>
       <div style={{ position: "relative", height: NAV_H }}>
         {/* fondo della barra con l'incavo (un cerchio del colore della pagina che scivola sul bordo) */}
         <div aria-hidden="true" style={{ position: "absolute", inset: 0, borderRadius: 22, background: NAV_BAR, boxShadow: `inset 0 0 0 1px ${NAV_EDGE}, 0 10px 24px rgba(0,0,0,.45)`, overflow: "hidden" }}>
@@ -13373,8 +13373,8 @@ function App() {
           onPointerMove={showBottomNav ? e => { if (e.pointerType === "mouse" && (e.buttons & 1)) swipeMove(e.clientX, e.clientY); } : undefined}
           onPointerUp={showBottomNav ? e => { if (e.pointerType === "mouse") swipeEnd(e.clientX, e.clientY, e.timeStamp, e.currentTarget.clientWidth, true); } : undefined}
           onClickCapture={e => { if (performance.now() - swipeClick.current < 400) { e.stopPropagation(); e.preventDefault(); } }}>
-          <BottomNav active={tab} pillRef={navPillRef} onChange={t => switchTab(t)} onTriple={() => { setRedOrb(true); fx.play("tick"); fx.buzz("success"); }} /></div>}
-      {redOrb && <EnzoChat accent={C.accent} offline={offline} raceToday={!!realLiveRace || races.some(r => { const d = Date.parse((r.date || "") + "T12:00:00Z"), n = nowMs(); return n > d - 2.6 * 86400000 && n < d + 0.6 * 86400000; })} onDemo={d => { setView("tab"); setTab(d.tab); }} onClose={() => setRedOrb(false)} />}
+          <BottomNav active={tab} pillRef={navPillRef} onChange={t => switchTab(t)} hidden={!!redOrb} onTriple={() => { const el = navPillRef.current, r = el && el.getBoundingClientRect(); setRedOrb(r ? { left: r.left, top: r.top, width: r.width, height: r.height } : true); fx.play("tick"); fx.buzz("success"); }} /></div>}
+      {redOrb && <EnzoChat accent={C.accent} fromRect={redOrb && redOrb.width ? redOrb : null} barColor={C.card} offline={offline} raceToday={!!realLiveRace || races.some(r => { const d = Date.parse((r.date || "") + "T12:00:00Z"), n = nowMs(); return n > d - 2.6 * 86400000 && n < d + 0.6 * 86400000; })} onDemo={d => { setView("tab"); setTab(d.tab); }} onClose={() => setRedOrb(false)} />}
         {showBottomNav && adH > 0 && <div data-ad-space="" aria-hidden="true" style={{ height: adH + AD_GAP, flexShrink: 0 }} />}
         {pumpkinAt && holiday === "halloween" && view === "tab" && pumpkinAt.tab === tab && (
           <button className="press hol-wob" data-pumpkin={pumpkinAt.spot} aria-label="Una zucca!" onClick={() => {

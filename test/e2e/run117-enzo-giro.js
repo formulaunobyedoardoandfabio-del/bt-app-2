@@ -4,7 +4,7 @@
 // Uso: node test/build-test.js && node test/e2e/run117-enzo-giro.js
 const { open, w, tapSel, login, assert, run } = require('./helpers');
 
-const triple = async p => { for (let k = 0; k < 3; k++) { await tapSel(p, '[data-nav-tab="home"]'); await w(p, 130); } await w(p, 400); };
+const triple = async p => { for (let k = 0; k < 3; k++) { await tapSel(p, '[data-nav-tab="home"]'); await w(p, 130); } await w(p, 1000); };   // 15/11: prima la barra diventa Enzo
 const lastEnzo = p => p.evaluate(() => { const m = [...document.querySelectorAll('[data-enzo-msg="enzo"]')]; return m.length ? m[m.length - 1].textContent : ''; });
 
 run({
@@ -13,6 +13,7 @@ run({
     await login(p); await w(p, 800);
     await triple(p);
     const hi = await lastEnzo(p);
+    const ball = await p.evaluate(() => ({ ball: !!document.querySelector('[data-enzo-ball] [data-live-orb="red"]'), nav: getComputedStyle(document.querySelector('[data-bottom-nav]')).opacity }));
     await tapSel(p, '[data-enzo-chip="Fanta F1"]'); await w(p, 1800);
     const fanta = await p.evaluate(() => ({ tab: (document.querySelector('[data-nav-tab][aria-current="page"]') || {}).getAttribute ? document.querySelector('[data-nav-tab][aria-current="page"]').getAttribute('data-nav-tab') : '', spot: !!document.querySelector('[data-enzo-spot]'), visible: (() => { const s = document.querySelector('[data-enzo-spot]'), e = document.querySelector('[data-enzo]'); if (!s || !e) return false; const a = s.getBoundingClientRect(), b = e.getBoundingClientRect(); return a.bottom <= b.top + 2 || a.top >= b.bottom - 2; })() }));
     const said = await lastEnzo(p);
@@ -21,14 +22,16 @@ run({
     await tapSel(p, '[data-enzo-close]'); await w(p, 400);
     const bye = await lastEnzo(p);
     await w(p, 7000);   // 15/11: Enzo saluta più piano, per dare il tempo di leggere
-    const gone = await p.evaluate(() => !document.querySelector('[data-enzo]'));
+    await w(p, 800);
+    const gone = await p.evaluate(() => !document.querySelector('[data-enzo]') && getComputedStyle(document.querySelector('[data-bottom-nav]')).opacity === '1');
     await ctx.close();
     assert(/sono Enzo/.test(hi), 'saluto di Enzo: ' + hi);
+    assert(ball.ball && ball.nav === '0', 'la barra in basso è diventata la palla di Enzo: ' + JSON.stringify(ball));
     assert(fanta.tab === 'fanta' && fanta.spot && fanta.visible, 'Fanta: l\'app va nella scheda Fanta e il pezzo si illumina, non coperto da Enzo: ' + JSON.stringify(fanta));
     assert(/Il Fanta F1 è nell'apposita sezione/.test(said), 'risposta del copione: ' + said);
     assert(/Per tutto il resto c'è Google/.test(off), 'fuori tema: ' + off);
     assert(/chiudi questa finestrella|stand-by|Non tornare troppo presto/.test(bye), 'frase di chiusura: ' + bye);
-    assert(gone, 'poi Enzo se ne va');
+    assert(gone, 'poi Enzo se ne va e torna la barra');
     assert(!errs.length, errs.join(' | '));
   },
 

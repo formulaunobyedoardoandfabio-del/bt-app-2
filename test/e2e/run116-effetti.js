@@ -64,10 +64,10 @@ run({
     await login(p); await w(p, 800);
     await tapSel(p, '[data-nav-tab="home"]'); await w(p, 150); await tapSel(p, '[data-nav-tab="home"]'); await w(p, 300);
     const two = await p.evaluate(() => !!document.querySelector('[data-red-orb]'));
-    await tapSel(p, '[data-nav-tab="home"]'); await w(p, 300);
-    const three = await p.evaluate(() => ({ on: !!document.querySelector('[data-red-orb] [data-live-orb="red"]') }));
+    await tapSel(p, '[data-nav-tab="home"]'); await w(p, 1000);   // 15/11: prima la barra in basso diventa la palla di Enzo
+    const three = await p.evaluate(() => ({ on: !!document.querySelector('[data-red-orb]') && !!document.querySelector('[data-enzo-ball] [data-live-orb="red"]') }));
     // 15/11: il pallino rosso ora è Enzo (run117): si chiude con Chiudi, dopo la frase di saluto
-    await tapSel(p, '[data-enzo-close]'); await w(p, 3600);
+    await tapSel(p, '[data-enzo-close]'); await w(p, 7600);   // congedo da leggere, poi la palla torna barra
     const closed = await p.evaluate(() => !document.querySelector('[data-red-orb]'));
     await openTerm(p);
     await code(p, '02'); await w(p, 2200);
