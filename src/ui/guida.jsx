@@ -114,6 +114,29 @@ export function AppGuide({ steps, onGo, onDone, onRegister = null, useBack = nul
   );
 }
 
+// 15/11 (Edoardo): dal registro delle novità l'app va alla funzione e la indica per un attimo: un anello che si accende,
+// resta e sparisce (solo opacity; il pezzo si porta sullo schermo). Pezzo che non c'è: niente anello.
+const FLASH_CSS = "@keyframes btFlash{0%{opacity:0}12%{opacity:1}72%{opacity:1}100%{opacity:0}}.bt-flash{animation:btFlash 2.6s ease-out forwards}@media (prefers-reduced-motion: reduce){.bt-flash{animation:none}}";
+export function FlashSpot({ sel, onDone, accent = "#E10600" }) {
+  const { rect, missing } = useSpot(sel, sel, "center");
+  // l'anello si accende quando il pezzo ha smesso di scorrere (sennò insegue lo scorrimento)
+  const [steady, setSteady] = useState(false);
+  useEffect(() => {   // useSpot cambia rect solo quando il pezzo si muove: fermo per 400 ms = arrivato
+    if (!rect) return undefined;
+    setSteady(false);
+    const t = setTimeout(() => setSteady(true), 400);
+    return () => clearTimeout(t);
+  }, [rect]);
+  useEffect(() => { if (missing) onDone(); }, [missing]);
+  useEffect(() => { if (!steady) return undefined; const t = setTimeout(onDone, 2600); return () => clearTimeout(t); }, [steady]);
+  if (!rect || !steady) return null;
+  return (
+    <div data-flash-spot="" aria-hidden="true" className="bt-flash" style={{ position: "fixed", left: 0, top: 0, zIndex: 94, width: rect.width + 12, height: rect.height + 12, transform: `translate(${rect.left - 6}px, ${rect.top - 6}px)`, borderRadius: 16, border: `3px solid ${accent}`, boxShadow: `0 0 0 6px ${accent}40, 0 0 28px ${accent}80`, pointerEvents: "none" }}>
+      <style>{FLASH_CSS}</style>
+    </div>
+  );
+}
+
 // 15/11 (Edoardo): bottone Novità in Home. Dot (il pallino bianco del giro guidato) ed Enzo (rosso) raccontano insieme
 // le novità, come un mini giro guidato a parte, con qualche battuta e qualche litigata tra loro. Ogni battuta può aprire
 // una scheda (onGo, come il giro guidato) e illuminare un pezzo: chi parla è più grande e guarda il pezzo, l'altro

@@ -155,6 +155,21 @@ const tests = {
       assert.strictEqual(pts(out), best, `budget ${budget}: ${pts(out)} punti invece del massimo ${best}`);
     }
   },
+  // 15/11 (Edoardo: "il sondaggio storico che ho creato non funziona"): la sua domanda (scuderia, risposta già segnata,
+  // gara di sabato prossimo) restava chiusa e nessuno poteva rispondere. Risposta nota prima della sessione = storia.
+  'previsioni: risposta già nota prima che la sessione cominci = domanda di storia (un tentativo, si vede subito)'() {
+    const at = Date.parse('2026-11-22T04:00:00Z'), before = at - 3600e3, after = at + 60e3;
+    const team = { kind: 'team', answer: 'redbull', raceId: 'r21', about: 'RACE' };
+    assert.strictEqual(L.predKnown({ kind: 'history', answer: 'o1' }), true, 'storia: sempre');
+    assert.strictEqual(L.predKnown(team, { lockAt: at, now: before }), true, 'risposta segnata prima della gara: si sa già');
+    assert.strictEqual(L.predKnown(team, { lockAt: at, now: after }), false, 'gara cominciata: pronostico chiuso come prima');
+    assert.strictEqual(L.predKnown({ ...team, answer: null }, { lockAt: at, now: before }), false, 'senza risposta: pronostico normale');
+    assert.strictEqual(L.predKnown({ kind: 'poll', answer: 'o0' }, { lockAt: at, now: before, closed: true }), false, 'sessione in corso o finita: chiuso');
+    assert.strictEqual(L.predKnown({ ...team, hist: true }, { lockAt: at, now: after, closed: true }), true, 'segnata come storia dall\'admin: resta di storia');
+    assert.strictEqual(L.predKnown({ ...team, hist: true, answer: null }, { lockAt: at, now: before }), false, 'di storia ma senza risposta: ancora pronostico');
+    assert.strictEqual(L.predKnown(team, { lockAt: null, now: before }), false, 'senza orario della sessione non si può dire');
+    assert.strictEqual(L.predKnown(null), false);
+  },
   'previsioni: risposte aperte senza badare a maiuscole e accenti, numeri, sondaggi'() {
     assert.strictEqual(L.predictionCorrect({ kind: 'open', answer: ['Hülkenberg', 'Hulkenberg'] }, ' hulkenberg '), true);
     assert.strictEqual(L.predictionCorrect({ kind: 'open', answer: ['Max Verstappen', 'Verstappen'] }, 'verstappen'), true);

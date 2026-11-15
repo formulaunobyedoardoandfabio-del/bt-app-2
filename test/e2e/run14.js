@@ -228,7 +228,7 @@ const tests = {
     const { ctx, p, errs } = await open(b); await login(p); await startLive(p, 'PROVE LIBERE 1');
     await goTab(p, 'FANTA'); await tapSel(p, '[aria-label="Cambia Lewis Hamilton"]'); await w(p, 300);
     const t = await text(p);
-    await tapSel(p, '[data-pick="leclerc"]'); await w(p, 300);
+    await require('./helpers').pickDriver(p, 'leclerc');   // 15/11: scelta stile chess.com (tocco + Prendi)
     const cards = await p.evaluate(() => [...document.querySelectorAll('[data-fanta-card]')].map(e => e.getAttribute('data-fanta-card')));
     await ctx.close();
     assert(/SCEGLI IL PILOTA/.test(t), 'toccando il pilota non si apre la scelta');

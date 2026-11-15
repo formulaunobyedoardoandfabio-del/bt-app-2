@@ -1095,3 +1095,24 @@ Misure prima del lavoro (pagina di prova, CPU rallentata 4x come un telefono med
   scopre), `check(..., { custom })` → `{ kind: "custom", title, say, action }`; i codici di serie e il codice admin
   vincono sempre. I codici dell'admin non sbloccano niente a pagamento. `appdata.js`: tipo `termCodes`.
 - Prove: unit `secret-codes` (+3), `appdata` (+1); e2e `run119-novita-codici.js` (4).
+
+
+## 15/11 (15:00): domande di storia dell'admin aperte, scelta piloti stile chess.com, novità che portano alle funzioni
+
+- Bug grave (Edoardo: "nei sondaggi storici che ho fatto io dice che è chiuso il voto"). Causa, dal documento vero
+  `shared/bt-predictions`: la sua domanda era di tipo Scuderia con la risposta già segnata (pitstop più veloce a Las
+  Vegas 2023, Red Bull) per la gara di sabato prossimo; una domanda con la risposta segnata risultava chiusa ("Il
+  risultato lo segna l'admin") e nessuno poteva rispondere. Ora `BtLogic.predKnown`: risposta segnata prima che la
+  sessione cominci (o `hist: true`) = domanda di storia: un tentativo, si vede subito se è giusta, +1 se giusta, badge
+  STORIA. A sessione cominciata torna un pronostico chiuso come prima. Spiegato anche nel Pannello (PREVISIONI).
+  Prove: unit `logic` (+1), e2e `run120-storia-admin.js` (2; rossa sul codice di prima).
+- Scelta del pilota nel Fanta "come su chess.com" (`ChessDriverPicker`): in alto il pilota scelto con la sua frase nel
+  fumetto (`src/data/driver-lines.js`, testo di Edoardo, 2 frasi per pilota; toccandolo di nuovo dice l'altra), sotto i
+  22 piloti a gruppi per scuderia (11), in fondo "Prendi <pilota> · prezzo". Chi non entra nel budget o è già in
+  squadra si guarda (e parla) ma non si prende (`data-pick-off`, lucchetto o spunta sul volto, motivo sopra il
+  bottone). Le scuderie restano con la lista di prima (`FantaPicker`). Nelle prove il pilota si prende con
+  `pickDriver(p, id)` (helpers): aggiornate run14, run15, run108 (tocco + Prendi; "non si prende" = data-pick-off).
+  Prove: unit `driver-lines` (3), e2e `run122-scelta-chess.js` (2).
+- Registro delle novità (Profilo): le voci con un posto nell'app sono bottoni (`go` in `CHANGELOG`): aprono la scheda e
+  indicano il pezzo per un attimo (`FlashSpot`, anello che si accende quando il pezzo ha smesso di scorrere), o fanno
+  partire la funzione (Novità con Dot ed Enzo, giro guidato, Enzo, Archivio, Premium). Prova: `run121-novita-vai.js`.

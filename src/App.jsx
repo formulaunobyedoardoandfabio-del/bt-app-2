@@ -21,7 +21,7 @@ import BtElo from "./logic/elo";
 import BtReplay from "./logic/replay";
 import TrackReplay from "./logic/track-replay";
 import { LiveOrb, TypeText, ChangelogCard, VanishCanvas } from "./ui/effetti";
-import { AppGuide, EnzoChat, DuoGuide } from "./ui/guida";
+import { AppGuide, EnzoChat, DuoGuide, FlashSpot } from "./ui/guida";
 import { createArchive, findReplay } from "./services/archive";
 import BtTrophyPro from "./logic/trophypro";
 import { createSwipeVotes } from "./services/swipevotes";
@@ -36,6 +36,8 @@ import { qZones, zoneOf } from "./logic/qzones";
 import { TROPHIES, SECRET_NAME, SECRET_HOW, trophyProgress, medalOf, cleanTrophies, trophyDefs } from "./logic/trophies";
 import CommonsData from "./data/commons-candidates";
 import F1 from "./data/f1-2026";
+import DriverLines from "./data/driver-lines";   // 15/11: frasi dei piloti nella scelta stile chess.com
+const { driverLine } = DriverLines;
 import AppData from "./services/appdata";
 import Compat from "./services/compat";
 import { createAccount, MESSAGES as ACCOUNT_MSG, messageOf, MIN_AGE, pwStrength } from "./services/account";
@@ -8182,6 +8184,103 @@ function FantaPicker({ kind, slot, squad, stats, budget, listing = null, onPick,
   );
 }
 
+// 15/11 (Edoardo): scelta del pilota "come su chess.com" (la scelta dell'avversario): in alto il pilota scelto in grande
+// con la sua frase nel fumetto (src/data/driver-lines.js, testo di Edoardo; toccandolo di nuovo dice l'altra), sotto
+// tutti i piloti a gruppi per scuderia, in fondo il bottone per prenderlo. Chi non entra nel budget o è già in squadra
+// si può guardare (e sentire) ma non prendere. Le scuderie si scelgono ancora con FantaPicker.
+function ChessDriverPicker({ slot, squad, stats, budget, listing = null, onPick, onClose }) {
+  const current = squad.drivers[slot];
+  const left = BtLogic.bank(squad, stats, budget, listing) + (current && stats.drivers[current] ? Number(stats.drivers[current].price) : 0);
+  const price = id => Number((stats.drivers[id] || {}).price) || 0;
+  const info = id => {
+    const r = stats.drivers[id] || {}, d = driverById(id);
+    const inSquad = squad.drivers.includes(id) && id !== current;
+    const afford = BtLogic.canAfford(squad, stats, budget, "drivers", slot, id, listing);
+    const short = id === current ? "In squadra" : inSquad ? "Già in squadra" : !afford ? "Fuori budget" : null;
+    const why = id === current ? "È già nel tuo posto" : inSquad ? "Già in squadra" : !afford ? `Budget insufficiente: ti mancano ${fmtM(Math.round((price(id) - left) * 10) / 10, true)}` : null;
+    return { d, r, t: d && teamById(d.teamId), off: inSquad || (!afford && id !== current), short, why, isCur: id === current };
+  };
+  const ids = Object.keys(stats.drivers).filter(id => driverById(id));
+  const groups = Object.values(ids.reduce((g, id) => { const t = driverById(id).teamId; (g[t] = g[t] || { team: teamById(t), ids: [] }).ids.push(id); return g; }, {}))
+    .map(g => ({ ...g, ids: g.ids.sort((a, b) => price(b) - price(a)), top: Math.max(...g.ids.map(price)) }))
+    .sort((a, b) => b.top - a.top);
+  const [sel, setSel] = useState(() => current || ids.filter(id => !info(id).off).sort((a, b) => price(b) - price(a))[0] || ids[0]);
+  const [turn, setTurn] = useState({});   // quante volte hai toccato ogni pilota: decide quale frase dice
+  const tap = id => { if (id === sel) setTurn(t => ({ ...t, [id]: (t[id] || 0) + 1 })); else setSel(id); fx.play("tick"); };
+  const s = info(sel);
+  if (!s.d) return null;
+  const line = driverLine(sel, turn[sel] || 0);
+  const take = () => { if (s.off) return; if (!s.isCur) { onPick(sel); fx.buzz("success"); } onClose(); };
+  return (
+    <div role="dialog" aria-modal="true" aria-label="Scegli un pilota" data-chess-picker="" style={{ position: "absolute", inset: 0, zIndex: 640, background: "rgba(0,0,0,.72)", display: "flex", alignItems: "flex-end" }} onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
+      <div style={{ width: "100%", height: "92%", display: "flex", flexDirection: "column", background: C.card, borderRadius: "24px 24px 0 0", overflow: "hidden" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "16px 16px 8px" }}>
+          <div style={{ flex: 1 }}>
+            <h2 style={{ margin: 0, fontFamily: F_HEAD, fontWeight: 900, fontStyle: "italic", fontSize: 17, color: C.text }}>SCEGLI IL PILOTA</h2>
+            <div style={{ fontFamily: F_BODY, fontSize: 11.5, color: C.muted, marginTop: 2 }}>Puoi spendere fino a <b data-picker-left="" style={{ color: C.text }}>{fmtM(Math.max(0, left), true)}</b></div>
+          </div>
+          <button className="press" aria-label="Chiudi" onClick={onClose} style={{ width: 44, height: 44, borderRadius: "50%", background: "rgba(255,255,255,.08)", display: "flex", alignItems: "center", justifyContent: "center" }}><Icon name="close" size={13} sw={2.2} /></button>
+        </div>
+        <div data-chess-hero={sel} style={{ display: "flex", gap: 14, alignItems: "flex-start", padding: "6px 16px 10px" }}>
+          <button type="button" className="press" data-chess-face="" aria-label={s.d.full + ": un'altra frase"} onClick={() => tap(sel)} style={{ flexShrink: 0, padding: 0, background: "none", border: "none", borderRadius: "50%" }}><Headshot driver={s.d} size={88} /></button>
+          <div style={{ position: "relative", flex: 1, minWidth: 0 }}>
+            <span aria-hidden="true" style={{ position: "absolute", left: -5, top: 22, width: 12, height: 12, background: "#F4F4F5", transform: "rotate(45deg)", borderRadius: 2 }} />
+            <div data-chess-line="" aria-live="polite" onClick={() => tap(sel)} style={{ position: "relative", minHeight: 82, boxSizing: "border-box", padding: "10px 12px", borderRadius: 14, background: "#F4F4F5", color: "#0B0B0C", fontFamily: F_BODY, fontWeight: 600, fontSize: 13.5, lineHeight: 1.42 }}>
+              {line ? <TypeText key={sel + ":" + (turn[sel] || 0)} text={line} cps={45} cursorColor="#0B0B0C" /> : s.d.full}
+            </div>
+          </div>
+        </div>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "0 16px 12px", borderBottom: `1px solid ${C.border}` }}>
+          <span aria-hidden="true" style={{ width: 4, height: 30, borderRadius: 2, background: s.t ? s.t.color : C.dim }} />
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div data-chess-name="" style={{ fontFamily: F_HEAD, fontWeight: 900, fontStyle: "italic", fontSize: 18, color: C.text, lineHeight: 1.15 }}>{s.d.full}</div>
+            <div style={{ fontFamily: F_BODY, fontSize: 11.5, color: C.muted }}>{s.t ? s.t.name : ""} · {Number(s.r.pts) || 0} pt in stagione</div>
+          </div>
+          <div style={{ textAlign: "right" }}>
+            <div style={{ fontFamily: F_HEAD, fontWeight: 900, fontSize: 17, color: C.text }}>{fmtM(price(sel))}</div>
+            <PriceChange v={s.r.change} size={10} />
+          </div>
+        </div>
+        <div className="scrollcol" data-chess-grid="" style={{ flex: 1, minHeight: 0, padding: "10px 12px 12px" }}>
+          <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr) minmax(0, 1fr)", gap: 8 }}>
+            {groups.map(g => (
+              <div key={g.team ? g.team.id : g.ids[0]} data-chess-team={g.team ? g.team.id : ""} style={{ padding: "8px 6px 6px", borderRadius: 14, background: "rgba(255,255,255,.04)", border: `1px solid ${C.border}` }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "0 4px 6px" }}>
+                  <span aria-hidden="true" style={{ width: 8, height: 8, borderRadius: "50%", background: g.team ? g.team.color : C.dim }} />
+                  <span style={{ fontFamily: F_BODY, fontWeight: 700, fontSize: 11, color: C.muted, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{g.team ? g.team.name : ""}</span>
+                </div>
+                <div style={{ display: "flex", gap: 4 }}>
+                  {g.ids.map(id => {
+                    const x = info(id), on = id === sel;
+                    return (
+                      <button key={id} type="button" className="press" data-pick={id} data-pick-off={x.off ? "" : undefined} aria-pressed={on ? "true" : "false"} aria-label={x.d.full + (x.why ? ": " + x.why : "")} onClick={() => tap(id)}
+                        style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", alignItems: "center", gap: 3, padding: "6px 2px", borderRadius: 12, background: on ? "rgba(255,255,255,.1)" : "transparent", border: `2px solid ${on ? C.text : "transparent"}`, opacity: x.off && !on ? .45 : 1 }}>
+                        <span style={{ position: "relative", display: "inline-flex" }}>
+                          <Headshot driver={x.d} size={46} />
+                          {x.short && <span aria-hidden="true" title={x.short} style={{ position: "absolute", right: -3, bottom: -2, width: 18, height: 18, borderRadius: "50%", background: x.off && !squad.drivers.includes(id) ? "#3A3A42" : TIMING.green, border: `2px solid ${C.card}`, display: "flex", alignItems: "center", justifyContent: "center" }}><Icon name={squad.drivers.includes(id) ? "check" : "lock"} size={9} sw={2.6} color="#fff" /></span>}
+                        </span>
+                        <span style={{ maxWidth: "100%", fontFamily: F_BODY, fontWeight: 700, fontSize: 11.5, color: C.text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{x.d.name}</span>
+                        <span style={{ display: "flex", alignItems: "center", gap: 3, fontFamily: F_HEAD, fontWeight: 800, fontSize: 11, color: C.muted }}>{fmtM(price(id))}<PriceChange v={x.r.change} size={9} /></span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            ))}
+          </div>
+          <p style={{ margin: "10px 6px 0", fontFamily: F_BODY, fontSize: 10.5, color: C.dim, lineHeight: 1.45 }}>{FANTASY_SOURCE}.</p>
+        </div>
+        <div style={{ padding: "10px 16px 16px", borderTop: `1px solid ${C.border}`, background: C.card }}>
+          {s.why && !s.isCur && <div data-chess-why="" role="status" style={{ fontFamily: F_BODY, fontSize: 12, color: s.off ? "#FF5A5F" : C.muted, textAlign: "center", marginBottom: 8 }}>{s.why}</div>}
+          <button type="button" className="press" data-chess-confirm="" disabled={s.off} onClick={take} style={{ width: "100%", minHeight: 52, borderRadius: 16, background: s.off ? "rgba(255,255,255,.12)" : "#F4F4F5", fontFamily: F_HEAD, fontWeight: 900, fontSize: 16, color: s.off ? C.dim : "#0B0B0C" }}>
+            {s.isCur ? `Tieni ${s.d.name}` : `Prendi ${s.d.name} · ${fmtM(price(sel))}`}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // La tua squadra come in F1 Fantasy: chiusura con conto alla rovescia, nome, cambi gratis, budget, 5 piloti e 2 scuderie.
 function FantaSquadCard({ squad, setSquad, base, freeTransfers, budget, stats, listing = null, race, lock, onToast, needAccount, standings }) {
   const [picking, setPicking] = useState(null);   // { kind, slot }
@@ -8277,8 +8376,11 @@ function FantaSquadCard({ squad, setSquad, base, freeTransfers, budget, stats, l
         {locked && <ParcFerme kind="squad" at={lock.lockAt} liftable />}
       </div>
       {!complete && <p role="status" style={{ margin: "-4px 14px 14px", fontFamily: F_BODY, fontSize: 11.5, color: C.gold }}>Mancano {squad.drivers.filter(x => !x).length + squad.teams.filter(x => !x).length} posti: completa la squadra prima della chiusura, altrimenti non prende punti.</p>}
-      {picking && <FantaPicker kind={picking.kind} slot={picking.slot} squad={squad} stats={stats} budget={budget} listing={listing} onClose={() => setPicking(null)}
-        onPick={id => { setSlot(picking.kind, picking.slot, id); const d = driverById(id), t = teamById(id); onToast(`${d ? d.full : t ? t.name : id} entra nella tua squadra`); }} />}
+      {picking && (() => {   // 15/11: i piloti con la scelta stile chess.com, le scuderie con la lista di prima
+        const P = picking.kind === "drivers" ? ChessDriverPicker : FantaPicker;
+        return <P kind={picking.kind} slot={picking.slot} squad={squad} stats={stats} budget={budget} listing={listing} onClose={() => setPicking(null)}
+          onPick={id => { setSlot(picking.kind, picking.slot, id); const d = driverById(id), t = teamById(id); onToast(`${d ? d.full : t ? t.name : id} entra nella tua squadra`); }} />;
+      })()}
     </div>
   );
 }
@@ -8368,9 +8470,11 @@ const QUIZ_BITS = Array.from({ length: 12 }, (_, i) => {
 function PredictionCard({ q, answer, lock, onAnswer }) {
   const [burst, setBurst] = useState(null);   // "right" | "wrong" finché gira l'animazione della risposta appena data
   const tapAt = useRef(0), prevAnswer = useRef(answer);
+  // 15/11: di storia anche una domanda dell'admin con la risposta già nota (lock.hist, BtLogic.predKnown)
+  const history = q.kind === "history" || !!(lock && lock.hist);
   useEffect(() => {
     const was = prevAnswer.current; prevAnswer.current = answer;
-    if (q.kind !== "history" || was != null || answer == null || Date.now() - tapAt.current > 1500) return undefined;
+    if (!history || was != null || answer == null || Date.now() - tapAt.current > 1500) return undefined;
     const ok = BtLogic.predictionCorrect(q, answer) === true;
     setBurst(ok ? "right" : "wrong");
     fx.play(ok ? "flag" : "abort"); fx.buzz(ok ? "success" : "error");
@@ -8382,12 +8486,11 @@ function PredictionCard({ q, answer, lock, onAnswer }) {
   useBack(picking, () => setPicking(false));
   useBack(pad != null, () => setPad(null));
   const res = BtLogic.predictionCorrect(q, answer);
-  const history = q.kind === "history";
-  const choice = q.kind === "poll" || history;
+  const choice = q.kind === "poll" || q.kind === "history";
   const done = history ? answer != null : lock.locked;
   const parcFerme = !history && lock.locked && q.answer == null;   // G21: chiusa e risultato non ancora segnato
   const right = q.answer == null ? null : predLabel(q, q.answer);
-  const badge = PRED_BADGE[q.kind] || ["DOMANDA", C.dim];
+  const badge = history ? PRED_BADGE.history : PRED_BADGE[q.kind] || ["DOMANDA", C.dim];
   const mine = predLabel(q, answer);
   const d = q.kind === "driver" && answer ? driverById(answer) : null, t = q.kind === "team" && answer ? teamById(answer) : null;
   const openBtn = { display: "flex", alignItems: "center", gap: 10, width: "100%", padding: "9px 11px", borderRadius: 12, textAlign: "left", background: "rgba(255,255,255,.05)", border: `1px solid ${answer != null ? C.accentInk : C.border}`, opacity: done ? .6 : 1 };
@@ -8416,7 +8519,7 @@ function PredictionCard({ q, answer, lock, onAnswer }) {
             <span style={{ flex: 1, fontFamily: F_BODY, fontWeight: 700, fontSize: 13, color: C.text }}>{answer != null ? "Cambia il numero" : "Scrivi il numero"}</span>
             {!done && <Icon name="chevron" size={13} color={C.dim} />}
           </button>
-        ) : <NumPad value={pad} onChange={setPad} onOk={v => { onAnswer(v); setPad(null); }} onCancel={() => setPad(null)} />
+        ) : <NumPad value={pad} onChange={setPad} onOk={v => { if (history) tapAt.current = Date.now(); onAnswer(v); setPad(null); }} onCancel={() => setPad(null)} />
       ) : (
         <button className="press" data-pred-open="" disabled={done} onClick={() => setPicking(true)} style={openBtn}>
           {d ? <Headshot driver={d} size={34} /> : t ? <span style={{ width: 34, height: 34, borderRadius: 10, background: t.color, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}><CarSilhouette color="#F4F2EF" width={28} /></span>
@@ -8426,7 +8529,7 @@ function PredictionCard({ q, answer, lock, onAnswer }) {
         </button>
       )}
       </div>
-      {picking && <EntityPicker id={q.id} kind={q.kind === "team" ? "team" : "driver"} title={q.q} selected={answer} onPick={v => { onAnswer(v); setPicking(false); }} onClose={() => setPicking(false)} />}
+      {picking && <EntityPicker id={q.id} kind={q.kind === "team" ? "team" : "driver"} title={q.q} selected={answer} onPick={v => { if (history) tapAt.current = Date.now(); onAnswer(v); setPicking(false); }} onClose={() => setPicking(false)} />}
       {burst && (
         <div className="quiz-fx" aria-hidden="true">
           {burst === "right" ? (
@@ -8824,7 +8927,7 @@ function TrophyCase({ trophies = {}, helmet = null, defs = TROPHIES, onOpen }) {
   );
 }
 
-function ProfiloScreen({ onHack = null, onCoffee = null, coffeePrice = null, fanLevel = null, reminders = true, onReminders = null, halfway = true, onHalfway = null, news = true, onNews = null, trophiesOn = true, onTrophiesOn = null, holidays = true, onHolidays = null, miniPit = true, onMiniPit = null, ig, onOpenIg, trial = null, trialUsed = false, onBack, onNotifiche, onPremium, onAdmin, onLogout, isPremium, onAbout, onHelp, onFeedback, aboutMe, onSaveAboutMe, favTeam, favDriver, onPickTeam, onPickDriver, guest, onLogin, onTerms, blocked = [], onUnblock, onDeleteAccount, savedCount = 0, onOpenSaved, account = null, onSaveName, isAdmin = false, onTheme, sounds = true, haptics = true, onSounds, onHaptics, helmet = null, onHelmet, trophies = {}, trophyProg = {}, trophyList = TROPHIES, onAdPrivacy = null }) {
+function ProfiloScreen({ onChangelog = null, onHack = null, onCoffee = null, coffeePrice = null, fanLevel = null, reminders = true, onReminders = null, halfway = true, onHalfway = null, news = true, onNews = null, trophiesOn = true, onTrophiesOn = null, holidays = true, onHolidays = null, miniPit = true, onMiniPit = null, ig, onOpenIg, trial = null, trialUsed = false, onBack, onNotifiche, onPremium, onAdmin, onLogout, isPremium, onAbout, onHelp, onFeedback, aboutMe, onSaveAboutMe, favTeam, favDriver, onPickTeam, onPickDriver, guest, onLogin, onTerms, blocked = [], onUnblock, onDeleteAccount, savedCount = 0, onOpenSaved, account = null, onSaveName, isAdmin = false, onTheme, sounds = true, haptics = true, onSounds, onHaptics, helmet = null, onHelmet, trophies = {}, trophyProg = {}, trophyList = TROPHIES, onAdPrivacy = null }) {
   const ft = favTeam ? teamById(favTeam) : null;
   const fd = favDriver ? driverById(favDriver) : null;
   const favRows = [
@@ -9019,7 +9122,7 @@ function ProfiloScreen({ onHack = null, onCoffee = null, coffeePrice = null, fan
         ))}
       </div>
 
-      <div style={{ margin: "0 20px 14px" }}><ChangelogCard releases={CHANGELOG} fontHead={F_HEAD} fontBody={F_BODY} colors={{ card: C.card, border: C.border, text: C.text, muted: C.muted, accent: C.accent }} /></div>
+      <div style={{ margin: "0 20px 14px" }}><ChangelogCard releases={CHANGELOG} onOpen={onChangelog} fontHead={F_HEAD} fontBody={F_BODY} colors={{ card: C.card, border: C.border, text: C.text, muted: C.muted, accent: C.accent }} /></div>
 
       {onHack && (
         <button className="press" data-hack-open="" onClick={onHack} style={{ display: "flex", alignItems: "center", gap: 12, width: "calc(100% - 40px)", margin: "0 20px 10px", padding: 14, borderRadius: 18, background: "#030806", border: "1px solid rgba(61,255,122,.35)", textAlign: "left" }}>
@@ -9178,26 +9281,30 @@ const APP_TOUR = [
 ];
 
 // 15/11: registro delle novità del Profilo (Edoardo: scheda compatta per un Changelog). Dati veri: i commit dell'app.
+// 15/11 (Edoardo): toccando una voce con go si va alla funzione: { tab | view, sel } apre la scheda e indica il pezzo,
+// { action } fa partire qualcosa (Novità, giro guidato, Enzo, Archivio, Premium). Le voci senza un posto non si toccano.
 const CHANGELOG = [
-  { date: "15/11", title: "Novità raccontate da Dot ed Enzo", tag: "Nuovo" },
-  { date: "15/11", title: "Enzo, l'assistente svogliato", tag: "Nuovo" },
-  { date: "15/11", title: "Giro guidato nuovo col pallino" },
-  { date: "15/11", title: "Riguarda la gara sulla mappa", tag: "Nuovo" },
+  { date: "15/11", title: "Scelta dei piloti come su chess.com", tag: "Nuovo", go: { tab: "fanta", sel: "[data-fanta-drivers]" } },
+  { date: "15/11", title: "Domande di storia scritte dall'admin", go: { tab: "fanta", sel: "[data-prediction]" } },
+  { date: "15/11", title: "Novità raccontate da Dot ed Enzo", tag: "Nuovo", go: { action: "duo" } },
+  { date: "15/11", title: "Enzo, l'assistente svogliato", tag: "Nuovo", go: { action: "enzo" } },
+  { date: "15/11", title: "Giro guidato nuovo col pallino", go: { action: "tour" } },
+  { date: "15/11", title: "Riguarda la gara sulla mappa", tag: "Nuovo", go: { tab: "race", sel: "[data-race-archive]" } },
   { date: "15/11", title: "Modalità senza rete", tag: "Nuovo" },
-  { date: "15/11", title: "Archivio storico dei GP", tag: "Nuovo" },
-  { date: "15/11", title: "ELO B&T e lega B&T per tutti" },
-  { date: "15/11", title: "Salvati a piastrelle e foto più veloci" },
-  { date: "14/11", title: "Terminale del box (ADMIN)", tag: "Nuovo" },
+  { date: "15/11", title: "Archivio storico dei GP", tag: "Nuovo", go: { action: "archive" } },
+  { date: "15/11", title: "ELO B&T e lega B&T per tutti", go: { tab: "fanta", sel: "[data-fanta-elo]" } },
+  { date: "15/11", title: "Salvati a piastrelle e foto più veloci", go: { tab: "home", sel: "[data-saved-chip]" } },
+  { date: "14/11", title: "Terminale del box (ADMIN)", tag: "Nuovo", go: { view: "profilo", sel: "[data-hack-open]" } },
   { date: "14/11", title: "Avvio senza aspettare la rete" },
   { date: "14/11", title: "Accesso più svelto" },
-  { date: "13/11", title: "Fanta: budget sul prezzo pagato" },
-  { date: "13/11", title: "Notifiche del team", tag: "Nuovo" },
-  { date: "08/11", title: "Premium col nuovo design" },
-  { date: "08/11", title: "Previsioni del weekend automatiche" },
+  { date: "13/11", title: "Fanta: budget sul prezzo pagato", go: { tab: "fanta", sel: "[data-squad-area]" } },
+  { date: "13/11", title: "Notifiche del team", tag: "Nuovo", go: { tab: "home", sel: '[aria-label="Notifiche"]' } },
+  { date: "08/11", title: "Premium col nuovo design", go: { action: "premium" } },
+  { date: "08/11", title: "Previsioni del weekend automatiche", go: { tab: "fanta", sel: "[data-prediction]" } },
   { date: "08/11", title: "Muretto dei tifosi sotto Safety Car" },
-  { date: "08/11", title: "Calcolatrice del Mondiale" },
+  { date: "08/11", title: "Calcolatrice del Mondiale", go: { tab: "race", sel: "[data-calc-open]" } },
   { date: "08/11", title: "Griglia di partenza con le penalità" },
-  { date: "08/11", title: "B&T Trophies a fine sessione" },
+  { date: "08/11", title: "B&T Trophies a fine sessione", go: { view: "profilo", sel: "[data-trophies]" } },
 ];
 
 // 15/11 (Edoardo): bottone Novità in Home. Dot ed Enzo raccontano insieme le novità, come un mini giro guidato a parte,
@@ -9719,7 +9826,7 @@ function AdminPredictionsTab({ predictions, setPredictions, answers, races, onTo
           <button className="press" aria-pressed={showOld ? "true" : "false"} onClick={() => setShowOld(v => !v)} style={aChip(showOld)}>{showOld ? "Nascondi" : "Mostra"}</button>
         </div>
       )}
-      <p style={{ margin: "0 2px 12px", fontFamily: F_BODY, fontSize: 11.5, color: C.muted, lineHeight: 1.5 }}>Quando il risultato è noto, segna la risposta esatta: chi ha indovinato prende +1 punto FantaF1. Le domande di storia hanno già la risposta.</p>
+      <p style={{ margin: "0 2px 12px", fontFamily: F_BODY, fontSize: 11.5, color: C.muted, lineHeight: 1.5 }}>Quando il risultato è noto, segna la risposta esatta: chi ha indovinato prende +1 punto FantaF1. Le domande di storia hanno già la risposta. Se segni la risposta prima che la sessione cominci (una domanda sul passato, anche di pilota, scuderia o numero), diventa di storia: i tifosi rispondono una volta sola e vedono subito se è giusta.</p>
       {open.map(q => {
         const mine = answers[q.id];
         const res = BtLogic.predictionCorrect(q, mine);
@@ -11283,6 +11390,7 @@ function App() {
   const [bootCache] = useState(() => { try { return AppData.sharedCached(nowMs()); } catch (e) { return { values: {}, kinds: [], complete: false }; } });
   const [shared0] = useState(() => { const v = { ...AppData.sharedDefaults(nowMs()), ...bootCache.values }; addStandingsGuests(v.standings.guests); return v; });
   const [redOrb, setRedOrb] = useState(false);   // 15/11: pallino rosso (tre tocchi sulla stessa scheda)
+  const [flash, setFlash] = useState(null);   // 15/11: pezzo indicato per un attimo (dal registro delle novità)
   const [duoOn, setDuoOn] = useState(false), [novitaSeen, setNovitaSeen] = useState(() => local.get(NOVITA_KEY));   // 15/11: Novità con Dot ed Enzo
   const [termCodes, setTermCodes] = useState(() => shared0.termCodes || []);   // 15/11: codici del terminale aggiunti dall'admin
   const [offline, setOffline] = useState(false);   // all'avvio qualcosa non si è potuto leggere: riga "Sei offline"
@@ -12517,6 +12625,19 @@ function App() {
   const tourDone = () => { tourEnd(); if (tourDemo.current) { tourDemo.current = false; stopLive(); } setView("tab"); setTab("home"); };
   // 15/11: Novità con Dot ed Enzo (bottone in Home): si segna come vista appena si apre
   const duoOpen = () => { setRedOrb(false); setTourOn(false); setDuoOn(true); local.set(NOVITA_KEY, NOVITA_VER); setNovitaSeen(NOVITA_VER); };
+  // 15/11: Enzo come coi tre tocchi (la barra in basso diventa la palla) e il registro delle novità che porta alle funzioni
+  const enzoOpen = () => { const el = navPillRef.current, r = el && el.getBoundingClientRect(); setRedOrb(r && r.width ? { left: r.left, top: r.top, width: r.width, height: r.height } : true); fx.play("tick"); fx.buzz("success"); };
+  const changelogGo = g => {
+    if (!g) return;
+    if (g.action === "duo") { duoOpen(); return; }
+    if (g.action === "tour") { setView("tab"); setTab("home"); setTourOn(true); return; }
+    if (g.action === "enzo") { setView("tab"); setTab("home"); setTimeout(enzoOpen, 400); return; }
+    if (g.action === "archive") { openArchive(); return; }
+    if (g.action === "premium") { setPremiumOpen(true); return; }
+    if (g.view) setView(g.view); else { setView("tab"); if (g.tab) setTab(g.tab); }
+    if (g.sel) setFlash({ sel: g.sel, n: Date.now() });
+    fx.play("tick");
+  };
   const duoDone = () => { setDuoOn(false); if (tourDemo.current) { tourDemo.current = false; stopLive(); } setView("tab"); setTab("home"); };
   const stopLive = () => {
     if (demoLive) closeSession(demoLive);
@@ -12659,10 +12780,11 @@ function App() {
   const answerPrediction = (q, v) => {
     if (guest) { needLogin("Per rispondere alle previsioni serve un account."); return; }
     if (userDataWait()) return;
-    if (q.kind === "history" && predAnswers[q.id] != null) return;
+    const hist = q.kind === "history" || !!predLockOf(q).hist;   // 15/11: anche le domande dell'admin con la risposta già nota
+    if (hist && predAnswers[q.id] != null) return;
     setPredAnswers(a => ({ ...a, [q.id]: v }));
     if (!predAnswers[q.id]) psBump("pred");
-    showToast(q.kind === "history" ? (BtLogic.predictionCorrect(q, v) ? "Giusto! +1 punto FantaF1" : "Risposta sbagliata") : "Previsione salvata");
+    showToast(hist ? (BtLogic.predictionCorrect(q, v) ? "Giusto! +1 punto FantaF1" : "Risposta sbagliata") : "Previsione salvata");
   };
   const readAll = () => {
     if (userDataWait()) return;
@@ -13330,13 +13452,15 @@ function App() {
   const teamLockInfo = BtLogic.teamLock({ sessions: fantaSessions, now: nowMs() });   // solo l'ora vera: la prova DEMO non blocca (D23)
   // Previsioni sul weekend: si chiudono all'inizio della sessione a cui si riferiscono (o quando l'admin segna la risposta).
   const predLockOf = q => {
-    if (q.kind === "history") return { locked: false, text: "" };
+    if (q.kind === "history") return { locked: false, text: "", hist: true };
     const r = races.find(x => x.id === q.raceId);
     const ses = r && CIRCUIT_INFO[r.circuitId] ? CIRCUIT_INFO[r.circuitId].weekend || [] : [];
     const at = BtLogic.startOf(ses.find(x => x.key === q.about));
     const keys = r ? weekendKeys(r) : [];
     const liveHere = !!live && !!r && live.raceId === r.id && keys.indexOf(live.type) >= keys.indexOf(q.about);
     const endedHere = !!r && !!wxResult[r.id + ":" + q.about];
+    // 15/11: risposta già segnata prima della sessione (o segnata di storia) = domanda di storia: si risponde una volta
+    if (BtLogic.predKnown(q, { lockAt: at, now: nowMs(), closed: liveHere || endedHere })) return { locked: false, text: "", hist: true, lockAt: at };
     return { locked: q.answer != null || (at != null && nowMs() >= at) || liveHere || endedHere, lockAt: at, text: `all'inizio ${SESSION_DEL[q.about] || ""}${at ? ` (${fmtRome(at)})` : ""}` };
   };
   const onRaceTab = view === "tab" && tab === "race";
@@ -13371,7 +13495,7 @@ function App() {
     mode={swipe.mode || "taste"} onMode={m => { if (!guest && !userDataWait()) setSwipe(s => ({ ...s, mode: m })); }} rain={psRain} onEgg={psEgg} streak={{ n: (swipe.streak || {}).n || 0 }}
     endInfo={psEndInfo} onSaved={() => { setSavedOnly(true); setView("tab"); goTab("home"); }} onShare={psShare} onDuel={!guest ? sendDuel : null} />;
   else if (view === "chats") body = <ChatsView chats={chats} onOpen={openChat} blocked={blocked} onBack={viewBack.chats} unreadOf={(id, ms) => Chat.unread(id, ms)} />;
-  else if (view === "profilo") body = <ProfiloScreen onCoffee={Billing.where() ? buyCoffee : null} coffeePrice={playPrices.coffee || null} ig={ig} onOpenIg={() => { setIgFrom("profilo"); setView("instagram"); }} aboutMe={aboutMe} onSaveAboutMe={a => Account.updateAbout(a).catch(e => showToast(e && (e.code === "too-young" || e.code === "not-loaded") ? messageOf(e) : NOT_SAVED))} account={account} onSaveName={n => Account.updateName(n)} isAdmin={Account.isAdmin()} trial={trialActive ? trial : null} trialUsed={!!trial} onBack={viewBack.profilo} onNotifiche={() => setView("notifiche")} onPremium={() => setPremiumOpen(true)} onAdmin={() => guest ? needLogin("Accedi per usare il pannello admin.") : setView(adminUnlocked ? "admin" : "hack")} onHack={() => { setView("hack"); if (account && Account.refreshAdmin) Account.refreshAdmin().catch(() => {}); }} onLogout={logout} isPremium={isPremium} onAbout={() => setInfoModal({ title: "Info su B&T", body: ABOUT_TEXT, credits: true })} onFeedback={() => setFeedbackOpen(true)} onHelp={() => setInfoModal({ title: "Assistenza", body: HELP_TEXT })} favTeam={favTeam} favDriver={favDriver} onPickTeam={() => guest ? needLogin("Per scegliere scuderia e pilota del cuore serve un account.") : setPicker("team")} onPickDriver={() => guest ? needLogin("Per scegliere scuderia e pilota del cuore serve un account.") : setPicker("driver")} guest={guest} onLogin={() => needLogin(null)} onTerms={() => setTermsOpen(true)} blocked={blocked} onUnblock={unblockUser} onDeleteAccount={deleteAccount} savedCount={saved.length} onOpenSaved={openSaved} onTheme={() => setThemeOpen(true)} helmet={helmet} onHelmet={() => setHelmetOpen(true)} trophies={trophies} trophyProg={trophyProg} trophyList={trophyList}
+  else if (view === "profilo") body = <ProfiloScreen onChangelog={changelogGo} onCoffee={Billing.where() ? buyCoffee : null} coffeePrice={playPrices.coffee || null} ig={ig} onOpenIg={() => { setIgFrom("profilo"); setView("instagram"); }} aboutMe={aboutMe} onSaveAboutMe={a => Account.updateAbout(a).catch(e => showToast(e && (e.code === "too-young" || e.code === "not-loaded") ? messageOf(e) : NOT_SAVED))} account={account} onSaveName={n => Account.updateName(n)} isAdmin={Account.isAdmin()} trial={trialActive ? trial : null} trialUsed={!!trial} onBack={viewBack.profilo} onNotifiche={() => setView("notifiche")} onPremium={() => setPremiumOpen(true)} onAdmin={() => guest ? needLogin("Accedi per usare il pannello admin.") : setView(adminUnlocked ? "admin" : "hack")} onHack={() => { setView("hack"); if (account && Account.refreshAdmin) Account.refreshAdmin().catch(() => {}); }} onLogout={logout} isPremium={isPremium} onAbout={() => setInfoModal({ title: "Info su B&T", body: ABOUT_TEXT, credits: true })} onFeedback={() => setFeedbackOpen(true)} onHelp={() => setInfoModal({ title: "Assistenza", body: HELP_TEXT })} favTeam={favTeam} favDriver={favDriver} onPickTeam={() => guest ? needLogin("Per scegliere scuderia e pilota del cuore serve un account.") : setPicker("team")} onPickDriver={() => guest ? needLogin("Per scegliere scuderia e pilota del cuore serve un account.") : setPicker("driver")} guest={guest} onLogin={() => needLogin(null)} onTerms={() => setTermsOpen(true)} blocked={blocked} onUnblock={unblockUser} onDeleteAccount={deleteAccount} savedCount={saved.length} onOpenSaved={openSaved} onTheme={() => setThemeOpen(true)} helmet={helmet} onHelmet={() => setHelmetOpen(true)} trophies={trophies} trophyProg={trophyProg} trophyList={trophyList}
     onAdPrivacy={Ads.privacyRequired() ? () => Ads.openPrivacy().catch(() => showToast("Le preferenze sulla privacy degli annunci non sono disponibili in questo momento.")) : null}
     sounds={sounds} haptics={haptics} onSounds={v => { if (userDataWait()) return; setSounds(v); fx.setSounds(v); if (v) fx.play("tick"); }} onHaptics={v => { if (userDataWait()) return; setHaptics(v); fx.setHaptics(v); if (v) fx.buzz("light"); }}
     holidays={holidaysOn} onHolidays={v => { if (userDataWait()) return; setHolidaysOn(v); local.set("bt-holidays-on", v); fx.play("tick"); }}
@@ -13466,7 +13590,7 @@ function App() {
           onPointerMove={showBottomNav ? e => { if (e.pointerType === "mouse" && (e.buttons & 1)) swipeMove(e.clientX, e.clientY); } : undefined}
           onPointerUp={showBottomNav ? e => { if (e.pointerType === "mouse") swipeEnd(e.clientX, e.clientY, e.timeStamp, e.currentTarget.clientWidth, true); } : undefined}
           onClickCapture={e => { if (performance.now() - swipeClick.current < 400) { e.stopPropagation(); e.preventDefault(); } }}>
-          <BottomNav active={tab} pillRef={navPillRef} onChange={t => switchTab(t)} hidden={!!redOrb} onTriple={() => { const el = navPillRef.current, r = el && el.getBoundingClientRect(); setRedOrb(r ? { left: r.left, top: r.top, width: r.width, height: r.height } : true); fx.play("tick"); fx.buzz("success"); }} /></div>}
+          <BottomNav active={tab} pillRef={navPillRef} onChange={t => switchTab(t)} hidden={!!redOrb} onTriple={enzoOpen} /></div>}
       {redOrb && <EnzoChat accent={C.accent} fromRect={redOrb && redOrb.width ? redOrb : null} barColor={C.card} offline={offline} raceToday={!!realLiveRace || races.some(r => { const d = Date.parse((r.date || "") + "T12:00:00Z"), n = nowMs(); return n > d - 2.6 * 86400000 && n < d + 0.6 * 86400000; })} onDemo={d => { setView("tab"); setTab(d.tab); }} onClose={() => setRedOrb(false)} />}
         {showBottomNav && adH > 0 && <div data-ad-space="" aria-hidden="true" style={{ height: adH + AD_GAP, flexShrink: 0 }} />}
         {pumpkinAt && holiday === "halloween" && view === "tab" && pumpkinAt.tab === tab && (
@@ -13504,6 +13628,7 @@ function App() {
         {linkShare && <ChatRoomPicker onPick={id => { setPendingLink(linkShare); setLinkShare(null); openChat(id); }} onClose={() => setLinkShare(null)} />}
         {socialOpen && <SocialSheet post={socialOpen} onClose={() => setSocialOpen(null)} />}
         <RainGlass on={rainOn} />
+        {flash && <FlashSpot key={flash.n} sel={flash.sel} accent={C.accent} onDone={() => setFlash(null)} />}
         {duoOn && <DuoGuide steps={NOVITA_DUO} accent={C.accent} useBack={useBack} onGo={tourGo} onDone={duoDone} />}
         {tourOn && (guest || !!account) && <AppGuide steps={APP_TOUR} where={view + ":" + tab} useBack={useBack} onGo={tourGo} onDone={tourDone} onRegister={guest ? () => { tourDone(); setLoginReason(null); setLoginMode("register"); setLoginOpen(true); } : null} />}
         {termsAccepted && termsOpen && <TermsSheet review onClose={() => setTermsOpen(false)} />}

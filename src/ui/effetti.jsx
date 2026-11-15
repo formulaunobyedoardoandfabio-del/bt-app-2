@@ -82,7 +82,8 @@ export function TypeText({ text, cps = 70, cursorColor = "currentColor", onDone 
   );
 }
 
-export function ChangelogCard({ releases = [], title = "Novità", fontHead = "inherit", fontBody = "inherit", colors = {} }) {
+// 15/11 (Edoardo): toccando una novità che ha un posto nell'app (go) si va a quella funzione (onOpen).
+export function ChangelogCard({ releases = [], title = "Novità", fontHead = "inherit", fontBody = "inherit", colors = {}, onOpen = null }) {
   const box = useRef(null);
   const [fade, setFade] = useState([0, 40]);
   const c = { card: "#141418", border: "rgba(255,255,255,.1)", text: "#F2F2F4", muted: "#8E8E96", accent: "#E10600", ...colors };
@@ -103,10 +104,19 @@ export function ChangelogCard({ releases = [], title = "Novità", fontHead = "in
       <div ref={box} data-changelog-list="" onScroll={measure} style={{ height: 256, overflowY: "auto", overscrollBehavior: "contain", WebkitMaskImage: mask, maskImage: mask, scrollbarWidth: "none" }}>
         <ul style={{ listStyle: "none", margin: 0, padding: 8, display: "flex", flexDirection: "column" }}>
           {releases.map((r, i) => (
-            <li key={i} data-changelog-item="" style={{ display: "flex", alignItems: "center", gap: 12, minHeight: 34, padding: "4px 8px", borderRadius: 8 }}>
-              <span style={{ width: 40, flexShrink: 0, fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace", fontSize: 11.5, color: c.muted }}>{r.date}</span>
-              <span style={{ flex: 1, minWidth: 0, fontFamily: fontBody, fontSize: 13, color: c.text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{r.title}</span>
-              {r.tag && <span style={{ padding: "0 7px", borderRadius: 999, background: c.accent, fontFamily: fontBody, fontWeight: 700, fontSize: 9.5, lineHeight: "16px", color: "#fff" }}>{r.tag}</span>}
+            <li key={i} data-changelog-item="" style={{ display: "flex" }}>
+              {(() => {
+                const go = !!(r.go && onOpen);
+                const inner = <>
+                  <span style={{ width: 40, flexShrink: 0, fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace", fontSize: 11.5, color: c.muted }}>{r.date}</span>
+                  <span style={{ flex: 1, minWidth: 0, fontFamily: fontBody, fontSize: 13, color: c.text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", textAlign: "left" }}>{r.title}</span>
+                  {r.tag && <span style={{ padding: "0 7px", borderRadius: 999, background: c.accent, fontFamily: fontBody, fontWeight: 700, fontSize: 9.5, lineHeight: "16px", color: "#fff" }}>{r.tag}</span>}
+                  {go && <svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={c.muted} strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}><path d="M9 6l6 6-6 6" /></svg>}
+                </>;
+                const row = { flex: 1, minWidth: 0, display: "flex", alignItems: "center", gap: 12, minHeight: go ? 44 : 34, padding: "4px 8px", borderRadius: 8 };
+                return go ? <button type="button" className="press" data-changelog-go="" aria-label={r.title + ": vai alla funzione"} onClick={() => onOpen(r.go, r)} style={{ ...row, background: "none", border: "none", cursor: "pointer" }}>{inner}</button>
+                  : <div style={row}>{inner}</div>;
+              })()}
             </li>
           ))}
         </ul>

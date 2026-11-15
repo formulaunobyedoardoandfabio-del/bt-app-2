@@ -176,8 +176,8 @@ const tests = {
     await tapSel(p, '[aria-label="Togli Nico Hülkenberg"]'); await w(p, 300);
     const left = await inner(p, '[data-budget-left]');
     await tapSel(p, '[data-fanta-add="drivers:2"]'); await w(p, 400);
-    const st = await p.evaluate(() => Object.fromEntries(['verstappen', 'bearman', 'hulkenberg', 'perez', 'stroll'].map(id => { const b = document.querySelector(`[data-pick="${id}"]`); return [id, b ? !b.disabled : null]; })));
-    await tapSel(p, '[data-pick="stroll"]'); await w(p, 300);
+    const st = await p.evaluate(() => Object.fromEntries(['verstappen', 'bearman', 'hulkenberg', 'perez', 'stroll'].map(id => { const b = document.querySelector(`[data-pick="${id}"]`); return [id, b ? !b.hasAttribute('data-pick-off') : null]; })));
+    await require('./helpers').pickDriver(p, 'stroll');   // 15/11: scelta stile chess.com (tocco + Prendi)
     const cards = await p.evaluate(() => [...document.querySelectorAll('[data-fanta-card]')].map(e => e.getAttribute('data-fanta-card')));
     await ctx.close();
     assert(left === '$5.5M', 'budget dopo aver tolto Hülkenberg: ' + left);
@@ -188,7 +188,7 @@ const tests = {
   },
   async 'fanta: ogni cambio usa un cambio gratis, oltre i 3 costa 10 punti, e il 2X si sposta'(b) {
     const { ctx, p } = await open(b); await login(p); await goTab(p, 'FANTA');
-    const swap = async (from, add, to) => { await tapSel(p, `[aria-label="Cambia ${from}"]`); await w(p, 300); await tapSel(p, `[data-pick="${to}"]`); await w(p, 300); };
+    const swap = async (from, add, to) => { await tapSel(p, `[aria-label="Cambia ${from}"]`); await w(p, 300); await require('./helpers').pickDriver(p, to); };
     await swap('Sergio Pérez', null, 'stroll');
     const t1 = await inner(p, '[data-transfers]');
     await swap('Nico Hülkenberg', null, 'bottas');

@@ -229,6 +229,19 @@
     return answer === q.answer;
   }
 
+  // 15/11 (Edoardo: "il sondaggio storico che ho creato non funziona"): una domanda dell'admin con la risposta esatta
+  // già segnata prima che la sessione cominci non è un pronostico ma una domanda di storia (la risposta si sa già): si
+  // risponde una volta e si vede subito se è giusta. Prima restava chiusa ("Il risultato lo segna l'admin") e nessuno
+  // poteva rispondere. hist: true = segnata di storia dall'admin (resta di storia anche a sessione cominciata).
+  // closed = sessione in corso o finita.
+  function predKnown(q, { lockAt = null, now = Date.now(), closed = false } = {}) {
+    if (!q) return false;
+    if (q.kind === "history") return true;
+    if (q.answer == null) return false;
+    if (q.hist === true) return true;
+    return !closed && lockAt != null && now < lockAt;
+  }
+
   // Notizie: quanti minuti fa sono uscite, dal testo mostrato ("Adesso", "2 min fa", "5 h fa", "Ieri", "3 giorni fa"...).
   // Serve a mettere in grande sempre la più recente e le altre dalla più nuova. Testo sconosciuto: in fondo.
   const AGE_UNITS = [[/^min/, 1], [/^(h|or)/, 60], [/^giorn/, 1440], [/^settiman/, 10080], [/^mes/, 43200], [/^ann/, 525600]];
@@ -340,6 +353,6 @@
     return { vmax: Math.round(v.vmax), vcorner: Math.round(v.vcorner), lapDelta: Math.round(pen * lapTime) / 100, ideal: { wing: iw, ride: ir, vmax: Math.round(vi.vmax), vcorner: Math.round(vi.vcorner) }, warnings };
   }
 
-  return { SESSION_MIN, startOf, endOf, wxLock, teamLock, countdown, RULES, aeroModel, sessionPoints, squadScore, transfers, nextFree, squadValue, canAfford, autoFill, bank, place, withPaid, clearSquad, fixBoost, norm, predictionCorrect, newsAge, newestFirst, RATING_PARAMS, communityRatings,
+  return { SESSION_MIN, startOf, endOf, wxLock, teamLock, countdown, RULES, aeroModel, sessionPoints, squadScore, transfers, nextFree, squadValue, canAfford, autoFill, bank, place, withPaid, clearSquad, fixBoost, norm, predictionCorrect, predKnown, newsAge, newestFirst, RATING_PARAMS, communityRatings,
     PIT_WHEELS, PIT_STEPS, PIT_RULES, pitNew, pitLights, pitGo, pitTap, pitRating, SILLY_RULES, sillyPoints, SILLY_FANS, sillyBoard };
 });

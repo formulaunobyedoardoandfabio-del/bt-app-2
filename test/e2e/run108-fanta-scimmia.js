@@ -21,12 +21,15 @@ const state = p => p.evaluate(() => {
 });
 const choose = async p => {   // nel selettore aperto: una riga a caso tra quelle che si possono scegliere
   await w(p, 250);
-  const rows = await p.evaluate(() => [...document.querySelectorAll('[data-pick]')].map(e => ({ id: e.getAttribute('data-pick'), off: e.disabled, text: e.innerText.replace(/\n/g, ' ') })));
+  // 15/11: piloti nella scelta stile chess.com: chi non si prende ha data-pick-off e il motivo nell'aria-label
+  const rows = await p.evaluate(() => [...document.querySelectorAll('[data-pick]')].map(e => ({ id: e.getAttribute('data-pick'), off: e.disabled || e.hasAttribute('data-pick-off'), text: (e.getAttribute('aria-label') || '') + ' ' + e.innerText.replace(/\n/g, ' ') })));
   const ok = rows.filter(r => !r.off);
-  const wrongOff = rows.filter(r => r.off && !/Budget insufficiente|In squadra|già/i.test(r.text));
+  const wrongOff = rows.filter(r => r.off && !/Budget insufficiente|In squadra|già|È già nel tuo posto/i.test(r.text));
   if (!ok.length) { await p.keyboard.press('Escape').catch(() => {}); await p.evaluate(() => { const b = document.querySelector('[aria-label="Chiudi"]'); if (b) b.click(); }); await w(p, 200); return { picked: null, rows: rows.length, wrongOff }; }
   const r = pick(ok);
   await p.evaluate(id => document.querySelector(`[data-pick="${id}"]`).click(), r.id);
+  await w(p, 150);
+  await p.evaluate(() => { const c = document.querySelector('[data-chess-confirm]'); if (c && !c.disabled) c.click(); });
   await w(p, 250);
   return { picked: r.id, rows: rows.length, wrongOff };
 };

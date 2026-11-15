@@ -149,4 +149,11 @@ async function run(tests) {
   process.exit(fail ? 1 : 0);
 }
 
-module.exports = { EXE, PAGE, NOW, open, w, text, norm, inner, inners, count, has, tapText, tapSel, goTab, login, openAdmin, enterAdminCode, assert, run };
+// 15/11: scelta del pilota nel Fanta stile chess.com: si tocca il pilota (dice la sua frase), poi "Prendi".
+async function pickDriver(p, id) {
+  await tapSel(p, `[data-pick="${id}"]`); await w(p, 200);
+  if (await p.$('[data-chess-confirm]:not([disabled])')) await tapSel(p, '[data-chess-confirm]');
+  await w(p, 300);
+}
+
+module.exports = { EXE, PAGE, NOW, open, w, text, norm, inner, inners, count, has, tapText, tapSel, goTab, login, openAdmin, enterAdminCode, pickDriver, assert, run };
