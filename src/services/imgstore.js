@@ -5,6 +5,20 @@
 // subito. Al massimo `max` foto: quando sono troppe esce quella vista meno di recente. Se IndexedDB non c'è o si rompe,
 // non succede niente (si scarica come prima).
 
+// 15/11 (Edoardo: "le immagini a seconda della dimensione che devono ricoprire scaricate in qualità inferiore o
+// normale"): ogni foto ha due copie leggere, "s" (lato lungo 400 px: miniature delle liste, Salvati, chat) e "m"
+// (800 px: l'ultima notizia in grande); la foto intera (fino a 1080x1350) solo dentro la notizia aperta.
+// imgLevel: larghezza sullo schermo in px CSS → copia ("s" | "m"), null = foto intera.
+const IMG_LEVELS = { s: { px: 400, q: 0.6 }, m: { px: 800, q: 0.68 } };
+const imgLevel = w => (!(w > 0) ? null : w <= 200 ? "s" : w <= 440 ? "m" : null);
+// Misure della copia leggera (lato lungo = px del livello); null se la foto è già abbastanza piccola.
+function shrinkSize(w0, h0, level) {
+  const L = IMG_LEVELS[level];
+  if (!L || !(w0 > 0) || !(h0 > 0)) return null;
+  const k = L.px / Math.max(w0, h0);
+  return k >= 1 ? null : { w: Math.max(1, Math.round(w0 * k)), h: Math.max(1, Math.round(h0 * k)) };
+}
+
 const isRef = k => typeof k === "string" && /^fsimg:[A-Za-z0-9_-]{1,60}$/.test(k);
 const isData = v => typeof v === "string" && /^data:image\/[a-z+.-]+;base64,/.test(v);
 
@@ -50,7 +64,7 @@ function idbBackend(indexedDB) {
   };
 }
 
-function createImgStore({ backend = () => idbBackend(typeof window !== "undefined" ? window.indexedDB : null), now = () => Date.now(), max = 80 } = {}) {
+function createImgStore({ backend = () => idbBackend(typeof window !== "undefined" ? window.indexedDB : null), now = () => Date.now(), max = 200 } = {}) {   // 15/11: 200 (ci sono anche le copie leggere)
   let b;
   const B = () => { if (b === undefined) { try { b = backend() || null; } catch (e) { b = null; } } return b; };
   // Ogni chiamata al negozio è protetta: se manca o lancia un errore, vale come "niente".
@@ -79,4 +93,4 @@ function createImgStore({ backend = () => idbBackend(typeof window !== "undefine
   return { get, put, drop };
 }
 
-module.exports = { createImgStore, memoryBackend, idbBackend };
+module.exports = { createImgStore, memoryBackend, idbBackend, IMG_LEVELS, imgLevel, shrinkSize };

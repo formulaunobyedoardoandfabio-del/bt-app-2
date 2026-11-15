@@ -201,7 +201,7 @@ const IMG_REF = "fsimg:";
 const IMG_MAX_CHARS = 600000;     // foto compressa (base64): ben sotto il limite di 1 MB per documento
 const imgCache = new Map();       // riferimento → promessa del data URL
 // 14/11: le foto si tengono anche sul telefono (IndexedDB): dalla seconda apertura dell'app non si riscaricano.
-const { createImgStore } = require("./imgstore");
+const { createImgStore, imgLevel, shrinkSize, IMG_LEVELS } = require("./imgstore");
 let phoneImgs = null;
 const imgStore = () => (phoneImgs = phoneImgs || createImgStore({ backend: () => { const w = W(); return w && w.indexedDB ? require("./imgstore").idbBackend(w.indexedDB) : null; } }));
 function readAsDataURL(file) {
@@ -227,6 +227,17 @@ async function compressImage(file) {
   }
   throw mkErr("troppo-grande");
 }
+// 15/11: copia leggera di una foto (livello "s" o "m", src/services/imgstore.js); se è già piccola, la stessa foto.
+async function shrinkData(data, level) {
+  const img = await decodeImage(data);
+  const z = shrinkSize(img.naturalWidth, img.naturalHeight, level);
+  if (!z) return data;
+  const c = W().document.createElement("canvas"), g = c.getContext("2d");
+  c.width = z.w; c.height = z.h;
+  g.fillStyle = "#000"; g.fillRect(0, 0, c.width, c.height);
+  g.drawImage(img, 0, 0, c.width, c.height);
+  return c.toDataURL("image/jpeg", IMG_LEVELS[level].q);
+}
 async function uploadImage(file) {
   const data = await compressImage(file);
   const d = await needDb();
@@ -235,10 +246,43 @@ async function uploadImage(file) {
   const ref = IMG_REF + id;
   imgCache.set(ref, Promise.resolve(data));
   imgStore().put(ref, data);
+  // 15/11: anche le copie leggere (shared/img-<id>-s e -m), così liste e miniature scaricano pochi KB.
+  // Se non riescono non importa: il telefono le fa da solo dalla foto intera.
+  await Promise.all(Object.keys(IMG_LEVELS).map(async lv => {
+    try {
+      const t = await shrinkData(data, lv);
+      imgCache.set(ref + "-" + lv, Promise.resolve(t));
+      imgStore().put(ref + "-" + lv, t);
+      await track(withTimeout(d.collection("shared").doc("img-" + id + "-" + lv).set({ data: t, ts: Date.now() }), WRITE_TIMEOUT));
+    } catch (e) { /* niente copia leggera: va bene lo stesso */ }
+  }));
   return ref;
 }
-function loadImage(ref) {
+// 15/11: w = larghezza sullo schermo (px CSS). Piccola: la copia leggera ("s" o "m") e non la foto intera. Ordine:
+// telefono (IndexedDB), memoria, la copia dell'admin su Firestore (shared/img-<id>-<livello>); per le foto di prima
+// la si fa qui dalla foto intera, una volta, e resta sul telefono.
+function loadImage(ref, w) {
   if (!ref || !String(ref).startsWith(IMG_REF)) return Promise.resolve(ref || "");
+  const lv = imgLevel(w);
+  if (lv) return loadSmall(ref, lv);
+  return loadFull(ref);
+}
+function loadSmall(ref, lv) {
+  const key = ref + "-" + lv;
+  if (!imgCache.has(key)) {
+    const id = ref.slice(IMG_REF.length);
+    const fromFull = () => loadFull(ref).then(full => (full ? shrinkData(full, lv).catch(() => full) : ""));
+    const p = imgStore().get(key).then(hit => {
+      if (hit) return hit;
+      if (imgCache.has(ref)) return fromFull();   // la foto intera è già qui: niente da scaricare
+      return sg("img-" + id + "-" + lv).then(d => (d && d.data) || fromFull(), fromFull);
+    }).then(u => { if (u && u !== "") imgStore().put(key, u); return u || ""; });
+    imgCache.set(key, p);
+    p.then(u => { if (!u) imgCache.delete(key); }, () => imgCache.delete(key));
+  }
+  return imgCache.get(key);
+}
+function loadFull(ref) {
   if (!imgCache.has(ref)) {
     // prima il telefono, poi Firestore (e quella scaricata si mette da parte sul telefono)
     const p = imgStore().get(ref).then(hit => hit || sg("img-" + ref.slice(IMG_REF.length)).then(d => {
@@ -253,9 +297,11 @@ function loadImage(ref) {
 }
 async function dropImage(ref) {
   if (!ref || !String(ref).startsWith(IMG_REF)) return;
+  const id = ref.slice(IMG_REF.length);
   imgCache.delete(ref);
   imgStore().drop(ref);
-  await sd("img-" + ref.slice(IMG_REF.length), true);
+  for (const lv of Object.keys(IMG_LEVELS)) { imgCache.delete(ref + "-" + lv); imgStore().drop(ref + "-" + lv); sd("img-" + id + "-" + lv, true).catch(() => {}); }   // 15/11: anche le copie leggere
+  await sd("img-" + id, true);
 }
 
 module.exports = {

@@ -137,9 +137,12 @@ run({
     const imgs = await imgDocs(p), err1 = await alerts(p);
     await p.setInputFiles('#adImg', { name: 'appunti.txt', mimeType: 'text/plain', buffer: Buffer.from('non è una foto') }); await w(p, 800);
     const err2 = await alerts(p), still = await has(p, 'img[alt="Anteprima immagine"]'), imgs2 = await imgDocs(p); await ctx.close();
-    assert(imgs.length === 1 && imgs[0].jpeg && imgs[0].len > 1000 && imgs[0].len <= 600000, 'foto grande: ' + JSON.stringify(imgs) + ' ' + err1);
+    // 15/11: con la foto vanno su anche le copie leggere -s e -m (run123), più piccole della foto intera
+    const main = imgs.filter(x => !/-[sm]$/.test(x.k)), light = imgs.filter(x => /-[sm]$/.test(x.k));
+    assert(main.length === 1 && main[0].jpeg && main[0].len > 1000 && main[0].len <= 600000, 'foto grande: ' + JSON.stringify(imgs) + ' ' + err1);
+    assert(light.length === 2 && light.every(x => x.jpeg && x.len < main[0].len), 'copie leggere della foto: ' + JSON.stringify(light));
     assert(/Formato non supportato: scegli una foto JPG o PNG\./.test(err2), 'file di testo: ' + err2);
-    assert(still && imgs2.length === 1, 'il file sbagliato non deve togliere la foto né salvare altro: ' + JSON.stringify(imgs2));
+    assert(still && imgs2.length === imgs.length, 'il file sbagliato non deve togliere la foto né salvare altro (foto e sue copie leggere): ' + JSON.stringify(imgs2));
     assert(!errs.length, errs.join(' | '));
   },
   async 'eliminando una notizia si cancella anche la sua foto, se nessun\'altra la usa'(b) {

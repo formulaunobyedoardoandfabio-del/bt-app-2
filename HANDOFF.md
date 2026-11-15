@@ -1116,3 +1116,14 @@ Misure prima del lavoro (pagina di prova, CPU rallentata 4x come un telefono med
 - Registro delle novità (Profilo): le voci con un posto nell'app sono bottoni (`go` in `CHANGELOG`): aprono la scheda e
   indicano il pezzo per un attimo (`FlashSpot`, anello che si accende quando il pezzo ha smesso di scorrere), o fanno
   partire la funzione (Novità con Dot ed Enzo, giro guidato, Enzo, Archivio, Premium). Prova: `run121-novita-vai.js`.
+
+- Foto più leggere (Edoardo: "le immagini scaricate in qualità inferiore o normale a seconda della dimensione che devono
+  ricoprire"). Ogni foto ha due copie leggere: "s" (lato lungo 400 px: miniature della lista, Salvati, chat, copertine
+  piccole) e "m" (800 px: ultima notizia in grande, copertina grande Instagram); la foto intera (1080 px) solo nella
+  notizia aperta e nell'immagine da condividere. `src/services/imgstore.js`: `IMG_LEVELS`, `imgLevel(larghezza)`,
+  `shrinkSize`; `firebase.js`: `loadImage(ref, larghezza)` (telefono → memoria → `shared/img-<id>-s|m` → per le foto di
+  prima la copia si fa sul telefono dalla foto intera, una volta, e resta in IndexedDB, ora fino a 200 voci);
+  `uploadImage` carica anche le copie; `dropImage` cancella anche quelle. App: `useImageSrc(src, w)`, prop `w` di
+  `StoredImg`/`StoredBg`. Le notizie vere hanno tutte foto `fsimg:` (controllato sul documento pubblico).
+  Prove: unit `imgstore` (+3), e2e `run123-foto-leggere.js` (2, rossa sul codice di prima), aggiornata `run34-admin`
+  (con la foto ci sono anche le due copie).

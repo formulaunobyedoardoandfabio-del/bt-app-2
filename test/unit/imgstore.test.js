@@ -53,6 +53,36 @@ t('solo data URL di immagini e solo riferimenti fsimg: (niente altro finisce sul
   assert.strictEqual(await S.get('fsimg:c'), null, 'foto tolta dalla notizia: tolta anche dal telefono');
 });
 
+// 15/11 (Edoardo: "le immagini a seconda della dimensione che devono ricoprire scaricate in qualità inferiore o
+// normale"): copie leggere "s" e "m" di ogni foto, la foto intera solo nella notizia aperta.
+t('copia giusta per la larghezza sullo schermo: miniature "s", ultima notizia "m", notizia aperta la foto intera', () => {
+  const { imgLevel } = require('../../src/services/imgstore');
+  assert.strictEqual(imgLevel(54), 's');
+  assert.strictEqual(imgLevel(92), 's');
+  assert.strictEqual(imgLevel(200), 's');
+  assert.strictEqual(imgLevel(201), 'm');
+  assert.strictEqual(imgLevel(358), 'm');
+  assert.strictEqual(imgLevel(440), 'm');
+  assert.strictEqual(imgLevel(441), null);
+  assert.strictEqual(imgLevel(undefined), null, 'senza larghezza: la foto intera');
+  assert.strictEqual(imgLevel(0), null);
+});
+
+t('misure della copia leggera: lato lungo al massimo quello del livello, proporzioni uguali, mai ingrandita', () => {
+  const { shrinkSize, IMG_LEVELS } = require('../../src/services/imgstore');
+  assert.deepStrictEqual(shrinkSize(1080, 1350, 's'), { w: Math.round(1080 * IMG_LEVELS.s.px / 1350), h: IMG_LEVELS.s.px });
+  assert.deepStrictEqual(shrinkSize(1080, 720, 'm'), { w: IMG_LEVELS.m.px, h: Math.round(720 * IMG_LEVELS.m.px / 1080) });
+  assert.strictEqual(shrinkSize(300, 200, 'm'), null, 'già piccola: si usa così com\'è');
+  assert.strictEqual(shrinkSize(0, 200, 's'), null);
+  assert.ok(IMG_LEVELS.s.px < IMG_LEVELS.m.px && IMG_LEVELS.m.px < 1080);
+});
+
+t('la copia leggera si tiene sul telefono come la foto intera (chiave con -s / -m)', async () => {
+  const store = createImgStore({ backend: () => memoryBackend() });
+  await store.put('fsimg:abc123-s', 'data:image/jpeg;base64,AAAA');
+  assert.strictEqual(await store.get('fsimg:abc123-s'), 'data:image/jpeg;base64,AAAA');
+});
+
 (async () => {
   const filter = process.argv[2] || '';
   for (const [name, fn] of tests) {

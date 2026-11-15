@@ -163,26 +163,28 @@ const openUrl = url => {
 // riferimento "fsimg:<id>", come l'app di oggi. Link https e data URL si usano così come sono.
 const isStoredRef = src => typeof src === "string" && src.startsWith(IMG_REF);
 // Indirizzo da mettere nell'<img>: "" finché la foto salvata non è arrivata (o se non si trova).
-function useImageSrc(src) {
+// 15/11: w = quanto è larga sullo schermo (px CSS): piccola = copia leggera della foto (src/services/imgstore.js,
+// "s" fino a 200, "m" fino a 440), senza w la foto intera (notizia aperta, immagine da condividere).
+function useImageSrc(src, w) {
   const [u, setU] = useState(() => (src && !isStoredRef(src) ? src : ""));
   useEffect(() => {
     let alive = true;
     if (!src) { setU(""); return undefined; }
     if (!isStoredRef(src)) { setU(src); return undefined; }
     setU("");
-    loadStoredImage(src).then(v => { if (alive) setU(v || ""); }, () => {});
+    loadStoredImage(src, w).then(v => { if (alive) setU(v || ""); }, () => {});
     return () => { alive = false; };
-  }, [src]);
+  }, [src, w]);
   return u;
 }
 // <img> di una foto che può essere salvata su Firebase; finché non c'è, al suo posto fallback.
-function StoredImg({ src, fallback = null, ...rest }) {
-  const u = useImageSrc(src);
+function StoredImg({ src, w, fallback = null, ...rest }) {
+  const u = useImageSrc(src, w);
   return u ? <img alt="" {...rest} src={u} /> : fallback;
 }
 // Riquadro con la foto come sfondo (copertine); empty è lo sfondo quando la foto non c'è.
-function StoredBg({ src, as: Tag = "div", fit = "cover", empty, style, children, ...rest }) {
-  const u = useImageSrc(src);
+function StoredBg({ src, w, as: Tag = "div", fit = "cover", empty, style, children, ...rest }) {
+  const u = useImageSrc(src, w);
   return <Tag {...rest} style={{ ...style, background: u ? `#111 url("${u}") center / ${fit} no-repeat` : empty }}>{children}</Tag>;
 }
 // Una foto tolta da una notizia o da un video si cancella da Firebase, se nient'altro la usa.
@@ -2282,7 +2284,7 @@ function HomeScreen({ onNovita = null, novitaNew = false, onOpenArchive = null, 
   // In grande sempre la notizia più recente; sotto le altre, dalla più nuova alla più vecchia.
   const sorted = BtLogic.newestFirst(matches);
   const featured = listMode ? null : sorted[0] || null;
-  const featuredImg = useImageSrc(featured ? featured.image : "");   // finché la foto non arriva, il riquadro B&T
+  const featuredImg = useImageSrc(featured ? featured.image : "", 360);   // 15/11: ultima notizia: copia "m"   // finché la foto non arriva, il riquadro B&T
   const rest = listMode ? sorted : sorted.slice(1);
   return (
     <div data-news-look="" style={{ position: "relative", height: "100%", overflow: "hidden" }}>
@@ -2391,7 +2393,7 @@ function HomeScreen({ onNovita = null, novitaNew = false, onOpenArchive = null, 
         <SaveBtn a={a} saved={saved.includes(a.id)} onToggle={onToggleSave} style={{ top: 8, right: 24 }} />
         <button className="press" data-news-item={a.id} data-age={String(BtLogic.newsAge(a))} onClick={() => onOpenArticle(a.id)} style={{ scrollSnapAlign: "center", display: "flex", textAlign: "left", width: "calc(100% - 32px)", margin: "0 16px 12px", borderRadius: 16, overflow: "hidden", background: C.card, border: `1px solid ${C.border}` }}>
           <div style={{ width: 92, minHeight: 92, flexShrink: 0, position: "relative", background: a.image ? "#111" : "linear-gradient(155deg,#1a1a2e 0%,#0f0f12 70%)" }}>
-            {a.image && <StoredImg data-news-img="" src={a.image} loading="lazy" decoding="async" style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "contain" }} />}
+            {a.image && <StoredImg data-news-img="" src={a.image} w={92} loading="lazy" decoding="async" style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "contain" }} />}
             <span style={{ position: "absolute", top: 8, left: 8, padding: "3px 8px", borderRadius: 6, background: a.premium ? "rgba(231,179,76,.2)" : "rgba(255,255,255,.12)", fontFamily: F_HEAD, fontWeight: 800, fontSize: 8, letterSpacing: .8, color: a.premium ? C.gold : "#fff" }}>{a.cat}</span>
           </div>
           <div style={{ flex: 1, padding: "12px 52px 12px 14px", display: "flex", flexDirection: "column", justifyContent: "center", minWidth: 0 }}>
@@ -2897,7 +2899,7 @@ function CircuitScreen({ circuitId, races, articles, onBack, onTag, onOpenArticl
       <div style={{ margin: "0 16px 12px" }}>
         {related.length ? related.map(a => (
           <button key={a.id} className="press" onClick={() => onOpenArticle(a.id)} style={{ display: "flex", alignItems: "center", gap: 12, width: "100%", padding: "11px 12px", marginBottom: 8, borderRadius: 14, background: C.card, border: `1px solid ${C.border}`, textAlign: "left" }}>
-            <StoredBg as="span" src={a.image} fit="contain" empty="linear-gradient(155deg,#1a1a2e 0%,#0f0f12 70%)" style={{ width: 54, height: 54, flexShrink: 0, borderRadius: 10 }} />
+            <StoredBg as="span" src={a.image} w={54} fit="contain" empty="linear-gradient(155deg,#1a1a2e 0%,#0f0f12 70%)" style={{ width: 54, height: 54, flexShrink: 0, borderRadius: 10 }} />
             <span style={{ flex: 1, minWidth: 0 }}>
               <span style={{ display: "block", fontFamily: F_HEAD, fontWeight: 700, fontSize: 13.5, color: C.text, lineHeight: 1.3 }}>{a.title}</span>
               <span style={{ display: "block", fontFamily: F_BODY, fontSize: 11, color: C.dim, marginTop: 3 }}>{a.cat} · {a.time}</span>
@@ -6345,7 +6347,7 @@ function SavedTiles({ items, onOpen }) {
           return (
             <button key={a.id} type="button" className="press garage-tile" data-saved-tile={a.id} aria-label={a.title} onClick={() => onOpen(a.id)}
               style={{ position: "absolute", left: pos.left, top: pos.top, width: T, height: T, boxSizing: "border-box", padding: 0, borderRadius: R, overflow: "hidden", background: "#111", border: "1px solid rgba(255,255,255,.14)", boxShadow: "inset 0 1px 0 rgba(255,255,255,.22), 0 8px 18px rgba(0,0,0,.4)", textAlign: "left" }}>
-              <StoredBg as="span" data-saved-photo="" src={a.image} empty={empty} style={{ position: "absolute", inset: 0 }} />
+              <StoredBg as="span" data-saved-photo="" src={a.image} w={180} empty={empty} style={{ position: "absolute", inset: 0 }} />
               {!a.image && <span aria-hidden="true" style={{ position: "absolute", top: 8, left: 0, right: 0, textAlign: "center", fontFamily: F_HEAD, fontWeight: 900, fontStyle: "italic", fontSize: Math.round(T * 0.26), color: "rgba(255,255,255,.12)" }}>B&amp;T</span>}
               <h3 style={{ position: "absolute", left: 0, right: 0, bottom: 0, margin: 0, padding: "16px 8px 7px", background: "linear-gradient(180deg, rgba(0,0,0,0), rgba(0,0,0,.85) 55%)", fontFamily: F_HEAD, fontWeight: 800, fontSize: 9.5, lineHeight: 1.22, color: "#fff" }}><span style={{ display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{a.title}</span></h3>
             </button>
@@ -7358,7 +7360,7 @@ function IgRow({ v, pos = null, line, onOpen }) {
     <button className="press" data-ig-video={v.id} aria-label={"Apri su Instagram: " + (v.title || "reel")} onClick={onOpen}
       style={{ display: "flex", alignItems: "center", gap: 12, width: "100%", padding: "10px 14px", textAlign: "left", borderBottom: line ? `1px solid ${C.divider}` : "none" }}>
       {pos != null && <span data-ig-pos={pos} style={{ width: 34, height: 28, borderRadius: 8, display: "flex", alignItems: "center", justifyContent: "center", fontFamily: F_HEAD, fontWeight: 900, fontStyle: "italic", fontSize: 13, flexShrink: 0, ...(pos === 1 ? { background: C.accent, color: C.onAccent } : { background: C.card, color: C.text, border: "1px solid rgba(255,255,255,.1)" }) }}>P{pos}</span>}
-      <StoredBg as="span" data-ig-thumb="" src={v.thumb} empty="#1F1F24" style={{ width: 40, height: 52, borderRadius: 9, border: `1px solid ${C.border}`, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+      <StoredBg as="span" data-ig-thumb="" src={v.thumb} w={40} empty="#1F1F24" style={{ width: 40, height: 52, borderRadius: 9, border: `1px solid ${C.border}`, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
         {!v.thumb && <IgPlay size={14} color={C.dim} />}
       </StoredBg>
       <span style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: 3 }}>
@@ -7415,7 +7417,7 @@ function InstagramScreen({ ig, onToast }) {
             {lastDay && <span data-ig-date="" style={{ fontFamily: F_BODY, fontSize: 12, color: C.muted }}>{igDay(lastDay)}</span>}
           </div>
           <button className="press" data-ig-video={last.id} data-ig-last="" aria-label={"Guarda su Instagram: " + (last.title || "l'ultimo reel")} onClick={() => open(last)} style={{ display: "block", width: "100%", padding: 0, borderRadius: 22, overflow: "hidden", border: `1px solid ${C.border}`, textAlign: "left" }}>
-            <StoredBg as="span" data-ig-thumb="" src={last.thumb} empty={IG_EMPTY} style={{ display: "block", position: "relative", aspectRatio: "4 / 5" }}>
+            <StoredBg as="span" data-ig-thumb="" src={last.thumb} w={360} empty={IG_EMPTY} style={{ display: "block", position: "relative", aspectRatio: "4 / 5" }}>
               {last.desc && <span data-ig-desc="" style={{ position: "absolute", top: 14, left: 14, maxWidth: "60%", padding: "6px 10px", borderRadius: 8, background: "rgba(0,0,0,.6)", border: "1px solid rgba(255,255,255,.16)", fontFamily: F_HEAD, fontWeight: 900, fontStyle: "italic", fontSize: 11, letterSpacing: 1, color: "#fff", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", boxSizing: "border-box" }}>{last.desc}</span>}
               {IGL.isNew(last, now) && <span data-ig-new="" style={{ position: "absolute", top: 14, right: 14, display: "flex", alignItems: "center", gap: 6, padding: "6px 9px", borderRadius: 8, background: "#fff", color: "#0A0A0C", fontFamily: F_HEAD, fontWeight: 900, fontSize: 11, letterSpacing: 1 }}><span style={{ width: 7, height: 7, borderRadius: "50%", background: C.accent }} />NUOVO</span>}
               <span aria-hidden="true" style={{ position: "absolute", top: "50%", left: "50%", width: 68, height: 68, margin: "-34px 0 0 -34px", borderRadius: "50%", background: "rgba(255,255,255,.16)", border: "1px solid rgba(255,255,255,.3)", display: "flex", alignItems: "center", justifyContent: "center", boxSizing: "border-box" }}><IgPlay size={26} color="#fff" /></span>
@@ -7572,7 +7574,7 @@ function ChatLinkThumb({ k, prof = null, size = 52 }) {
   const box = { width: size, height: size, borderRadius: 10, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden", background: C.card };
   if (k.t === "news") {
     const a = ctx && ctx.sources ? (ctx.sources.articles || []).find(x => x.id === k.id) : null;
-    return <StoredBg data-link-thumb="news" src={a && a.image} empty={C.card} style={box}>{!(a && a.image) && <Icon name="doc" size={Math.round(size * .42)} color={C.muted} />}</StoredBg>;
+    return <StoredBg data-link-thumb="news" src={a && a.image} w={120} empty={C.card} style={box}>{!(a && a.image) && <Icon name="doc" size={Math.round(size * .42)} color={C.muted} />}</StoredBg>;
   }
   const d = (k.t === "driver" || k.t === "radio") && driverById(k.id), t = k.t === "team" && teamById(k.id);
   if (d) return <span data-link-thumb="driver" style={{ ...box, background: alpha(d.color, .28) }}><Headshot driver={d} size={size - 8} /></span>;
@@ -9285,6 +9287,7 @@ const APP_TOUR = [
 // { action } fa partire qualcosa (Novità, giro guidato, Enzo, Archivio, Premium). Le voci senza un posto non si toccano.
 const CHANGELOG = [
   { date: "15/11", title: "Scelta dei piloti come su chess.com", tag: "Nuovo", go: { tab: "fanta", sel: "[data-fanta-drivers]" } },
+  { date: "15/11", title: "Foto più leggere nelle liste" },
   { date: "15/11", title: "Domande di storia scritte dall'admin", go: { tab: "fanta", sel: "[data-prediction]" } },
   { date: "15/11", title: "Novità raccontate da Dot ed Enzo", tag: "Nuovo", go: { action: "duo" } },
   { date: "15/11", title: "Enzo, l'assistente svogliato", tag: "Nuovo", go: { action: "enzo" } },
@@ -10259,7 +10262,7 @@ function AdminInstagramTab({ ig, setIg, onToast }) {
             <input aria-label={"Like video " + (i + 1)} placeholder="Likes" value={v.likes} onChange={e => setV(v.id, "likes", e.target.value)} style={aInput} />
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            {v.thumb && <StoredImg src={v.thumb} alt={"Copertina video " + (i + 1)} style={{ width: 44, height: 44, borderRadius: 8, objectFit: "cover" }} />}
+            {v.thumb && <StoredImg src={v.thumb} w={44} alt={"Copertina video " + (i + 1)} style={{ width: 44, height: 44, borderRadius: 8, objectFit: "cover" }} />}
             <ImagePicker id={"igThumb" + v.id} value={v.thumb} onChange={url => setThumb(v, url)} label="Carica copertina" changeLabel="Cambia copertina" compact />
           </div>
         </div>
