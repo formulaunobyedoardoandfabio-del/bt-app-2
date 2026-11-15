@@ -21,6 +21,7 @@ import BtElo from "./logic/elo";
 import BtReplay from "./logic/replay";
 import TrackReplay from "./logic/track-replay";
 import { LiveOrb, TypeText, ChangelogCard, VanishCanvas } from "./ui/effetti";
+import { AppGuide, EnzoChat } from "./ui/guida";
 import { createArchive, findReplay } from "./services/archive";
 import BtTrophyPro from "./logic/trophypro";
 import { createSwipeVotes } from "./services/swipevotes";
@@ -2305,7 +2306,7 @@ function HomeScreen({ onOpenArchive = null, holidayTop = null, pitSwipe = null, 
       </div>
       {/* 7/11 sera (Edoardo): tolti dalla Home la Pit Lane e le gomme (filtri G09 e G10); i filtri restano spenti. */}
       <div style={{ display: "flex", gap: 8, margin: "0 16px 14px" }}>
-        <button className="press" aria-pressed={savedOnly ? "true" : "false"} onClick={() => setSavedOnly && setSavedOnly(!savedOnly)} style={aChip(savedOnly, C.gold)}><Icon name={savedOnly ? "bookmark-fill" : "bookmark"} size={12} color={savedOnly ? C.gold : C.muted} /> Salvati{saved.length ? ` · ${saved.length}` : ""}</button>
+        <button className="press" data-saved-chip="" aria-pressed={savedOnly ? "true" : "false"} onClick={() => setSavedOnly && setSavedOnly(!savedOnly)} style={aChip(savedOnly, C.gold)}><Icon name={savedOnly ? "bookmark-fill" : "bookmark"} size={12} color={savedOnly ? C.gold : C.muted} /> Salvati{saved.length ? ` · ${saved.length}` : ""}</button>
         {savedOnly && <div role="group" aria-label="Come vedere i salvati" style={{ display: "flex", gap: 6, marginLeft: "auto" }}>
           {[["griglia", "Salvati a piastrelle", <><rect x="4" y="4" width="7" height="7" rx="1.5" /><rect x="13" y="4" width="7" height="7" rx="1.5" /><rect x="4" y="13" width="7" height="7" rx="1.5" /><rect x="13" y="13" width="7" height="7" rx="1.5" /></>], ["lista", "Salvati a lista", <path d="M9 6h11M9 12h11M9 18h11M4.5 6h.01M4.5 12h.01M4.5 18h.01" />]].map(([id, label, glyph]) => (
             <button key={id} type="button" className="press" data-saved-view={id} aria-label={label} aria-pressed={savedView === id ? "true" : "false"} onClick={() => pickSavedView(id)}
@@ -9145,6 +9146,31 @@ const HACK_BOOT = [
   "> garage B&T: serve un codice",
 ];
 const HACK_GUARD_KEY = "bt-hack-guard";
+// 15/11 (Edoardo: "per il tutorial con il Dot fai molti più punti facendo vedere bene ogni singola cosa e se non c'è
+// una gara in atto ... fai partire una demo"). Giro guidato in tutta l'app (src/ui/guida.jsx AppGuide): ogni tappa apre
+// la sua scheda; le tappe "live" partono con la prova diretta (DEMO) se non si corre; i pezzi che non ci sono si saltano.
+const APP_TOUR = [
+  { area: "Home", tab: "home", sel: "[data-featured]", title: "La notizia del giorno", text: "In alto la notizia più importante, con la foto grande. Toccala per leggerla tutta." },
+  { area: "Home", tab: "home", sel: 'input[placeholder^="Cerca articoli"]', title: "Cerca", text: "Scrivi un pilota, una scuderia o una parola: le notizie si filtrano mentre scrivi." },
+  { area: "Home", tab: "home", sel: "[data-saved-chip]", r: 999, title: "I tuoi salvati", text: "Col segnalibro salvi una notizia. Qui le ritrovi tutte, a piastrelle come il Garage." },
+  { area: "Home", tab: "home", sel: "[data-news-item]", title: "Tutte le notizie", text: "Sotto, le altre notizie del paddock, dalla più nuova. Scorri col dito." },
+  { area: "Home", tab: "home", sel: "[data-ig-big]", title: "Instagram di B&T", text: "Le storie e i post di B&T Motorsport, anche gli indizi sui codici segreti." },
+  { area: "Home", tab: "home", sel: '[aria-label="Notifiche"]', r: 999, title: "Notifiche", text: "Qui arrivano gli avvisi del team: inizio sessione, notizie importanti, risultati." },
+  { area: "Fanta", tab: "fanta", sel: "[data-squad-area]", title: "La tua squadra", text: "Scegli piloti e scuderie col budget: fanno punti coi risultati veri di ogni GP." },
+  { area: "Fanta", tab: "fanta", sel: "[data-league-new]", title: "Leghe", text: "Crea una lega con gli amici o entra con un codice. Nella lega B&T ci sei già." },
+  { area: "Fanta", tab: "fanta", sel: "[data-fanta-elo]", title: "ELO B&T", text: "La tua forza nel Fanta, come negli scacchi: sale se batti chi è più forte di te." },
+  { area: "Race", tab: "race", live: true, sel: "[data-live-card]", title: "Diretta della sessione", text: "Durante prove, qualifiche e gara qui c'è la diretta. Ora non si corre: questa è una prova (DEMO), la vedi solo tu." },
+  { area: "Race", tab: "race", live: true, sel: "[data-live-map]", title: "Mappa live", text: "Le auto sul tracciato vero. Il tracciato si colora con le bandiere: giallo, Safety Car, rosso." },
+  { area: "Race", tab: "race", live: true, sel: "[data-session-picker]", title: "Sessioni", text: "Passi da una sessione all'altra del weekend: prove libere, qualifiche, gara." },
+  { area: "Race", tab: "race", live: true, sel: "[data-race-chat]", title: "Chat dei tifosi", text: "La community di B&T: commenti la gara in diretta con gli altri tifosi." },
+  { area: "Race", tab: "race", live: true, sel: "[data-race-archive]", title: "Riguarda una gara", text: "Le gare finite si riguardano sulla mappa, secondo per secondo, con gomme e distacchi." },
+  { area: "Garage", tab: "garage", sel: "[data-garage-canvas]", title: "Garage", text: "Giochi e strumenti: Pit Stop, Ghost Lap, strategie, assetto, tracciati. Trascina per vederli tutti." },
+  { area: "Garage", tab: "garage", sel: "[data-garage-view]", title: "Griglia o lista", text: "Le piastrelle come un orologio, oppure l'elenco coi nomi. La scelta resta sul telefono." },
+  { area: "Profilo", view: "profilo", sel: "[data-changelog]", title: "Novità", text: "Tutto quello che cambia nell'app, dalla più nuova." },
+  { area: "Profilo", view: "profilo", sel: "[data-hack-open]", title: "Terminale del box", text: "Il terminale ADMIN: prova i codici segreti che escono sulle storie Instagram." },
+  { area: "Enzo", tab: "home", sel: '[data-nav-tab="home"]', r: 999, title: "E poi c'è Enzo", text: "Tocca tre volte la scheda dove sei già: arriva Enzo, l'assistente. Non ha voglia di lavorare, ma ti aiuta." },
+];
+
 // 15/11: registro delle novità del Profilo (Edoardo: scheda compatta per un Changelog). Dati veri: i commit dell'app.
 const CHANGELOG = [
   { date: "15/11", title: "Riguarda la gara sulla mappa", tag: "Nuovo" },
@@ -11348,7 +11374,8 @@ function App() {
   // registrati (su questo telefono si è già entrati con un account: dopo l'uscita si torna qui). ENTRY_KEY lo ricorda.
   const [entryView, setEntryView] = useState(() => { const v = local.get(ENTRY_KEY); return v === "form" || v === "door" ? v : "slides"; });
   const [entryMode, setEntryMode] = useState("login");
-  const [tourOn, setTourOn] = useState(false);   // giro guidato dell'ospite entrato dall'Entrata (una volta per telefono)
+  const [tourOn, setTourOn] = useState(false);
+  const tourDemo = useRef(false);   // 15/11: il giro guidato ha fatto partire la prova diretta (va fermata alla fine)   // giro guidato dell'ospite entrato dall'Entrata (una volta per telefono)
   // 7/11: post dei profili ufficiali (public/data/social.json); si riguarda quando si torna in Home (al massimo ogni 15 min).
   const [socialPosts, setSocialPosts] = useState([]);
   const [socialOpen, setSocialOpen] = useState(null);
@@ -12376,6 +12403,15 @@ function App() {
     setDemoVotes({ ratings: {}, dotd: {} });
     showToast(`Prova diretta (DEMO): ${sessionName(type)}. La vedi solo tu.`);
   };
+  // 15/11: giro guidato che si muove nell'app; senza una sessione vera le tappe "live" usano la prova diretta (DEMO).
+  const tourGo = st => {
+    if (st.view) setView(st.view); else { setView("tab"); if (st.tab) setTab(st.tab); }
+    if (st.live && !realLiveRace && !demoLive && !tourDemo.current) {
+      const r = races.find(x => x.status !== "DONE" && CIRCUITS[x.circuitId]) || races.find(x => CIRCUITS[x.circuitId]);
+      if (r) { tourDemo.current = true; startLive(r.id, "race"); }
+    }
+  };
+  const tourDone = () => { tourEnd(); if (tourDemo.current) { tourDemo.current = false; stopLive(); } setView("tab"); setTab("home"); };
   const stopLive = () => {
     if (demoLive) closeSession(demoLive);
     setDemoLive(null); setTelemetry(null); setLapList(null); setDemoVotes({ ratings: {}, dotd: {} }); showToast("Prova diretta terminata");
@@ -13324,7 +13360,7 @@ function App() {
           onPointerUp={showBottomNav ? e => { if (e.pointerType === "mouse") swipeEnd(e.clientX, e.clientY, e.timeStamp, e.currentTarget.clientWidth, true); } : undefined}
           onClickCapture={e => { if (performance.now() - swipeClick.current < 400) { e.stopPropagation(); e.preventDefault(); } }}>
           <BottomNav active={tab} pillRef={navPillRef} onChange={t => switchTab(t)} onTriple={() => { setRedOrb(true); fx.play("tick"); fx.buzz("success"); }} /></div>}
-      {redOrb && <div data-red-orb="" role="dialog" aria-label="Pallino rosso" onClick={() => setRedOrb(false)} style={{ position: "fixed", inset: 0, zIndex: 90, background: "rgba(0,0,0,.6)", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 18 }}><LiveOrb size={150} variant="red" label="Pallino rosso" /><span style={{ fontFamily: F_BODY, fontSize: 12, color: "rgba(255,255,255,.62)" }}>Tocca per chiudere</span></div>}
+      {redOrb && <EnzoChat accent={C.accent} offline={offline} raceToday={!!realLiveRace || races.some(r => { const d = Date.parse((r.date || "") + "T12:00:00Z"), n = nowMs(); return n > d - 2.6 * 86400000 && n < d + 0.6 * 86400000; })} onDemo={d => { setView("tab"); setTab(d.tab); }} onClose={() => setRedOrb(false)} />}
         {showBottomNav && adH > 0 && <div data-ad-space="" aria-hidden="true" style={{ height: adH + AD_GAP, flexShrink: 0 }} />}
         {pumpkinAt && holiday === "halloween" && view === "tab" && pumpkinAt.tab === tab && (
           <button className="press hol-wob" data-pumpkin={pumpkinAt.spot} aria-label="Una zucca!" onClick={() => {
@@ -13361,7 +13397,7 @@ function App() {
         {linkShare && <ChatRoomPicker onPick={id => { setPendingLink(linkShare); setLinkShare(null); openChat(id); }} onClose={() => setLinkShare(null)} />}
         {socialOpen && <SocialSheet post={socialOpen} onClose={() => setSocialOpen(null)} />}
         <RainGlass on={rainOn} />
-        {tourOn && (guest || !!account) && view === "tab" && tab === "home" && <GuestTour member={!guest} useBack={useBack} onDone={tourEnd} onRegister={() => { tourEnd(); setLoginReason(null); setLoginMode("register"); setLoginOpen(true); }} />}
+        {tourOn && (guest || !!account) && <AppGuide steps={APP_TOUR} useBack={useBack} onGo={tourGo} onDone={tourDone} onRegister={guest ? () => { tourDone(); setLoginReason(null); setLoginMode("register"); setLoginOpen(true); } : null} />}
         {termsAccepted && termsOpen && <TermsSheet review onClose={() => setTermsOpen(false)} />}
         {feedbackOpen && <FeedbackModal onClose={() => setFeedbackOpen(false)} onSend={sendFeedback} />}
         {toast && <div className="toast" style={showBottomNav && adH > 0 ? { bottom: 104 + adH + AD_GAP } : undefined}>{toast}</div>}

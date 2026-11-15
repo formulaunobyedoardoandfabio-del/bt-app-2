@@ -95,6 +95,27 @@ def track_status(msgs, sec):
             out.append([sec(m.get('date')), new]); cur = new
     return out
 
+def quality(rec, lap_share=0.8, order_share=0.25):
+    """Si pubblica solo un replay che torna coi dati ufficiali: giri di ognuno (±1) per almeno l'80% dei piloti e ordine
+    d'arrivo (chi completa i suoi giri prima) diverso da quello ufficiale per al massimo il 25% (penalità comprese)."""
+    L = rec.get('L') or 0
+    ds = [d for d in rec.get('drivers', []) if d.get('laps') is not None]
+    if not L or not ds: return False, 'senza giri ufficiali'
+    good, fin = 0, []
+    for d in ds:
+        v = undeltas(d.get('p') or [])
+        top = max(v) if v else 0
+        if abs(math.floor(top / L + 1e-9) - d['laps']) <= 1: good += 1
+        if d.get('pos') is not None:
+            t = next((k for k, x in enumerate(v) if x >= d['laps'] * L - 2), None)
+            fin.append((d['pos'], -d['laps'], t if t is not None else 10 ** 9, d.get('code')))
+    if good < lap_share * len(ds): return False, f'giri che non tornano: {good}/{len(ds)} giusti'
+    official = [x[3] for x in sorted(fin)]
+    data = [x[3] for x in sorted(fin, key=lambda x: (x[1], x[2]))]
+    diff = sum(1 for a, b in zip(official, data) if a != b)
+    if fin and diff > order_share * len(fin): return False, f'arrivo diverso da quello ufficiale: {diff}/{len(fin)}'
+    return True, 'ok'
+
 # ── OpenF1 ──────────────────────────────────────────────────────────────────────────────────────────────────────────
 def iso(d): return datetime.fromisoformat(str(d).replace('Z', '+00:00'))
 
@@ -198,7 +219,13 @@ def main():
     for k in keys:
         if k in have and not force: continue
         try:
-            text = dump(f'{k}.json', convert(k))
+            rec = convert(k)
+            ok, why = quality(rec)
+            if not ok:                                  # replay che non torna: non si pubblica (resta il giro per giro)
+                old = os.path.join(OUT, f'{k}.json')
+                if os.path.exists(old): os.remove(old)
+                print(f'{k}: salto ({why})'); continue
+            text = dump(f'{k}.json', rec)
             print(f'{k}: ok ({len(text) // 1024} KB)')
         except Exception as e:
             print(f'{k}: salto ({e})')

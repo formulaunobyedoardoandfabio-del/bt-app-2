@@ -11,11 +11,24 @@ import React, { useEffect, useRef, useState } from "react";
 const reduced = () => typeof window !== "undefined" && !!window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
 // variant "auto": bianca su sfondo scuro (on="dark"), nera su sfondo chiaro (on="light"); "red": il pallino rosso.
-export function LiveOrb({ size = 120, variant = "auto", on = "dark", interactive = true, blink = true, label = "Pallino B&T", style, ...rest }) {
+// lookAt {x, y} (punto dello schermo): gli occhi guardano lì invece che il dito (giro guidato).
+export function LiveOrb({ size = 120, variant = "auto", on = "dark", interactive = true, blink = true, lookAt = null, label = "Pallino B&T", style, ...rest }) {
   const ref = useRef(null), eyes = useRef(null);
   const [closed, setClosed] = useState(false);
+  const lx = lookAt ? Math.round(lookAt.x) : null, ly = lookAt ? Math.round(lookAt.y) : null;
   useEffect(() => {
-    if (!interactive) return undefined;
+    if (lx == null) return undefined;
+    const id = requestAnimationFrame(() => {
+      const el = ref.current, ey = eyes.current;
+      if (!el || !ey) return;
+      const r = el.getBoundingClientRect(), dx = lx - (r.left + r.width / 2), dy = ly - (r.top + r.height / 2);
+      const d = Math.hypot(dx, dy) || 1, m = Math.min(1, d / (size * 2)) * size * 0.14;
+      ey.style.transform = `translate(${((dx / d) * m).toFixed(1)}px, ${((dy / d) * m).toFixed(1)}px)`;
+    });
+    return () => cancelAnimationFrame(id);
+  });
+  useEffect(() => {
+    if (!interactive || lx != null) return undefined;
     let raf = 0, px = 0, py = 0;
     const apply = () => {
       raf = 0;
@@ -29,7 +42,7 @@ export function LiveOrb({ size = 120, variant = "auto", on = "dark", interactive
     window.addEventListener("pointermove", move, { passive: true });
     window.addEventListener("pointerdown", move, { passive: true });
     return () => { window.removeEventListener("pointermove", move); window.removeEventListener("pointerdown", move); cancelAnimationFrame(raf); };
-  }, [interactive, size]);
+  }, [interactive, size, lx == null]);
   useEffect(() => {
     if (!blink || reduced()) return undefined;
     let t1 = 0, t2 = 0;

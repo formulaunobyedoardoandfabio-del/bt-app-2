@@ -62,22 +62,25 @@ run({
     assert(!errs.length, errs.join(' | '));
   },
 
-  async 'ospite dall\'Entrata: giro guidato in 5 passi sulle parti vere dell\'app, una volta sola'(b) {
+  // 15/11: il giro guidato ora è a tappe in tutta l'app (src/ui/guida.jsx); per l'ospite si saltano i pezzi che non vede.
+  async 'ospite dall\'Entrata: giro guidato a tappe sulle parti vere dell\'app, una volta sola'(b) {
     const { ctx, p, errs } = await open(b, { welcome: true, init: () => { try { localStorage.setItem('bt_bt-entry', JSON.stringify('door')); } catch (e) {} } });
-    await tapSel(p, '[data-door-guest]'); await w(p, 700);
+    await tapSel(p, '[data-door-guest]'); await w(p, 900);
     const seen = [];
-    for (let i = 0; i < 5; i++) {
+    for (let i = 0; i < 30; i++) {
+      await p.waitForFunction(() => !!document.querySelector('[data-tour-spot="on"]') || !document.querySelector('[data-guest-tour]'), null, { timeout: 4000 }).catch(() => {});
       seen.push(await p.evaluate(() => { const t = document.querySelector('[data-guest-tour]'); const s = document.querySelector('[data-tour-spot="on"]'); return t ? { n: +t.getAttribute('data-guest-tour'), title: t.querySelector('[role="dialog"]').innerText.split('\n')[1], spot: !!s } : null; }));
-      if (i < 4) { await tapSel(p, '[data-tour-next]'); await w(p, 350); }
+      if (await has(p, '[data-tour-done]')) break;
+      await tapSel(p, '[data-tour-next]'); await w(p, 900);
     }
     const lastText = await inner(p, '[data-guest-tour]');
-    await tapSel(p, '[data-tour-done]'); await w(p, 400);
+    await tapSel(p, '[data-tour-done]'); await w(p, 600);
     const gone = !(await has(p, '[data-guest-tour]')), saved = await p.evaluate(() => !!localStorage.getItem('bt_bt-guest-tour'));
     const home = await has(p, '[data-home]');
     await ctx.close();
-    assert(seen.every((s, i) => s && s.n === i + 1 && s.spot), 'passi del giro con il riquadro acceso: ' + JSON.stringify(seen));
-    assert(seen.map(s => s.title).join('|') === 'Qui trovi le notizie|La gara in diretta|Il tuo FantaF1|Il Garage|Crea il tuo account', 'titoli del giro: ' + seen.map(s => s && s.title).join('|'));
-    assert(/5 di 5/.test(lastText) && /Continua a guardare/.test(lastText), 'ultimo passo: ' + lastText);
+    assert(seen.length >= 8 && seen.every(s => s && s.spot), 'tappe del giro col pezzo acceso: ' + seen.length + ' ' + JSON.stringify(seen.slice(0, 3)));
+    assert(seen[0].title === 'La notizia del giorno' && seen[seen.length - 1].title === "E poi c'è Enzo", 'prima e ultima tappa: ' + seen.map(s => s && s.title).join('|'));
+    assert(/Continua a guardare/.test(lastText) && /Registrati/.test(lastText), 'ultimo passo dell\'ospite: ' + lastText);
     assert(gone && saved && home, 'Continua a guardare chiude il giro e lo ricorda: ' + JSON.stringify({ gone, saved, home }));
     assert(!errs.length, errs.join(' | '));
   },
@@ -85,7 +88,7 @@ run({
   async 'giro guidato: Crea il tuo account apre la registrazione; ENTRA COME OSPITE da Accedi non fa il giro'(b) {
     const { ctx, p, errs } = await open(b, { welcome: true, init: () => { try { localStorage.setItem('bt_bt-entry', JSON.stringify('door')); } catch (e) {} } });
     await tapSel(p, '[data-door-guest]'); await w(p, 600);
-    for (let i = 0; i < 4; i++) { await tapSel(p, '[data-tour-next]'); await w(p, 250); }
+    for (let i = 0; i < 30 && !(await has(p, '[data-tour-register]')); i++) { await tapSel(p, '[data-tour-next]'); await w(p, 900); }
     await tapSel(p, '[data-tour-register]'); await w(p, 500);
     const mode = await p.evaluate(() => { const e = document.querySelector('[data-login]'); return e ? e.getAttribute('data-login') : null; });
     await ctx.close();

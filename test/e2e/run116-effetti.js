@@ -66,18 +66,21 @@ run({
     const two = await p.evaluate(() => !!document.querySelector('[data-red-orb]'));
     await tapSel(p, '[data-nav-tab="home"]'); await w(p, 300);
     const three = await p.evaluate(() => ({ on: !!document.querySelector('[data-red-orb] [data-live-orb="red"]') }));
-    await tapSel(p, '[data-red-orb]'); await w(p, 300);
+    // 15/11: il pallino rosso ora è Enzo (run117): si chiude con Chiudi, dopo la frase di saluto
+    await tapSel(p, '[data-enzo-close]'); await w(p, 3600);
     const closed = await p.evaluate(() => !document.querySelector('[data-red-orb]'));
     await openTerm(p);
     await code(p, '02'); await w(p, 2200);
     const e0 = await p.evaluate(() => (document.querySelector('[data-tour-orb] [data-orb-eyes]') || {}).style ? document.querySelector('[data-tour-orb] [data-orb-eyes]').style.transform : null);
-    await p.mouse.move(5, 5); await w(p, 300);
+    const o0 = await p.evaluate(() => document.querySelector('[data-tour-orb-wrap]').style.transform);
+    await tapSel(p, '[data-tour-next]'); await w(p, 1300);   // 15/11: il pallino vola sul pezzo e lo guarda
+    const o1 = await p.evaluate(() => document.querySelector('[data-tour-orb-wrap]').style.transform);
     const e1 = await p.evaluate(() => { const e = document.querySelector('[data-tour-orb] [data-orb-eyes]'); return e ? e.style.transform : null; });
     await ctx.close();
     assert(!two, 'con due tocchi non succede niente');
     assert(three.on, 'al terzo tocco il pallino rosso');
     assert(closed, 'tocco sul pallino: si chiude');
-    assert(e1 !== null && e1 !== e0 && /translate/.test(e1), 'nel giro guidato il pallino guarda il dito: ' + e0 + ' → ' + e1);
+    assert(e1 !== null && /translate/.test(e1) && o0 !== o1, 'nel giro guidato il pallino vola sul pezzo e lo guarda: ' + o0 + ' → ' + o1 + ' occhi ' + e1);
     assert(!errs.length, errs.join(' | '));
   },
 });

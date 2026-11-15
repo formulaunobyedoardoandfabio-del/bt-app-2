@@ -148,19 +148,25 @@ run({
     assert(!errs.length, errs.join(' | '));
   },
 
-  async '02: parte il giro guidato in Home, anche con l\'account; l\'ultimo passo parla del Profilo'(b) {
+  // 15/11: giro guidato a tappe in tutta l'app; per chi ha l'account si chiude con Fine (niente Registrati).
+  async '02: parte il giro guidato in Home, anche con l\'account; passa anche dal Profilo'(b) {
     const { ctx, p, errs } = await open(b, { now: NOW }); await login(p); await w(p, 800);
     await openTerm(p);
-    await type(p, '02'); await w(p, 900);
+    await type(p, '02'); await w(p, 1400);
     const first = await p.evaluate(() => { const t = document.querySelector('[data-guest-tour]'); return t && { step: t.getAttribute('data-guest-tour'), term: !!document.querySelector('[data-hack-term]'), home: !!document.querySelector('[data-home]') }; });
-    for (let i = 0; i < 4; i++) { await tapSel(p, '[data-tour-next]'); await w(p, 250); }
-    const last = await p.evaluate(() => ({ text: (document.querySelector('[data-guest-tour]') || {}).innerText || '', reg: !!document.querySelector('[data-tour-register]') }));
-    await tapSel(p, '[data-tour-done]'); await w(p, 300);
+    const areas = new Set();
+    for (let i = 0; i < 30; i++) {
+      areas.add(await p.evaluate(() => ((document.querySelector('[data-tour-count]') || {}).textContent || '').split('·')[1] || ''));
+      if (await p.evaluate(() => !!document.querySelector('[data-tour-done]'))) break;
+      await tapSel(p, '[data-tour-next]'); await w(p, 900);
+    }
+    const reg = await p.evaluate(() => !!document.querySelector('[data-tour-register]'));
+    await tapSel(p, '[data-tour-done]'); await w(p, 500);
     const gone = await p.evaluate(() => !document.querySelector('[data-guest-tour]'));
     await ctx.close();
     assert(first && first.step === '1' && !first.term && first.home, 'giro partito in Home: ' + JSON.stringify(first));
-    assert(/Il tuo Profilo/.test(last.text) && !last.reg, 'ultimo passo per chi ha l\'account (niente "Crea il tuo account"): ' + last.text.slice(0, 160));
-    assert(gone, 'Ho capito chiude il giro');
+    assert([...areas].some(a => /Profilo/.test(a)) && !reg, 'passa dal Profilo, niente Registrati per chi ha l\'account: ' + [...areas].join(','));
+    assert(gone, 'Fine chiude il giro');
     assert(!errs.length, errs.join(' | '));
   },
 });

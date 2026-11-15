@@ -62,5 +62,29 @@ class Calcoli(unittest.TestCase):
         sec = lambda d: int(d[1:])
         self.assertEqual(R.track_status(msgs, sec), [[10, 'sc'], [30, 'green'], [40, 'vsc'], [45, 'green'], [50, 'red'], [60, 'green']])
 
+class Qualita(unittest.TestCase):
+    # 15/11: un replay si pubblica solo se torna coi giri e con l'arrivo ufficiali (Budapest 2026 aveva il tracciato sbagliato)
+    def rec(self, pos_laps_times):
+        L, drivers = 1000, []
+        for code, pos, laps, t_fin in pos_laps_times:
+            v = [round(min(laps * L, laps * L * k / t_fin)) for k in range(0, t_fin + 30)]
+            drivers.append({'code': code, 'pos': pos, 'laps': laps, 'p': R.deltas(v)})
+        return {'L': L, 'start': 0, 'laps': 3, 'drivers': drivers}
+
+    def test_buono(self):
+        ok, why = R.quality(self.rec([('AAA', 1, 3, 100), ('BBB', 2, 3, 104), ('CCC', 3, 2, 99), ('DDD', None, 1, 50)]))
+        self.assertTrue(ok, why)
+
+    def test_giri_sbagliati(self):
+        r = self.rec([('AAA', 1, 3, 100), ('BBB', 2, 3, 104), ('CCC', 3, 3, 110)])
+        for d in r['drivers']: d['laps'] = 5
+        self.assertFalse(R.quality(r)[0])
+
+    def test_arrivo_diverso(self):
+        # ordine dei dati al contrario di quello ufficiale
+        ok, why = R.quality(self.rec([('AAA', 3, 3, 100), ('BBB', 2, 3, 104), ('CCC', 1, 3, 110)]))
+        self.assertFalse(ok)
+        self.assertIn('arrivo', why)
+
 if __name__ == '__main__':
     unittest.main(verbosity=1)
