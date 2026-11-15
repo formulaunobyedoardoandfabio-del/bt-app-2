@@ -72,5 +72,43 @@ t('firewall: 5 codici sbagliati di fila → 30 secondi chiuso, anche il codice g
   assert.deepStrictEqual(S.cleanGuard({ fails: 'x', until: null }), S.freshGuard(), 'stato rovinato → da capo');
 });
 
+// 15/11 (Edoardo): codici aggiunti dall'admin nel Pannello (shared/bt-terminal-codes): scrivono un messaggio e al massimo
+// fanno una delle azioni che ci sono già (video, giro, gara demo). Non sbloccano niente.
+t('codici dell\'admin: puliti (maiuscole, niente doppioni, niente codici di serie, campi accorciati)', () => {
+  const out = S.cleanCustom([
+    { code: ' monza 25 ', title: '  Monza  ', say: 'Il tempio della velocità', action: 'demo', at: 5 },
+    { code: 'MONZA25', title: 'doppio', say: 'x' },
+    { code: '01', title: 'come il video', say: 'x' },
+    { code: 'pitwall', title: 'come Pit Swipe', say: 'x' },
+    { code: 'A', title: 'troppo corto', say: 'x' },
+    { code: 'IMOLA', title: '', say: 'senza titolo' },
+    { code: 'SPA', title: 'Spa', say: 'y'.repeat(300), action: 'admin' },
+    'rotto', null,
+  ]);
+  assert.deepStrictEqual(out, [
+    { code: 'MONZA25', title: 'Monza', say: 'Il tempio della velocità', action: 'demo', at: 5 },
+    { code: 'SPA', title: 'Spa', say: 'y'.repeat(200), action: '', at: 0 },
+  ]);
+  assert.deepStrictEqual(S.cleanCustom(null), []);
+  assert.strictEqual(S.cleanCustom(Array.from({ length: 50 }, (_, k) => ({ code: 'C' + k, title: 'T' }))).length, S.CUSTOM_MAX);
+});
+
+t('codici dell\'admin: il terminale li riconosce; quelli di serie e il codice admin vincono', () => {
+  const custom = [{ code: 'MONZA25', title: 'Monza', say: 'Il tempio della velocità', action: 'demo' }, { code: '000000', title: 'finto admin', say: 'x' }];
+  assert.deepStrictEqual(S.check('monza 25', { adminCode: ADMIN, custom }), { kind: 'custom', code: 'MONZA25', title: 'Monza', say: 'Il tempio della velocità', action: 'demo' });
+  assert.deepStrictEqual(S.check('000000', { adminCode: ADMIN, isAdmin: false, custom }), { kind: 'denied' }, 'mai un modo per scoprire il codice admin');
+  assert.deepStrictEqual(S.check('01', { adminCode: ADMIN, custom: [{ code: '01', title: 'x', say: 'y' }] }), { kind: 'action', id: 'video' });
+  assert.deepStrictEqual(S.check('NIENTE', { adminCode: ADMIN, custom }), { kind: 'denied' });
+});
+
+t('codici dell\'admin: perché un codice non si può usare', () => {
+  assert.strictEqual(S.takenWhy('01', { adminCode: ADMIN }), 'serie');
+  assert.strictEqual(S.takenWhy('pit wall', { adminCode: ADMIN }), 'serie');
+  assert.strictEqual(S.takenWhy('000000', { adminCode: ADMIN }), 'serie', 'il codice admin sembra un codice di serie qualsiasi');
+  assert.strictEqual(S.takenWhy('MONZA', { adminCode: ADMIN, custom: [{ code: 'MONZA', title: 'x' }] }), 'doppio');
+  assert.strictEqual(S.takenWhy('a', { adminCode: ADMIN }), 'corto');
+  assert.strictEqual(S.takenWhy('MONZA', { adminCode: ADMIN }), null);
+});
+
 console.log(`\n${pass} passati, ${fail} falliti`);
 process.exit(fail ? 1 : 0);

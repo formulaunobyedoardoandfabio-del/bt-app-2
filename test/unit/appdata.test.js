@@ -399,6 +399,14 @@ t('14/11 funzioni: hiddenQs tiene solo gli id delle domande di storia automatich
   assert.deepStrictEqual(KINDS.flags.from({ 'bt-flags': { pitSwipe: true } }), { pitSwipe: true, hiddenQs: [] }, 'documento di prima: nessuna domanda tolta');
 });
 
+t('15/11 codici del terminale dell\'admin (shared/bt-terminal-codes): puliti in lettura e in scrittura', () => {
+  const { KINDS } = require('../../src/services/appdata');
+  assert.deepStrictEqual(KINDS.termCodes.from({ 'bt-terminal-codes': null }), [], 'niente documento: nessun codice');
+  const out = KINDS.termCodes.to([{ code: 'monza', title: 'Monza', say: 'ciao', action: 'tour', at: 3 }, { code: '02', title: 'come il giro', say: 'x' }]);
+  assert.deepStrictEqual(out, { 'bt-terminal-codes': [{ code: 'MONZA', title: 'Monza', say: 'ciao', action: 'tour', at: 3 }] });
+  assert.deepStrictEqual(KINDS.termCodes.from(out), out['bt-terminal-codes']);
+});
+
 t('13/11 userDataOf: i dati personali dal profilo già letto, solo le chiavi note e in copia', () => {
   const { userDataOf } = require('../../src/services/appdata');
   const app2 = { saved: ['n1'], votes: { home: 'norris' }, altro: 1 };

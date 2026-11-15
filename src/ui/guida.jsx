@@ -5,6 +5,7 @@
 //   pezzo che non c'è (es. ospite) si saltano da sole; finché il pezzo non è trovato il riquadro del testo non si vede.
 // - EnzoChat: Enzo, l'assistente svogliato (copione in src/logic/enzo.js): mentre risponde l'app va nella scheda giusta
 //   e il pezzo si illumina.
+// - DuoGuide: le novità raccontate da Dot ed Enzo insieme (bottone Novità in Home).
 // Solo transform/opacity; con "Rimuovi animazioni" niente voli e niente scrittura.
 import React, { useEffect, useRef, useState } from "react";
 import { LiveOrb, TypeText } from "./effetti";
@@ -109,6 +110,70 @@ export function AppGuide({ steps, onGo, onDone, onRegister = null, useBack = nul
           </> : <button type="button" data-tour-next="" data-tour-done={last ? "" : undefined} onClick={next} style={{ minHeight: 44, padding: "0 18px", borderRadius: 12, background: "#0B0B0C", border: "none", fontFamily: FONT, fontWeight: 800, fontSize: 14, color: "#fff" }}>{last ? "Fine" : "Avanti"}</button>}
         </div>
       </div>}
+    </div>
+  );
+}
+
+// 15/11 (Edoardo): bottone Novità in Home. Dot (il pallino bianco del giro guidato) ed Enzo (rosso) raccontano insieme
+// le novità, come un mini giro guidato a parte, con qualche battuta e qualche litigata tra loro. Ogni battuta può aprire
+// una scheda (onGo, come il giro guidato) e illuminare un pezzo: chi parla è più grande e guarda il pezzo, l'altro
+// guarda chi parla. steps: [{ who: "dot" | "enzo", text, tab | view, sel, r }]. Un pezzo che non c'è: si parla lo stesso.
+export function DuoGuide({ steps, onGo, onDone, useBack = null, accent = "#E10600" }) {
+  const [i, setI] = useState(0);
+  const step = steps[i] || {};
+  const last = i >= steps.length - 1;
+  const next = () => (last ? onDone() : setI(v => v + 1));
+  if (useBack) useBack(true, onDone);
+  useEffect(() => { if (onGo) onGo(step); }, [i]);
+  // stesso pezzo della battuta prima: non si cerca di nuovo (niente lampo)
+  const spotKey = (step.view || step.tab || "") + "|" + [].concat(step.sel || []).join(",");
+  const { rect, missing } = useSpot(step.sel || null, spotKey);
+  const pad = 8;
+  const box = rect ? { x: rect.left - pad, y: rect.top - pad, w: rect.width + pad * 2, h: rect.height + pad * 2 } : null;
+  const low = box ? box.y + box.h / 2 > vh() * 0.5 : false;
+  const dotRef = useRef(null), enzoRef = useRef(null);
+  const [eyes, setEyes] = useState({ dot: null, enzo: null });
+  useEffect(() => {
+    const c = el => { if (!el) return null; const r = el.getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; };
+    const tm = setTimeout(() => setEyes({ dot: c(dotRef.current), enzo: c(enzoRef.current) }), 80);
+    return () => clearTimeout(tm);
+  }, [i, low, !!box]);
+  const dot = step.who !== "enzo";
+  const target = box ? { x: box.x + box.w / 2, y: box.y + box.h / 2 } : null;
+  const lookDot = dot ? target || eyes.enzo : eyes.enzo;
+  const lookEnzo = dot ? eyes.dot : target || eyes.dot;
+  const ready = !step.sel || !!rect || missing;   // il testo parte quando il pezzo è sullo schermo
+  const fly = reduced() ? "none" : "transform 420ms cubic-bezier(.2,.8,.2,1)";
+  const grow = reduced() ? "none" : "transform 260ms ease-out, opacity 260ms ease-out";
+  const who = (on, ref, attr, orb) => (
+    <div ref={ref} {...{ [attr]: "" }} data-speaking={on ? "" : undefined} style={{ flexShrink: 0, transformOrigin: "50% 100%", transform: on ? "scale(1)" : "scale(.78)", opacity: on ? 1 : 0.6, transition: grow }}>
+      <div className="bt-dot-bob" style={attr === "data-duo-enzo" ? { animationDelay: "-1.3s" } : null}>{orb}</div>
+    </div>
+  );
+  return (
+    <div data-duo-guide="" data-duo-step={i + 1} style={{ position: "fixed", inset: 0, zIndex: 95 }}>
+      <style>{BOB_CSS}</style>
+      {box ? <div data-duo-spot="" aria-hidden="true" style={{ position: "absolute", left: 0, top: 0, width: box.w, height: box.h, transform: `translate(${box.x}px, ${box.y}px)`, borderRadius: step.r || 16, boxShadow: "0 0 0 3000px rgba(0,0,0,.74)", outline: `2px solid ${dot ? "rgba(255,255,255,.9)" : accent}`, transition: fly, pointerEvents: "none" }} />
+        : <div aria-hidden="true" style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,.74)" }} />}
+      <div role="dialog" aria-label="Novità con Dot ed Enzo" style={{ position: "absolute", left: 12, right: 12, ...(low ? { top: 16 } : { bottom: 16 }), boxSizing: "border-box", padding: "10px 12px 12px", borderRadius: 22, background: "#0F0F12", border: "1px solid #2A2A30", boxShadow: "0 18px 44px rgba(0,0,0,.6)", fontFamily: FONT }}>
+        <div style={{ display: "flex", alignItems: "center" }}>
+          <span data-duo-count="" style={{ flex: 1, fontSize: 12.5, fontWeight: 700, color: "#8E8E96" }}>{i + 1} di {steps.length} · Novità</span>
+          <button type="button" data-duo-skip="" onClick={onDone} style={{ minHeight: 44, padding: "0 6px", background: "none", border: "none", fontFamily: FONT, fontWeight: 700, fontSize: 14, color: "#8E8E96" }}>Salta</button>
+        </div>
+        <div style={{ display: "flex", alignItems: "flex-end", gap: 8, marginTop: 2 }}>
+          {who(dot, dotRef, "data-duo-dot", <LiveOrb size={46} label="Dot" lookAt={lookDot} interactive={false} />)}
+          <div data-duo-text="" data-duo-who={dot ? "dot" : "enzo"} aria-live="polite" style={{ flex: 1, minWidth: 0, minHeight: 92, boxSizing: "border-box", padding: "9px 12px 10px", borderRadius: dot ? "16px 16px 16px 4px" : "16px 16px 4px 16px", background: dot ? "#F4F4F5" : "#1B1B20", border: dot ? "1px solid #F4F4F5" : `1px solid ${accent}77`, color: dot ? "#0B0B0C" : "#fff", fontSize: 14.5, lineHeight: "21px", fontWeight: 500 }}>
+            <div style={{ fontSize: 11.5, fontWeight: 800, color: dot ? "#52525B" : accent, marginBottom: 2 }}>{dot ? "Dot" : "Enzo"}</div>
+            {ready && <TypeText key={i} text={step.text || ""} cps={45} cursorColor={dot ? "#0B0B0C" : accent} />}
+          </div>
+          {who(!dot, enzoRef, "data-duo-enzo", <LiveOrb size={46} variant="red" label="Enzo" lookAt={lookEnzo} interactive={false} />)}
+        </div>
+        <div style={{ marginTop: 10, display: "flex", alignItems: "center", gap: 8 }}>
+          <span style={{ flex: 1 }} />
+          {i > 0 && <button type="button" data-duo-prev="" onClick={() => setI(v => Math.max(0, v - 1))} style={{ minHeight: 44, padding: "0 14px", borderRadius: 12, background: "transparent", border: "1px solid #3A3A42", fontFamily: FONT, fontWeight: 700, fontSize: 14, color: "#fff" }}>Indietro</button>}
+          <button type="button" data-duo-next="" data-duo-done={last ? "" : undefined} onClick={next} style={{ minHeight: 44, padding: "0 18px", borderRadius: 12, background: dot ? "#F4F4F5" : accent, border: "none", fontFamily: FONT, fontWeight: 800, fontSize: 14, color: dot ? "#0B0B0C" : "#fff" }}>{last ? "Fine" : "Avanti"}</button>
+        </div>
+      </div>
     </div>
   );
 }

@@ -1077,3 +1077,21 @@ Misure prima del lavoro (pagina di prova, CPU rallentata 4x come un telefono med
 - Animazione `BarMorph`: al terzo tocco la barra in basso si stacca (i due tappi tondi vanno al centro, il pezzo in mezzo si stringe), diventa un cerchio rosso e vola dove sta la palla (520 ms, solo transform/opacity; niente con riduzione movimento). Al congedo lo stesso al contrario e la barra torna. Mentre c'è Enzo la barra è nascosta (`BottomNav` prop `hidden`). App passa a `EnzoChat` la posizione della barra (`fromRect`) e il colore (`barColor`).
 - Prove aggiornate: `run117-enzo-giro` (attese, palla rossa e barra nascosta, barra che torna), `run116-effetti` (attese).
 - Da fare (stessa richiesta): bottone Novità in Home con Dot ed Enzo; codici del terminale aggiunti dall'admin.
+
+
+## 15/11 (13:30): bottone Novità con Dot ed Enzo; codici del terminale dall'admin
+
+- Richiesta di Edoardo (11:35), terza parte. Home: chip "Novità" accanto a Salvati (`data-novita-open`, acceso con
+  `data-novita-new` finché non hai aperto l'ultima novità del registro: `NOVITA_KEY` sul telefono, versione = prima
+  voce di `CHANGELOG`). Apre `DuoGuide` (src/ui/guida.jsx): Dot (bianco) ed Enzo (rosso) si alternano (`NOVITA_DUO`,
+  20 battute con qualche battuta e litigata), ogni battuta apre la sua scheda (`tourGo`) e illumina il pezzo; chi parla
+  è più grande e guarda il pezzo, l'altro guarda chi parla; un pezzo che non c'è: si parla lo stesso. Salta, Indietro,
+  Avanti, Fine. Solo funzioni vere (le stesse del registro). Nuove voci del registro: Novità con Dot ed Enzo, Enzo,
+  giro guidato nuovo.
+- Admin, scheda nuova TERMINALE (`AdminTerminalTab`): codice, titolo, messaggio, azione (solo messaggio, video, giro
+  guidato, gara demo). Salvati in `shared/bt-terminal-codes` (le regole di Firestore ci sono già: scrivono solo gli
+  admin, leggono tutti). `secret-codes.js`: `cleanCustom` (al massimo 30, codice 2-16 lettere/numeri, niente doppioni,
+  niente codici di serie), `takenWhy` (dice "c'è già" senza dire quale codice di serie, così il codice admin non si
+  scopre), `check(..., { custom })` → `{ kind: "custom", title, say, action }`; i codici di serie e il codice admin
+  vincono sempre. I codici dell'admin non sbloccano niente a pagamento. `appdata.js`: tipo `termCodes`.
+- Prove: unit `secret-codes` (+3), `appdata` (+1); e2e `run119-novita-codici.js` (4).

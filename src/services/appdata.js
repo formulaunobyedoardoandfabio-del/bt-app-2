@@ -14,6 +14,7 @@ const C = require("./compat");
 const H = require("../logic/holidays");
 const F1 = require("../data/f1-2026");
 const T = require("../logic/trophies");
+const SC = require("../logic/secret-codes");   // 15/11: codici del terminale aggiunti dall'admin
 
 const isObj = v => v && typeof v === "object" && !Array.isArray(v);
 const list = v => (Array.isArray(v) ? v.filter(isObj) : []);
@@ -68,6 +69,7 @@ const SHARED_DOCS = {
   "bt-trophies": null,                    // 25/10: trofei cambiati da Firebase (niente documento: quelli di serie)
   "bt-holidays": { force: null, off: [] }, // 31/10: temi delle feste: force = tema acceso sempre, off = temi spenti
   "bt-takes": [],
+  "bt-terminal-codes": [],                 // 15/11: codici del terminale aggiunti dall'admin nel Pannello
   "bt-flags": { pitSwipe: false },         // 7/11: funzioni accese dall'admin (Pit Swipe spento di serie)                          // 1/11: opinioni di Pit Swipe scritte dall'admin [{ id, text, on, at }]
 };
 // Opinioni di Pit Swipe: solo quelle con id e testo, al massimo 140 caratteri, le più nuove prima, al massimo 60.
@@ -108,6 +110,8 @@ const KINDS = {
   holidays: { docs: ["bt-holidays"], from: d => H.cleanConfig(d["bt-holidays"]), to: v => ({ "bt-holidays": H.cleanConfig(v) }) },
   takes: { docs: ["bt-takes"], from: d => cleanTakes(d["bt-takes"]), to: v => ({ "bt-takes": cleanTakes(v) }) },
   flags: { docs: ["bt-flags"], from: d => cleanFlags(d["bt-flags"]), to: v => ({ "bt-flags": cleanFlags(v) }) },
+  // 15/11: codici del terminale aggiunti dall'admin (src/logic/secret-codes.js, cleanCustom): solo messaggi e azioni di serie.
+  termCodes: { docs: ["bt-terminal-codes"], from: d => SC.cleanCustom(list(d["bt-terminal-codes"])), to: v => ({ "bt-terminal-codes": SC.cleanCustom(v) }) },
 };
 
 // Dati personali dell'account (users/<email>.app2): ognuno vede e modifica solo i suoi.

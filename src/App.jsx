@@ -21,7 +21,7 @@ import BtElo from "./logic/elo";
 import BtReplay from "./logic/replay";
 import TrackReplay from "./logic/track-replay";
 import { LiveOrb, TypeText, ChangelogCard, VanishCanvas } from "./ui/effetti";
-import { AppGuide, EnzoChat } from "./ui/guida";
+import { AppGuide, EnzoChat, DuoGuide } from "./ui/guida";
 import { createArchive, findReplay } from "./services/archive";
 import BtTrophyPro from "./logic/trophypro";
 import { createSwipeVotes } from "./services/swipevotes";
@@ -2206,7 +2206,7 @@ function TyreFilter({ value, onChange }) {
   );
 }
 
-function HomeScreen({ onOpenArchive = null, holidayTop = null, pitSwipe = null, social = [], onOpenSocial = null, ig, onOpenIg, highlights = [], ytHighlights = [], articles, tagFilter, onTag, onClearTag, onOpenArticle, isPremium, onPremium, onToast, onLiveTrack, onGoFanta, saved = [], onToggleSave, savedOnly = false, setSavedOnly, onOpenCircuit, homePoll = null, homeVote = null, onVote, hidden = [], onHide, onUnhideAll, onSwipeSave, onRefresh }) {
+function HomeScreen({ onNovita = null, novitaNew = false, onOpenArchive = null, holidayTop = null, pitSwipe = null, social = [], onOpenSocial = null, ig, onOpenIg, highlights = [], ytHighlights = [], articles, tagFilter, onTag, onClearTag, onOpenArticle, isPremium, onPremium, onToast, onLiveTrack, onGoFanta, saved = [], onToggleSave, savedOnly = false, setSavedOnly, onOpenCircuit, homePoll = null, homeVote = null, onVote, hidden = [], onHide, onUnhideAll, onSwipeSave, onRefresh }) {
   const [q, setQ] = useState("");
   const homeRef = useRef(null);
   const pullRev = usePullRefresh(homeRef, onRefresh);
@@ -2307,6 +2307,9 @@ function HomeScreen({ onOpenArchive = null, holidayTop = null, pitSwipe = null, 
       {/* 7/11 sera (Edoardo): tolti dalla Home la Pit Lane e le gomme (filtri G09 e G10); i filtri restano spenti. */}
       <div style={{ display: "flex", gap: 8, margin: "0 16px 14px" }}>
         <button className="press" data-saved-chip="" aria-pressed={savedOnly ? "true" : "false"} onClick={() => setSavedOnly && setSavedOnly(!savedOnly)} style={aChip(savedOnly, C.gold)}><Icon name={savedOnly ? "bookmark-fill" : "bookmark"} size={12} color={savedOnly ? C.gold : C.muted} /> Salvati{saved.length ? ` · ${saved.length}` : ""}</button>
+        {onNovita && !savedOnly && <button type="button" className="press" data-novita-open="" data-novita-new={novitaNew ? "" : undefined} aria-label={novitaNew ? "Novità: ce ne sono di nuove" : "Novità"} onClick={onNovita} style={{ ...aChip(novitaNew, C.accent), color: C.text }}>
+          <span aria-hidden="true" style={{ display: "inline-flex" }}><span style={{ width: 10, height: 10, borderRadius: "50%", background: "#F4F4F5" }} /><span style={{ width: 10, height: 10, borderRadius: "50%", background: C.accent, marginLeft: -3 }} /></span> Novità
+        </button>}
         {savedOnly && <div role="group" aria-label="Come vedere i salvati" style={{ display: "flex", gap: 6, marginLeft: "auto" }}>
           {[["griglia", "Salvati a piastrelle", <><rect x="4" y="4" width="7" height="7" rx="1.5" /><rect x="13" y="4" width="7" height="7" rx="1.5" /><rect x="4" y="13" width="7" height="7" rx="1.5" /><rect x="13" y="13" width="7" height="7" rx="1.5" /></>], ["lista", "Salvati a lista", <path d="M9 6h11M9 12h11M9 18h11M4.5 6h.01M4.5 12h.01M4.5 18h.01" />]].map(([id, label, glyph]) => (
             <button key={id} type="button" className="press" data-saved-view={id} aria-label={label} aria-pressed={savedView === id ? "true" : "false"} onClick={() => pickSavedView(id)}
@@ -9176,6 +9179,9 @@ const APP_TOUR = [
 
 // 15/11: registro delle novità del Profilo (Edoardo: scheda compatta per un Changelog). Dati veri: i commit dell'app.
 const CHANGELOG = [
+  { date: "15/11", title: "Novità raccontate da Dot ed Enzo", tag: "Nuovo" },
+  { date: "15/11", title: "Enzo, l'assistente svogliato", tag: "Nuovo" },
+  { date: "15/11", title: "Giro guidato nuovo col pallino" },
   { date: "15/11", title: "Riguarda la gara sulla mappa", tag: "Nuovo" },
   { date: "15/11", title: "Modalità senza rete", tag: "Nuovo" },
   { date: "15/11", title: "Archivio storico dei GP", tag: "Nuovo" },
@@ -9194,7 +9200,35 @@ const CHANGELOG = [
   { date: "08/11", title: "B&T Trophies a fine sessione" },
 ];
 
-function HackTerminal({ isAdmin, unlocks, onToggle, onAdmin, onClose, onOpenIg, telemetry, panelOpen = false, onTour = null, onDemoRace = null }) {
+// 15/11 (Edoardo): bottone Novità in Home. Dot ed Enzo raccontano insieme le novità, come un mini giro guidato a parte,
+// con qualche battuta e qualche litigata. Solo funzioni vere (le stesse del registro qui sopra). Il bottone si accende
+// finché non hai visto l'ultima novità del registro (NOVITA_KEY sul telefono).
+const NOVITA_KEY = "bt-novita-seen";
+const NOVITA_VER = CHANGELOG[0].date + " " + CHANGELOG[0].title;
+const NOVITA_DUO = [
+  { who: "dot", tab: "home", text: "Ciao! Sono Dot, il pallino della guida. Oggi ti faccio vedere le novità di Sector 4." },
+  { who: "enzo", tab: "home", text: "E io sono Enzo. Mi hanno detto che era obbligatorio. Facciamo in fretta, che ho una pausa da fare." },
+  { who: "dot", tab: "race", sel: "[data-race-archive]", text: "Prima novità: le gare finite si riguardano sulla mappa, secondo per secondo, con gomme, distacchi e Safety Car." },
+  { who: "enzo", tab: "race", sel: "[data-race-archive]", text: "Come la TV, ma senza pubblicità. E senza di me che commento. Peccato per te." },
+  { who: "dot", tab: "home", sel: "[data-saved-chip]", r: 999, text: "Le notizie che salvi col segnalibro le ritrovi qui, a piastrelle come il Garage. E le foto arrivano più veloci." },
+  { who: "enzo", tab: "home", sel: "[data-saved-chip]", r: 999, text: "Io salvo solo le energie. Comunque è comodo, lo ammetto. Non dirlo in giro." },
+  { who: "dot", tab: "home", text: "Se resti senza rete l'app non si blocca: restano le notizie salvate, la classifica e un gioco per aspettare." },
+  { who: "enzo", tab: "home", text: "Finalmente una scusa buona per non rispondere a nessuno." },
+  { who: "dot", tab: "fanta", sel: "[data-fanta-elo]", text: "Nel Fanta c'è l'ELO B&T: la tua forza sale se batti chi è più forte di te. E nella lega B&T ci sei già." },
+  { who: "enzo", tab: "fanta", sel: "[data-fanta-elo]", text: "Come negli scacchi. Solo che qui ci si lamenta di più." },
+  { who: "dot", tab: "fanta", sel: "[data-fanta-elo]", text: "Non è vero, i nostri tifosi non si lamentano." },
+  { who: "enzo", tab: "fanta", sel: "[data-fanta-elo]", text: "Dot, hai mai letto la chat dopo una qualifica?" },
+  { who: "dot", view: "profilo", sel: "[data-hack-open]", text: "Nel Profilo c'è il terminale del box: prova i codici segreti che escono sulle storie Instagram di B&T." },
+  { who: "enzo", view: "profilo", sel: "[data-hack-open]", text: "Io i codici li so tutti. Ma dirteli è fatica, quindi no." },
+  { who: "dot", view: "profilo", sel: "[data-changelog]", text: "Tutte le novità sono scritte anche qui, dalla più nuova." },
+  { who: "enzo", view: "profilo", sel: "[data-changelog]", text: "Scritte. Così la prossima volta non devi sentire noi due. Pensaci." },
+  { who: "dot", tab: "home", sel: '[data-nav-tab="home"]', r: 999, text: "E l'ultima novità è lui: tocca tre volte la scheda dove sei già e arriva Enzo." },
+  { who: "enzo", tab: "home", sel: '[data-nav-tab="home"]', r: 999, text: "Arrivo, ma di malavoglia. Ti porto dove serve e ti mostro le cose, sbuffando." },
+  { who: "dot", tab: "home", text: "Ed è bravo, anche se non lo ammette mai." },
+  { who: "enzo", tab: "home", text: "Calunnie. Abbiamo finito? Bene. Quando c'è qualcosa di nuovo, il bottone Novità in Home si accende." },
+];
+
+function HackTerminal({ isAdmin, unlocks, onToggle, onAdmin, onClose, onOpenIg, telemetry, panelOpen = false, onTour = null, onDemoRace = null, custom = [] }) {
   const [video, setVideo] = useState(false);
   const [wrap, setWrap] = useState(true), [copied, setCopied] = useState(false);   // 15/11: blocco di codice   // 14/11: codice 01, video di presentazione dentro il terminale
   const [log, setLog] = useState([]);        // righe scritte dopo l'avvio: { id, text, tone }
@@ -9213,7 +9247,7 @@ function HackTerminal({ isAdmin, unlocks, onToggle, onAdmin, onClose, onOpenIg, 
   const submit = () => {
     if (opening.current) return;
     const now = nowMs(), typed = SecretCodes.norm(code);
-    const r = SecretCodes.check(code, { adminCode: ADMIN_CODE, isAdmin, guard, now });
+    const r = SecretCodes.check(code, { adminCode: ADMIN_CODE, isAdmin, guard, now, custom });
     if (r.kind === "empty") return;
     setCode("");
     const echo = ["> " + "*".repeat(Math.min(typed.length, 12)), "cmd"];
@@ -9240,13 +9274,23 @@ function HackTerminal({ isAdmin, unlocks, onToggle, onAdmin, onClose, onOpenIg, 
       setTimeout(onAdmin, 1100);
       return;
     }
+    const runAction = id => {
+      if (id === "video") setVideo(true);
+      if (id === "tour" && onTour) { opening.current = true; setTimeout(onTour, 700); }
+      if (id === "demo" && onDemoRace) { opening.current = true; setTimeout(onDemoRace, 700); }
+    };
     if (r.kind === "action") {
       const act = SecretCodes.actionOf(r.id);
       setState("granted"); fx.play("done"); fx.buzz("success");
       say([echo, ["ESEGUITO: " + act.title.toUpperCase(), "ok"], [act.say, "dim"]]);
-      if (r.id === "video") setVideo(true);
-      if (r.id === "tour" && onTour) { opening.current = true; setTimeout(onTour, 700); }
-      if (r.id === "demo" && onDemoRace) { opening.current = true; setTimeout(onDemoRace, 700); }
+      runAction(r.id);
+      return;
+    }
+    // 15/11: codice aggiunto dall'admin nel Pannello: il suo titolo, il suo messaggio e al massimo un'azione di serie
+    if (r.kind === "custom") {
+      setState("granted"); fx.play("done"); fx.buzz("success");
+      say([echo, ["CODICE ACCETTATO: " + r.title.toUpperCase(), "ok"], ...(r.say ? [[r.say, "dim"]] : [])]);
+      if (r.action) runAction(r.action);
       return;
     }
     const u = SecretCodes.unlockOf(r.id), turningOn = !unlocks.includes(r.id);
@@ -9313,7 +9357,7 @@ function HackTerminal({ isAdmin, unlocks, onToggle, onAdmin, onClose, onOpenIg, 
 }
 
 /* ── PANNELLO ADMIN (stesse sezioni della versione vecchia) ─────────── */
-const ADMIN_TABS = ["NEWS", "SONDAGGI", "OPINIONI", "FANTA F1", "PREVISIONI", "CLASSIFICHE", "GARA LIVE", "MERCATO", "INSTAGRAM", "VIDEO", "NOTIFICHE", "CHAT", "TEMI", "FUNZIONI"];
+const ADMIN_TABS = ["NEWS", "SONDAGGI", "OPINIONI", "FANTA F1", "PREVISIONI", "CLASSIFICHE", "GARA LIVE", "MERCATO", "INSTAGRAM", "VIDEO", "NOTIFICHE", "CHAT", "TEMI", "FUNZIONI", "TERMINALE"];
 // 31/10: temi delle feste dal Pannello Admin (shared/bt-holidays): di serie seguono le date; si può accenderne uno
 // sempre (per provarlo o per un evento) o spegnerne uno.
 // 7/11 (Edoardo): funzioni che si accendono solo da qui. Pit Swipe (le notizie come carte da scorrere) è spento di
@@ -10207,7 +10251,7 @@ function AdminChatTab({ chats, reports, banned, onDeleteMsg, onSuspend, onUnsusp
 // Impronta di un valore: le schede con la bozza (classifiche, prezzi FantaF1, Instagram) si rifanno da capo quando i
 // dati sotto cambiano (riletti da Firebase o appena salvati), così SALVA non riscrive valori vecchi (revisione Fase B, C2).
 const versionOf = v => { const s = JSON.stringify(v) || ""; let h = 5381; for (let i = 0; i < s.length; i++) h = (Math.imul(h, 33) + s.charCodeAt(i)) | 0; return (h >>> 0).toString(36) + "." + s.length; };
-function AdminScreen({ histAuto = [], hiddenQs = [], onHideQ = null, flags = null, onFlags = null, takes = [], onTakes = null, photos, setPhotos, silly = {}, onSilly, highlights = [], setHighlights, onBack, onPublish, articles, setArticles, fantaStats, fantaLatestRound = null, setFantaStats, standings, setStandings, races, setRaces, extraRaces = [], setExtraRaces, ig, setIg, sentNotifs, onSendNotif, onDeleteNotif, onToast, tab, setTab, chats, reports, banned, onDeleteMsg, onSuspend, onUnsuspend, onIgnoreReport, liveProps = {}, polls = [], votes = {}, onPollAnswer, predictions = [], setPredictions, predAnswers = {}, holidayCfg = null, onHolidays = null, holiday = null }) {
+function AdminScreen({ termCodes = [], onTermCodes = null, histAuto = [], hiddenQs = [], onHideQ = null, flags = null, onFlags = null, takes = [], onTakes = null, photos, setPhotos, silly = {}, onSilly, highlights = [], setHighlights, onBack, onPublish, articles, setArticles, fantaStats, fantaLatestRound = null, setFantaStats, standings, setStandings, races, setRaces, extraRaces = [], setExtraRaces, ig, setIg, sentNotifs, onSendNotif, onDeleteNotif, onToast, tab, setTab, chats, reports, banned, onDeleteMsg, onSuspend, onUnsuspend, onIgnoreReport, liveProps = {}, polls = [], votes = {}, onPollAnswer, predictions = [], setPredictions, predAnswers = {}, holidayCfg = null, onHolidays = null, holiday = null }) {
   return (
     <div className="scrollcol" style={{ height: "100%" }}>
       <SubHeader title="PANNELLO ADMIN" onBack={onBack} />
@@ -10219,6 +10263,7 @@ function AdminScreen({ histAuto = [], hiddenQs = [], onHideQ = null, flags = nul
         {tab === "SONDAGGI" && <AdminPollsTab polls={polls} votes={votes} onAnswer={onPollAnswer} />}
         {tab === "FANTA F1" && <AdminFantaTab key={"fs:" + versionOf(fantaStats)} fantaStats={fantaStats} setFantaStats={setFantaStats} onToast={onToast} latestRound={fantaLatestRound} />}
         {tab === "FUNZIONI" && <AdminFlagsTab flags={flags} onSave={onFlags} />}
+        {tab === "TERMINALE" && <AdminTerminalTab codes={termCodes} onSave={v => onTermCodes && onTermCodes(v)} />}
         {tab === "TEMI" && <AdminHolidaysTab cfg={holidayCfg} active={holiday} onSave={v => onHolidays && onHolidays(v)} />}
         {tab === "OPINIONI" && <AdminTakesTab takes={takes} onSave={v => onTakes && onTakes(v)} />}
         {tab === "PREVISIONI" && <AdminPredictionsTab predictions={predictions} setPredictions={setPredictions} answers={predAnswers} races={races} onToast={onToast} histAuto={histAuto} hiddenQs={hiddenQs} onHideQ={onHideQ} />}
@@ -11077,6 +11122,48 @@ function PsEnd({ info, onSaved, onShare, onDuel }) {
   );
 }
 
+// 15/11 (Edoardo): codici del terminale aggiunti dall'admin (shared/bt-terminal-codes). Chi li scrive nel terminale
+// vede il titolo e il messaggio; si può far partire anche il video, il giro guidato o la gara demo. Non sbloccano niente
+// a pagamento. I codici di serie non si possono riusare (il terminale non dice quali sono).
+const TERM_ACTION_LABEL = { "": "Solo messaggio", video: "Video di presentazione", tour: "Giro guidato", demo: "Gara demo dal 5° giro" };
+function AdminTerminalTab({ codes = [], onSave }) {
+  const [code, setCode] = useState(""), [title, setTitle] = useState(""), [say, setSay] = useState(""), [action, setAction] = useState(""), [err, setErr] = useState("");
+  const save = list => onSave && onSave(list);
+  const add = () => {
+    const why = SecretCodes.takenWhy(code, { adminCode: ADMIN_CODE, custom: codes });
+    if (why) { setErr(why === "corto" ? "Il codice deve avere almeno 2 lettere o numeri." : why === "serie" ? "Questo codice nel terminale c'è già: scegline un altro." : "Hai già un codice uguale."); return; }
+    if (!title.trim()) { setErr("Scrivi il titolo: è quello che il terminale mostra in grande."); return; }
+    if (codes.length >= SecretCodes.CUSTOM_MAX) { setErr("Al massimo " + SecretCodes.CUSTOM_MAX + " codici: togline uno."); return; }
+    save([{ code: SecretCodes.norm(code), title: title.trim(), say: say.trim(), action, at: nowMs() }, ...codes]);
+    setCode(""); setTitle(""); setSay(""); setAction(""); setErr("");
+  };
+  const field = { width: "100%", boxSizing: "border-box", minHeight: 44, padding: "0 12px", borderRadius: 12, background: C.card, border: `1px solid ${C.border}`, color: C.text, fontFamily: F_BODY, fontSize: 14, marginBottom: 8 };
+  return (
+    <div data-admin-terminal="" style={{ padding: "0 0 24px" }}>
+      <p style={{ fontFamily: F_BODY, fontSize: 12.5, color: C.muted, lineHeight: 1.5, margin: "0 0 10px" }}>Codici nuovi per il terminale del box. Chi li scrive vede il titolo e il messaggio; puoi anche far partire il video, il giro guidato o la gara demo. Non sbloccano niente a pagamento. Valgono per tutti appena li salvi.</p>
+      <input data-term-code-input="" value={code} maxLength={16} onChange={e => { setCode(e.target.value); setErr(""); }} placeholder="Codice (es. MONZA25)" aria-label="Codice" autoCapitalize="characters" style={{ ...field, fontFamily: F_TERM, letterSpacing: 1 }} />
+      <input data-term-title-input="" value={title} maxLength={40} onChange={e => { setTitle(e.target.value); setErr(""); }} placeholder="Titolo (es. Monza)" aria-label="Titolo" style={field} />
+      <textarea data-term-say-input="" value={say} maxLength={200} onChange={e => setSay(e.target.value)} placeholder="Messaggio che il terminale scrive (facoltativo)" aria-label="Messaggio" rows={3} style={{ ...field, padding: 12, resize: "none" }} />
+      <select data-term-action="" value={action} onChange={e => setAction(e.target.value)} aria-label="Cosa fa il codice" style={field}>
+        {SecretCodes.CUSTOM_ACTIONS.map(a => <option key={a} value={a}>{TERM_ACTION_LABEL[a]}</option>)}
+      </select>
+      {err && <div role="alert" data-term-err="" style={{ fontFamily: F_BODY, fontSize: 12.5, color: C.accentInk, margin: "0 0 8px" }}>{err}</div>}
+      <div data-term-add=""><ABtn onClick={add} kind="primary">AGGIUNGI CODICE</ABtn></div>
+      {codes.length === 0 && <p data-term-empty="" style={{ fontFamily: F_BODY, fontSize: 12.5, color: C.dim, margin: "12px 0 0" }}>Nessun codice aggiunto: nel terminale ci sono solo quelli di serie.</p>}
+      {codes.map(c => (
+        <div key={c.code} data-term-row={c.code} style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 0", borderBottom: `1px solid ${C.divider}` }}>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontFamily: F_TERM, fontSize: 13, color: C.text, letterSpacing: 1 }}>{c.code}<span style={{ fontFamily: F_HEAD, fontWeight: 800, letterSpacing: 0, marginLeft: 8 }}>{c.title}</span></div>
+            {c.say && <div style={{ fontFamily: F_BODY, fontSize: 12, color: C.muted, lineHeight: 1.4, marginTop: 2 }}>{c.say}</div>}
+            <div style={{ fontFamily: F_BODY, fontSize: 11, color: C.dim, marginTop: 2 }}>{TERM_ACTION_LABEL[c.action] || TERM_ACTION_LABEL[""]}</div>
+          </div>
+          <button type="button" className="press" data-term-del={c.code} aria-label={"Elimina il codice " + c.title} onClick={() => save(codes.filter(x => x.code !== c.code))} style={{ width: 44, height: 44, display: "flex", alignItems: "center", justifyContent: "center", background: "none", border: "none" }}><Icon name="trash" size={16} color={C.muted} /></button>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 // Opinioni di Pit Swipe scritte dall'admin (shared/bt-takes).
 function AdminTakesTab({ takes = [], onSave }) {
   const [text, setText] = useState("");
@@ -11196,6 +11283,8 @@ function App() {
   const [bootCache] = useState(() => { try { return AppData.sharedCached(nowMs()); } catch (e) { return { values: {}, kinds: [], complete: false }; } });
   const [shared0] = useState(() => { const v = { ...AppData.sharedDefaults(nowMs()), ...bootCache.values }; addStandingsGuests(v.standings.guests); return v; });
   const [redOrb, setRedOrb] = useState(false);   // 15/11: pallino rosso (tre tocchi sulla stessa scheda)
+  const [duoOn, setDuoOn] = useState(false), [novitaSeen, setNovitaSeen] = useState(() => local.get(NOVITA_KEY));   // 15/11: Novità con Dot ed Enzo
+  const [termCodes, setTermCodes] = useState(() => shared0.termCodes || []);   // 15/11: codici del terminale aggiunti dall'admin
   const [offline, setOffline] = useState(false);   // all'avvio qualcosa non si è potuto leggere: riga "Sei offline"
   // 14/11: modalità senza rete. Si apre da sola quando il telefono dice che non c'è rete, oppure a mano dalla riga
   // "Sei offline" (rete che c'è ma non risponde); "Riprova a collegarti" rilegge Firebase.
@@ -11635,6 +11724,7 @@ function App() {
     trophies: keep(setTrophyCfg), holidays: v => { keep(setHolidayCfg)(v); local.set("bt-holidays-cfg", v); },
     takes: keep(setTakes),
     flags: v => { keep(setFlags)(v); local.set("bt-flags-cfg", v); },
+    termCodes: keep(setTermCodes),
   };
   // Rilegge i contenuti indicati (tutti, all'avvio) e mette nello stato quelli letti davvero.
   const refreshShared = kinds => AppData.loadShared(nowMs(), kinds ? { kinds } : undefined).then(r => {
@@ -12425,6 +12515,9 @@ function App() {
     }
   };
   const tourDone = () => { tourEnd(); if (tourDemo.current) { tourDemo.current = false; stopLive(); } setView("tab"); setTab("home"); };
+  // 15/11: Novità con Dot ed Enzo (bottone in Home): si segna come vista appena si apre
+  const duoOpen = () => { setRedOrb(false); setTourOn(false); setDuoOn(true); local.set(NOVITA_KEY, NOVITA_VER); setNovitaSeen(NOVITA_VER); };
+  const duoDone = () => { setDuoOn(false); if (tourDemo.current) { tourDemo.current = false; stopLive(); } setView("tab"); setTab("home"); };
   const stopLive = () => {
     if (demoLive) closeSession(demoLive);
     setDemoLive(null); setTelemetry(null); setLapList(null); setDemoVotes({ ratings: {}, dotd: {} }); showToast("Prova diretta terminata");
@@ -13266,8 +13359,8 @@ function App() {
   let body;
   if (view === "article" && activeArticle) body = <ArticleScreen article={activeArticle} onBack={viewBack.article} isPremium={isPaid || adNews.includes(activeArticle.id)} onAdUnlock={Ads.canReward() ? () => watchAdNews(activeArticle.id) : null} adBusy={adBusy} onPremium={() => setPremiumOpen(true)} onTag={filterByTag} saved={saved.includes(activeArticle.id)} onToggleSave={() => toggleSave(activeArticle.id)} onShare={() => setShareId(activeArticle.id)} vote={votes["art-" + activeArticle.id] || null} onVote={castVote} />;
   else if (view === "circuit" && circuitId) body = <CircuitScreen circuitId={circuitId} races={races} articles={newsAll} onBack={viewBack.circuit} onTag={filterByTag} onOpenArticle={openArticle} />;
-  else if (view === "adminLock" || view === "hack") body = <HackTerminal isAdmin={!!account && Account.isAdmin()} unlocks={unlocks} onToggle={toggleUnlock} onAdmin={() => { setAdminUnlocked(true); setView("admin"); }} onClose={viewBack.hack} onOpenIg={() => { setIgFrom("profilo"); setView("instagram"); }} telemetry={hackTelemetry} panelOpen={adminUnlocked && !!account && Account.isAdmin()} onTour={() => { setView("tab"); setTab("home"); setTourOn(true); }} onDemoRace={demoFromLap5} />;
-  else if (view === "admin" && adminUnlocked && Account.isAdmin()) body = <AdminScreen histAuto={histQs.filter(q => q.raceId === (weekendRace(races) || {}).id)} hiddenQs={hiddenQs} onHideQ={(id, hide) => commitShared("flags", latest => { const cur = latest && Array.isArray(latest.hiddenQs) ? latest.hiddenQs : []; return { ...latest, hiddenQs: hide ? [...cur.filter(x => x !== id), id] : cur.filter(x => x !== id) }; }).then(ok => { if (ok) showToast(hide ? "Domanda tolta dal FantaF1 per tutti" : "Domanda rimessa nel FantaF1"); })} flags={flags} onFlags={v => commitShared("flags", () => v).then(ok => { if (ok) showToast(v.pitSwipe ? "Pit Swipe acceso per tutti" : "Pit Swipe spento per tutti"); })} takes={takes} onTakes={v => commitShared("takes", () => v).then(ok => { if (ok) showToast("Opinioni salvate"); })} holidayCfg={holidayCfg} holiday={holiday} onHolidays={v => commitShared("holidays", () => v).then(ok => { if (ok) showToast("Temi delle feste salvati"); })} photos={commonsPhotos} setPhotos={adminSet.commonsPhotos} silly={sillyOfficial} onSilly={officialSeat} highlights={highlights} setHighlights={adminSet.highlights} onBack={viewBack.admin} onPublish={publishArticle} articles={articles} setArticles={adminSet.articles} fantaStats={shownFantaStats} fantaLatestRound={latestRaceRound} setFantaStats={adminSet.fantaStats} standings={standings} setStandings={adminSet.standings} races={races} setRaces={adminSet.races} extraRaces={racesDoc.extra} setExtraRaces={adminSet.extraRaces} ig={ig} setIg={adminSet.ig} sentNotifs={sentNotifs} onSendNotif={sendNotif} onDeleteNotif={deleteNotif} onToast={showToast} tab={adminTab} setTab={setAdminTab} chats={chats} reports={reports} banned={banned} onDeleteMsg={deleteChatMsg} onSuspend={suspendUser} onUnsuspend={unsuspendUser} onIgnoreReport={ignoreReport} liveProps={liveProps} polls={allPolls} votes={votes} onPollAnswer={setPollAnswer} predictions={predictions} setPredictions={adminSet.predictions} predAnswers={predAnswers} />;
+  else if (view === "adminLock" || view === "hack") body = <HackTerminal custom={termCodes} isAdmin={!!account && Account.isAdmin()} unlocks={unlocks} onToggle={toggleUnlock} onAdmin={() => { setAdminUnlocked(true); setView("admin"); }} onClose={viewBack.hack} onOpenIg={() => { setIgFrom("profilo"); setView("instagram"); }} telemetry={hackTelemetry} panelOpen={adminUnlocked && !!account && Account.isAdmin()} onTour={() => { setView("tab"); setTab("home"); setTourOn(true); }} onDemoRace={demoFromLap5} />;
+  else if (view === "admin" && adminUnlocked && Account.isAdmin()) body = <AdminScreen termCodes={termCodes} onTermCodes={v => commitShared("termCodes", () => v).then(ok => { if (ok) showToast("Codici del terminale salvati"); })} histAuto={histQs.filter(q => q.raceId === (weekendRace(races) || {}).id)} hiddenQs={hiddenQs} onHideQ={(id, hide) => commitShared("flags", latest => { const cur = latest && Array.isArray(latest.hiddenQs) ? latest.hiddenQs : []; return { ...latest, hiddenQs: hide ? [...cur.filter(x => x !== id), id] : cur.filter(x => x !== id) }; }).then(ok => { if (ok) showToast(hide ? "Domanda tolta dal FantaF1 per tutti" : "Domanda rimessa nel FantaF1"); })} flags={flags} onFlags={v => commitShared("flags", () => v).then(ok => { if (ok) showToast(v.pitSwipe ? "Pit Swipe acceso per tutti" : "Pit Swipe spento per tutti"); })} takes={takes} onTakes={v => commitShared("takes", () => v).then(ok => { if (ok) showToast("Opinioni salvate"); })} holidayCfg={holidayCfg} holiday={holiday} onHolidays={v => commitShared("holidays", () => v).then(ok => { if (ok) showToast("Temi delle feste salvati"); })} photos={commonsPhotos} setPhotos={adminSet.commonsPhotos} silly={sillyOfficial} onSilly={officialSeat} highlights={highlights} setHighlights={adminSet.highlights} onBack={viewBack.admin} onPublish={publishArticle} articles={articles} setArticles={adminSet.articles} fantaStats={shownFantaStats} fantaLatestRound={latestRaceRound} setFantaStats={adminSet.fantaStats} standings={standings} setStandings={adminSet.standings} races={races} setRaces={adminSet.races} extraRaces={racesDoc.extra} setExtraRaces={adminSet.extraRaces} ig={ig} setIg={adminSet.ig} sentNotifs={sentNotifs} onSendNotif={sendNotif} onDeleteNotif={deleteNotif} onToast={showToast} tab={adminTab} setTab={setAdminTab} chats={chats} reports={reports} banned={banned} onDeleteMsg={deleteChatMsg} onSuspend={suspendUser} onUnsuspend={unsuspendUser} onIgnoreReport={ignoreReport} liveProps={liveProps} polls={allPolls} votes={votes} onPollAnswer={setPollAnswer} predictions={predictions} setPredictions={adminSet.predictions} predAnswers={predAnswers} />;
   else if (view === "chatThread" && activeChat) body = <ChatThreadScreen since={chatSince(activeChat && activeChat.id)} chat={activeChat} onBack={viewBack.chatThread} onSend={guest ? () => needLogin("Per scrivere in chat serve un account.") : sendMessage} isPremium={isPremium} blocked={blocked} onReport={guest ? () => needLogin("Per segnalare un messaggio serve un account.") : reportMessage} onBlock={blockUser} onReact={guest ? () => needLogin("Per reagire ai messaggi serve un account.") : reactMessage} trophyList={trophyList} myWon={trophies} pendingLink={pendingLink} onPendingUsed={() => setPendingLink(null)} onOpenLink={openLink} liveRace={races.find(r => r.status === "LIVE") || null} />;
   else if (view === "instagram") body = <InstagramView ig={ig} onToast={showToast} onBack={viewBack.instagram} />;
   else if (view === "archivio") body = <ArchiveScreen archive={Archive} weekend={BtWeekend} calendar={races} onBack={viewBack.archivio} />;
@@ -13298,7 +13391,7 @@ function App() {
   // 7/11: il contenuto di una scheda della barra (anche di quella accanto, che si vede durante lo swipe come su WhatsApp).
   function tabBodyFor(tab) {
     let body = null;
-    if (tab === "home") body = <HomeScreen onOpenArchive={openArchive} holidayTop={holiday ? <HolidayCard id={holiday} onOpen={holidayOpen(holiday)} /> : null}
+    if (tab === "home") body = <HomeScreen onNovita={duoOpen} novitaNew={novitaSeen !== NOVITA_VER} onOpenArchive={openArchive} holidayTop={holiday ? <HolidayCard id={holiday} onOpen={holidayOpen(holiday)} /> : null}
       social={socialPosts} onOpenSocial={p => { fx.buzz("select"); setSocialOpen(p); }}
       pitSwipe={<>
         {onboardShow && <OnboardCard steps={onboardSteps} onHide={() => setSwipe(s => ({ ...s, onb: "off" }))} />}
@@ -13411,6 +13504,7 @@ function App() {
         {linkShare && <ChatRoomPicker onPick={id => { setPendingLink(linkShare); setLinkShare(null); openChat(id); }} onClose={() => setLinkShare(null)} />}
         {socialOpen && <SocialSheet post={socialOpen} onClose={() => setSocialOpen(null)} />}
         <RainGlass on={rainOn} />
+        {duoOn && <DuoGuide steps={NOVITA_DUO} accent={C.accent} useBack={useBack} onGo={tourGo} onDone={duoDone} />}
         {tourOn && (guest || !!account) && <AppGuide steps={APP_TOUR} where={view + ":" + tab} useBack={useBack} onGo={tourGo} onDone={tourDone} onRegister={guest ? () => { tourDone(); setLoginReason(null); setLoginMode("register"); setLoginOpen(true); } : null} />}
         {termsAccepted && termsOpen && <TermsSheet review onClose={() => setTermsOpen(false)} />}
         {feedbackOpen && <FeedbackModal onClose={() => setFeedbackOpen(false)} onSend={sendFeedback} />}
