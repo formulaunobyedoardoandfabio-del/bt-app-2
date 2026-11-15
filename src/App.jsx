@@ -19,7 +19,8 @@ import BtHolidays from "./logic/holidays";
 import BtSwipe from "./logic/pitswipe";
 import BtElo from "./logic/elo";
 import BtReplay from "./logic/replay";
-import { createArchive } from "./services/archive";
+import TrackReplay from "./logic/track-replay";
+import { createArchive, findReplay } from "./services/archive";
 import BtTrophyPro from "./logic/trophypro";
 import { createSwipeVotes } from "./services/swipevotes";
 import Reminders from "./services/reminders";
@@ -6479,13 +6480,131 @@ function RaceReplay({ race, title, onBack }) {
   );
 }
 
+// 15/11 (Edoardo: copiare il sito di imcarto, ma solo per le gare finite, nel bottone "Riguarda la gara"). Replay sulla
+// mappa: tracciato vero (da OpenF1), le auto che scorrono secondo per secondo, classifica con gomme e distacchi, barra
+// del tempo con Safety Car, VSC e rossa. Dati: tools/openf1_replay.py → public/data/replay; calcoli in
+// src/logic/track-replay.js. Le auto si muovono a ogni fotogramma (solo transform); la classifica si aggiorna 4 volte
+// al secondo.
+const TYRE = { S: ["#FF3B3B", "#111"], M: ["#FFD43B", "#111"], H: ["#F2F2F2", "#111"], I: ["#3DD56D", "#111"], W: ["#3D8BFF", "#fff"] };
+const MAP_SPEEDS = [1, 10, 30, 60];
+const MAP_FLAG = { sc: ["SAFETY CAR", "#FFD43B", "#111"], vsc: ["VIRTUAL SAFETY CAR", "#FFD43B", "#111"], red: ["BANDIERA ROSSA", "#E10600", "#fff"] };
+const raceClock = x => { const v = Math.max(0, Math.floor(x)), h = Math.floor(v / 3600), m = Math.floor((v % 3600) / 60), q = v % 60; return (h ? h + ":" + String(m).padStart(2, "0") : m) + ":" + String(q).padStart(2, "0"); };
+function MapReplay({ file, title, onBack }) {
+  const rep = useMemo(() => TrackReplay.decode(file), [file]);
+  const tMin = rep ? rep.start : 0, tMax = rep ? rep.start + rep.drivers[0].prog.length - 1 : 0;
+  const [t, setT] = useState(tMin), [playing, setPlaying] = useState(false), [speed, setSpeed] = useState(10);
+  const [sel, setSel] = useState(null), [mode, setMode] = useState("gap");
+  const tRef = useRef(tMin), cars = useRef({}), lastUi = useRef(0);
+  const geo = useMemo(() => {
+    if (!rep) return null;
+    const minX = Math.min(...rep.xs), maxX = Math.max(...rep.xs), minY = Math.min(...rep.ys), maxY = Math.max(...rep.ys);
+    const pad = Math.max(maxX - minX, maxY - minY) * 0.06, W = maxX - minX + 2 * pad, H = maxY - minY + 2 * pad;
+    const tx = x => x - minX + pad, ty = y => maxY - y + pad;
+    const d = "M" + rep.line.map(([x, y]) => tx(x).toFixed(1) + " " + ty(y).toFixed(1)).join(" L") + " Z";
+    const a = rep.line[0], b = rep.line[1], len = Math.hypot(b[0] - a[0], b[1] - a[1]) || 1;
+    const nx = -(b[1] - a[1]) / len, ny = (b[0] - a[0]) / len, k = W / 340;
+    return { W, H, d, tx, ty, k, sf: [tx(a[0] + nx * 9 * k), ty(a[1] + ny * 9 * k), tx(a[0] - nx * 9 * k), ty(a[1] - ny * 9 * k)] };
+  }, [rep]);
+  const place = tt => {
+    if (!rep || !geo) return;
+    rep.drivers.forEach((d, i) => {
+      const el = cars.current[d.code];
+      if (!el) return;
+      let pr = TrackReplay.progAt(rep, i, tt);
+      if (rep.tf != null && tt >= rep.tf) pr = Math.min(pr, d.cap);
+      const [x, y] = TrackReplay.pointAt(rep, pr);
+      el.setAttribute("transform", `translate(${geo.tx(x).toFixed(1)} ${geo.ty(y).toFixed(1)})`);
+    });
+  };
+  useEffect(() => { place(tRef.current); });
+  useEffect(() => {
+    if (!playing) return undefined;
+    let raf = 0, prev = performance.now();
+    const step = now => {
+      const dt = Math.min(0.25, (now - prev) / 1000);
+      prev = now;
+      const nt = Math.min(tMax, tRef.current + dt * speed);
+      tRef.current = nt;
+      place(nt);
+      if (now - lastUi.current > 250 || nt >= tMax) { lastUi.current = now; setT(nt); }
+      if (nt >= tMax) { setPlaying(false); return; }
+      raf = requestAnimationFrame(step);
+    };
+    raf = requestAnimationFrame(step);
+    return () => cancelAnimationFrame(raf);
+  }, [playing, speed, geo]);
+  const seek = v => { const nt = Math.max(tMin, Math.min(tMax, v)); tRef.current = nt; setT(nt); place(nt); };
+  if (!rep || !geo) return <div data-map-replay="" style={{ height: "100%" }}><SubHeader title={title} onBack={onBack} /><p style={{ margin: "0 16px", fontFamily: F_BODY, fontSize: 13, color: C.muted }}>Questo replay non si riesce a leggere.</p></div>;
+  const st = TrackReplay.stateAt(rep, t), k = geo.k;
+  const flag = st.done ? null : MAP_FLAG[st.flag];
+  const trackCol = st.flag === "red" ? "#E10600" : st.flag === "sc" || st.flag === "vsc" ? "#FFD43B" : "#5A5A63";
+  const byCode = {}; st.rows.forEach(r => { byCode[r.code] = r; });
+  const label = new Set([...st.rows.slice(0, 3).map(r => r.code), sel].filter(Boolean));
+  const span = tMax - tMin || 1;
+  const bands = (rep.status || []).map((x, i, a) => x[1] === "green" ? null : { from: x[0], to: i + 1 < a.length ? a[i + 1][0] : tMax, s: x[1] }).filter(Boolean);
+  const gapText = r => (r.out ? "RIT" : r.box ? "BOX" : r.pos === 1 ? (st.done ? "Vince" : "Leader") : r.down >= 1 ? `+${r.down} ${r.down === 1 ? "giro" : "giri"}` : (mode === "int" ? r.int : r.gap) == null ? "" : "+" + (mode === "int" ? r.int : r.gap).toFixed(1).replace(".", ","));
+  const ROW = 34, btn = { minHeight: 44, padding: "0 12px", borderRadius: 12, background: C.card, border: `1px solid ${C.border}`, fontFamily: F_HEAD, fontWeight: 800, fontSize: 13, color: C.text };
+  return (
+    <div data-map-replay="" style={{ height: "100%", display: "flex", flexDirection: "column", background: "#0B0B0D" }}>
+      <SubHeader title={title} onBack={onBack} />
+      <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "0 16px 6px", flexShrink: 0 }}>
+        <span data-map-lap="" style={{ fontFamily: F_HEAD, fontWeight: 900, fontStyle: "italic", fontSize: 17, color: C.text, fontVariantNumeric: "tabular-nums" }}>{st.done ? "BANDIERA A SCACCHI" : t < 0 ? "GRIGLIA" : `GIRO ${st.lap}/${rep.N}`}</span>
+        <span style={{ fontFamily: F_HEAD, fontWeight: 700, fontSize: 12, color: C.dim, fontVariantNumeric: "tabular-nums" }}>{t < 0 ? "via tra " + Math.ceil(-t) + " s" : raceClock(t)}</span>
+        {flag && <span data-map-flag="" style={{ marginLeft: "auto", padding: "4px 9px", borderRadius: 8, background: flag[1], fontFamily: F_HEAD, fontWeight: 800, fontSize: 10.5, letterSpacing: .5, color: flag[2] }}>{flag[0]}</span>}
+      </div>
+      <div style={{ flexShrink: 0, padding: "0 12px", height: "38vh", minHeight: 210 }}>
+        <svg data-map-svg="" viewBox={`0 0 ${geo.W.toFixed(1)} ${geo.H.toFixed(1)}`} preserveAspectRatio="xMidYMid meet" style={{ width: "100%", height: "100%", display: "block" }} role="img" aria-label={"Tracciato di " + title + " con le auto"}>
+          <path d={geo.d} fill="none" stroke="#1E1E23" strokeWidth={13 * k} strokeLinejoin="round" />
+          <path data-map-track="" d={geo.d} fill="none" stroke={trackCol} strokeWidth={6 * k} strokeLinejoin="round" />
+          <line x1={geo.sf[0]} y1={geo.sf[1]} x2={geo.sf[2]} y2={geo.sf[3]} stroke="#fff" strokeWidth={2.5 * k} />
+          {rep.drivers.slice().sort((a, b) => (a.code === sel) - (b.code === sel)).map(d => { const r = byCode[d.code] || {}, on = d.code === sel; return (
+            <g key={d.code} data-car={d.code} data-selected={on ? "" : undefined} ref={el => { cars.current[d.code] = el; }} opacity={r.out ? .25 : 1} onClick={() => setSel(on ? null : d.code)}>
+              <circle r={(on ? 8 : 5.6) * k} fill={d.color} stroke={on ? "#fff" : "#0B0B0D"} strokeWidth={(on ? 2.2 : 1.6) * k} />
+              {label.has(d.code) && <text x={9 * k} y={4 * k} fontSize={11 * k} fontFamily={F_HEAD} fontWeight="800" fill="#fff" stroke="#0B0B0D" strokeWidth={3 * k} paintOrder="stroke">{d.code}</text>}
+            </g>
+          ); })}
+        </svg>
+      </div>
+      <div style={{ padding: "6px 16px 8px", flexShrink: 0 }}>
+        {bands.length > 0 && <div data-map-bands="" style={{ position: "relative", height: 5, borderRadius: 3, background: "#1E1E23", overflow: "hidden" }} title="Safety Car, VSC e bandiera rossa lungo la gara">
+          {bands.map((x, i) => <span key={i} style={{ position: "absolute", top: 0, bottom: 0, left: ((x.from - tMin) / span * 100) + "%", width: (Math.max(0.4, (x.to - x.from) / span * 100)) + "%", background: x.s === "red" ? "#E10600" : "#FFD43B" }} />)}
+        </div>}
+        <input type="range" data-map-slider="" aria-label="Momento della gara" min={tMin} max={tMax} step={1} value={Math.round(t)} onChange={e => { setPlaying(false); seek(+e.target.value); }} style={{ width: "100%", marginTop: 4, accentColor: C.accent }} />
+        <div style={{ display: "flex", gap: 8 }}>
+          <button type="button" className="press" data-map-play="" onClick={() => { if (tRef.current >= tMax) seek(tMin); setPlaying(v => !v); fx.play("tick"); }} style={{ ...btn, flex: 1, background: C.accent, border: "none", color: "#fff" }}>{playing ? "Pausa" : t >= tMax ? "Da capo" : "Play"}</button>
+          <button type="button" className="press" data-map-speed="" aria-label={`Velocità ×${speed}: tocca per cambiarla`} onClick={() => setSpeed(v => MAP_SPEEDS[(MAP_SPEEDS.indexOf(v) + 1) % MAP_SPEEDS.length])} style={btn}>×{speed}</button>
+          <button type="button" className="press" data-map-mode="" aria-label={mode === "gap" ? "Distacco dal primo: tocca per quello da chi sta davanti" : "Distacco da chi sta davanti: tocca per quello dal primo"} onClick={() => setMode(m => (m === "gap" ? "int" : "gap"))} style={btn}>{mode === "gap" ? "Dal 1°" : "Davanti"}</button>
+        </div>
+      </div>
+      <div className="scrollcol" style={{ flex: 1, minHeight: 0, overflowY: "auto", padding: "4px 16px 16px" }}>
+        <div style={{ position: "relative", height: st.rows.length * ROW }}>
+          {rep.drivers.map(d => { const r = byCode[d.code], on = d.code === sel, ty = TYRE[r.tyre]; return (
+            <button key={d.code} type="button" data-tower-row={d.code} data-pos={r.pos} aria-pressed={on ? "true" : "false"} onClick={() => setSel(on ? null : d.code)}
+              style={{ position: "absolute", left: 0, right: 0, top: 0, height: ROW - 4, transform: `translateY(${(r.pos - 1) * ROW}px)`, transition: prefersReduced() ? "none" : "transform .4s cubic-bezier(.2,.8,.2,1)", display: "flex", alignItems: "center", gap: 9, padding: "0 10px", borderRadius: 10, background: on ? alpha(d.color, .22) : "#141418", border: `1px solid ${on ? d.color : "transparent"}`, opacity: r.out ? .5 : 1, textAlign: "left" }}>
+              <span style={{ width: 20, fontFamily: F_HEAD, fontWeight: 800, fontSize: 13, color: r.pos <= 3 ? C.gold : C.text, fontVariantNumeric: "tabular-nums" }}>{r.pos}</span>
+              <span aria-hidden="true" style={{ width: 4, height: 18, borderRadius: 2, background: d.color }} />
+              <span style={{ width: 38, fontFamily: F_HEAD, fontWeight: 800, fontSize: 13, color: C.text }}>{d.code}</span>
+              {ty ? <span data-tyre="" aria-label={"Gomma " + r.tyre} style={{ width: 20, height: 20, borderRadius: 10, background: "#0B0B0D", border: `2.5px solid ${ty[0]}`, display: "flex", alignItems: "center", justifyContent: "center", fontFamily: F_HEAD, fontWeight: 900, fontSize: 9.5, color: ty[0] }}>{r.tyre}</span> : <span style={{ width: 20 }} />}
+              <span style={{ flex: 1 }} />
+              <span style={{ fontFamily: F_HEAD, fontWeight: 700, fontSize: 12.5, color: r.out ? "#FF5A5F" : r.box ? C.gold : C.muted, fontVariantNumeric: "tabular-nums" }}>{gapText(r)}</span>
+            </button>
+          ); })}
+        </div>
+        <p style={{ margin: "10px 2px 0", fontFamily: F_BODY, fontSize: 10.5, color: C.dim }}>Posizioni vere a ogni secondo: OpenF1, dal live timing di Formula 1.</p>
+      </div>
+    </div>
+  );
+}
+
 function ArchiveScreen({ archive, weekend, calendar = [], onBack }) {
   const now26 = (weekend && Array.isArray(weekend.races) ? weekend.races : []).filter(r => r && r.drivers);
   const [years, setYears] = useState(null);           // null = si carica; [] = niente dal sito
   const [year, setYear] = useState(now26.length ? 2026 : null);
   const [season, setSeason] = useState({ year: null, races: null, status: "idle" });
-  const [pick, setPick] = useState(null), [replay, setReplay] = useState(false);
+  const [pick, setPick] = useState(null), [replay, setReplay] = useState(false);   // false | "laps" | "map"
+  const [rlist, setRlist] = useState(null), [mapFile, setMapFile] = useState({ status: "idle", file: null });
   useEffect(() => { let on = true; archive.index().then(list => { if (on) setYears((list || []).filter(y => y.year < 2026)); }); return () => { on = false; }; }, []);
+  useEffect(() => { let on = true; if (archive.replays) archive.replays().then(list => { if (on) setRlist(list || []); }); return () => { on = false; }; }, []);
   useEffect(() => {
     if (year == null && years && years.length) setYear(years[0].year);
     if (year == null || year === 2026) return undefined;
@@ -6498,7 +6617,27 @@ function ArchiveScreen({ archive, weekend, calendar = [], onBack }) {
   useBack(!!pick && !replay, () => setPick(null));
   const nameOf = r => r.name || ((calendar.find(c => c.round === r.round) || {}).name) || "Round " + r.round;
   const label = r => `${nameOf(r)} ${year}`;
-  if (pick && replay) return <RaceReplay race={pick} title={label(pick)} onBack={() => setReplay(false)} />;
+  const dateOf = r => r.date || ((calendar.find(c => c.round === r.round) || {}).date) || "";
+  const rinfo = pick ? findReplay(rlist, dateOf(pick)) : null;
+  const openMap = () => {
+    setReplay("map"); setMapFile({ status: "loading", file: null });
+    archive.replay(rinfo.key).then(f => setMapFile(f ? { status: "ok", file: f } : { status: "error", file: null }));
+  };
+  if (pick && replay === "laps") return <RaceReplay race={pick} title={label(pick)} onBack={() => setReplay(false)} />;
+  if (pick && replay === "map") {
+    if (mapFile.status === "ok") return <MapReplay file={mapFile.file} title={label(pick)} onBack={() => setReplay(false)} />;
+    return (
+      <div data-map-loading="" style={{ height: "100%" }}>
+        <SubHeader title={label(pick)} onBack={() => setReplay(false)} />
+        <div style={{ padding: "0 16px" }}>
+          {mapFile.status === "error" ? <>
+            <p role="status" style={{ margin: "0 0 12px", fontFamily: F_BODY, fontSize: 13, color: C.muted }}>Il replay sulla mappa non è arrivato. Controlla la connessione e riprova.</p>
+            <button type="button" className="press" data-replay-fallback="" onClick={() => setReplay("laps")} style={{ width: "100%", minHeight: 48, borderRadius: 14, background: C.card, border: `1px solid ${C.border}`, fontFamily: F_HEAD, fontWeight: 800, fontSize: 13.5, color: C.text }}>Guarda il giro per giro</button>
+          </> : <p role="status" style={{ margin: 0, fontFamily: F_BODY, fontSize: 13, color: C.muted }}>Carico la gara…</p>}
+        </div>
+      </div>
+    );
+  }
   const allYears = [...(now26.length ? [2026] : []), ...((years || []).map(y => y.year))];
   const list = year === 2026 ? now26.slice().sort((a, b) => b.round - a.round) : season.year === year && season.races ? season.races.slice().sort((a, b) => b.round - a.round) : [];
   const chip = on => ({ minHeight: 40, padding: "0 14px", borderRadius: 20, background: on ? C.accent : C.card, border: `1px solid ${on ? C.accent : C.border}`, fontFamily: F_HEAD, fontWeight: 800, fontSize: 13, color: "#fff", flexShrink: 0 });
@@ -6508,7 +6647,8 @@ function ArchiveScreen({ archive, weekend, calendar = [], onBack }) {
       <div data-archive="" data-archive-detail="" style={{ height: "100%", display: "flex", flexDirection: "column" }}>
         <SubHeader title={label(pick)} onBack={() => setPick(null)} />
         <div className="scrollcol" style={{ flex: 1, minHeight: 0, overflowY: "auto", padding: "0 16px 20px" }}>
-          <button type="button" className="press" data-replay-open="" onClick={() => { setReplay(true); fx.play("tick"); }} style={{ width: "100%", minHeight: 50, marginBottom: 14, borderRadius: 14, background: C.accent, border: "none", fontFamily: F_HEAD, fontWeight: 800, fontSize: 14, color: "#fff" }}>Riguarda la gara · {pick.laps || "?"} giri</button>
+          <button type="button" className="press" data-replay-open="" onClick={() => { if (rinfo) openMap(); else setReplay("laps"); fx.play("tick"); }} style={{ width: "100%", minHeight: 50, marginBottom: rinfo ? 8 : 14, borderRadius: 14, background: C.accent, border: "none", fontFamily: F_HEAD, fontWeight: 800, fontSize: 14, color: "#fff" }}>{rinfo ? "Riguarda la gara sulla mappa" : `Riguarda la gara · ${pick.laps || "?"} giri`}</button>
+          {rinfo && <button type="button" className="press" data-replay-laps="" onClick={() => { setReplay("laps"); fx.play("tick"); }} style={{ width: "100%", minHeight: 44, marginBottom: 14, borderRadius: 14, background: "transparent", border: `1px solid ${C.border}`, fontFamily: F_HEAD, fontWeight: 700, fontSize: 13, color: C.text }}>Solo la classifica giro per giro</button>}
           <div style={{ borderRadius: 16, background: C.card, border: `1px solid ${C.border}`, padding: "2px 14px" }}>
             {rows.map((code, i) => { const d = ds[code]; return (
               <div key={code} data-archive-row={code} style={{ display: "flex", alignItems: "center", gap: 10, padding: "9px 0", borderTop: i ? `1px solid ${C.divider}` : "none" }}>

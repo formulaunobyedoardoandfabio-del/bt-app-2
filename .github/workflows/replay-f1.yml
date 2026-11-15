@@ -1,0 +1,54 @@
+# Replay sulla mappa delle gare finite (15/11). tools/openf1_replay.py scarica da OpenF1 (dati storici gratis dal 2023)
+# le posizioni delle auto di ogni gara già corsa e non ancora nell'app e scrive public/data/replay/<gara>.json e
+# index.json; se è cambiato qualcosa fa il commit su tappa-3, Vercel lo pubblica e "Riguarda la gara" lo usa.
+# Da solo il lunedì e il martedì mattina (dopo il GP); a mano: Actions → "Replay F1" → Run workflow (anni: per esempio
+# 2023-2025 per riempire gli anni passati, circa 1 minuto a gara per il limite di richieste di OpenF1).
+# Gli orari partono solo dal ramo principale: questo file deve stare anche su main.
+name: Replay F1
+
+on:
+  schedule:
+    - cron: '17 6 * * 1,2'
+  workflow_dispatch:
+    inputs:
+      anni:
+        description: 'Anni (dal 2023), per esempio 2026 oppure 2023-2025'
+        required: true
+        default: '2026'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: replay-f1
+  cancel-in-progress: false
+
+jobs:
+  replay:
+    runs-on: ubuntu-latest
+    timeout-minutes: 240
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: tappa-3
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Prove dei calcoli
+        run: python3 tools/openf1_replay_test.py
+      - name: Gare finite non ancora nell'app (tools/openf1_replay.py)
+        env:
+          ANNI: ${{ github.event.inputs.anni || '2026' }}
+        run: cd tools && python3 openf1_replay.py
+      - name: Commit su tappa-3 se è cambiato qualcosa
+        run: |
+          git add public/data/replay
+          if git diff --cached --quiet; then echo "Niente di nuovo"; exit 0; fi
+          git config user.name 'B&T'
+          git config user.email '259185044+formulaunobyedoardoandfabio-del@users.noreply.github.com'
+          git commit -q -m "Replay F1 aggiornati (${{ github.event.inputs.anni || '2026' }})"
+          for i in 1 2 3; do
+            if git pull -q --rebase origin tappa-3 && git push -q origin HEAD:tappa-3; then exit 0; fi
+            sleep 10
+          done
+          exit 1

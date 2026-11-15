@@ -44,6 +44,8 @@ jobs:
         run: |
           # versionCode che cresce sempre: minuti dal 1/1/2026
           export BUILD_NUMBER=$(( ($(date +%s) - 1767225600) / 60 ))
+          # 15/11: replay e archivio storico l'app li scarica dal sito: fuori dall'APK (pesano qualche MB a stagione)
+          rm -rf build/data/replay build/data/archivio
           npx cap add android
           npx cap sync android
           python3 scripts/prepare_android.py
