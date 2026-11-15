@@ -156,4 +156,13 @@ async function pickDriver(p, id) {
   await w(p, 300);
 }
 
-module.exports = { EXE, PAGE, NOW, open, w, text, norm, inner, inners, count, has, tapText, tapSel, goTab, login, openAdmin, enterAdminCode, pickDriver, assert, run };
+// 15/11: dopo la registrazione parte il giro guidato; le prove che fanno altro lo saltano (Salta)
+async function skipTour(p) {
+  for (let k = 0; k < 15; k++) {
+    if (await p.$('[data-tour-skip]')) { await tapSel(p, '[data-tour-skip]'); await w(p, 300); return true; }
+    await w(p, 200);
+  }
+  return false;
+}
+
+module.exports = { EXE, PAGE, NOW, open, w, text, norm, inner, inners, count, has, tapText, tapSel, goTab, login, openAdmin, enterAdminCode, pickDriver, skipTour, assert, run };

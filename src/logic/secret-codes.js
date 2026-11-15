@@ -13,11 +13,18 @@ const UNLOCKS = [
   { id: "retro", code: "1950", title: "Modalità 1950", on: "Modalità 1950: l'app in bianco e nero, come il primo Mondiale.", off: "Modalità 1950 spenta: tornano i colori." },
 ];
 // 14/11 (Edoardo): azioni (non si accendono e non si contano): 01 video di presentazione, 02 giro guidato dell'app.
+// 15/11 (Edoardo, lista dei codici): 04-08. admin: true = solo per l'admin (agli altri "codice riservato").
+// desc: la riga della lista nel Pannello admin (scheda TERMINALE).
 const ACTIONS = [
-  { id: "video", code: "01", title: "Video di presentazione", say: "riproduzione: il video di presentazione dell'app" },
-  { id: "tour", code: "02", title: "Giro guidato", say: "avvio del giro guidato dell'app..." },
+  { id: "video", code: "01", title: "Video di presentazione", say: "riproduzione: il video di presentazione dell'app", desc: "Fa partire il video di presentazione dell'app." },
+  { id: "tour", code: "02", title: "Giro guidato", say: "avvio del giro guidato dell'app...", desc: "Fa ripartire il giro guidato col pallino." },
   // 15/11: gara di prova (DEMO) già al 5° giro, a velocità 30x
-  { id: "demo", code: "03", title: "Gara demo dal 5° giro", say: "avvio della gara di prova: dal 5° giro, velocità 30x" },
+  { id: "demo", code: "03", title: "Gara demo dal 5° giro", say: "avvio della gara di prova: dal 5° giro, velocità 30x", desc: "Gara di prova già al 5° giro, a velocità 30x." },
+  { id: "publish", code: "04", title: "Pubblicazione rapida", admin: true, say: "apertura del modulo per pubblicare: notizia, aggiornamento di pista o comunicato", desc: "Apre subito il modulo per pubblicare una notizia, un aggiornamento di pista o un comunicato." },
+  { id: "reset", code: "05", title: "Reset forzato", say: "svuoto i dati salvati sul telefono e riscarico tutto da Firebase...", desc: "Svuota i dati salvati sul telefono (notizie, classifiche, foto) e riscarica tutto da Firebase." },
+  { id: "errors", code: "06", title: "Errori dell'app", admin: true, say: "ultimi errori registrati su questo telefono:", desc: "Mostra gli ultimi errori di questo telefono: console, rete, salvataggi su Firebase." },
+  { id: "notify", code: "07", title: "Prova notifiche", say: "invio di una notifica di prova a questo telefono tra 3 secondi...", desc: "Manda una notifica di prova a questo telefono, per vedere se le notifiche funzionano." },
+  { id: "emergency", code: "08", title: "Interruttore d'emergenza", admin: true, say: "cambio della schermata di manutenzione per tutti...", desc: "Accende o spegne per tutti la schermata di manutenzione (l'admin entra lo stesso)." },
 ];
 const BY_CODE = new Map(UNLOCKS.map(u => [u.code, u]));
 const ACTION_BY_CODE = new Map(ACTIONS.map(a => [a.code, a]));
@@ -70,7 +77,7 @@ function check(input, { adminCode, isAdmin = false, guard = null, now = Date.now
   if (ms > 0) return { kind: "locked", ms };
   if (adminCode && c === norm(adminCode)) return isAdmin ? { kind: "admin" } : { kind: "denied" };
   const act = ACTION_BY_CODE.get(c);
-  if (act) return { kind: "action", id: act.id };
+  if (act) return act.admin && !isAdmin ? { kind: "admin-only", id: act.id } : { kind: "action", id: act.id };
   const u = BY_CODE.get(c);
   if (u) return { kind: "unlock", id: u.id };
   const cu = cleanCustom(custom).find(x => x.code === c);

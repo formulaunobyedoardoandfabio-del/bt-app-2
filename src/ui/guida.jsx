@@ -56,7 +56,7 @@ export function AppGuide({ steps, onGo, onDone, onRegister = null, useBack = nul
   const step = steps[i] || {};
   const last = i >= steps.length - 1;
   const next = () => (last ? onDone() : setI(v => v + 1));
-  if (useBack) useBack(true, onDone);
+  if (useBack) useBack(!explore, onDone);   // 15/11: mentre esplori, il tasto indietro torna indietro nell'app
   useEffect(() => { if (onGo) onGo(step); }, [i]);
   const { rect, missing } = useSpot(explore ? null : step.sel, explore ? -1 - i : i);
   useEffect(() => { if (missing && step.sel && !explore) next(); }, [missing]);
@@ -74,7 +74,9 @@ export function AppGuide({ steps, onGo, onDone, onRegister = null, useBack = nul
   const holeRef = useRef(null);
   holeRef.current = !explore && box ? { box, where } : null;
   useEffect(() => {
-    const h = e => { const c = holeRef.current; if (!c) return; const b = c.box; if (e.clientX >= b.x && e.clientX <= b.x + b.w && e.clientY >= b.y && e.clientY <= b.y + b.h) setExplore({ where0: c.where, left: false }); };
+    // 15/11: un tocco sul riquadro del giro (Avanti, Indietro, Salta) non è mai un tocco sul pezzo, anche se il
+    // riquadro gli sta sopra (prima Avanti faceva partire l'esplorazione e spariva)
+    const h = e => { const c = holeRef.current; if (!c) return; if (e.target && e.target.closest && e.target.closest("[data-app-guide]")) return; const b = c.box; if (e.clientX >= b.x && e.clientX <= b.x + b.w && e.clientY >= b.y && e.clientY <= b.y + b.h) setExplore({ where0: c.where, left: false }); };
     document.addEventListener("pointerdown", h, true);
     return () => document.removeEventListener("pointerdown", h, true);
   }, []);
@@ -101,7 +103,7 @@ export function AppGuide({ steps, onGo, onDone, onRegister = null, useBack = nul
         <div style={{ marginTop: 4, fontSize: 20, lineHeight: "24px", fontWeight: 800 }}>{step.title}</div>
         <div data-tour-text="" style={{ marginTop: 6, minHeight: 44, fontSize: 14.5, lineHeight: "21px", fontWeight: 500, color: "#3F3F46" }}><TypeText key={i} text={step.text || ""} cps={45} cursorColor="#0B0B0C" /></div>
         <div style={{ marginTop: 14, display: "flex", alignItems: "center", gap: 8 }}>
-          <button type="button" onClick={onDone} style={{ minHeight: 44, padding: "0 10px", background: "none", border: "none", fontFamily: FONT, fontWeight: 700, fontSize: 14, color: "#52525B" }}>Salta</button>
+          <button type="button" data-tour-skip="" onClick={onDone} style={{ minHeight: 44, padding: "0 10px", background: "none", border: "none", fontFamily: FONT, fontWeight: 700, fontSize: 14, color: "#52525B" }}>Salta</button>
           <span style={{ flex: 1 }} />
           {i > 0 && <button type="button" data-tour-prev="" onClick={() => setI(v => Math.max(0, v - 1))} style={{ minHeight: 44, padding: "0 14px", borderRadius: 12, background: "transparent", border: "1px solid #D4D4D8", fontFamily: FONT, fontWeight: 700, fontSize: 14, color: "#0B0B0C" }}>Indietro</button>}
           {last && onRegister ? <>

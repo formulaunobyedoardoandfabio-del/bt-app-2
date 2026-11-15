@@ -43,7 +43,10 @@ import Compat from "./services/compat";
 import { createAccount, MESSAGES as ACCOUNT_MSG, messageOf, MIN_AGE, pwStrength } from "./services/account";
 import { createChat, CHAT_MSG, ROOM_IDS, nextPollDelay } from "./services/chat";
 import { createFeedback, FEEDBACK_CATS, FEEDBACK_MSG, APP_VERSION } from "./services/feedback";
-import { local, IMG_REF, uploadImage, loadImage as loadStoredImage, dropImage } from "./services/firebase";
+import { local, IMG_REF, uploadImage, loadImage as loadStoredImage, dropImage, errLog } from "./services/firebase";
+import ErrLogMod from "./services/errlog";
+// 15/11 (codice 06): console, errori non presi e rete finiscono nel registro degli errori del telefono
+if (typeof window !== "undefined") ErrLogMod.install(window, errLog);
 import { generateArticle } from "./services/backend";
 import { fx } from "./services/fx";
 import { createCommons, normFile as commonsFileOf } from "./services/commons";
@@ -241,6 +244,7 @@ function Icon({ name, size = 18, color = C.text, sw = 2 }) {
   const s = { width: size, height: size, viewBox: "0 0 24 24", fill: "none", stroke: color, strokeWidth: sw, strokeLinecap: "round", strokeLinejoin: "round" };
   switch (name) {
     case "back": return <svg {...s}><polyline points="15,18 9,12 15,6" /></svg>;
+    case "tv": return <svg {...s}><rect x="3" y="5" width="18" height="12" rx="2" /><line x1="8" y1="21" x2="16" y2="21" /><line x1="12" y1="17" x2="12" y2="21" /></svg>;
     case "close": return <svg {...s}><line x1="6" y1="6" x2="18" y2="18" /><line x1="18" y1="6" x2="6" y2="18" /></svg>;
     case "chevron": return <svg {...s}><polyline points="9,6 15,12 9,18" /></svg>;
     case "garage": return <svg {...s}><path d="M3 21V9l9-6 9 6v12" /><path d="M7 21v-9h10v9" /><line x1="7" y1="15" x2="17" y2="15" /><line x1="7" y1="18" x2="17" y2="18" /></svg>;
@@ -4617,20 +4621,25 @@ function Watermark({ style }) {
 // finché il Second Screen è aperto lo schermo resta acceso (plugin KeepAwake nell'APK, Wake Lock nel browser, ripreso
 // quando torni sull'app). Niente pannelli nuovi. Unica cosa in più, che non si vede: contro il burn-in degli schermi OLED
 // tutto si sposta di 1-3 pixel una volta al minuto (src/logic/oled.js).
+// 15/11: chi lo chiede si conta (Second Screen e modalità TV insieme): lo schermo può spegnersi solo quando nessuno lo
+// vuole più acceso (prima chiudendo il Second Screen si spegneva anche con la modalità TV attiva).
+let awakeUsers = 0, awakeLock = null;
+const awakeWeb = () => { if (awakeUsers > 0 && !awakeLock && typeof navigator !== "undefined" && navigator.wakeLock && navigator.wakeLock.request) navigator.wakeLock.request("screen").then(l => { if (awakeUsers > 0) { awakeLock = l; l.addEventListener && l.addEventListener("release", () => { awakeLock = null; }); } else l.release().catch(() => {}); }).catch(() => {}); };
+const awakeBack = () => { if (document.visibilityState === "visible") awakeWeb(); };
 function useKeepAwake(on) {
   useEffect(() => {
     if (!on) return undefined;
-    let lock = null, alive = true;
     const KA = capPlugin("KeepAwake");
-    const web = () => { if (alive && !lock && typeof navigator !== "undefined" && navigator.wakeLock && navigator.wakeLock.request) navigator.wakeLock.request("screen").then(l => { if (alive) { lock = l; l.addEventListener && l.addEventListener("release", () => { lock = null; }); } else l.release(); }, () => {}); };
-    const back = () => { if (document.visibilityState === "visible") web(); };
-    if (KA && KA.keepAwake) Promise.resolve().then(() => KA.keepAwake()).catch(() => {});
-    else { web(); document.addEventListener("visibilitychange", back); }
+    if (++awakeUsers === 1) {
+      if (KA && KA.keepAwake) Promise.resolve().then(() => KA.keepAwake()).catch(() => {});
+      else { awakeWeb(); document.addEventListener("visibilitychange", awakeBack); }
+    }
     return () => {
-      alive = false;
-      document.removeEventListener("visibilitychange", back);
+      if (--awakeUsers > 0) return;
+      awakeUsers = 0;
+      document.removeEventListener("visibilitychange", awakeBack);
       if (KA && KA.allowSleep) Promise.resolve().then(() => KA.allowSleep()).catch(() => {});
-      if (lock) lock.release().catch(() => {});
+      if (awakeLock) { awakeLock.release().catch(() => {}); awakeLock = null; }
     };
   }, [on]);
 }
@@ -8929,7 +8938,7 @@ function TrophyCase({ trophies = {}, helmet = null, defs = TROPHIES, onOpen }) {
   );
 }
 
-function ProfiloScreen({ onChangelog = null, onHack = null, onCoffee = null, coffeePrice = null, fanLevel = null, reminders = true, onReminders = null, halfway = true, onHalfway = null, news = true, onNews = null, trophiesOn = true, onTrophiesOn = null, holidays = true, onHolidays = null, miniPit = true, onMiniPit = null, ig, onOpenIg, trial = null, trialUsed = false, onBack, onNotifiche, onPremium, onAdmin, onLogout, isPremium, onAbout, onHelp, onFeedback, aboutMe, onSaveAboutMe, favTeam, favDriver, onPickTeam, onPickDriver, guest, onLogin, onTerms, blocked = [], onUnblock, onDeleteAccount, savedCount = 0, onOpenSaved, account = null, onSaveName, isAdmin = false, onTheme, sounds = true, haptics = true, onSounds, onHaptics, helmet = null, onHelmet, trophies = {}, trophyProg = {}, trophyList = TROPHIES, onAdPrivacy = null }) {
+function ProfiloScreen({ tv = false, onTv = null, onChangelog = null, onHack = null, onCoffee = null, coffeePrice = null, fanLevel = null, reminders = true, onReminders = null, halfway = true, onHalfway = null, news = true, onNews = null, trophiesOn = true, onTrophiesOn = null, holidays = true, onHolidays = null, miniPit = true, onMiniPit = null, ig, onOpenIg, trial = null, trialUsed = false, onBack, onNotifiche, onPremium, onAdmin, onLogout, isPremium, onAbout, onHelp, onFeedback, aboutMe, onSaveAboutMe, favTeam, favDriver, onPickTeam, onPickDriver, guest, onLogin, onTerms, blocked = [], onUnblock, onDeleteAccount, savedCount = 0, onOpenSaved, account = null, onSaveName, isAdmin = false, onTheme, sounds = true, haptics = true, onSounds, onHaptics, helmet = null, onHelmet, trophies = {}, trophyProg = {}, trophyList = TROPHIES, onAdPrivacy = null }) {
   const ft = favTeam ? teamById(favTeam) : null;
   const fd = favDriver ? driverById(favDriver) : null;
   const favRows = [
@@ -8980,6 +8989,8 @@ function ProfiloScreen({ onChangelog = null, onHack = null, onCoffee = null, cof
       { icon: "palette", label: "Colori dell'app", onClick: onTheme, chevron: true, sub: true },
       { icon: "sound", label: "Suoni", toggle: { on: sounds, onChange: onSounds }, sub: true },
       { icon: "vibrate", label: "Vibrazioni", toggle: { on: haptics, onChange: onHaptics }, sub: true },
+      // 15/11 (Edoardo: "la funzione TV: mantieni schermo attivo"): lo schermo non si spegne finché l'app è aperta
+      ...(onTv ? [{ icon: "tv", label: "Modalità TV: schermo sempre acceso", toggle: { on: !!tv, onChange: onTv }, sub: true }] : []),
       ...(onHolidays ? [{ icon: "sparkle", label: "Temi delle feste", toggle: { on: holidays !== false, onChange: onHolidays }, sub: true }] : []),
       ...(onMiniPit ? [{ icon: "stopwatch", label: "Pit Board in tutta l'app", toggle: { on: miniPit !== false, onChange: onMiniPit }, sub: true }] : []),
       ...(onReminders ? [{ icon: "bell", label: "Promemoria sul telefono", toggle: { on: reminders !== false, onChange: onReminders }, sub: true }] : []),
@@ -9286,6 +9297,8 @@ const APP_TOUR = [
 // 15/11 (Edoardo): toccando una voce con go si va alla funzione: { tab | view, sel } apre la scheda e indica il pezzo,
 // { action } fa partire qualcosa (Novità, giro guidato, Enzo, Archivio, Premium). Le voci senza un posto non si toccano.
 const CHANGELOG = [
+  { date: "15/11", title: "Modalità TV: schermo sempre acceso", tag: "Nuovo", go: { view: "profilo" } },
+  { date: "15/11", title: "Giro guidato anche dopo la registrazione" },
   { date: "15/11", title: "Scelta dei piloti come su chess.com", tag: "Nuovo", go: { tab: "fanta", sel: "[data-fanta-drivers]" } },
   { date: "15/11", title: "Foto più leggere nelle liste" },
   { date: "15/11", title: "Domande di storia scritte dall'admin", go: { tab: "fanta", sel: "[data-prediction]" } },
@@ -9338,7 +9351,21 @@ const NOVITA_DUO = [
   { who: "enzo", tab: "home", text: "Calunnie. Abbiamo finito? Bene. Quando c'è qualcosa di nuovo, il bottone Novità in Home si accende." },
 ];
 
-function HackTerminal({ isAdmin, unlocks, onToggle, onAdmin, onClose, onOpenIg, telemetry, panelOpen = false, onTour = null, onDemoRace = null, custom = [] }) {
+// 15/11 (codice 08, interruttore d'emergenza): con la manutenzione accesa (shared/bt-flags.maintenance) chi non è
+// admin vede solo questa schermata. "Accedi (solo admin)" apre l'accesso, così l'admin rientra anche da disconnesso.
+function MaintenanceScreen({ onAdminLogin = null }) {
+  return (
+    <div role="alertdialog" aria-label="App in manutenzione" data-maintenance="" style={{ position: "fixed", inset: 0, zIndex: 3000, background: "#0B0B0C", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 14, padding: 28, textAlign: "center" }}>
+      <Icon name="stopwatch" size={36} color={C.accent} />
+      <h1 style={{ margin: 0, fontFamily: F_HEAD, fontWeight: 900, fontStyle: "italic", fontSize: 24, color: C.text }}>BOX, BOX: MANUTENZIONE</h1>
+      <p style={{ margin: 0, maxWidth: 300, fontFamily: F_BODY, fontSize: 14, color: C.muted, lineHeight: 1.5 }}>Stiamo sistemando l'app. Torna tra poco: squadra, punti e trofei restano come li hai lasciati.</p>
+      <button type="button" className="press" data-maintenance-retry="" onClick={() => window.location.reload()} style={{ minHeight: 48, padding: "0 22px", borderRadius: 14, background: "#F4F4F5", fontFamily: F_HEAD, fontWeight: 900, fontSize: 15, color: "#0B0B0C" }}>Riprova</button>
+      {onAdminLogin && <button type="button" className="press" data-maintenance-admin="" onClick={onAdminLogin} style={{ minHeight: 44, padding: "0 12px", background: "none", border: "none", fontFamily: F_BODY, fontSize: 12.5, color: C.dim, textDecoration: "underline" }}>Accedi (solo admin)</button>}
+    </div>
+  );
+}
+
+function HackTerminal({ isAdmin, unlocks, onToggle, onAdmin, onClose, onOpenIg, telemetry, panelOpen = false, onTour = null, onDemoRace = null, custom = [], onPublish = null, onReset = null, onNotify = null, onEmergency = null }) {
   const [video, setVideo] = useState(false);
   const [wrap, setWrap] = useState(true), [copied, setCopied] = useState(false);   // 15/11: blocco di codice   // 14/11: codice 01, video di presentazione dentro il terminale
   const [log, setLog] = useState([]);        // righe scritte dopo l'avvio: { id, text, tone }
@@ -9388,7 +9415,21 @@ function HackTerminal({ isAdmin, unlocks, onToggle, onAdmin, onClose, onOpenIg, 
       if (id === "video") setVideo(true);
       if (id === "tour" && onTour) { opening.current = true; setTimeout(onTour, 700); }
       if (id === "demo" && onDemoRace) { opening.current = true; setTimeout(onDemoRace, 700); }
+      // 15/11: codici 04-08
+      if (id === "publish" && onPublish) { opening.current = true; setTimeout(onPublish, 700); }
+      if (id === "reset" && onReset) setTimeout(onReset, 900);
+      if (id === "notify" && onNotify) onNotify();
+      if (id === "errors") {
+        const L = errLog.list().slice(-12);
+        say(L.length ? L.map(x => [`${new Date(x.at).toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit" })} ${x.kind.toUpperCase()}${x.n > 1 ? " x" + x.n : ""}: ${x.msg}`, "dim"]) : [["nessun errore registrato su questo telefono", "ok"]]);
+      }
+      if (id === "emergency" && onEmergency) onEmergency().then(on => say([[on ? "MANUTENZIONE ACCESA: gli utenti vedono la schermata di manutenzione" : "MANUTENZIONE SPENTA: l'app è di nuovo aperta a tutti", on ? "red" : "ok"]]), () => say([["salvataggio non riuscito: riprova", "red"]]));
     };
+    if (r.kind === "admin-only") {   // 15/11: 04, 06, 08 solo per l'admin
+      setState("denied"); fx.buzz("error");
+      say([echo, ["CODICE RISERVATO ALL'ADMIN", "red"]]);
+      return;
+    }
     if (r.kind === "action") {
       const act = SecretCodes.actionOf(r.id);
       setState("granted"); fx.play("done"); fx.buzz("success");
@@ -10373,7 +10414,7 @@ function AdminScreen({ termCodes = [], onTermCodes = null, histAuto = [], hidden
         {tab === "SONDAGGI" && <AdminPollsTab polls={polls} votes={votes} onAnswer={onPollAnswer} />}
         {tab === "FANTA F1" && <AdminFantaTab key={"fs:" + versionOf(fantaStats)} fantaStats={fantaStats} setFantaStats={setFantaStats} onToast={onToast} latestRound={fantaLatestRound} />}
         {tab === "FUNZIONI" && <AdminFlagsTab flags={flags} onSave={onFlags} />}
-        {tab === "TERMINALE" && <AdminTerminalTab codes={termCodes} onSave={v => onTermCodes && onTermCodes(v)} />}
+        {tab === "TERMINALE" && <AdminTerminalTab codes={termCodes} />}
         {tab === "TEMI" && <AdminHolidaysTab cfg={holidayCfg} active={holiday} onSave={v => onHolidays && onHolidays(v)} />}
         {tab === "OPINIONI" && <AdminTakesTab takes={takes} onSave={v => onTakes && onTakes(v)} />}
         {tab === "PREVISIONI" && <AdminPredictionsTab predictions={predictions} setPredictions={setPredictions} answers={predAnswers} races={races} onToast={onToast} histAuto={histAuto} hiddenQs={hiddenQs} onHideQ={onHideQ} />}
@@ -11232,44 +11273,33 @@ function PsEnd({ info, onSaved, onShare, onDuel }) {
   );
 }
 
-// 15/11 (Edoardo): codici del terminale aggiunti dall'admin (shared/bt-terminal-codes). Chi li scrive nel terminale
-// vede il titolo e il messaggio; si può far partire anche il video, il giro guidato o la gara demo. Non sbloccano niente
-// a pagamento. I codici di serie non si possono riusare (il terminale non dice quali sono).
+// 15/11 (Edoardo: "nella sezione admin si vedrà solo l'elenco"): scheda TERMINALE = l'elenco dei codici del terminale
+// (src/logic/secret-codes.js): azioni 01-08 (quelle solo per l'admin segnate), codici segreti delle storie Instagram e,
+// se ci sono, i codici aggiunti prima su Firebase (shared/bt-terminal-codes, che funzionano ancora). Niente modulo.
 const TERM_ACTION_LABEL = { "": "Solo messaggio", video: "Video di presentazione", tour: "Giro guidato", demo: "Gara demo dal 5° giro" };
-function AdminTerminalTab({ codes = [], onSave }) {
-  const [code, setCode] = useState(""), [title, setTitle] = useState(""), [say, setSay] = useState(""), [action, setAction] = useState(""), [err, setErr] = useState("");
-  const save = list => onSave && onSave(list);
-  const add = () => {
-    const why = SecretCodes.takenWhy(code, { adminCode: ADMIN_CODE, custom: codes });
-    if (why) { setErr(why === "corto" ? "Il codice deve avere almeno 2 lettere o numeri." : why === "serie" ? "Questo codice nel terminale c'è già: scegline un altro." : "Hai già un codice uguale."); return; }
-    if (!title.trim()) { setErr("Scrivi il titolo: è quello che il terminale mostra in grande."); return; }
-    if (codes.length >= SecretCodes.CUSTOM_MAX) { setErr("Al massimo " + SecretCodes.CUSTOM_MAX + " codici: togline uno."); return; }
-    save([{ code: SecretCodes.norm(code), title: title.trim(), say: say.trim(), action, at: nowMs() }, ...codes]);
-    setCode(""); setTitle(""); setSay(""); setAction(""); setErr("");
-  };
-  const field = { width: "100%", boxSizing: "border-box", minHeight: 44, padding: "0 12px", borderRadius: 12, background: C.card, border: `1px solid ${C.border}`, color: C.text, fontFamily: F_BODY, fontSize: 14, marginBottom: 8 };
+function AdminTerminalTab({ codes = [] }) {
+  const row = (code, title, desc, tag, key) => (
+    <div key={key} data-term-row={code} style={{ display: "flex", alignItems: "flex-start", gap: 12, padding: "11px 0", borderBottom: `1px solid ${C.divider}` }}>
+      <span style={{ minWidth: 54, padding: "3px 0", borderRadius: 8, background: "rgba(255,255,255,.06)", textAlign: "center", fontFamily: F_TERM, fontSize: 13, color: C.text, letterSpacing: 1 }}>{code}</span>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <span style={{ fontFamily: F_HEAD, fontWeight: 800, fontSize: 14, color: C.text }}>{title}</span>
+          {tag && <span data-term-admin="" style={{ padding: "1px 7px", borderRadius: 999, background: alpha(C.accentInk, .16), fontFamily: F_BODY, fontWeight: 700, fontSize: 10, color: C.accentInk }}>{tag}</span>}
+        </div>
+        <div style={{ fontFamily: F_BODY, fontSize: 12, color: C.muted, lineHeight: 1.45, marginTop: 2 }}>{desc}</div>
+      </div>
+    </div>
+  );
+  const head = t => <div style={{ margin: "16px 0 2px", fontFamily: F_BODY, fontWeight: 700, fontSize: 11, color: C.dim, letterSpacing: .4 }}>{t}</div>;
   return (
     <div data-admin-terminal="" style={{ padding: "0 0 24px" }}>
-      <p style={{ fontFamily: F_BODY, fontSize: 12.5, color: C.muted, lineHeight: 1.5, margin: "0 0 10px" }}>Codici nuovi per il terminale del box. Chi li scrive vede il titolo e il messaggio; puoi anche far partire il video, il giro guidato o la gara demo. Non sbloccano niente a pagamento. Valgono per tutti appena li salvi.</p>
-      <input data-term-code-input="" value={code} maxLength={16} onChange={e => { setCode(e.target.value); setErr(""); }} placeholder="Codice (es. MONZA25)" aria-label="Codice" autoCapitalize="characters" style={{ ...field, fontFamily: F_TERM, letterSpacing: 1 }} />
-      <input data-term-title-input="" value={title} maxLength={40} onChange={e => { setTitle(e.target.value); setErr(""); }} placeholder="Titolo (es. Monza)" aria-label="Titolo" style={field} />
-      <textarea data-term-say-input="" value={say} maxLength={200} onChange={e => setSay(e.target.value)} placeholder="Messaggio che il terminale scrive (facoltativo)" aria-label="Messaggio" rows={3} style={{ ...field, padding: 12, resize: "none" }} />
-      <select data-term-action="" value={action} onChange={e => setAction(e.target.value)} aria-label="Cosa fa il codice" style={field}>
-        {SecretCodes.CUSTOM_ACTIONS.map(a => <option key={a} value={a}>{TERM_ACTION_LABEL[a]}</option>)}
-      </select>
-      {err && <div role="alert" data-term-err="" style={{ fontFamily: F_BODY, fontSize: 12.5, color: C.accentInk, margin: "0 0 8px" }}>{err}</div>}
-      <div data-term-add=""><ABtn onClick={add} kind="primary">AGGIUNGI CODICE</ABtn></div>
-      {codes.length === 0 && <p data-term-empty="" style={{ fontFamily: F_BODY, fontSize: 12.5, color: C.dim, margin: "12px 0 0" }}>Nessun codice aggiunto: nel terminale ci sono solo quelli di serie.</p>}
-      {codes.map(c => (
-        <div key={c.code} data-term-row={c.code} style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 0", borderBottom: `1px solid ${C.divider}` }}>
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ fontFamily: F_TERM, fontSize: 13, color: C.text, letterSpacing: 1 }}>{c.code}<span style={{ fontFamily: F_HEAD, fontWeight: 800, letterSpacing: 0, marginLeft: 8 }}>{c.title}</span></div>
-            {c.say && <div style={{ fontFamily: F_BODY, fontSize: 12, color: C.muted, lineHeight: 1.4, marginTop: 2 }}>{c.say}</div>}
-            <div style={{ fontFamily: F_BODY, fontSize: 11, color: C.dim, marginTop: 2 }}>{TERM_ACTION_LABEL[c.action] || TERM_ACTION_LABEL[""]}</div>
-          </div>
-          <button type="button" className="press" data-term-del={c.code} aria-label={"Elimina il codice " + c.title} onClick={() => save(codes.filter(x => x.code !== c.code))} style={{ width: 44, height: 44, display: "flex", alignItems: "center", justifyContent: "center", background: "none", border: "none" }}><Icon name="trash" size={16} color={C.muted} /></button>
-        </div>
-      ))}
+      <p style={{ fontFamily: F_BODY, fontSize: 12.5, color: C.muted, lineHeight: 1.5, margin: "0 0 4px" }}>I codici da scrivere nel terminale del box (Profilo, in fondo). Quelli segnati Solo admin agli altri rispondono "codice riservato".</p>
+      {head("AZIONI")}
+      {SecretCodes.ACTIONS.map(a => row(a.code, a.title, a.desc, a.admin ? "Solo admin" : null, "a" + a.code))}
+      {head("CODICI SEGRETI (STORIE INSTAGRAM)")}
+      {SecretCodes.UNLOCKS.map(u => row(u.code, u.title, u.on, null, "u" + u.code))}
+      {codes.length > 0 && head("AGGIUNTI PRIMA SU FIREBASE")}
+      {codes.map(c => row(c.code, c.title, (c.say ? c.say + " · " : "") + (TERM_ACTION_LABEL[c.action] || TERM_ACTION_LABEL[""]), null, "c" + c.code))}
     </div>
   );
 }
@@ -11393,6 +11423,8 @@ function App() {
   const [bootCache] = useState(() => { try { return AppData.sharedCached(nowMs()); } catch (e) { return { values: {}, kinds: [], complete: false }; } });
   const [shared0] = useState(() => { const v = { ...AppData.sharedDefaults(nowMs()), ...bootCache.values }; addStandingsGuests(v.standings.guests); return v; });
   const [redOrb, setRedOrb] = useState(false);   // 15/11: pallino rosso (tre tocchi sulla stessa scheda)
+  const [tvMode, setTvMode] = useState(() => local.get("bt-tv") === true);   // 15/11: modalità TV (schermo sempre acceso)
+  useKeepAwake(tvMode);
   const [flash, setFlash] = useState(null);   // 15/11: pezzo indicato per un attimo (dal registro delle novità)
   const [duoOn, setDuoOn] = useState(false), [novitaSeen, setNovitaSeen] = useState(() => local.get(NOVITA_KEY));   // 15/11: Novità con Dot ed Enzo
   const [termCodes, setTermCodes] = useState(() => shared0.termCodes || []);   // 15/11: codici del terminale aggiunti dall'admin
@@ -12628,6 +12660,27 @@ function App() {
   const tourDone = () => { tourEnd(); if (tourDemo.current) { tourDemo.current = false; stopLive(); } setView("tab"); setTab("home"); };
   // 15/11: Novità con Dot ed Enzo (bottone in Home): si segna come vista appena si apre
   const duoOpen = () => { setRedOrb(false); setTourOn(false); setDuoOn(true); local.set(NOVITA_KEY, NOVITA_VER); setNovitaSeen(NOVITA_VER); };
+  // 15/11 (codici 05, 07, 08 del terminale)
+  const forceReset = () => {
+    try { Object.keys(localStorage).filter(k => /bt-sc[:-]/.test(k)).forEach(k => localStorage.removeItem(k)); } catch (e) { errLog.add("reset", e); }
+    try { if (window.indexedDB) window.indexedDB.deleteDatabase("bt-img"); } catch (e) { errLog.add("reset", e); }
+    setTimeout(() => window.location.reload(), 400);
+  };
+  const notifyTest = async () => {
+    const title = "Prova notifica B&T", body = "Se la vedi, le notifiche su questo telefono funzionano.";
+    const LN = capPlugin("LocalNotifications");
+    try {
+      if (LN && LN.schedule) {
+        const perm = LN.requestPermissions ? await LN.requestPermissions() : null;
+        if (perm && perm.display && perm.display !== "granted") { showToast("Notifiche non permesse: attivale nelle impostazioni del telefono"); return; }
+        await LN.schedule({ notifications: [{ id: 990001, title, body, schedule: { at: new Date(Date.now() + 3000) } }] });
+      } else if (typeof Notification !== "undefined" && Notification.requestPermission) {
+        const ok = (await Notification.requestPermission()) === "granted";
+        setTimeout(() => { if (ok) new Notification(title, { body }); else showToast(title + ": " + body); }, 3000);
+      } else setTimeout(() => showToast(title + ": " + body), 3000);
+    } catch (e) { errLog.add("notifiche", e); showToast("Notifica di prova non riuscita: guarda il codice 06"); }
+  };
+  const toggleEmergency = () => { let on = false; return commitShared("flags", d => { on = !(d && d.maintenance); return { ...(d || {}), maintenance: on }; }).then(ok => { if (!ok) throw new Error("non salvato"); return on; }); };
   // 15/11: Enzo come coi tre tocchi (la barra in basso diventa la palla) e il registro delle novità che porta alle funzioni
   const enzoOpen = () => { const el = navPillRef.current, r = el && el.getBoundingClientRect(); setRedOrb(r && r.width ? { left: r.left, top: r.top, width: r.width, height: r.height } : true); fx.play("tick"); fx.buzz("success"); };
   const changelogGo = g => {
@@ -12641,6 +12694,9 @@ function App() {
     if (g.sel) setFlash({ sel: g.sel, n: Date.now() });
     fx.play("tick");
   };
+  // 15/11 (Edoardo: "quando una persona si registra dagli comunque il tutorial"): account appena creato = giro guidato,
+  // anche se l'aveva già visto da ospite
+  const tourAfterSignup = r => { if (r && r.created) setTimeout(() => { setView("tab"); setTab("home"); setTourOn(true); }, 700); };
   const duoDone = () => { setDuoOn(false); if (tourDemo.current) { tourDemo.current = false; stopLive(); } setView("tab"); setTab("home"); };
   const stopLive = () => {
     if (demoLive) closeSession(demoLive);
@@ -13374,14 +13430,14 @@ function App() {
         onLogin={() => { fx.buzz("select"); setEntryMode("login"); setEntryView("form"); }} />
     );
     return shell(
-      <LoginScreen key={entryMode} initialMode={entryMode} auth={Account} onHold={setLoginHold} onDoor={() => setEntryView("door")} onDone={entryDone} onGuest={() => guestIn(false)} />
+      <LoginScreen key={entryMode} initialMode={entryMode} auth={Account} onHold={setLoginHold} onDoor={() => setEntryView("door")} onDone={r => { entryDone(r); tourAfterSignup(r); }} onGuest={() => guestIn(false)} />
     );
   }
   if (loginOpen && (!authed || loginHold)) {
     return shell(
       <>
         <LoginScreen key={loginMode} initialMode={loginMode} auth={Account} onHold={setLoginHold} reason={loginReason} onBack={closeLogin}
-          onDone={r => { entryDone(); setGuest(false); setLoginOpen(false); setLoginReason(null); setLoginMode("login"); showToast(r && r.created ? "Account creato" : "Accesso effettuato"); }} />
+          onDone={r => { entryDone(); setGuest(false); setLoginOpen(false); setLoginReason(null); setLoginMode("login"); showToast(r && r.created ? "Account creato" : "Accesso effettuato"); tourAfterSignup(r); }} />
         {toast && <div className="toast">{toast}</div>}
       </>
     );
@@ -13486,7 +13542,7 @@ function App() {
   let body;
   if (view === "article" && activeArticle) body = <ArticleScreen article={activeArticle} onBack={viewBack.article} isPremium={isPaid || adNews.includes(activeArticle.id)} onAdUnlock={Ads.canReward() ? () => watchAdNews(activeArticle.id) : null} adBusy={adBusy} onPremium={() => setPremiumOpen(true)} onTag={filterByTag} saved={saved.includes(activeArticle.id)} onToggleSave={() => toggleSave(activeArticle.id)} onShare={() => setShareId(activeArticle.id)} vote={votes["art-" + activeArticle.id] || null} onVote={castVote} />;
   else if (view === "circuit" && circuitId) body = <CircuitScreen circuitId={circuitId} races={races} articles={newsAll} onBack={viewBack.circuit} onTag={filterByTag} onOpenArticle={openArticle} />;
-  else if (view === "adminLock" || view === "hack") body = <HackTerminal custom={termCodes} isAdmin={!!account && Account.isAdmin()} unlocks={unlocks} onToggle={toggleUnlock} onAdmin={() => { setAdminUnlocked(true); setView("admin"); }} onClose={viewBack.hack} onOpenIg={() => { setIgFrom("profilo"); setView("instagram"); }} telemetry={hackTelemetry} panelOpen={adminUnlocked && !!account && Account.isAdmin()} onTour={() => { setView("tab"); setTab("home"); setTourOn(true); }} onDemoRace={demoFromLap5} />;
+  else if (view === "adminLock" || view === "hack") body = <HackTerminal custom={termCodes} onPublish={() => { setAdminTab("NEWS"); setAdminUnlocked(true); setView("admin"); }} onReset={forceReset} onNotify={notifyTest} onEmergency={toggleEmergency} isAdmin={!!account && Account.isAdmin()} unlocks={unlocks} onToggle={toggleUnlock} onAdmin={() => { setAdminUnlocked(true); setView("admin"); }} onClose={viewBack.hack} onOpenIg={() => { setIgFrom("profilo"); setView("instagram"); }} telemetry={hackTelemetry} panelOpen={adminUnlocked && !!account && Account.isAdmin()} onTour={() => { setView("tab"); setTab("home"); setTourOn(true); }} onDemoRace={demoFromLap5} />;
   else if (view === "admin" && adminUnlocked && Account.isAdmin()) body = <AdminScreen termCodes={termCodes} onTermCodes={v => commitShared("termCodes", () => v).then(ok => { if (ok) showToast("Codici del terminale salvati"); })} histAuto={histQs.filter(q => q.raceId === (weekendRace(races) || {}).id)} hiddenQs={hiddenQs} onHideQ={(id, hide) => commitShared("flags", latest => { const cur = latest && Array.isArray(latest.hiddenQs) ? latest.hiddenQs : []; return { ...latest, hiddenQs: hide ? [...cur.filter(x => x !== id), id] : cur.filter(x => x !== id) }; }).then(ok => { if (ok) showToast(hide ? "Domanda tolta dal FantaF1 per tutti" : "Domanda rimessa nel FantaF1"); })} flags={flags} onFlags={v => commitShared("flags", () => v).then(ok => { if (ok) showToast(v.pitSwipe ? "Pit Swipe acceso per tutti" : "Pit Swipe spento per tutti"); })} takes={takes} onTakes={v => commitShared("takes", () => v).then(ok => { if (ok) showToast("Opinioni salvate"); })} holidayCfg={holidayCfg} holiday={holiday} onHolidays={v => commitShared("holidays", () => v).then(ok => { if (ok) showToast("Temi delle feste salvati"); })} photos={commonsPhotos} setPhotos={adminSet.commonsPhotos} silly={sillyOfficial} onSilly={officialSeat} highlights={highlights} setHighlights={adminSet.highlights} onBack={viewBack.admin} onPublish={publishArticle} articles={articles} setArticles={adminSet.articles} fantaStats={shownFantaStats} fantaLatestRound={latestRaceRound} setFantaStats={adminSet.fantaStats} standings={standings} setStandings={adminSet.standings} races={races} setRaces={adminSet.races} extraRaces={racesDoc.extra} setExtraRaces={adminSet.extraRaces} ig={ig} setIg={adminSet.ig} sentNotifs={sentNotifs} onSendNotif={sendNotif} onDeleteNotif={deleteNotif} onToast={showToast} tab={adminTab} setTab={setAdminTab} chats={chats} reports={reports} banned={banned} onDeleteMsg={deleteChatMsg} onSuspend={suspendUser} onUnsuspend={unsuspendUser} onIgnoreReport={ignoreReport} liveProps={liveProps} polls={allPolls} votes={votes} onPollAnswer={setPollAnswer} predictions={predictions} setPredictions={adminSet.predictions} predAnswers={predAnswers} />;
   else if (view === "chatThread" && activeChat) body = <ChatThreadScreen since={chatSince(activeChat && activeChat.id)} chat={activeChat} onBack={viewBack.chatThread} onSend={guest ? () => needLogin("Per scrivere in chat serve un account.") : sendMessage} isPremium={isPremium} blocked={blocked} onReport={guest ? () => needLogin("Per segnalare un messaggio serve un account.") : reportMessage} onBlock={blockUser} onReact={guest ? () => needLogin("Per reagire ai messaggi serve un account.") : reactMessage} trophyList={trophyList} myWon={trophies} pendingLink={pendingLink} onPendingUsed={() => setPendingLink(null)} onOpenLink={openLink} liveRace={races.find(r => r.status === "LIVE") || null} />;
   else if (view === "instagram") body = <InstagramView ig={ig} onToast={showToast} onBack={viewBack.instagram} />;
@@ -13498,7 +13554,7 @@ function App() {
     mode={swipe.mode || "taste"} onMode={m => { if (!guest && !userDataWait()) setSwipe(s => ({ ...s, mode: m })); }} rain={psRain} onEgg={psEgg} streak={{ n: (swipe.streak || {}).n || 0 }}
     endInfo={psEndInfo} onSaved={() => { setSavedOnly(true); setView("tab"); goTab("home"); }} onShare={psShare} onDuel={!guest ? sendDuel : null} />;
   else if (view === "chats") body = <ChatsView chats={chats} onOpen={openChat} blocked={blocked} onBack={viewBack.chats} unreadOf={(id, ms) => Chat.unread(id, ms)} />;
-  else if (view === "profilo") body = <ProfiloScreen onChangelog={changelogGo} onCoffee={Billing.where() ? buyCoffee : null} coffeePrice={playPrices.coffee || null} ig={ig} onOpenIg={() => { setIgFrom("profilo"); setView("instagram"); }} aboutMe={aboutMe} onSaveAboutMe={a => Account.updateAbout(a).catch(e => showToast(e && (e.code === "too-young" || e.code === "not-loaded") ? messageOf(e) : NOT_SAVED))} account={account} onSaveName={n => Account.updateName(n)} isAdmin={Account.isAdmin()} trial={trialActive ? trial : null} trialUsed={!!trial} onBack={viewBack.profilo} onNotifiche={() => setView("notifiche")} onPremium={() => setPremiumOpen(true)} onAdmin={() => guest ? needLogin("Accedi per usare il pannello admin.") : setView(adminUnlocked ? "admin" : "hack")} onHack={() => { setView("hack"); if (account && Account.refreshAdmin) Account.refreshAdmin().catch(() => {}); }} onLogout={logout} isPremium={isPremium} onAbout={() => setInfoModal({ title: "Info su B&T", body: ABOUT_TEXT, credits: true })} onFeedback={() => setFeedbackOpen(true)} onHelp={() => setInfoModal({ title: "Assistenza", body: HELP_TEXT })} favTeam={favTeam} favDriver={favDriver} onPickTeam={() => guest ? needLogin("Per scegliere scuderia e pilota del cuore serve un account.") : setPicker("team")} onPickDriver={() => guest ? needLogin("Per scegliere scuderia e pilota del cuore serve un account.") : setPicker("driver")} guest={guest} onLogin={() => needLogin(null)} onTerms={() => setTermsOpen(true)} blocked={blocked} onUnblock={unblockUser} onDeleteAccount={deleteAccount} savedCount={saved.length} onOpenSaved={openSaved} onTheme={() => setThemeOpen(true)} helmet={helmet} onHelmet={() => setHelmetOpen(true)} trophies={trophies} trophyProg={trophyProg} trophyList={trophyList}
+  else if (view === "profilo") body = <ProfiloScreen tv={tvMode} onTv={v => { setTvMode(v); local.set("bt-tv", v); fx.play("tick"); showToast(v ? "Modalità TV: lo schermo resta acceso finché l'app è aperta" : "Modalità TV spenta"); }} onChangelog={changelogGo} onCoffee={Billing.where() ? buyCoffee : null} coffeePrice={playPrices.coffee || null} ig={ig} onOpenIg={() => { setIgFrom("profilo"); setView("instagram"); }} aboutMe={aboutMe} onSaveAboutMe={a => Account.updateAbout(a).catch(e => showToast(e && (e.code === "too-young" || e.code === "not-loaded") ? messageOf(e) : NOT_SAVED))} account={account} onSaveName={n => Account.updateName(n)} isAdmin={Account.isAdmin()} trial={trialActive ? trial : null} trialUsed={!!trial} onBack={viewBack.profilo} onNotifiche={() => setView("notifiche")} onPremium={() => setPremiumOpen(true)} onAdmin={() => guest ? needLogin("Accedi per usare il pannello admin.") : setView(adminUnlocked ? "admin" : "hack")} onHack={() => { setView("hack"); if (account && Account.refreshAdmin) Account.refreshAdmin().catch(() => {}); }} onLogout={logout} isPremium={isPremium} onAbout={() => setInfoModal({ title: "Info su B&T", body: ABOUT_TEXT, credits: true })} onFeedback={() => setFeedbackOpen(true)} onHelp={() => setInfoModal({ title: "Assistenza", body: HELP_TEXT })} favTeam={favTeam} favDriver={favDriver} onPickTeam={() => guest ? needLogin("Per scegliere scuderia e pilota del cuore serve un account.") : setPicker("team")} onPickDriver={() => guest ? needLogin("Per scegliere scuderia e pilota del cuore serve un account.") : setPicker("driver")} guest={guest} onLogin={() => needLogin(null)} onTerms={() => setTermsOpen(true)} blocked={blocked} onUnblock={unblockUser} onDeleteAccount={deleteAccount} savedCount={saved.length} onOpenSaved={openSaved} onTheme={() => setThemeOpen(true)} helmet={helmet} onHelmet={() => setHelmetOpen(true)} trophies={trophies} trophyProg={trophyProg} trophyList={trophyList}
     onAdPrivacy={Ads.privacyRequired() ? () => Ads.openPrivacy().catch(() => showToast("Le preferenze sulla privacy degli annunci non sono disponibili in questo momento.")) : null}
     sounds={sounds} haptics={haptics} onSounds={v => { if (userDataWait()) return; setSounds(v); fx.setSounds(v); if (v) fx.play("tick"); }} onHaptics={v => { if (userDataWait()) return; setHaptics(v); fx.setHaptics(v); if (v) fx.buzz("light"); }}
     holidays={holidaysOn} onHolidays={v => { if (userDataWait()) return; setHolidaysOn(v); local.set("bt-holidays-on", v); fx.play("tick"); }}
@@ -13631,6 +13687,7 @@ function App() {
         {linkShare && <ChatRoomPicker onPick={id => { setPendingLink(linkShare); setLinkShare(null); openChat(id); }} onClose={() => setLinkShare(null)} />}
         {socialOpen && <SocialSheet post={socialOpen} onClose={() => setSocialOpen(null)} />}
         <RainGlass on={rainOn} />
+        {flags && flags.maintenance && !(account && Account.isAdmin()) && !loginOpen && <MaintenanceScreen onAdminLogin={() => { setLoginMode("login"); setLoginOpen(true); }} />}
         {flash && <FlashSpot key={flash.n} sel={flash.sel} accent={C.accent} onDone={() => setFlash(null)} />}
         {duoOn && <DuoGuide steps={NOVITA_DUO} accent={C.accent} useBack={useBack} onGo={tourGo} onDone={duoDone} />}
         {tourOn && (guest || !!account) && <AppGuide steps={APP_TOUR} where={view + ":" + tab} useBack={useBack} onGo={tourGo} onDone={tourDone} onRegister={guest ? () => { tourDone(); setLoginReason(null); setLoginMode("register"); setLoginOpen(true); } : null} />}

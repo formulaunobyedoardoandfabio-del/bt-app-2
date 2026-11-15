@@ -234,7 +234,7 @@ const tests = {
     const lbl = await inner(p, '[data-follow-label]');
     await tapSel(p, '[data-fan-option="vroom"]'); await w(p, 150);
     await p.fill('#regBirth', '15/06/2000');   // 8/11: l'età dalla data (niente casella "Ho almeno 14 anni")
-    await tapText(p, 'CREA ACCOUNT', { exact: true }); await w(p, 2900);   // Task 9: i Termini si accettano al primo avvio, non dopo l'accesso
+    await tapText(p, 'CREA ACCOUNT', { exact: true }); await w(p, 2900); await require('./helpers').skipTour(p);   // Task 9: i Termini si accettano al primo avvio, non dopo l'accesso
     await tapSel(p, '[aria-label="Profilo"]'); await w(p, 400);
     await tapText(p, 'Profilo pubblico').catch(() => {}); await w(p, 400);   // 8/11: Su di te sta in Profilo pubblico
     const follow = await inner(p, '[data-about-row="follow"]'), fan = await inner(p, '[data-about-row="fan"]'), birth = await inner(p, '[data-about-row="birth"]');

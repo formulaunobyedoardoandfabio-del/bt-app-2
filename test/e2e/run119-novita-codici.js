@@ -61,36 +61,21 @@ run({
     assert(!r.guide && r.chip, 'Salta: chiuso, bottone ancora lì: ' + JSON.stringify(r));
   },
 
-  async 'Admin TERMINALE: aggiunge un codice (no a quelli di serie), il terminale lo riconosce e fa partire la gara demo'(b) {
+  // 15/11 (Edoardo, dopo: "nella sezione admin si vedrà solo l'elenco"): la scheda TERMINALE non ha più il modulo per
+  // aggiungere codici: è l'elenco dei codici (01-08, quelli solo admin segnati, e i codici segreti delle storie).
+  async 'Admin TERMINALE: solo l\'elenco dei codici (01-08 e codici segreti), niente modulo'(b) {
     const { ctx, p } = await open(b);
     await login(p); await w(p, 600);
     await openAdmin(p, 'TERMINALE');
-    const empty = await p.evaluate(() => !!document.querySelector('[data-term-empty]'));
-    await p.fill('[data-term-code-input]', '01'); await p.fill('[data-term-title-input]', 'Copia');
-    await tapSel(p, '[data-term-add] button'); await w(p, 300);
-    const err = await p.evaluate(() => (document.querySelector('[data-term-err]') || {}).textContent || '');
-    await p.fill('[data-term-code-input]', 'monza 25'); await p.fill('[data-term-title-input]', 'Monza');
-    await p.fill('[data-term-say-input]', 'Il tempio della velocità');
-    await p.selectOption('[data-term-action]', 'demo');
-    await tapSel(p, '[data-term-add] button'); await w(p, 900);
-    const saved = await p.evaluate(() => {
-      const d = window.firebase.__fake.doc('shared/bt-terminal-codes');
-      return { row: !!document.querySelector('[data-term-row="MONZA25"]'), doc: d && (d.__arr || d) };
-    });
-    await tapSel(p, '[aria-label="Indietro"]'); await w(p, 600);   // dal Pannello si torna al Profilo
-    if (!(await p.$('[data-hack-open]'))) { await tapSel(p, '[aria-label="Profilo"]'); await w(p, 500); }
-    await p.$eval('[data-hack-open]', e => e.scrollIntoView({ block: 'center' }));
-    await tapSel(p, '[data-hack-open]'); await w(p, 1800);
-    await p.fill('[data-hack-input]', 'monza25'); await p.press('[data-hack-input]', 'Enter'); await w(p, 500);
-    const said = await p.evaluate(() => (document.querySelector('[data-hack-term]') || {}).innerText || '');
-    await w(p, 1500);
-    const live = await p.evaluate(() => ({ card: !!document.querySelector('[data-live-card]'), lap: Number((document.querySelector('[data-live-lap]') || { getAttribute: () => 0 }).getAttribute('data-live-lap')) }));
+    const r = await p.evaluate(() => ({
+      rows: [...document.querySelectorAll('[data-admin-terminal] [data-term-row]')].map(e => e.getAttribute('data-term-row')),
+      admin: [...document.querySelectorAll('[data-admin-terminal] [data-term-row]')].filter(e => e.querySelector('[data-term-admin]')).map(e => e.getAttribute('data-term-row')),
+      form: !!document.querySelector('[data-term-code-input], [data-term-add]'),
+    }));
     await ctx.close();
-    assert(empty, 'all\'inizio nessun codice aggiunto');
-    assert(/c'è già/.test(err), 'un codice di serie non si può riusare: ' + err);
-    assert(saved.row && Array.isArray(saved.doc) && saved.doc.some(c => c.code === 'MONZA25' && c.title === 'Monza' && c.action === 'demo'), 'codice salvato per tutti (shared/bt-terminal-codes): ' + JSON.stringify(saved));
-    assert(/CODICE ACCETTATO: MONZA/.test(said) && /Il tempio della velocità/.test(said), 'il terminale lo riconosce e scrive il messaggio: ' + said.slice(-200));
-    assert(live.card && live.lap >= 5, 'e fa partire la gara demo dal 5° giro: ' + JSON.stringify(live));
+    assert(['01', '02', '03', '04', '05', '06', '07', '08', 'PITWALL'].every(c => r.rows.includes(c)), 'elenco dei codici: ' + JSON.stringify(r.rows));
+    assert(r.admin.join() === '04,06,08', 'solo admin: 04, 06, 08: ' + JSON.stringify(r.admin));
+    assert(!r.form, 'niente modulo per aggiungere codici');
   },
 
   async 'codice dell\'admin già su Firebase: un utente normale lo usa nel terminale'(b) {

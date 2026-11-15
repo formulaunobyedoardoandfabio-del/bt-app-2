@@ -33,8 +33,11 @@ function withTimeout(p, ms, code = "timeout") {
 // ── Rete ─────────────────────────────────────────────────────────────
 let online = true;
 const NET_CODES = ["unavailable", "auth/network-request-failed", "deadline-exceeded", "offline", "timeout"];
+// 15/11 (codice 06 del terminale): registro degli errori del telefono (src/services/errlog.js); qui le letture e i
+// salvataggi su Firebase non riusciti.
+const errLog = require("./errlog").createErrLog({ storage: (() => { try { return W().localStorage || null; } catch (e) { return null; } })() });
 function track(p) {
-  return p.then(v => { online = true; return v; }, e => { if (e && NET_CODES.includes(e.code)) online = false; throw e; });
+  return p.then(v => { online = true; return v; }, e => { if (e && NET_CODES.includes(e.code)) online = false; errLog.add("firebase", e); throw e; });
 }
 const isOnline = () => online;
 
@@ -305,6 +308,7 @@ async function dropImage(ref) {
 }
 
 module.exports = {
+  errLog,
   FIREBASE_CONFIG, getDb, getAuth, isOnline, loadScript,
   ss, sg, sgStrict, sd, dbGet, dbSet, dbDelete, dbQuery, sharedAppend, docAppend, sharedRemoveWhere, listOf, local,
   IMG_REF, IMG_MAX_CHARS, compressImage, uploadImage, loadImage, dropImage,

@@ -15,7 +15,7 @@ async function register(p, { name = 'Fabio', email = 'fabio@b.it', pw = 'abcdef1
   if (steps) { await p.focus('#regFollow'); for (let i = 0; i < steps; i++) await p.keyboard.press('ArrowRight'); }
   await tapSel(p, `[data-fan-option="${fan}"]`); await w(p, 150);
   if (adult && !birth) await p.fill('#regBirth', '15/06/2000');   // 8/11: niente casella "Ho almeno 14 anni", serve la data
-  await tapText(p, 'CREA ACCOUNT', { exact: true }); await w(p, 1500);
+  await tapText(p, 'CREA ACCOUNT', { exact: true }); await w(p, 1500); await require('./helpers').skipTour(p);   // 15/11: dopo la registrazione parte il giro guidato
 }
 const OLD = { 'users/v@b.it': { name: 'Edo', nick: 'Edo', email: 'v@b.it', pw: 'segreta', isPremium: false, premium: false, notif: { news: true, live: true, fanta: true }, ts: 1726000000000, plan: 'free' } };
 
@@ -45,6 +45,18 @@ run({
     assert(!errs.length, errs.join(' | '));
   },
 
+  // 15/11 (Edoardo: "quando una persona si registra dagli comunque il tutorial"): account appena creato = giro guidato
+  async 'registrazione: appena creato l\'account parte il giro guidato'(b) {
+    const { ctx, p } = await open(b);
+    await tapText(p, 'REGISTRATI', { exact: true }); await w(p, 300);
+    await p.fill('#regName', 'Fabio'); await p.fill('#authEmail', 'fabio@b.it'); await p.fill('#authPw', 'abcdef12'); await p.fill('#regPw2', 'abcdef12');
+    await tapSel(p, '[data-fan-option="vivo"]'); await p.fill('#regBirth', '15/06/2000');
+    await tapText(p, 'CREA ACCOUNT', { exact: true }); await w(p, 1500);
+    await p.waitForSelector('[data-tour-count]', { timeout: 6000 }).catch(() => {});
+    const t = await p.evaluate(() => (document.querySelector('[data-tour-count]') || {}).textContent || '');
+    await ctx.close();
+    assert(/^1 di \d+/.test(t), 'dopo la registrazione parte il giro guidato: ' + t);
+  },
   async 'account vecchio senza About you: il profilo chiede di completarlo'(b) {
     const { ctx, p, errs } = await open(b, { seed: { addDocs: OLD } });
     await login(p, { email: 'v@b.it', pw: 'segreta' });

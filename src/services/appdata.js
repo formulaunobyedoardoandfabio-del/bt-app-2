@@ -79,7 +79,9 @@ const cleanTakes = v => (Array.isArray(v) ? v : []).filter(t => isObj(t) && type
 
 // 7/11: funzioni accese dall'admin; ogni valore che non è true è spento.
 // 13/11: hiddenQs = domande di storia automatiche tolte dall'admin (id "auto:<gara>:h-<tipo>"), le ultime 200.
-const cleanFlags = v => ({ pitSwipe: !!(isObj(v) && v.pitSwipe === true), hiddenQs: isObj(v) && Array.isArray(v.hiddenQs) ? [...new Set(v.hiddenQs.filter(x => typeof x === "string" && /^auto:[A-Za-z0-9_-]{1,12}:h-[a-z]{1,12}$/.test(x)))].slice(-200) : [] });
+const cleanFlags = v => ({ pitSwipe: !!(isObj(v) && v.pitSwipe === true), hiddenQs: isObj(v) && Array.isArray(v.hiddenQs) ? [...new Set(v.hiddenQs.filter(x => typeof x === "string" && /^auto:[A-Za-z0-9_-]{1,12}:h-[a-z]{1,12}$/.test(x)))].slice(-200) : [],
+  // 15/11 (codice 08): schermata di manutenzione per tutti tranne l'admin; c'è solo quando è accesa
+  ...(isObj(v) && v.maintenance === true ? { maintenance: true } : {}) });
 
 // Ogni contenuto dell'app (nome dello stato della 2.0) → i suoi documenti e le conversioni.
 // from(documenti, ora) dà il valore per l'app; to(valore) dà i documenti da scrivere (null = documento da cancellare).

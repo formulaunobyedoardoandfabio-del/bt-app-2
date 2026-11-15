@@ -23,6 +23,26 @@ run({
     assert(!errs.length, errs.join(' | '));
   },
 
+  // 15/11 (Edoardo): "se schiacci quello evidenziato, poi torni indietro e schiacci Avanti, è come se il bottone Avanti
+  // scomparisse". Causa: quando il riquadro del testo sta sopra il pezzo acceso, il tocco su Avanti cadeva "dentro il
+  // pezzo" e il giro passava a esplorare (sparivano riquadro e bottone). I tocchi sul riquadro non contano mai come pezzo.
+  async 'tocco su Avanti sopra il pezzo acceso: va avanti, non si mette a esplorare'(b) {
+    const { ctx, p } = await open(b);
+    await login(p); await w(p, 800);
+    await start02(p);
+    await p.waitForSelector('[data-tour-spot="on"]', { timeout: 5000 });
+    // un tocco su Avanti con le coordinate dentro il pezzo acceso (come quando il riquadro gli sta sopra)
+    await p.evaluate(() => {
+      const s = document.querySelector('[data-tour-spot="on"]').getBoundingClientRect(), b = document.querySelector('[data-tour-next]');
+      b.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, cancelable: true, clientX: s.left + s.width / 2, clientY: s.top + s.height / 2 }));
+      b.click();
+    });
+    await w(p, 900);
+    const r = await p.evaluate(() => ({ float: !!document.querySelector('[data-tour-float]'), count: (document.querySelector('[data-tour-count]') || {}).textContent || '', next: !!document.querySelector('[data-tour-next]') }));
+    await ctx.close();
+    assert(!r.float && /^2 di/.test(r.count) && r.next, 'Avanti porta alla tappa 2 e il bottone resta: ' + JSON.stringify(r));
+  },
+
   async 'ospite da Accedi: parte il giro col pallino; tappe Profilo, Second Screen (gara demo) e B&T Trophies'(b) {
     const { ctx, p, errs } = await open(b);
     await tapText(p, 'ENTRA COME OSPITE'); await w(p, 1500);

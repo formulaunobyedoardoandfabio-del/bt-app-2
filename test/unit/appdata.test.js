@@ -399,6 +399,12 @@ t('14/11 funzioni: hiddenQs tiene solo gli id delle domande di storia automatich
   assert.deepStrictEqual(KINDS.flags.from({ 'bt-flags': { pitSwipe: true } }), { pitSwipe: true, hiddenQs: [] }, 'documento di prima: nessuna domanda tolta');
 });
 
+t('15/11 interruttore d\'emergenza (codice 08): maintenance nei bt-flags solo quando è acceso', () => {
+  const { KINDS } = require('../../src/services/appdata');
+  assert.deepStrictEqual(KINDS.flags.to({ pitSwipe: false, maintenance: true }), { 'bt-flags': { pitSwipe: false, hiddenQs: [], maintenance: true } });
+  assert.deepStrictEqual(KINDS.flags.from({ 'bt-flags': { maintenance: 'sì' } }), { pitSwipe: false, hiddenQs: [] }, 'solo true accende');
+});
+
 t('15/11 codici del terminale dell\'admin (shared/bt-terminal-codes): puliti in lettura e in scrittura', () => {
   const { KINDS } = require('../../src/services/appdata');
   assert.deepStrictEqual(KINDS.termCodes.from({ 'bt-terminal-codes': null }), [], 'niente documento: nessun codice');

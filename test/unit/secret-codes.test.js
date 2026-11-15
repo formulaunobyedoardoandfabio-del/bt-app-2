@@ -72,6 +72,20 @@ t('firewall: 5 codici sbagliati di fila → 30 secondi chiuso, anche il codice g
   assert.deepStrictEqual(S.cleanGuard({ fails: 'x', until: null }), S.freshGuard(), 'stato rovinato → da capo');
 });
 
+// 15/11 (Edoardo, lista dei codici): 04 pubblicazione rapida, 05 reset forzato, 06 errori, 07 prova notifiche,
+// 08 interruttore d'emergenza. 04, 06 e 08 solo per l'admin (gli altri dicono che il codice è riservato).
+t('codici 04-08: azioni giuste; 04, 06 e 08 riservati all\'admin', () => {
+  const opts = isAdmin => ({ adminCode: ADMIN, isAdmin });
+  assert.deepStrictEqual(['04', '05', '06', '07', '08'].map(c => S.check(c, opts(true))), ['publish', 'reset', 'errors', 'notify', 'emergency'].map(id => ({ kind: 'action', id })));
+  assert.deepStrictEqual(S.check('04', opts(false)), { kind: 'admin-only', id: 'publish' });
+  assert.deepStrictEqual(S.check('06', opts(false)), { kind: 'admin-only', id: 'errors' });
+  assert.deepStrictEqual(S.check('08', opts(false)), { kind: 'admin-only', id: 'emergency' });
+  assert.deepStrictEqual(S.check('05', opts(false)), { kind: 'action', id: 'reset' });
+  assert.deepStrictEqual(S.check('07', opts(false)), { kind: 'action', id: 'notify' });
+  assert.deepStrictEqual(S.ACTIONS.map(a => a.code), ['01', '02', '03', '04', '05', '06', '07', '08']);
+  assert.ok(S.ACTIONS.every(a => a.title && a.desc), 'ogni codice ha titolo e descrizione per la lista dell\'admin');
+});
+
 // 15/11 (Edoardo): codici aggiunti dall'admin nel Pannello (shared/bt-terminal-codes): scrivono un messaggio e al massimo
 // fanno una delle azioni che ci sono già (video, giro, gara demo). Non sbloccano niente.
 t('codici dell\'admin: puliti (maiuscole, niente doppioni, niente codici di serie, campi accorciati)', () => {

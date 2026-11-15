@@ -1127,3 +1127,28 @@ Misure prima del lavoro (pagina di prova, CPU rallentata 4x come un telefono med
   `StoredImg`/`StoredBg`. Le notizie vere hanno tutte foto `fsimg:` (controllato sul documento pubblico).
   Prove: unit `imgstore` (+3), e2e `run123-foto-leggere.js` (2, rossa sul codice di prima), aggiornata `run34-admin`
   (con la foto ci sono anche le due copie).
+
+
+## 15/11 (16:00): Avanti del giro guidato, modalità TV, giro dopo la registrazione, codici 04-08, manutenzione
+
+- Giro guidato (Edoardo: "se schiacci l'evidenziato, torni indietro e schiacci Avanti, il bottone scompare"). Causa:
+  quando il riquadro del testo sta sopra il pezzo acceso, il tocco su Avanti cadeva "dentro il pezzo" e il giro passava
+  a esplorare. Ora i tocchi sul riquadro non contano mai come pezzo; mentre si esplora il tasto indietro del telefono
+  torna indietro nell'app invece di chiudere il giro. Prova: run118 (+1, rossa sul codice di prima).
+- Modalità TV (Profilo, Impostazioni: "Modalità TV: schermo sempre acceso", `bt-tv` sul telefono): lo schermo non si
+  spegne finché l'app è aperta. `useKeepAwake` conta chi lo chiede (Second Screen + modalità TV): chiudendo il Second
+  Screen lo schermo non si spegne più se la modalità TV è attiva. Prova: run101 (+1).
+- Account appena creato = giro guidato, anche se visto da ospite (`tourAfterSignup`). Le prove che registrano un account
+  e poi fanno altro saltano il giro con `skipTour(p)` (helpers; bottone Salta = `data-tour-skip`): run10, run16, run31,
+  run32, run33, run60. Prova: run31 (+1).
+- Codici del terminale (numerazione scelta da Edoardo, nella sua lista c'erano due 06): 04 pubblicazione rapida (apre il
+  Pannello sul modulo NEWS), 05 reset forzato (toglie la copia dei dati `bt-sc:*` e le foto in IndexedDB, poi ricarica),
+  06 errori dell'app (`src/services/errlog.js`: console.error, errori non presi, rete senza risposta o 5xx, letture e
+  salvataggi Firebase non riusciti; ultimi 40 sul telefono), 07 prova notifiche (LocalNotifications tra 3 s; nel browser
+  Notification o avviso), 08 interruttore d'emergenza (`shared/bt-flags.maintenance`: chi non è admin vede solo la
+  schermata "Box, box: manutenzione", con "Accedi (solo admin)"). 04, 06, 08 solo admin (`admin-only`: "codice
+  riservato"). Scheda TERMINALE del Pannello: solo l'elenco dei codici (azioni, codici segreti delle storie, quelli
+  aggiunti prima su Firebase che funzionano ancora); il modulo per aggiungerli è tolto. Prove: unit secret-codes (+1),
+  errlog (2), appdata (+1); e2e run124 (4), aggiornata run119 (scheda TERMINALE = elenco).
+- Lingue (tutta l'app in qualsiasi lingua): rimandate con Edoardo a una sessione nuova con un piano (app da 13.600 righe
+  tutte in italiano).
