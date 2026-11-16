@@ -1159,3 +1159,18 @@ Misure prima del lavoro (pagina di prova, CPU rallentata 4x come un telefono med
   "Trofeo sbloccato" ha i coriandoli e la coppa che salta. Prova: run93 (+1).
 - `#madebyhuman` in fondo alle scritte piccole (avviso F1 in Home e Profilo, fonte dei prezzi del Fanta): scelta di
   Edoardo, dopo avergli detto che l'app è scritta in gran parte con l'IA (`MADE_TAG`, `madeTag()`).
+
+
+## 16/11 (11:30): scritta Sector 4 in alto, schede dei feedback veri
+
+- In alto, al posto del logo B&T: la scritta "SECTOR 4" che si rivela (`RevealText` in src/ui/effetti.jsx, ricreato
+  dal RevealText di 21st.dev: lettere che salgono una dopo l'altra, poi una copia nel colore dell'app che passa sopra;
+  col dito ripassa; solo transform/opacity, ferma con "Rimuovi animazioni"). Restano i tre tocchi (lampeggia) e il dito
+  tenuto premuto (Launch control); il colore delle feste è quello della copia che passa (Halloween arancio).
+- Scheda Feedback: in cima scorrono in 3D (tre colonne inclinate, ferme col dito sopra) i feedback veri dei tifosi che
+  hanno spuntato "Si può mostrare agli altri tifosi" (`public: true`, `name` = nickname, mai l'email). `Feedback.
+  listPublic()` (testo di almeno 8 lettere, non nascosti, i più nuovi prima, al massimo 18), `Feedback.hide(id)`
+  (admin: "Nascondi" nell'elenco "Feedback mostrati", il feedback resta su Firebase). Con meno di 3 feedback da mostrare
+  le schede non ci sono: all'inizio sono vuote, si riempiono man mano che i tifosi dicono sì.
+- Prove: unit `feedback` (+2), e2e `run125-feedback-sector4.js` (3); aggiornate run64 (scritta al posto del logo) e
+  run79 (colore della festa sulla scritta).

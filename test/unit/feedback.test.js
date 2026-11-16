@@ -29,6 +29,29 @@ t('invio: shared/bt-feedback-<id> = {id, stars, category, msg, user, date, appVe
   assert.deepStrictEqual(out, d);
 });
 
+// 16/11 (Edoardo: le schede dei feedback nella scheda Feedback, "con dati e cose vere"): si mostra solo il feedback di
+// chi lo permette (public, col suo nickname, mai l'email), con un testo vero, non nascosto dall'admin.
+t('16/11 permesso di mostrarlo: public e nickname (o "Tifoso anonimo"); senza permesso il documento è come prima', async () => {
+  const c = ctx();
+  await c.fb.send({ stars: 5, msg: 'App bellissima, la uso ogni weekend', email: 'a@b.it', share: true, name: '  Edo il Ferrarista che scrive un nome lunghissimo  ' });
+  await c.fb.send({ stars: 4, msg: 'Mi piace il Fanta', share: true });
+  const docs = c.feedbacks().map(([, d]) => d).sort((a, b) => b.stars - a.stars);
+  assert.strictEqual(docs[0].public, true);
+  assert.strictEqual(docs[0].name, 'Edo il Ferrarista che sc');
+  assert.strictEqual(docs[1].name, 'Tifoso anonimo');
+});
+
+t('16/11 elenco da mostrare: solo permessi, testo di almeno 8 lettere, non nascosti; i più nuovi prima; mai l\'email', async () => {
+  const d = (id, o) => ({ ['shared/bt-feedback-' + id]: { id, stars: 4, category: 'generale', msg: 'Testo vero del feedback', user: 'x@y.it', date: '2026-11-0' + id + 'T10:00:00.000Z', appVersion: '2.0.0', public: true, name: 'Nick' + id, ...o } });
+  const c = ctx({ ...d(1), ...d(2), ...d(3, { public: false }), ...d(4, { hidden: true }), ...d(5, { msg: 'corto' }), ...d(6, { stars: 9 }), 'shared/bt-takes': { public: true } });
+  const out = await c.fb.listPublic();
+  assert.deepStrictEqual(out.map(x => x.id), ['2', '1']);
+  assert.deepStrictEqual(Object.keys(out[0]).sort(), ['category', 'date', 'id', 'msg', 'name', 'stars']);
+  await c.fb.hide('2');
+  assert.deepStrictEqual((await c.fb.listPublic()).map(x => x.id), ['1'], 'nascosto dall\'admin: non si vede più');
+  assert.strictEqual(c.fake.doc('shared/bt-feedback-2').msg, 'Testo vero del feedback', 'nascondere non cancella il feedback');
+});
+
 t('senza account il feedback è "anonimo"; categoria sconosciuta → generale; testo facoltativo', async () => {
   const c = ctx();
   await c.fb.send({ stars: 5 });

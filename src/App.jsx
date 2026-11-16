@@ -20,7 +20,7 @@ import BtSwipe from "./logic/pitswipe";
 import BtElo from "./logic/elo";
 import BtReplay from "./logic/replay";
 import TrackReplay from "./logic/track-replay";
-import { LiveOrb, TypeText, ChangelogCard, VanishCanvas } from "./ui/effetti";
+import { LiveOrb, TypeText, ChangelogCard, VanishCanvas, RevealText } from "./ui/effetti";
 import { AppGuide, EnzoChat, DuoGuide, FlashSpot } from "./ui/guida";
 import { createArchive, findReplay } from "./services/archive";
 import BtTrophyPro from "./logic/trophypro";
@@ -746,10 +746,12 @@ function TopHeader({ isPremium, unread, onPremium, onBell, onProfile, trialDays 
   };
   return (
     <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "18px 16px 14px", flexShrink: 0 }}>
-      <button className="press" data-logo="" aria-label={"B&T"} onClick={() => { if (hold.current.long) { hold.current.long = false; return; } tapLogo(); }}
-        onPointerDown={holdDown} onPointerUp={holdUp} onPointerLeave={holdUp} onPointerCancel={holdUp} onContextMenu={e => e.preventDefault()} style={{ position: "relative", height: 38, padding: "0 12px", borderRadius: 11, background: C.accent, display: "flex", alignItems: "center", flexShrink: 0 }}>
+      {/* 16/11 (Edoardo): al posto del logo B&T la scritta "Sector 4" che si rivela (RevealText, src/ui/effetti.jsx).
+          Restano i tre tocchi (lampeggia tre volte) e il dito tenuto premuto (Launch control). */}
+      <button className="press" data-logo="" aria-label="Sector 4" onClick={() => { if (hold.current.long) { hold.current.long = false; return; } tapLogo(); }}
+        onPointerDown={holdDown} onPointerUp={holdUp} onPointerLeave={holdUp} onPointerCancel={holdUp} onContextMenu={e => e.preventDefault()} style={{ position: "relative", height: 38, padding: "0 4px", borderRadius: 11, background: "transparent", display: "flex", alignItems: "center", flexShrink: 0 }}>
         {holiday && <span data-holiday-mark={holiday} style={{ position: "absolute", right: -6, top: -6, filter: "drop-shadow(0 2px 3px rgba(0,0,0,.5))" }}><HolidayMark id={holiday} size={18} /></span>}
-        <img data-logo-img="" data-mode={egg ? "flash3" : "idle"} className={egg ? "logo-flash3" : undefined} src={BT_LOGO} alt="" style={{ width: 28, height: 28, objectFit: "contain", display: "block" }} />
+        <span data-logo-img="" data-mode={egg ? "flash3" : "idle"} className={egg ? "logo-flash3" : undefined} style={{ display: "flex" }}><RevealText text="SECTOR 4" color={C.text} overlay={C.accent} size={22} font={F_HEAD} letterDelay={0.08} overlayDelay={0.05} overlayDuration={0.4} springDuration={600} style={{ letterSpacing: .4 }} /></span>
         {held > 0 && <span data-launch={held === 2 ? "ready" : "charging"} aria-hidden="true" style={{ position: "absolute", left: "50%", top: "100%", marginTop: 5, transform: "translateX(-50%)", display: "flex", alignItems: "center", gap: 3, padding: "4px 6px", borderRadius: 7, background: "#000", border: "1px solid #2C2C33", zIndex: 60, whiteSpace: "nowrap" }}>
           {[0, 1, 2, 3, 4].map(k => <i key={k} className={held === 1 ? "ps-led" : undefined} style={{ width: 7, height: 7, borderRadius: "50%", background: k < 2 ? "#2FD36B" : k < 4 ? "#FF1801" : "#4C8DFF", animationDelay: (k * .5) + "s", opacity: held === 2 ? 1 : undefined }} />)}
           {held === 2 && <b style={{ marginLeft: 4, fontFamily: F_HEAD, fontWeight: 900, fontStyle: "italic", fontSize: 9.5, color: "#fff" }}>LASCIA!</b>}
@@ -10732,19 +10734,65 @@ function LoadingScreen({ ready, onDone, holiday = null }) {
 // Feedback come l'app di oggi (FeedbackModal): voto da 1 a 5 (obbligatorio; dall'8/11 con la faccina animata al posto
 // delle stelline, src/feedback/FaceRating.jsx), una categoria e un testo facoltativo;
 // si salva in shared/bt-feedback-<id> (src/services/feedback.js).
-function FeedbackModal({ onClose, onSend }) {
+// 16/11 (Edoardo: "metti questi con dati e cose vere nella scheda feedback", le schede che scorrono in 3D di 21st.dev):
+// in cima alla scheda Feedback scorrono i feedback veri dei tifosi che hanno detto sì a mostrarli (Feedback.listPublic:
+// nickname, faccina, categoria, quando, testo; mai l'email). Tre colonne inclinate che scorrono in su e in giù (solo
+// transform), ferme col dito sopra o con "Rimuovi animazioni". Con meno di 3 feedback da mostrare non c'è.
+const FB_WALL_CSS = "@keyframes fbUp{from{transform:translateY(0)}to{transform:translateY(-50%)}}@keyframes fbDown{from{transform:translateY(-50%)}to{transform:translateY(0)}}"
+  + ".fb-col{animation:fbUp var(--fb-dur,40s) linear infinite}.fb-col.rev{animation-name:fbDown}.fb-wall:active .fb-col{animation-play-state:paused}"
+  + "@media (prefers-reduced-motion: reduce){.fb-col,.fb-col.rev{animation:none}}";
+const FB_FACE = ["", "Molto male", "Migliorabile", "Nella media", "Bene", "Ottimo"];
+function FeedbackWallCard({ f }) {
+  const hue = Array.from(f.name).reduce((h, c) => (h * 31 + c.charCodeAt(0)) % 360, 7);
+  const cat = (FEEDBACK_CATS.find(c => c.id === f.category) || FEEDBACK_CATS[0]).label;
+  return (
+    <figure data-fb-card={f.id} style={{ margin: 0, width: 150, boxSizing: "border-box", padding: "10px 11px", borderRadius: 14, background: "#16161A", border: `1px solid ${C.border}` }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+        <span aria-hidden="true" style={{ width: 28, height: 28, borderRadius: "50%", flexShrink: 0, background: `hsl(${hue} 55% 42%)`, display: "flex", alignItems: "center", justifyContent: "center", fontFamily: F_HEAD, fontWeight: 900, fontSize: 13, color: "#fff" }}>{f.name.charAt(0).toUpperCase()}</span>
+        <figcaption style={{ minWidth: 0 }}>
+          <div style={{ fontFamily: F_BODY, fontWeight: 700, fontSize: 11.5, color: C.text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{f.name}</div>
+          <div style={{ fontFamily: F_BODY, fontSize: 10, color: C.dim, whiteSpace: "nowrap" }}>{FB_FACE[f.stars]} · {cat}</div>
+        </figcaption>
+      </div>
+      <blockquote style={{ margin: "7px 0 0", fontFamily: F_BODY, fontSize: 11.5, lineHeight: 1.4, color: C.muted, display: "-webkit-box", WebkitLineClamp: 4, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{f.msg}</blockquote>
+      {f.date && <div style={{ marginTop: 5, fontFamily: F_BODY, fontSize: 9.5, color: C.dim }}>{new Date(f.date).toLocaleDateString("it-IT", { day: "numeric", month: "short" })}</div>}
+    </figure>
+  );
+}
+function FeedbackWall({ items = [] }) {
+  if (items.length < 3) return null;
+  const cols = [0, 1, 2].map(k => items.slice(k).concat(items.slice(0, k)));   // ogni colonna tutti, in ordine diverso (niente buchi)
+  return (
+    <div data-fb-wall={items.length} className="fb-wall" aria-label="Cosa dicono i tifosi" role="region" style={{ position: "relative", height: 190, margin: "-4px -20px 14px", overflow: "hidden", perspective: 300, WebkitMaskImage: "linear-gradient(to bottom, transparent, #000 22%, #000 78%, transparent), linear-gradient(to right, transparent, #000 18%, #000 82%, transparent)", WebkitMaskComposite: "source-in", maskImage: "linear-gradient(to bottom, transparent, #000 22%, #000 78%, transparent)" }}>
+      <style>{FB_WALL_CSS}</style>
+      <div style={{ position: "absolute", left: "50%", top: "50%", display: "flex", gap: 10, transform: "translate(-50%, -50%) translateZ(-60px) rotateX(20deg) rotateY(-10deg) rotateZ(20deg)" }}>
+        {cols.map((l, k) => (
+          <div key={k} className={"fb-col" + (k % 2 ? " rev" : "")} style={{ display: "flex", flexDirection: "column", gap: 10, "--fb-dur": 34 + k * 6 + "s" }}>
+            {[...l, ...l].map((f, i) => <FeedbackWallCard key={f.id + ":" + i} f={f} />)}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function FeedbackModal({ onClose, onSend, isAdmin = false }) {
   const [stars, setStars] = useState(0);
   const [msg, setMsg] = useState("");
   const [category, setCategory] = useState("generale");
   const [sent, setSent] = useState(false);
   const [sending, setSending] = useState(false);
   const [err, setErr] = useState("");
+  const [share, setShare] = useState(false);   // 16/11: "si può mostrare" nelle schede che scorrono
+  const [wall, setWall] = useState([]);
+  useEffect(() => { let on = true; Feedback.listPublic().then(l => { if (on) setWall(l); }, () => {}); return () => { on = false; }; }, []);
+  const hideOne = id => Feedback.hide(id).then(() => setWall(l => l.filter(x => x.id !== id)), () => {});
   const buzz = () => { fx.buzz("select"); fx.play("tick"); };
   useEffect(() => { if (!sent) return undefined; const t = setTimeout(onClose, 2000); return () => clearTimeout(t); }, [sent]);
   const send = async () => {
     if (!stars || sending) return;
     setSending(true); setErr("");
-    try { await onSend({ stars, category, msg }); setSent(true); }
+    try { await onSend({ stars, category, msg, share }); setSent(true); }
     catch (e) { setErr(FEEDBACK_MSG.offline); }
     setSending(false);
   };
@@ -10761,6 +10809,7 @@ function FeedbackModal({ onClose, onSend }) {
           </div>
         ) : (
           <>
+            <FeedbackWall items={wall} />
             <h2 style={{ fontFamily: F_HEAD, fontWeight: 900, fontStyle: "italic", fontSize: 17, color: C.text, margin: "0 0 4px" }}>Invia feedback</h2>
             <p style={{ fontFamily: F_BODY, color: C.muted, fontSize: 12, margin: "0 0 16px" }}>Bastano 30 secondi: scegli una faccina e, se vuoi, scrivici cosa cambiare.</p>
             <FaceRating value={stars} onChange={n => { setStars(n); buzz(40); }} />
@@ -10773,7 +10822,22 @@ function FeedbackModal({ onClose, onSend }) {
             </div>
             <textarea data-feedback-msg="" aria-label="Il tuo feedback" placeholder="Scrivi qui (opzionale)… cosa ti piace? Cosa manca?" value={msg} onChange={e => setMsg(e.target.value)} rows={3}
               style={{ width: "100%", background: C.bg, border: `1px solid ${C.border}`, borderRadius: 12, padding: "11px 13px", color: C.text, fontFamily: F_BODY, fontSize: 13, outline: "none", resize: "none", marginBottom: 12 }} />
+            <label data-feedback-share="" style={{ display: "flex", alignItems: "center", gap: 10, minHeight: 44, margin: "-4px 0 10px", fontFamily: F_BODY, fontSize: 12, color: C.muted, cursor: "pointer" }}>
+              <input type="checkbox" checked={share} onChange={e => { setShare(e.target.checked); buzz(); }} style={{ width: 20, height: 20, accentColor: C.accent, flexShrink: 0 }} />
+              Si può mostrare agli altri tifosi qui in alto, col mio nickname (mai l'email)
+            </label>
             {err && <p role="alert" style={{ background: "#E1060018", border: `1px solid ${C.red}`, borderRadius: 10, padding: "9px 14px", margin: "0 0 12px", color: "#ff6b6b", fontFamily: F_BODY, fontSize: 12, lineHeight: 1.5 }}>{err}</p>}
+            {isAdmin && wall.length > 0 && (
+              <details data-fb-admin="" style={{ margin: "0 0 12px", fontFamily: F_BODY, fontSize: 12, color: C.muted }}>
+                <summary style={{ minHeight: 32, cursor: "pointer" }}>Feedback mostrati ({wall.length}): solo admin</summary>
+                {wall.map(f => (
+                  <div key={f.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 0", borderBottom: `1px solid ${C.divider}` }}>
+                    <span style={{ flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}><b style={{ color: C.text }}>{f.name}</b>: {f.msg}</span>
+                    <button type="button" className="press" data-fb-hide={f.id} onClick={() => hideOne(f.id)} style={{ minHeight: 36, padding: "0 10px", borderRadius: 10, background: "rgba(255,255,255,.06)", fontFamily: F_BODY, fontWeight: 700, fontSize: 11.5, color: C.text }}>Nascondi</button>
+                  </div>
+                ))}
+              </details>
+            )}
             <button className="press" onClick={send} disabled={!stars || sending} style={{ display: "block", width: "100%", padding: "15px 0", borderRadius: 14, background: stars && !sending ? C.accent : "rgba(255,255,255,.1)", fontFamily: F_HEAD, fontWeight: 900, fontStyle: "italic", fontSize: 14, color: stars ? "#fff" : C.dim }}>{sending ? <ShiftLight label="Invio in corso" /> : "INVIA FEEDBACK"}</button>
           </>
         )}
@@ -11466,7 +11530,7 @@ function App() {
   const saveAsk = a => { local.set(FEEDBACK_ASK_KEY, a); setFeedbackAsk(a); };
   useEffect(() => { const ask = countVisit(); if (ask) setFeedbackAsk(ask); }, []);   // questa apertura è un accesso
   // Feedback inviato (dal Profilo o dalla notifica): la richiesta sparisce e non torna più.
-  const sendFeedback = f => Feedback.send({ ...f, email: account ? account.email : "" }).then(r => {
+  const sendFeedback = f => Feedback.send({ ...f, email: account ? account.email : "", name: account ? (account.nick || account.name || "") : "" }).then(r => {
     saveAsk({ ...(local.get(FEEDBACK_ASK_KEY) || { at: Date.now(), read: true }), done: true });
     return r;
   });
@@ -13696,7 +13760,7 @@ function App() {
         {duoOn && <DuoGuide steps={NOVITA_DUO} accent={C.accent} useBack={useBack} onGo={tourGo} onDone={duoDone} />}
         {tourOn && (guest || !!account) && <AppGuide steps={APP_TOUR} where={view + ":" + tab} useBack={useBack} onGo={tourGo} onDone={tourDone} onRegister={guest ? () => { tourDone(); setLoginReason(null); setLoginMode("register"); setLoginOpen(true); } : null} />}
         {termsAccepted && termsOpen && <TermsSheet review onClose={() => setTermsOpen(false)} />}
-        {feedbackOpen && <FeedbackModal onClose={() => setFeedbackOpen(false)} onSend={sendFeedback} />}
+        {feedbackOpen && <FeedbackModal isAdmin={!!account && Account.isAdmin()} onClose={() => setFeedbackOpen(false)} onSend={sendFeedback} />}
         {toast && <div className="toast" style={showBottomNav && adH > 0 ? { bottom: 104 + adH + AD_GAP } : undefined}>{toast}</div>}
         {notice && !ssOpen && <LiveNotice n={notice} onClose={nextNotice} />}
         {trophyNotice && <TrophyNotice n={trophyNotice} />}

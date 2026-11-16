@@ -4,7 +4,8 @@
 const { open, w, text, tapText, tapSel, login, openAdmin, assert, run } = require('./helpers');
 
 const mark = p => p.evaluate(() => { const e = document.querySelector('[data-holiday-mark]'); return e ? e.getAttribute('data-holiday-mark') : null; });
-const logoBg = p => p.evaluate(() => getComputedStyle(document.querySelector('[data-logo]')).backgroundColor);
+// 16/11: il logo è la scritta SECTOR 4 (run125): il colore della festa è quello della copia che passa sulle lettere
+const logoBg = p => p.evaluate(() => getComputedStyle(document.querySelector('[data-logo] .rt-o')).color);
 const doc = (p, k) => p.evaluate(x => window.firebase.__fake.doc(x), k);
 
 run({
@@ -18,7 +19,7 @@ run({
     await ctx.close();
     assert(loader, 'manca il caricamento con le zucche');
     assert(m === 'halloween', 'segno sul bottone B&T: ' + m);
-    assert(/rgb\(2[0-5]\d, 1[0-4]\d, \d{1,2}\)/.test(bg), 'il bottone B&T deve essere arancio: ' + bg);
+    assert(/rgb\(2[0-5]\d, 1[0-4]\d, \d{1,2}\)/.test(bg), 'la scritta in alto deve passare arancio: ' + bg);
     assert(!errs.length, errs.join(' | '));
   },
   async 'Natale e Befana nelle loro date; in un giorno qualunque nessun tema'(b) {

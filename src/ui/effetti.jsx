@@ -65,6 +65,31 @@ export function LiveOrb({ size = 120, variant = "auto", on = "dark", interactive
   );
 }
 
+// 16/11 (Edoardo: "metti questo codice al posto del logo B&T con la scritta Sector 4", RevealText di 21st.dev): ogni
+// lettera sale con una molla, una dopo l'altra (letterDelay); finito, ci passa sopra una copia nel colore overlay
+// (overlayDelay tra le lettere, overlayDuration ciascuna) che poi sparisce. Col dito o il mouse sopra la copia ripassa.
+// Solo transform/opacity; con "Rimuovi animazioni" la scritta è ferma e niente copia.
+const REVEAL_CSS = "@keyframes rtIn{0%{transform:translateY(70%) scale(.6);opacity:0}60%{transform:translateY(-8%) scale(1.06);opacity:1}100%{transform:none;opacity:1}}"
+  + "@keyframes rtFlash{0%{opacity:0}35%{opacity:1}100%{opacity:0}}.rt-l{display:inline-block;position:relative;animation:rtIn var(--rt-spring) cubic-bezier(.3,1.4,.5,1) both}"
+  + ".rt-o{position:absolute;left:0;top:0;opacity:0;animation:rtFlash var(--rt-dur) ease-out both}@media (prefers-reduced-motion: reduce){.rt-l{animation:none}.rt-o{display:none}}";
+export function RevealText({ text, color = "#fff", overlay = "#E10600", size = 20, font = "inherit", weight = 900, italic = true, letterDelay = 0.08, overlayDelay = 0.05, overlayDuration = 0.4, springDuration = 600, style, ...rest }) {
+  const [pass, setPass] = useState(0);   // ogni ripassata della copia colorata
+  const chars = Array.from(String(text || ""));
+  const start = chars.length * letterDelay + springDuration / 1000 * 0.5;   // la prima copia parte quando le lettere sono salite
+  return (
+    <span data-reveal-text="" aria-label={text} onPointerEnter={() => setPass(n => n + 1)} onPointerDown={() => setPass(n => n + 1)}
+      style={{ display: "inline-flex", whiteSpace: "pre", fontFamily: font, fontWeight: weight, fontStyle: italic ? "italic" : "normal", fontSize: size, lineHeight: 1, color, "--rt-spring": springDuration + "ms", "--rt-dur": overlayDuration + "s", ...style }} {...rest}>
+      <style>{REVEAL_CSS}</style>
+      {chars.map((ch, i) => (
+        <span key={i} aria-hidden="true" className="rt-l" data-reveal-letter="" style={{ animationDelay: i * letterDelay + "s" }}>
+          {ch === " " ? " " : ch}
+          <span key={pass} className="rt-o" style={{ color: overlay, animationDelay: (pass ? 0 : start) + i * overlayDelay + "s" }}>{ch === " " ? " " : ch}</span>
+        </span>
+      ))}
+    </span>
+  );
+}
+
 export function TypeText({ text, cps = 70, cursorColor = "currentColor", onDone }) {
   const [n, setN] = useState(() => (reduced() ? text.length : 0));
   useEffect(() => {
