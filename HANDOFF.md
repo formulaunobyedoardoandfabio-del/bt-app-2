@@ -1183,3 +1183,9 @@ Misure prima del lavoro (pagina di prova, CPU rallentata 4x come un telefono med
 - Prossimo lavoro consigliato (sessione nuova): accesso con Google nel Registrati (serve la SHA-1 del keystore in
   Firebase e il plugin nativo; passi di Edoardo nella console) prima del caricamento a pezzi (senza misure dei tempi
   sarebbe a occhio).
+
+- 16/11 piano velocità (Edoardo: "app molto più veloce"), non iniziato per fine uso: 1) misurare prima (tempo al primo
+  disegno e al primo tocco sul bundle di build, Playwright con CPU rallentata 4x; peso dei pezzi con source-map-explorer);
+  2) caricare a pezzi le schermate pesanti con React.lazy (Archivio e mappa del replay, Second Screen, pagina Trofei,
+  Pannello admin, terminale), così all'avvio arriva solo Home; 3) rimandare dopo il primo disegno le letture Firebase
+  che la Home non usa; 4) rimisurare e tenere solo ciò che fa guadagnare davvero.
