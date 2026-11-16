@@ -36,12 +36,14 @@ run({
     const t8 = await said(p);
     const flags = await p.evaluate(() => window.firebase.__fake.doc('shared/bt-flags'));
     const adminSees = await p.evaluate(() => !!document.querySelector('[data-maintenance]'));
+    const adminBar = await p.evaluate(() => (document.querySelector('[data-maintenance-bar]') || {}).textContent || '');   // 16/11
     await type(p, '04', 1500);
     const form = await p.evaluate(() => !!document.querySelector('#adImg'));
     await ctx.close();
     assert(/CONSOLE: errore di prova del 15\/11/.test(errs), '06: c\'è l\'errore della console: ' + errs.slice(-300));
     assert(/MANUTENZIONE ACCESA/.test(t8) && flags && flags.maintenance === true, '08: manutenzione accesa su Firebase: ' + JSON.stringify(flags));
     assert(!adminSees, 'l\'admin non vede la schermata di manutenzione');
+    assert(/Scrivi 08 nel terminale/.test(adminBar), '16/11: ma vede la striscia che la manutenzione è accesa: ' + adminBar);
     assert(form, '04: si apre il modulo per pubblicare (Pannello, NEWS)');
   },
 

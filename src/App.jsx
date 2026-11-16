@@ -13755,6 +13755,8 @@ function App() {
         {linkShare && <ChatRoomPicker onPick={id => { setPendingLink(linkShare); setLinkShare(null); openChat(id); }} onClose={() => setLinkShare(null)} />}
         {socialOpen && <SocialSheet post={socialOpen} onClose={() => setSocialOpen(null)} />}
         <RainGlass on={rainOn} />
+        {/* 16/11: manutenzione rimasta accesa senza che l'admin se ne accorgesse (lui entra lo stesso): striscia solo per lui */}
+        {flags && flags.maintenance && account && Account.isAdmin() && <div data-maintenance-bar="" role="status" style={{ position: "fixed", top: 0, left: 0, right: 0, zIndex: 2900, padding: "5px 10px", background: C.red, color: "#fff", fontFamily: F_BODY, fontWeight: 700, fontSize: 11.5, textAlign: "center", pointerEvents: "none" }}>Manutenzione accesa: gli utenti vedono l'app chiusa. Scrivi 08 nel terminale per spegnerla.</div>}
         {flags && flags.maintenance && !(account && Account.isAdmin()) && !loginOpen && <MaintenanceScreen onAdminLogin={() => { setLoginMode("login"); setLoginOpen(true); }} />}
         {flash && <FlashSpot key={flash.n} sel={flash.sel} accent={C.accent} onDone={() => setFlash(null)} />}
         {duoOn && <DuoGuide steps={NOVITA_DUO} accent={C.accent} useBack={useBack} onGo={tourGo} onDone={duoDone} />}

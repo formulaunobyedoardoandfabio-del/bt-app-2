@@ -1174,3 +1174,12 @@ Misure prima del lavoro (pagina di prova, CPU rallentata 4x come un telefono med
   le schede non ci sono: all'inizio sono vuote, si riempiono man mano che i tifosi dicono sì.
 - Prove: unit `feedback` (+2), e2e `run125-feedback-sector4.js` (3); aggiornate run64 (scritta al posto del logo) e
   run79 (colore della festa sulla scritta).
+
+- 16/11 "l'app dice che è chiusa ma non lo è": non era un errore del codice. Su Firebase vero `shared/bt-flags.maintenance`
+  era `true` dal 15/11 17:02 (codice 08 scritto da un admin): chi non è admin vedeva la schermata di manutenzione,
+  l'admin no (entra lo stesso) e quindi non se ne accorgeva. Ora l'admin vede una striscia rossa in alto ("Manutenzione
+  accesa: scrivi 08 nel terminale per spegnerla"). Da fare a mano: scrivere 08 nel terminale da admin (o mettere
+  maintenance a false nella console di Firebase). Prova: run124 (+1 controllo).
+- Prossimo lavoro consigliato (sessione nuova): accesso con Google nel Registrati (serve la SHA-1 del keystore in
+  Firebase e il plugin nativo; passi di Edoardo nella console) prima del caricamento a pezzi (senza misure dei tempi
+  sarebbe a occhio).
