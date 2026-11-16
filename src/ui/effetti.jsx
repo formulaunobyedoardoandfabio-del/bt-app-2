@@ -90,6 +90,65 @@ export function RevealText({ text, color = "#fff", overlay = "#E10600", size = 2
   );
 }
 
+// 16/11 (Edoardo: "usa questo codice per la parola sector 4", RollingText di animate-ui, rifatto senza librerie): quando
+// la parola cambia, ogni lettera vecchia gira in su e sparisce mentre la nuova arriva da sotto, una dopo l'altra
+// (stagger). Prima di fermarsi ogni lettera nuova mostra qualche carattere a caso nel colore accent (consiglio di Gemini).
+// ghosts: le parole possibili, invisibili una sopra l'altra, così la scritta occupa sempre lo stesso spazio.
+// Solo transform/opacity; con "Rimuovi animazioni" la parola nuova c'è subito, intera e ferma.
+const ROLL_CSS = "@keyframes rlIn{0%{transform:rotateX(-90deg);opacity:0}55%{opacity:1}100%{transform:rotateX(0deg);opacity:1}}"
+  + "@keyframes rlOut{0%{transform:rotateX(0deg);opacity:1}100%{transform:rotateX(90deg);opacity:0}}"
+  + ".rl-c{display:inline-grid;perspective:240px}.rl-c>span{grid-area:1/1;transform-origin:50% 50% -.32em;backface-visibility:hidden}"
+  + ".rl-in{animation:rlIn var(--rl-dur) cubic-bezier(.2,.85,.25,1.15) both}.rl-out{animation:rlOut var(--rl-dur) ease-in both}"
+  + "@media (prefers-reduced-motion: reduce){.rl-in{animation:none}.rl-out{display:none}}";
+const ROLL_GLYPHS = "ABCDEFGHJKLNPRSTUVXYZ0123456789#$%&";
+const ROLL_TICK = 50;
+export function RollingText({ text, accent = "#E10600", color = "#fff", size = 20, font = "inherit", weight = 900, italic = true, delay = 0, stagger = 0.06, duration = 0.5, scramble = true, ghosts = null, style, ...rest }) {
+  const t = String(text == null ? "" : text);
+  const [pair, setPair] = useState({ to: t, from: "", n: 0 });
+  if (pair.to !== t) setPair({ to: t, from: pair.to, n: pair.n + 1 });   // parola nuova: la vecchia esce, la nuova entra
+  const still = reduced() || !scramble;
+  const chars = Array.from(pair.to), old = Array.from(pair.from), n = pair.n;
+  const settleAt = i => (delay + i * stagger + duration * 0.55) * 1000;   // ms: da qui la lettera i resta quella vera
+  const total = settleAt(Math.max(0, chars.length - 1));
+  const [clock, setClock] = useState({ n: -1, ms: 0 });
+  useEffect(() => {
+    if (still) return undefined;
+    const t0 = performance.now();
+    const id = setInterval(() => { const ms = performance.now() - t0; setClock({ n, ms }); if (ms > total) clearInterval(id); }, ROLL_TICK);
+    return () => clearInterval(id);
+  }, [n, still]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {   // finito il giro, via le lettere vecchie (altrimenti tengono il loro spazio)
+    if (!pair.from) return undefined;
+    const id = setTimeout(() => setPair(p => (p.n === n ? { ...p, from: "" } : p)), (delay + Math.max(chars.length, old.length) * stagger + duration) * 1000 + 60);
+    return () => clearTimeout(id);
+  }, [n]); // eslint-disable-line react-hooks/exhaustive-deps
+  const ms = still ? Infinity : clock.n === n ? clock.ms : 0;
+  const step = Math.floor(ms / ROLL_TICK), settled = ms > total;
+  const line = (
+    <span aria-hidden="true" style={{ display: "inline-flex", ...(ghosts && ghosts.length ? { position: "absolute", left: 0, top: 0 } : {}) }}>
+      {Array.from({ length: Math.max(chars.length, old.length) }, (_, i) => {
+        const ch = chars[i] || "", o = old[i] || "", d = delay + i * stagger + "s";
+        const live = !!ch && ch !== " " && ms < settleAt(i);
+        const shown = ch === " " ? " " : live ? ROLL_GLYPHS[(i * 7 + step * 5 + n * 3) % ROLL_GLYPHS.length] : ch;
+        return (
+          <span key={i} className="rl-c">
+            {o && <span key={"o" + n} className="rl-out" style={{ animationDelay: d }}>{o === " " ? " " : o}</span>}
+            {ch && <span key={"i" + n} className="rl-in" data-roll-in="" style={{ animationDelay: d, color: live ? "var(--rl-accent)" : undefined }}>{shown}</span>}
+          </span>
+        );
+      })}
+    </span>
+  );
+  return (
+    <span data-rolling-text={pair.to} data-rolling-settled={settled ? "1" : "0"} aria-label={pair.to}
+      style={{ position: "relative", display: "inline-grid", whiteSpace: "pre", fontFamily: font, fontWeight: weight, fontStyle: italic ? "italic" : "normal", fontSize: size, lineHeight: 1, color, "--rl-dur": duration + "s", "--rl-accent": accent, ...style }} {...rest}>
+      <style>{ROLL_CSS}</style>
+      {(ghosts || []).map(g => <span key={"g" + g} aria-hidden="true" style={{ gridArea: "1/1", visibility: "hidden" }}>{g}</span>)}
+      {line}
+    </span>
+  );
+}
+
 export function TypeText({ text, cps = 70, cursorColor = "currentColor", onDone }) {
   const [n, setN] = useState(() => (reduced() ? text.length : 0));
   useEffect(() => {

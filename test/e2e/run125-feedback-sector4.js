@@ -9,15 +9,17 @@ const SEED = { addDocs: { ...fb(1), ...fb(2, { stars: 4, category: 'idea' }), ..
 const openFeedback = async p => { await tapSel(p, '[aria-label="Profilo"]'); await w(p, 500); await tapText(p, 'Invia feedback'); await w(p, 1200); };
 
 run({
-  async 'in alto la scritta SECTOR 4 che si rivela lettera per lettera al posto del logo'(b) {
+  // 16/11, dopo: al posto di SECTOR 4 la parola del momento che rotola lettera per lettera (run126).
+  async 'in alto la scritta al posto del logo: la parola del momento che arriva lettera per lettera'(b) {
     const { ctx, p } = await open(b);
     await login(p); await w(p, 1800);
     const r = await p.evaluate(() => {
-      const l = document.querySelector('[data-logo]'), t = l && l.querySelector('[data-reveal-text]');
-      return { label: l && l.getAttribute('aria-label'), text: t && t.getAttribute('aria-label'), letters: t ? t.querySelectorAll('[data-reveal-letter]').length : 0, img: !!(l && l.querySelector('img')), anim: t && getComputedStyle(t.querySelector('[data-reveal-letter]')).animationName };
+      const l = document.querySelector('[data-logo]'), t = l && l.querySelector('[data-rolling-text]');
+      return { label: l && l.getAttribute('aria-label'), text: t && t.getAttribute('aria-label'), letters: t ? t.querySelectorAll('[data-roll-in]').length : 0, img: !!(l && l.querySelector('img')), anim: t && getComputedStyle(t.querySelector('[data-roll-in]')).animationName };
     });
     await ctx.close();
-    assert(r.label === 'Sector 4' && r.text === 'SECTOR 4' && r.letters === 8 && !r.img && r.anim === 'rtIn', 'scritta al posto del logo: ' + JSON.stringify(r));
+    const W = require('../../src/logic/header-words');
+    assert(r.label === 'Sector 4' && W.allWords().includes(r.text) && r.letters === r.text.length && !r.img && r.anim === 'rlIn', 'scritta al posto del logo: ' + JSON.stringify(r));
   },
 
   async 'scheda Feedback: scorrono i feedback veri di chi ha detto sì, mai l\'email; si può dire sì inviando'(b) {

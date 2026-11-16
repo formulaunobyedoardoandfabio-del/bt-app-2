@@ -225,6 +225,7 @@ run({
     await goTab(p, 'RACE'); await w(p, 600);
     const race = norm(await p.evaluate(() => (document.querySelector('[data-ghost-open]') || {}).innerText || ''));
     await goTab(p, 'GARAGE'); await w(p, 500);
+    await tapSel(p, '[data-garage-view="lista"]'); await w(p, 300);   // 16/11: dall'8/11 piastrelle solo icone; i nomi nella lista
     const garage = norm(await p.evaluate(() => (document.querySelector('[data-game="ghost"]') || {}).innerText || ''));
     await tapSel(p, '[data-game="ghost"]'); await w(p, 700);
     const lap = norm(await text(p));
@@ -238,6 +239,7 @@ run({
   async 'dati F1: senza il sito restano i dati dentro l\'APK (Ghost Lap di Sepang)'(b) {
     const { ctx, p, errs } = await open(b, { now: '2026-10-25T08:00:00Z', routes: OF1_LOCKED }); await login(p); await w(p, 800);
     await goTab(p, 'GARAGE'); await w(p, 500);
+    await tapSel(p, '[data-garage-view="lista"]'); await w(p, 300);   // 16/11: i nomi nella lista (piastrelle solo icone)
     const garage = norm(await p.evaluate(() => (document.querySelector('[data-game="ghost"]') || {}).innerText || ''));
     await ctx.close();
     assert(/qualifiche di Sepang/.test(garage), 'Garage: ' + garage);

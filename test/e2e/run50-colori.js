@@ -3,7 +3,7 @@
 // calcolano dai colori veri della pagina (getComputedStyle), con i conti di src/logic/colors.js.
 // Uso: node test/build-test.js && node test/e2e/run50-colori.js [filtro]
 const path = require('path');
-const { open, w, norm, inner, tapText, tapSel, login, assert, run } = require('./helpers');
+const { open, w, norm, inner, tapText, tapSel, login, skipTour, assert, run } = require('./helpers');
 const K = require(path.join(__dirname, '..', '..', 'src', 'logic', 'colors.js'));
 const F1 = require(path.join(__dirname, '..', '..', 'src', 'data', 'f1-2026.js'));
 
@@ -148,6 +148,9 @@ run({
   async "colore scelto da ospite: entrando, l'account senza colore prende quello del telefono"(b) {
     const { ctx, p, errs } = await open(b);
     await tapText(p, 'ENTRA COME OSPITE'); await w(p, 600);
+    // 16/11: da ospite parte il giro guidato, che dal 15/11 segue in tutta l'app e riprende dopo l'accesso (porta in
+    // Home): qui lo si salta, la prova guarda il colore.
+    await skipTour(p);
     await openColors(p);
     await tapSel(p, '[data-theme-color="#FF8000"]'); await w(p, 300);
     await tapSel(p, '[data-theme-sheet] [aria-label="Chiudi"]'); await w(p);

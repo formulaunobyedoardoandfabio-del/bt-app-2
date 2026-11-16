@@ -5,7 +5,13 @@ const { open, w, text, tapText, tapSel, login, openAdmin, assert, run } = requir
 
 const mark = p => p.evaluate(() => { const e = document.querySelector('[data-holiday-mark]'); return e ? e.getAttribute('data-holiday-mark') : null; });
 // 16/11: il logo è la scritta SECTOR 4 (run125): il colore della festa è quello della copia che passa sulle lettere
-const logoBg = p => p.evaluate(() => getComputedStyle(document.querySelector('[data-logo] .rt-o')).color);
+// 16/11, dopo: la scritta è la parola che rotola (run126); il colore della festa è quello dei caratteri a caso che
+// girano prima della lettera vera (--rl-accent). Qui lo si legge come colore calcolato.
+const logoBg = p => p.evaluate(() => {
+  const t = document.querySelector('[data-logo] [data-rolling-text]'), s = document.createElement('i');
+  s.style.color = getComputedStyle(t).getPropertyValue('--rl-accent').trim(); document.body.appendChild(s);
+  const c = getComputedStyle(s).color; s.remove(); return c;
+});
 const doc = (p, k) => p.evaluate(x => window.firebase.__fake.doc(x), k);
 
 run({

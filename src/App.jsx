@@ -16,11 +16,12 @@ import DnfArtData from "./logic/dnf-art";
 import BtGhost from "./logic/bt-ghost";
 import BtWk from "./logic/bt-weekend";
 import BtHolidays from "./logic/holidays";
+import BtHeaderWords from "./logic/header-words";
 import BtSwipe from "./logic/pitswipe";
 import BtElo from "./logic/elo";
 import BtReplay from "./logic/replay";
 import TrackReplay from "./logic/track-replay";
-import { LiveOrb, TypeText, ChangelogCard, VanishCanvas, RevealText } from "./ui/effetti";
+import { LiveOrb, TypeText, ChangelogCard, VanishCanvas, RollingText } from "./ui/effetti";
 import { AppGuide, EnzoChat, DuoGuide, FlashSpot } from "./ui/guida";
 import { createArchive, findReplay } from "./services/archive";
 import BtTrophyPro from "./logic/trophypro";
@@ -719,6 +720,11 @@ function SubHeader({ title, onBack, right }) {
 // precedente) e i LED lampeggiano tre volte, con la sgasata e la vibrazione. onTrack: c'è una sessione in pista, il
 // badge "IN PISTA" con i LED che pulsano.
 const EGG_GAP_MS = 450, EGG_SHOW_MS = 1100;
+const HEADER_WORDS_ALL = BtHeaderWords.allWords();   // 16/11: tutte le parole della scritta in alto (stessa larghezza sempre)
+// La parola resta la stessa per tutta la sessione: scelta all'apertura, cambia solo col tocco (l'intestazione sparisce e
+// torna quando si apre il Profilo o una pagina e si torna indietro).
+let headerWordNow = null;
+const headerWordStart = () => headerWordNow || (headerWordNow = BtHeaderWords.contextWord({ now: nowMs(), races: F1.RACES, info: CIRCUIT_INFO, rand: Math.random() }));
 function TopHeader({ isPremium, unread, onPremium, onBell, onProfile, trialDays = 0, helmet = null, onTrack = false, onLogoEgg, onLaunch, holiday = null }) {
   // Launch control (1/11, easter egg): tenendo premuto il logo i LED si accendono e il motore sale; dopo 3 secondi,
   // lasciando il dito, la pagina parte. Lasciato troppo presto (dopo quasi un secondo): "Anti-stallo".
@@ -734,6 +740,10 @@ function TopHeader({ isPremium, unread, onPremium, onBell, onProfile, trialDays 
     else if (dt >= 800) { h.long = true; fx.play("abort"); if (onLaunch) onLaunch(false); }
   };
   const [egg, setEgg] = useState(false);
+  // 16/11 (Edoardo): la parola in alto viene dal momento in cui si apre l'app (gara, qualifica, notte, giorno normale;
+  // src/logic/header-words.js); ogni tocco ne fa uscire una motivazionale a caso, mai la stessa.
+  const [word, setWord] = useState(headerWordStart);
+  const nextWord = () => { const v = BtHeaderWords.tapWord(word, Math.random()); headerWordNow = v; setWord(v); };
   const taps = useRef({ n: 0, at: 0 }), eggT = useRef(null);
   useEffect(() => () => clearTimeout(eggT.current), []);
   const tapLogo = () => {
@@ -746,12 +756,12 @@ function TopHeader({ isPremium, unread, onPremium, onBell, onProfile, trialDays 
   };
   return (
     <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "18px 16px 14px", flexShrink: 0 }}>
-      {/* 16/11 (Edoardo): al posto del logo B&T la scritta "Sector 4" che si rivela (RevealText, src/ui/effetti.jsx).
-          Restano i tre tocchi (lampeggia tre volte) e il dito tenuto premuto (Launch control). */}
-      <button className="press" data-logo="" aria-label="Sector 4" onClick={() => { if (hold.current.long) { hold.current.long = false; return; } tapLogo(); }}
-        onPointerDown={holdDown} onPointerUp={holdUp} onPointerLeave={holdUp} onPointerCancel={holdUp} onContextMenu={e => e.preventDefault()} style={{ position: "relative", height: 38, padding: "0 4px", borderRadius: 11, background: "transparent", display: "flex", alignItems: "center", flexShrink: 0 }}>
+      {/* 16/11 (Edoardo): al posto del logo B&T la parola che rotola (RollingText, src/ui/effetti.jsx), prima "SECTOR 4"
+          che si rivelava. Restano i tre tocchi (lampeggia tre volte) e il dito tenuto premuto (Launch control). */}
+      <button className="press" data-logo="" aria-label="Sector 4" onClick={() => { if (hold.current.long) { hold.current.long = false; return; } tapLogo(); nextWord(); }}
+        onPointerDown={holdDown} onPointerUp={holdUp} onPointerLeave={holdUp} onPointerCancel={holdUp} onContextMenu={e => e.preventDefault()} style={{ position: "relative", height: 38, padding: "0 4px", borderRadius: 11, background: "transparent", display: "flex", alignItems: "center", flex: "1000 1 0px", minWidth: 0, maxWidth: 170, containerType: "inline-size" }}>
         {holiday && <span data-holiday-mark={holiday} style={{ position: "absolute", right: -6, top: -6, filter: "drop-shadow(0 2px 3px rgba(0,0,0,.5))" }}><HolidayMark id={holiday} size={18} /></span>}
-        <span data-logo-img="" data-mode={egg ? "flash3" : "idle"} className={egg ? "logo-flash3" : undefined} style={{ display: "flex" }}><RevealText text="SECTOR 4" color={C.text} overlay={C.accent} size={22} font={F_HEAD} letterDelay={0.08} overlayDelay={0.05} overlayDuration={0.4} springDuration={600} style={{ letterSpacing: .4 }} /></span>
+        <span data-logo-img="" data-mode={egg ? "flash3" : "idle"} className={egg ? "logo-flash3" : undefined} style={{ display: "flex" }}><RollingText text={word} color={C.text} accent={C.accent} size="min(22px, 15cqw)" font={F_HEAD} ghosts={HEADER_WORDS_ALL} style={{ letterSpacing: .4 }} /></span>
         {held > 0 && <span data-launch={held === 2 ? "ready" : "charging"} aria-hidden="true" style={{ position: "absolute", left: "50%", top: "100%", marginTop: 5, transform: "translateX(-50%)", display: "flex", alignItems: "center", gap: 3, padding: "4px 6px", borderRadius: 7, background: "#000", border: "1px solid #2C2C33", zIndex: 60, whiteSpace: "nowrap" }}>
           {[0, 1, 2, 3, 4].map(k => <i key={k} className={held === 1 ? "ps-led" : undefined} style={{ width: 7, height: 7, borderRadius: "50%", background: k < 2 ? "#2FD36B" : k < 4 ? "#FF1801" : "#4C8DFF", animationDelay: (k * .5) + "s", opacity: held === 2 ? 1 : undefined }} />)}
           {held === 2 && <b style={{ marginLeft: 4, fontFamily: F_HEAD, fontWeight: 900, fontStyle: "italic", fontSize: 9.5, color: "#fff" }}>LASCIA!</b>}
@@ -763,23 +773,24 @@ function TopHeader({ isPremium, unread, onPremium, onBell, onProfile, trialDays 
           <span style={{ fontFamily: F_HEAD, fontWeight: 900, fontSize: 10.5, letterSpacing: .8, color: C.text }}>IN PISTA</span>
         </span>
       )}
-      <div style={{ flexGrow: 1 }} />
+      {/* 16/11: la scritta a sinistra prende lo spazio che resta (si rimpicciolisce sui telefoni stretti); questi
+          tasti non si schiacciano mai. */}
       {isPremium ? (
-        <button className="press" data-premium-chip="on" onClick={onPremium} aria-label="Il tuo Premium" style={{ display: "flex", alignItems: "center", gap: 6, padding: "8px 14px", borderRadius: 20, background: `linear-gradient(rgba(231,179,76,.16), rgba(231,179,76,.16)) ${C.bg}`, border: `1px solid ${C.gold}` }}>
+        <button className="press" data-premium-chip="on" onClick={onPremium} aria-label="Il tuo Premium" style={{ display: "flex", alignItems: "center", gap: 6, padding: onTrack ? "8px 12px" : "8px 14px", borderRadius: 20, background: `linear-gradient(rgba(231,179,76,.16), rgba(231,179,76,.16)) ${C.bg}`, border: `1px solid ${C.gold}`, marginLeft: "auto", flexShrink: 0 }}>
           <Icon name="star" size={13} color={C.gold} />
-          <span style={{ fontFamily: F_HEAD, fontWeight: 700, fontSize: 12, color: C.gold }}>{trialDays ? `PROVA · ${trialDays} gg` : "PREMIUM"}</span>
+          {!onTrack && <span style={{ fontFamily: F_HEAD, fontWeight: 700, fontSize: 12, color: C.gold }}>{trialDays ? `PROVA · ${trialDays} gg` : "PREMIUM"}</span>}
         </button>
       ) : (
-        <button className="press" data-premium-chip="off" onClick={onPremium} style={{ display: "flex", alignItems: "center", gap: 6, padding: "8px 14px", borderRadius: 20, background: `linear-gradient(rgba(231,179,76,.12), rgba(231,179,76,.12)) ${C.bg}`, border: "1px solid rgba(231,179,76,.35)" }}>
+        <button className="press" data-premium-chip="off" aria-label="Premium" onClick={onPremium} style={{ display: "flex", alignItems: "center", gap: 6, padding: onTrack ? "8px 12px" : "8px 14px", borderRadius: 20, background: `linear-gradient(rgba(231,179,76,.12), rgba(231,179,76,.12)) ${C.bg}`, border: "1px solid rgba(231,179,76,.35)", marginLeft: "auto", flexShrink: 0 }}>
           <Icon name="star" size={13} color={C.gold} />
-          <span style={{ fontFamily: F_HEAD, fontWeight: 700, fontSize: 12, color: C.gold }}>Premium</span>
+          {!onTrack && <span style={{ fontFamily: F_HEAD, fontWeight: 700, fontSize: 12, color: C.gold }}>Premium</span>}
         </button>
       )}
-      <button className="press" aria-label="Notifiche" onClick={onBell} style={{ position: "relative", width: 38, height: 38, borderRadius: "50%", background: C.card, border: `1px solid ${C.border}`, display: "flex", alignItems: "center", justifyContent: "center" }}>
+      <button className="press" aria-label="Notifiche" onClick={onBell} style={{ position: "relative", width: 38, height: 38, borderRadius: "50%", background: C.card, border: `1px solid ${C.border}`, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
         <Icon name="bell" size={16} />
         {unread > 0 && <span data-unread-dot="" style={{ position: "absolute", top: 6, right: 7, width: 8, height: 8, borderRadius: "50%", background: C.accentInk, border: "1.5px solid " + C.bg }} />}
       </button>
-      <button className="press" aria-label="Profilo" onClick={onProfile} style={{ width: 38, height: 38, borderRadius: "50%", background: C.card, border: `1px solid ${C.border}`, display: "flex", alignItems: "center", justifyContent: "center" }}>
+      <button className="press" aria-label="Profilo" onClick={onProfile} style={{ width: 38, height: 38, borderRadius: "50%", background: C.card, border: `1px solid ${C.border}`, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
         <HelmetArt spec={helmet} size={30} />
       </button>
     </div>

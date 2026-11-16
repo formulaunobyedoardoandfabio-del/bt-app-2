@@ -174,13 +174,18 @@ run({
   // il Degrado gomme parte dalle prove libere scaricate (qui i file veri di public/data/f1: le sessioni del Messico che ci sono).
   async 'degrado gomme nel weekend del Messico: prove libere scaricate, l\'ultima di serie, long run veri'(b) {
     const F1DIR = require('path').join(__dirname, '../../public/data/f1');
-    const routes = { 'https://bt-app-2.vercel.app/data/f1/**': r => {
-      const f = require('path').join(F1DIR, new URL(r.request().url()).pathname.split('/').pop());
-      return require('fs').existsSync(f) ? r.fulfill({ status: 200, contentType: 'application/json', headers: { 'access-control-allow-origin': '*' }, body: require('fs').readFileSync(f, 'utf8') }) : r.fulfill({ status: 404, body: '' });
-    } };
     // 7/11: il file si aggiorna da solo a ogni weekend: la prova usa l'ultimo weekend con le prove libere e la sua data.
     const WK = { 'mx-1962': ['2026-10-31T10:00:00Z', /Messico/], 'br-1940': ['2026-11-07T10:00:00Z', /San Paolo|Brasile|Interlagos/] };
     const lastFp = Object.keys(require(require('path').join(F1DIR, 'weekend.json')).practice).filter(k => WK[k]).sort((a, b) => WK[b][0].localeCompare(WK[a][0]))[0];
+    // 16/11: dopo la domenica il file ha anche la gara di quel weekend, e allora l'app (giusto) mostra le gare vere. La
+    // prova è al sabato: il sito le dà il file com'era quel giorno, senza la gara del weekend.
+    const routes = { 'https://bt-app-2.vercel.app/data/f1/**': r => {
+      const name = new URL(r.request().url()).pathname.split('/').pop(), f = require('path').join(F1DIR, name);
+      if (!require('fs').existsSync(f)) return r.fulfill({ status: 404, body: '' });
+      let body = require('fs').readFileSync(f, 'utf8');
+      if (name === 'weekend.json') { const d = JSON.parse(body); d.races = (d.races || []).filter(x => x.circuitId !== lastFp); body = JSON.stringify(d); }
+      return r.fulfill({ status: 200, contentType: 'application/json', headers: { 'access-control-allow-origin': '*' }, body });
+    } };
     const { ctx, p, errs } = await open(b, { now: WK[lastFp][0], routes }); await login(p); await w(p, 1500);
     await tapSel(p, '[data-nav-tab="garage"]'); await w(p, 500); await tapSel(p, '[data-game="deg"]'); await w(p, 600);
     const st = await p.evaluate(() => ({

@@ -1189,3 +1189,27 @@ Misure prima del lavoro (pagina di prova, CPU rallentata 4x come un telefono med
   2) caricare a pezzi le schermate pesanti con React.lazy (Archivio e mappa del replay, Second Screen, pagina Trofei,
   Pannello admin, terminale), così all'avvio arriva solo Home; 3) rimandare dopo il primo disegno le letture Firebase
   che la Home non usa; 4) rimisurare e tenere solo ciò che fa guadagnare davvero.
+
+## 16/11 pomeriggio: parola che rotola in alto (al posto di SECTOR 4)
+- Edoardo: "usa questo codice (RollingText di animate-ui) per la parola sector 4 e fai che cambia". Rifatto senza
+  librerie in `src/ui/effetti.jsx` (`RollingText`): ogni lettera vecchia gira in su, la nuova arriva da sotto, una dopo
+  l'altra; prima di fermarsi mostra caratteri a caso nel colore accent (per le feste è il colore della festa).
+  `ghosts` = tutte le parole invisibili una sull'altra: la scritta occupa sempre lo stesso spazio.
+- Parole in `src/logic/header-words.js` (prove: `test/unit/header-words.test.js`): all'apertura giorno di gara
+  (RACE DAY / BOX NOW! / RED LIGHT), giorno di qualifica (FULL GAS / POLE POS / TIME ATT), notte 00-05 (NIGHT SHI /
+  ROUGH MAP), altrimenti DEEP TECH / ANALYZE / COLD LAP. Giorni dagli orari veri di `circuit-info.json` (weekend) con
+  l'ora del telefono; senza orari il giorno della data è gara e quello prima qualifica. Il weekend vince sulla notte.
+  Tocco: una motivazionale a caso (LEVEL UP ... PUSH NOW), mai la stessa. Restano tre tocchi e Launch control.
+  La parola resta per tutta la sessione (`headerWordNow` in App.jsx): l'intestazione si smonta quando si apre il
+  Profilo o una pagina, e tornando non deve cambiare parola.
+- Intestazione: la scritta prende lo spazio che resta (`flex 1000 1 0`, max 170 px, `container-type: inline-size`,
+  font `min(22px, 15cqw)`); Premium, campanella e profilo non si schiacciano più (prima a 360 px la campanella era
+  ovale). Con il badge IN PISTA il Premium mostra solo la stella (aria-label resta).
+- Prove: nuova `test/e2e/run126-rolling-word.js` (6); aggiornate run125, run64, run79 (leggevano SECTOR 4 / `.rt-o`).
+- Suite completa (16/11, JOBS=2): 172 file, 169 verdi. Le 3 rosse erano prove vecchie, ora verdi da sole:
+  `run50-colori` (da ospite parte il giro guidato, che dal 15/11 riprende dopo l'accesso e porta in Home: la prova lo
+  salta con skipTour), `run70-sistemazioni` (Garage a icone dall'8/11: i nomi si leggono nella vista lista, come
+  run20/22/23/69), `run76-richieste-29-10` (il file del sito ha già la gara del weekend; la prova è al sabato e ora le
+  dà il file senza quella gara). Le due "DA FARE" del 14/11 sono chiuse.
+- Da sapere: in Firestore `shared/bt-flags.maintenance` è ancora `true` (dal 15/11 17:02): sul sito e nell'app chi non
+  è admin vede "BOX, BOX: MANUTENZIONE". Va spenta (codice 08 da admin) prima di mandare l'AAB in revisione su Google Play.

@@ -21,7 +21,7 @@ const shift = p => p.evaluate(() => {
 const logo = p => p.evaluate(() => {
   const i = document.querySelector('[data-logo] [data-logo-img]'); if (!i) return null;
   const cs = getComputedStyle(i);
-  return { grid: !!document.querySelector('[data-logo] [data-led-grid]'), mode: i.getAttribute('data-mode'), anim: cs.animationName, iter: cs.animationIterationCount, src: (i.getAttribute('src') || '').split(',')[0], text: (i.querySelector('[data-reveal-text]') || { getAttribute: () => null }).getAttribute('aria-label') };
+  return { grid: !!document.querySelector('[data-logo] [data-led-grid]'), mode: i.getAttribute('data-mode'), anim: cs.animationName, iter: cs.animationIterationCount, src: (i.getAttribute('src') || '').split(',')[0], text: (i.querySelector('[data-rolling-text]') || { getAttribute: () => null }).getAttribute('aria-label') };
 });
 const tapLogo = async (p, n, gap = 90) => { for (let i = 0; i < n; i++) { await tapSel(p, '[data-logo]'); await w(p, gap); } };
 
@@ -50,13 +50,15 @@ run({
     assert(!errs.length, errs.join(' | '));
   },
 
-  // 16/11 (Edoardo): al posto del logo B&T la scritta SECTOR 4 che si rivela (run125); i tre tocchi la fanno lampeggiare.
-  async 'logo in alto: la scritta SECTOR 4, senza la griglia di LED'(b) {
+  // 16/11 (Edoardo): al posto del logo B&T la scritta (prima SECTOR 4, poi la parola del momento che rotola, run126);
+  // i tre tocchi la fanno lampeggiare.
+  async 'logo in alto: la scritta, senza la griglia di LED'(b) {
     const { ctx, p, errs } = await open(b); await login(p);
     const l = await logo(p);
     const label = await p.evaluate(() => { const e = document.querySelector('[data-logo]'); return e && e.getAttribute('aria-label'); });
     await ctx.close();
-    assert(l && !l.grid && l.mode === 'idle' && l.text === 'SECTOR 4', 'nel tasto in alto deve esserci solo la scritta: ' + JSON.stringify(l));
+    const W = require('../../src/logic/header-words');
+    assert(l && !l.grid && l.mode === 'idle' && W.allWords().includes(l.text), 'nel tasto in alto deve esserci solo la scritta: ' + JSON.stringify(l));
     assert(label === 'Sector 4', 'il logo ha perso il nome: ' + label);
     assert(!errs.length, errs.join(' | '));
   },
