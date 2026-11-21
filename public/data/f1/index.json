@@ -1,6 +1,6 @@
 {
  "weekend": {
-  "h": "140505c904f7",
+  "h": "d8d66ff5d3ae",
   "races": [
    1,
    2,
@@ -43,7 +43,8 @@
    17,
    18,
    19,
-   20
+   20,
+   21
   ],
   "practice": [
    "us-2023",
@@ -53,18 +54,18 @@
  },
  "ghosts": [
   {
+   "id": "us-2023-2026-q",
+   "circuitId": "us-2023",
+   "round": 21,
+   "place": "Las Vegas",
+   "h": "80480d66cb01"
+  },
+  {
    "id": "br-1940-2026-q",
    "circuitId": "br-1940",
    "round": 20,
    "place": "San Paolo",
    "h": "08104a40e6ce"
-  },
-  {
-   "id": "mx-1962-2026-q",
-   "circuitId": "mx-1962",
-   "round": 19,
-   "place": "Città del Messico",
-   "h": "dacd6e176c13"
   }
  ],
  "source": "TracingInsights (github.com/TracingInsights/2026), dati FastF1 dal live timing di Formula 1"
