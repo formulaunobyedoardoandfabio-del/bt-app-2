@@ -1280,3 +1280,10 @@ Misure prima del lavoro (pagina di prova, CPU rallentata 4x come un telefono med
   dopo l'uscita: ora da t - durata a t (`track-replay.js`, prova aggiornata in track-replay.test.js).
 - App: nel Replay sulla mappa interruttore Mappa | Box (`PitDialView`, `dialPlace`); cartello della bandiera sopra la
   mappa. Prova `test/e2e/run129-quadrante-box.js` (3, São Paulo e Suzuka veri).
+
+### 21/11: Contagiri nel Ghost Lap (piano claude/multiviewer-in-sector4.md)
+- `src/logic/contagiri.js` (prove `test/unit/contagiri.test.js`, 5): lettura (velocità, gas, freno 0/1, marcia),
+  angoli 0-360 km/h su 270°, archi SVG, archi dei pedali, compatto sotto i 140 px.
+- App: `Contagiri` (misura il suo riquadro con ResizeObserver) sotto la lettura del grafico della velocità e nel
+  replay 2D della curva, per il pilota A e B. Niente giri motore né DRS (il dato non c'è). Prova
+  `test/e2e/run130-contagiri.js` (3): numeri uguali alla lettura e alle etichette delle macchine, compatto a 320 px.

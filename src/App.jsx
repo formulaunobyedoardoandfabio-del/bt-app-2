@@ -24,6 +24,7 @@ import BtElo from "./logic/elo";
 import BtReplay from "./logic/replay";
 import TrackReplay from "./logic/track-replay";
 import PitDial from "./logic/pit-dial";   // 21/11: Quadrante dei box nel Replay sulla mappa
+import BtContagiri from "./logic/contagiri";   // 21/11: contagiri circolare nel Ghost Lap
 import { LiveOrb, TypeText, ChangelogCard, VanishCanvas, RollingText } from "./ui/effetti";
 import { AppGuide, EnzoChat, DuoGuide, FlashSpot } from "./ui/guida";
 import { createArchive, findReplay } from "./services/archive";
@@ -6968,6 +6969,47 @@ function AdminSillyTab({ official = {}, onOfficial, onToast }) {
 const ghostInfo = code => { const d = DRIVERS.find(x => driverCode(x) === code); return { code, name: d ? d.full : code, last: d ? d.full.split(" ").slice(-1)[0].toUpperCase() : code, color: d ? d.color : C.dim }; };
 const fmtS3 = v => (v >= 0 ? "+" : "−") + Math.abs(v).toFixed(3).replace(".", ",");
 const fmtMeters = v => Math.round(v).toLocaleString("it-IT");
+
+// Contagiri (21/11, src/logic/contagiri.js): disco scuro con la velocità al centro, arco blu 0-360 km/h, acceleratore
+// verde a sinistra, freno rosso a destra (acceso o spento), marcia. Niente giri motore né DRS: il dato non c'è. Sotto i
+// 140 px (misurati dal riquadro) solo velocità e marcia. Gli archi seguono i dati, senza animazioni.
+const KMH_BLUE = "#3D8BFF", THR_GREEN = "#3DD56D", BRK_RED = "#FF3B3B";
+function Contagiri({ lap, d, code, color }) {
+  const box = useRef(null), [px, setPx] = useState(160);
+  useEffect(() => {
+    const el = box.current;
+    if (!el || typeof ResizeObserver === "undefined") return undefined;
+    const ro = new ResizeObserver(es => { const wv = es[0] && es[0].contentRect.width; if (wv) setPx(wv); });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+  const r = lap && d != null ? BtContagiri.reading({ v: BtGhost.at(lap, "v", d), thr: BtGhost.at(lap, "thr", d), brk: BtGhost.at(lap, "brk", d), g: BtGhost.at(lap, "g", d) }) : null;
+  if (!r) return null;
+  const small = BtContagiri.compact(px), ped = BtContagiri.pedals(r), K = BtContagiri, R0 = 50, R1 = 39;
+  return (
+    <div ref={box} data-contagiri={code} data-compact={small ? "" : undefined} data-brake={r.brake ? "on" : "off"} data-throttle={r.throttle.toFixed(2)} style={{ flex: "1 1 0", minWidth: 0, maxWidth: 190 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 5, marginBottom: 2, fontFamily: F_HEAD, fontWeight: 800, fontSize: 11.5, color: C.text }}><span aria-hidden="true" style={{ width: 3, height: 12, borderRadius: 2, background: color }} />{code}</div>
+      <svg viewBox="0 0 120 120" style={{ display: "block", width: "100%" }} role="img" aria-label={`${code}: ${r.v} km/h${r.gear ? ", marcia " + r.gear : ""}, gas ${Math.round(r.throttle * 100)}%${r.brake ? ", freno" : ""}`}>
+        <circle cx="60" cy="60" r="59" fill="#0B0B0E" stroke={alpha(color, .5)} strokeWidth="1" />
+        <path d={K.arc(60, 60, R0, -135, 135)} fill="none" stroke="#1E1E23" strokeWidth="6" strokeLinecap="round" />
+        {r.speed > 0 && <path data-contagiri-speed="" d={K.arc(60, 60, R0, -135, K.speedAngle(r.v))} fill="none" stroke={KMH_BLUE} strokeWidth="6" strokeLinecap="round" />}
+        {!small && K.TICKS.map(v => { const a = (K.speedAngle(v) * Math.PI) / 180; return <text key={v} data-contagiri-tick="" x={(60 + 41 * Math.sin(a)).toFixed(1)} y={(60 - 41 * Math.cos(a) + 2.6).toFixed(1)} textAnchor="middle" fontSize="6.8" fontFamily={F_BODY} fill={C.dim}>{v}</text>; })}
+        {!small && <>
+          <path d={K.arc(60, 60, R1 - 7, 210, 330)} fill="none" stroke="#1A1A1F" strokeWidth="4" strokeLinecap="round" />
+          <path d={K.arc(60, 60, R1 - 7, 30, 150)} fill="none" stroke="#1A1A1F" strokeWidth="4" strokeLinecap="round" />
+          {ped.thr && <path data-contagiri-thr="" d={K.arc(60, 60, R1 - 7, ped.thr[0], ped.thr[1])} fill="none" stroke={THR_GREEN} strokeWidth="4" strokeLinecap="round" />}
+          {ped.brk && <path data-contagiri-brk="" d={K.arc(60, 60, R1 - 7, ped.brk[0], ped.brk[1])} fill="none" stroke={BRK_RED} strokeWidth="4" strokeLinecap="round" />}
+        </>}
+        <text data-contagiri-v="" x="60" y={small ? 64 : 62} textAnchor="middle" fontSize={small ? 30 : 25} fontFamily={F_HEAD} fontWeight="900" fontStyle="italic" fill="#fff">{r.v}</text>
+        <text x="60" y={small ? 76 : 72} textAnchor="middle" fontSize="7" fontFamily={F_HEAD} fontWeight="800" letterSpacing=".6" fill={C.dim}>KM/H</text>
+        {r.gear != null && <text x="60" y={small ? 96 : 90} textAnchor="middle" fontSize={small ? 13 : 11} fontFamily={F_HEAD} fontWeight="900" fill={C.text}><tspan fontSize="6.5" fill={C.dim} fontWeight="800">MARCIA </tspan><tspan data-contagiri-gear="">{r.gear}</tspan></text>}
+        {!small && <text x="31" y="104" textAnchor="middle" fontSize="6" fontFamily={F_HEAD} fontWeight="800" fill={r.throttle > 0 ? THR_GREEN : C.dim}>GAS</text>}
+        {!small && <text x="89" y="104" textAnchor="middle" fontSize="6" fontFamily={F_HEAD} fontWeight="800" fill={r.brake ? BRK_RED : C.dim}>FRENO</text>}
+      </svg>
+    </div>
+  );
+}
+
 function GhostReplay({ A, B, IA, IB, duel }) {
   const [tau, setTau] = useState(0), [play, setPlay] = useState(true), [slow, setSlow] = useState(false), [cap, setCap] = useState(null);
   const raf = useRef(0), last = useRef(0);
@@ -7012,10 +7054,14 @@ function GhostReplay({ A, B, IA, IB, duel }) {
           {cb.el}{ca.el}
         </svg>
         <div style={{ position: "absolute", left: 8, top: 8, display: "flex", flexDirection: "column", gap: 3 }}>
-          {[[IA, ca.p], [IB, cb.p]].map(([I, p]) => <span key={I.code} style={{ padding: "2px 7px", borderRadius: 6, background: "rgba(0,0,0,.6)", fontFamily: F_HEAD, fontWeight: 800, fontSize: 11, color: "#fff", borderLeft: `3px solid ${I.color}` }}>{I.code} {Math.round(p.v)} km/h</span>)}
+          {[[IA, ca.p], [IB, cb.p]].map(([I, p]) => <span key={I.code} data-ghost-chip="" style={{ padding: "2px 7px", borderRadius: 6, background: "rgba(0,0,0,.6)", fontFamily: F_HEAD, fontWeight: 800, fontSize: 11, color: "#fff", borderLeft: `3px solid ${I.color}` }}>{I.code} {Math.round(p.v)} km/h</span>)}
         </div>
         <span style={{ position: "absolute", right: 8, top: 8, padding: "2px 7px", borderRadius: 6, background: "rgba(0,0,0,.6)", fontFamily: F_HEAD, fontWeight: 800, fontSize: 11, color: C.gold }}>{Math.abs(gapM) < 0.5 ? "AFFIANCATI" : `${(gapM > 0 ? IA : IB).code} DAVANTI DI ${Math.abs(gapM).toFixed(1).replace(".", ",")} m`}</span>
         {cap && <div data-ghost-caption="" style={{ position: "absolute", left: 8, right: 8, bottom: 8, padding: "6px 9px", borderRadius: 8, background: alpha(C.accent, .92), fontFamily: F_HEAD, fontWeight: 900, fontStyle: "italic", fontSize: 13, color: "#fff", textAlign: "center" }}>{capText}</div>}
+      </div>
+      <div style={{ display: "flex", justifyContent: "center", gap: 10, padding: "8px 8px 0" }}>
+        <Contagiri lap={A} d={ca.p.d} code={IA.code} color={IA.color} />
+        <Contagiri lap={B} d={cb.p.d} code={IB.code} color={IB.color} />
       </div>
       <div style={{ display: "flex", flexWrap: "wrap", gap: 6, padding: 8 }}>
         {btn({ "data-ghost-play": "" }, play ? "Pausa" : "Play", play, () => { setPlay(x => !x); setCap(null); })}
@@ -7102,6 +7148,10 @@ function GhostLap({ sessionId, init = null, onBack }) {
         <div data-ghost-readout="" style={{ minHeight: 34, padding: "4px 4px 0", fontFamily: F_BODY, fontSize: 11.5, color: C.muted, lineHeight: 1.45, fontVariantNumeric: "tabular-nums" }}>
           {cur == null ? <span style={{ color: C.dim }}>Tocca o scorri sul grafico per leggere i valori in quel punto.</span> : <>
             <b style={{ color: C.text }}>{fmtMeters(cur)} m</b> · <span style={{ color: IA.color }}>{IA.code}</span> {Math.round(val(A, "v"))} km/h, {Math.round(val(A, "g"))}ª, gas {Math.round(val(A, "thr"))}%{val(A, "brk") >= .5 ? ", freno" : ""} · <span style={{ color: IB.color }}>{IB.code}</span> {Math.round(val(B, "v"))} km/h, {Math.round(val(B, "g"))}ª, gas {Math.round(val(B, "thr"))}%{val(B, "brk") >= .5 ? ", freno" : ""} · distacco <b style={{ color: C.text }}>{fmtS3(BtGhost.at(B, "t", cur) - BtGhost.at(A, "t", cur))} s</b>
+            <div style={{ display: "flex", justifyContent: "center", gap: 10, marginTop: 8 }}>
+              <Contagiri lap={A} d={cur} code={IA.code} color={IA.color} />
+              <Contagiri lap={B} d={cur} code={IB.code} color={IB.color} />
+            </div>
           </>}
         </div>
       </div>
