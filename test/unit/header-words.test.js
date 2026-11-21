@@ -59,15 +59,24 @@ t('contextWord: una parola della lista del momento, scelta da rand (0 ≤ rand <
   assert.strictEqual(W.contextWord({ ...base, now: at('2026-11-17T12:00:00Z'), rand: 0.4 }), 'ANALYZE');
   for (const r of [-1, 1, 7, NaN, undefined]) assert.ok(W.WORDS.normal.includes(W.contextWord({ ...base, now: at('2026-11-17T12:00:00Z'), rand: r })), 'rand fuori scala: ' + r);
 });
-t('tapWord: una delle motivazionali, mai quella che c\'è già', () => {
-  for (let i = 0; i < 50; i++) { const r = i / 50; const w = W.tapWord('LEVEL UP', r); assert.ok(W.TAP.includes(w)); assert.notStrictEqual(w, 'LEVEL UP'); }
-  assert.strictEqual(W.tapWord('RACE DAY', 0), 'LEVEL UP', 'dalla parola del momento si può avere la prima');
-  const seen = new Set(); for (let i = 0; i < 200; i++) seen.add(W.tapWord('X', i / 200));
-  assert.strictEqual(seen.size, W.TAP.length, 'tutte possibili');
-  assert.ok(W.TAP.includes(W.tapWord(undefined, NaN)));
+// 21/11 (Edoardo: "le scritte devono comparire solo quando si clicca su Sector 4, e dopo poco tornare a Sector 4"):
+// di serie SECTOR 4; il tocco ne fa uscire una a caso tra quelle del momento e le motivazionali, mai quella che c'è.
+t('di serie la scritta è SECTOR 4 e torna dopo SHOW_MS', () => {
+  assert.strictEqual(W.HOME, 'SECTOR 4');
+  assert.ok(W.SHOW_MS >= 2000 && W.SHOW_MS <= 4000, 'dopo poco: ' + W.SHOW_MS);
+});
+t('tapWord: a caso tra le parole del momento e le motivazionali, mai quella che c\'è già, mai SECTOR 4', () => {
+  const race = { now: at('2026-11-22T10:00:00Z'), races: RACES, info: INFO, tz: TZ }, normal = { now: at('2026-11-18T12:00:00Z'), races: RACES, info: INFO, tz: TZ };
+  const poolRace = [...new Set([...W.WORDS.race, ...W.TAP])], poolNormal = [...new Set([...W.WORDS.normal, ...W.TAP])];
+  const seen = new Set();
+  for (let i = 0; i < 400; i++) { const w = W.tapWord('SECTOR 4', i / 400, race); seen.add(w); assert.ok(poolRace.includes(w), w); }
+  assert.strictEqual(seen.size, poolRace.length, 'tutte possibili, RACE DAY compreso');
+  for (let i = 0; i < 100; i++) { const w = W.tapWord('LEVEL UP', i / 100, normal); assert.ok(poolNormal.includes(w) && w !== 'LEVEL UP' && w !== 'SECTOR 4', w); }
+  assert.ok(!W.tapWord('SECTOR 4', 0.5, normal).startsWith('RACE'), 'nel giorno normale niente parole della gara');
+  assert.ok(W.allWords().includes(W.tapWord(undefined, NaN)), 'senza dati: una parola qualsiasi');
 });
 t('tutte le parole stanno in 9 caratteri (la larghezza della scritta non cambia)', () => {
-  const all = [...W.WORDS.race, ...W.WORDS.quali, ...W.WORDS.normal, ...W.WORDS.night, ...W.TAP];
+  const all = [W.HOME, ...W.WORDS.race, ...W.WORDS.quali, ...W.WORDS.normal, ...W.WORDS.night, ...W.TAP];
   for (const w of all) assert.ok(w.length <= 9 && w === w.trim(), w);
   assert.deepStrictEqual(W.allWords(), [...new Set(all)]);
 });

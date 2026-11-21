@@ -12,6 +12,27 @@ const type = async (p, code, wait = 700) => { await p.fill('[data-hack-input]', 
 const said = p => p.evaluate(() => (document.querySelector('[data-hack-term]') || {}).innerText || '');
 
 run({
+  // 21/11 (Edoardo: "se viene sbloccata è solo momentanea su quel telefono"): spegnendo con 08 su Firebase restava
+  // maintenance: true (si scrive con merge e la chiave mancava). Ora si spegne per tutti, anche dopo il riavvio.
+  async 'admin: 08 con la manutenzione accesa la spegne su Firebase, e un altro telefono vede l\'app aperta'(b) {
+    const { ctx, p, errs } = await open(b, { seed: { addDocs: { 'shared/bt-flags': { pitSwipe: false, hiddenQs: [], maintenance: true } } } });
+    await login(p); await w(p, 600);
+    await term(p, true);
+    await type(p, '08', 1200);
+    const t8 = await said(p);
+    const flags = await p.evaluate(() => window.firebase.__fake.doc('shared/bt-flags'));
+    await ctx.close();
+    assert(/MANUTENZIONE SPENTA/.test(t8), '08 con la manutenzione accesa la spegne: ' + t8.slice(-200));
+    assert(flags && flags.maintenance === false, 'su Firebase deve restare spenta: ' + JSON.stringify(flags));
+    // Un altro telefono (utente normale) che legge quel documento: app aperta.
+    const o = await open(b, { seed: { addDocs: { 'shared/bt-flags': flags } } });
+    await login(o.p); await w(o.p, 800);
+    const closed = await o.p.evaluate(() => !!document.querySelector('[data-maintenance]'));
+    await o.ctx.close();
+    assert(!closed, 'l\'altro telefono vede ancora la manutenzione: ' + JSON.stringify(flags));
+    assert(!errs.length && !o.errs.length, errs.concat(o.errs).join(' | '));
+  },
+
   async 'utente normale: 04, 06 e 08 sono riservati all\'admin; 07 manda la notifica di prova'(b) {
     const { ctx, p } = await open(b);
     await login(p); await w(p, 600);

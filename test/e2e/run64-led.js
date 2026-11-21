@@ -57,8 +57,7 @@ run({
     const l = await logo(p);
     const label = await p.evaluate(() => { const e = document.querySelector('[data-logo]'); return e && e.getAttribute('aria-label'); });
     await ctx.close();
-    const W = require('../../src/logic/header-words');
-    assert(l && !l.grid && l.mode === 'idle' && W.allWords().includes(l.text), 'nel tasto in alto deve esserci solo la scritta: ' + JSON.stringify(l));
+    assert(l && !l.grid && l.mode === 'idle' && l.text === 'SECTOR 4', 'nel tasto in alto deve esserci solo la scritta (di serie SECTOR 4, 21/11): ' + JSON.stringify(l));
     assert(label === 'Sector 4', 'il logo ha perso il nome: ' + label);
     assert(!errs.length, errs.join(' | '));
   },

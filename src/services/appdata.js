@@ -111,7 +111,9 @@ const KINDS = {
   // 31/10: temi delle feste comandati dall'admin (src/logic/holidays.js).
   holidays: { docs: ["bt-holidays"], from: d => H.cleanConfig(d["bt-holidays"]), to: v => ({ "bt-holidays": H.cleanConfig(v) }) },
   takes: { docs: ["bt-takes"], from: d => cleanTakes(d["bt-takes"]), to: v => ({ "bt-takes": cleanTakes(v) }) },
-  flags: { docs: ["bt-flags"], from: d => cleanFlags(d["bt-flags"]), to: v => ({ "bt-flags": cleanFlags(v) }) },
+  // 21/11: in scrittura maintenance c'è sempre (true o false). shared/ si scrive con merge: senza la chiave, spegnendo
+  // il codice 08 su Firebase restava true e l'app era aperta solo su quel telefono fino al riavvio.
+  flags: { docs: ["bt-flags"], from: d => cleanFlags(d["bt-flags"]), to: v => ({ "bt-flags": { ...cleanFlags(v), maintenance: !!(isObj(v) && v.maintenance === true) } }) },
   // 15/11: codici del terminale aggiunti dall'admin (src/logic/secret-codes.js, cleanCustom): solo messaggi e azioni di serie.
   termCodes: { docs: ["bt-terminal-codes"], from: d => SC.cleanCustom(list(d["bt-terminal-codes"])), to: v => ({ "bt-terminal-codes": SC.cleanCustom(v) }) },
 };

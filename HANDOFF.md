@@ -1213,3 +1213,17 @@ Misure prima del lavoro (pagina di prova, CPU rallentata 4x come un telefono med
   dà il file senza quella gara). Le due "DA FARE" del 14/11 sono chiuse.
 - Da sapere: in Firestore `shared/bt-flags.maintenance` è ancora `true` (dal 15/11 17:02): sul sito e nell'app chi non
   è admin vede "BOX, BOX: MANUTENZIONE". Va spenta (codice 08 da admin) prima di mandare l'AAB in revisione su Google Play.
+
+## 21/11: blocco app (codice 08) che si sbloccava solo su quel telefono; SECTOR 4 di serie
+- Bug (Edoardo: "se viene sbloccata è solo momentanea su quel telefono"): `shared/` si scrive con `{merge:true}` e
+  `cleanFlags` toglieva `maintenance` quando era spenta, quindi spegnendo con 08 su Firebase restava `true`; il telefono
+  dell'admin la vedeva spenta fino al riavvio. Ora `KINDS.flags.to` scrive sempre `maintenance: true|false`
+  (`src/services/appdata.js`). Prove: unit appdata (codice 08 spento) e `run124` (08 con manutenzione accesa la spegne
+  su Firebase, un altro telefono vede l'app aperta), rossa prima della correzione.
+- Su Firebase oggi `shared/bt-flags.maintenance` è ancora `true` (dal 15/11): con la versione nuova (sito o APK nuovo)
+  basta scrivere 08 da admin una volta. Le versioni vecchie leggono soltanto il valore, quindi si aprono anche loro.
+- Scritta in alto (Edoardo: "le scritte devono comparire solo quando si clicca su Sector 4, e dopo poco tornare a
+  Sector 4 con la stessa animazione"): di serie SECTOR 4; il tocco fa rotolare una parola a caso tra quelle del momento
+  (gara, qualifica, notte, giorno normale) e le motivazionali; dopo `SHOW_MS` (3 s) torna SECTOR 4 rotolando; ogni tocco
+  fa ripartire il tempo. Tolta la parola fissa per la sessione del 16/11 (`headerWordNow`). Prove: unit header-words,
+  `run126` (7), run125 e run64 di nuovo su SECTOR 4.

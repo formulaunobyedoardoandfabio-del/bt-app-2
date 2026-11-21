@@ -394,7 +394,8 @@ t('14/11 saveUserData: ogni chiave salvata si sostituisce intera (un pilota vend
 t('14/11 funzioni: hiddenQs tiene solo gli id delle domande di storia automatiche, senza doppioni', () => {
   const { KINDS } = require('../../src/services/appdata');
   const out = KINDS.flags.to({ pitSwipe: true, hiddenQs: ['auto:r21:h-first', 'auto:r21:h-first', 'auto:r21:win', 'x', 5, 'auto:r20:h-rec'] });
-  assert.deepStrictEqual(out, { 'bt-flags': { pitSwipe: true, hiddenQs: ['auto:r21:h-first', 'auto:r20:h-rec'] } });
+  // 21/11: in scrittura c'è sempre anche maintenance (false = spenta), vedi la prova del codice 08 spento.
+  assert.deepStrictEqual(out, { 'bt-flags': { pitSwipe: true, hiddenQs: ['auto:r21:h-first', 'auto:r20:h-rec'], maintenance: false } });
   assert.deepStrictEqual(KINDS.flags.from({ 'bt-flags': null }), { pitSwipe: false, hiddenQs: [] });
   assert.deepStrictEqual(KINDS.flags.from({ 'bt-flags': { pitSwipe: true } }), { pitSwipe: true, hiddenQs: [] }, 'documento di prima: nessuna domanda tolta');
 });
@@ -403,6 +404,16 @@ t('15/11 interruttore d\'emergenza (codice 08): maintenance nei bt-flags solo qu
   const { KINDS } = require('../../src/services/appdata');
   assert.deepStrictEqual(KINDS.flags.to({ pitSwipe: false, maintenance: true }), { 'bt-flags': { pitSwipe: false, hiddenQs: [], maintenance: true } });
   assert.deepStrictEqual(KINDS.flags.from({ 'bt-flags': { maintenance: 'sì' } }), { pitSwipe: false, hiddenQs: [] }, 'solo true accende');
+});
+
+// 21/11 (Edoardo: "se viene sbloccata è solo momentanea su quel telefono"): il documento si scrive con merge, quindi
+// spegnendo bisogna scrivere maintenance: false; prima la chiave mancava e su Firebase restava true.
+t('21/11 codice 08 spento: si scrive maintenance: false (con merge non resta il true di prima)', () => {
+  const { KINDS } = require('../../src/services/appdata');
+  assert.deepStrictEqual(KINDS.flags.to({ pitSwipe: false, maintenance: false }), { 'bt-flags': { pitSwipe: false, hiddenQs: [], maintenance: false } });
+  assert.deepStrictEqual(KINDS.flags.to({ pitSwipe: true }), { 'bt-flags': { pitSwipe: true, hiddenQs: [], maintenance: false } }, 'senza la chiave: spenta');
+  const merged = { pitSwipe: false, hiddenQs: [], maintenance: true, ...KINDS.flags.to({ pitSwipe: false })['bt-flags'] };
+  assert.strictEqual(KINDS.flags.from({ 'bt-flags': merged }).maintenance, undefined, 'dopo il merge su Firebase è spenta');
 });
 
 t('15/11 codici del terminale dell\'admin (shared/bt-terminal-codes): puliti in lettura e in scrittura', () => {

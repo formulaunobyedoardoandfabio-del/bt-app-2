@@ -721,10 +721,6 @@ function SubHeader({ title, onBack, right }) {
 // badge "IN PISTA" con i LED che pulsano.
 const EGG_GAP_MS = 450, EGG_SHOW_MS = 1100;
 const HEADER_WORDS_ALL = BtHeaderWords.allWords();   // 16/11: tutte le parole della scritta in alto (stessa larghezza sempre)
-// La parola resta la stessa per tutta la sessione: scelta all'apertura, cambia solo col tocco (l'intestazione sparisce e
-// torna quando si apre il Profilo o una pagina e si torna indietro).
-let headerWordNow = null;
-const headerWordStart = () => headerWordNow || (headerWordNow = BtHeaderWords.contextWord({ now: nowMs(), races: F1.RACES, info: CIRCUIT_INFO, rand: Math.random() }));
 function TopHeader({ isPremium, unread, onPremium, onBell, onProfile, trialDays = 0, helmet = null, onTrack = false, onLogoEgg, onLaunch, holiday = null }) {
   // Launch control (1/11, easter egg): tenendo premuto il logo i LED si accendono e il motore sale; dopo 3 secondi,
   // lasciando il dito, la pagina parte. Lasciato troppo presto (dopo quasi un secondo): "Anti-stallo".
@@ -740,10 +736,18 @@ function TopHeader({ isPremium, unread, onPremium, onBell, onProfile, trialDays 
     else if (dt >= 800) { h.long = true; fx.play("abort"); if (onLaunch) onLaunch(false); }
   };
   const [egg, setEgg] = useState(false);
-  // 16/11 (Edoardo): la parola in alto viene dal momento in cui si apre l'app (gara, qualifica, notte, giorno normale;
-  // src/logic/header-words.js); ogni tocco ne fa uscire una motivazionale a caso, mai la stessa.
-  const [word, setWord] = useState(headerWordStart);
-  const nextWord = () => { const v = BtHeaderWords.tapWord(word, Math.random()); headerWordNow = v; setWord(v); };
+  // 21/11 (Edoardo: "le scritte devono comparire solo quando si clicca su Sector 4, e dopo poco con la stessa
+  // animazione tornare a Sector 4"): di serie SECTOR 4; il tocco fa rotolare una parola a caso (del momento: gara,
+  // qualifica, notte, giorno normale; o motivazionale; src/logic/header-words.js), dopo SHOW_MS torna SECTOR 4 rotolando.
+  // Ogni tocco fa ripartire il tempo.
+  const [word, setWord] = useState(BtHeaderWords.HOME);
+  const wordT = useRef(null);
+  useEffect(() => () => clearTimeout(wordT.current), []);
+  const nextWord = () => {
+    setWord(BtHeaderWords.tapWord(word, Math.random(), { now: nowMs(), races: F1.RACES, info: CIRCUIT_INFO }));
+    clearTimeout(wordT.current);
+    wordT.current = setTimeout(() => setWord(BtHeaderWords.HOME), BtHeaderWords.SHOW_MS);
+  };
   const taps = useRef({ n: 0, at: 0 }), eggT = useRef(null);
   useEffect(() => () => clearTimeout(eggT.current), []);
   const tapLogo = () => {

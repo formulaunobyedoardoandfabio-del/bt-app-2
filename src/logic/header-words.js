@@ -1,5 +1,6 @@
 // Scritta in alto a sinistra (16/11, Edoardo: "usa questo codice per la parola sector 4 e fai che cambia"; prove in
-// test/unit/header-words.test.js). All'apertura dell'app la parola viene dal momento, con l'ora di chi la usa:
+// test/unit/header-words.test.js). Dal 21/11 di serie c'è SECTOR 4 e le parole escono solo toccandola (vedi tapWord).
+// Le parole del momento dipendono dall'ora di chi usa l'app:
 // giorno della gara, giorno della qualifica (gli orari veri da circuit-info.json; senza orari il giorno della data
 // e quello prima), notte da mezzanotte alle 5, altrimenti giorno normale. Il weekend vince sulla notte.
 // Toccandola ne esce una a caso tra le motivazionali, mai quella che c'è già. Tutte al massimo 9 caratteri.
@@ -55,9 +56,13 @@
   const cleanRand = r => (Number.isFinite(r) && r >= 0 && r < 1 ? r : 0);
   const pickFrom = (list, rand) => list[Math.min(list.length - 1, Math.floor(cleanRand(rand) * list.length))];
   const contextWord = ({ rand, ...rest } = {}) => pickFrom(WORDS[moodOf(rest)] || WORDS.normal, rand);
-  const tapWord = (current, rand) => pickFrom(TAP.filter(w => w !== current), rand);
-  const allWords = () => [...new Set([...WORDS.race, ...WORDS.quali, ...WORDS.normal, ...WORDS.night, ...TAP])];
+  // 21/11 (Edoardo: "le scritte devono comparire solo quando si clicca su Sector 4, e dopo poco tornare a Sector 4"):
+  // di serie HOME; il tocco ne fa uscire una a caso tra quelle del momento (ctx: now, races, info, tz) e le
+  // motivazionali, mai quella che c'è già; dopo SHOW_MS l'app torna a HOME.
+  const HOME = "SECTOR 4", SHOW_MS = 3000;
+  const tapWord = (current, rand, ctx = {}) => pickFrom([...new Set([...(WORDS[moodOf(ctx)] || WORDS.normal), ...TAP])].filter(w => w !== current && w !== HOME), rand);
+  const allWords = () => [...new Set([HOME, ...WORDS.race, ...WORDS.quali, ...WORDS.normal, ...WORDS.night, ...TAP])];
 
-  const api = { WORDS, TAP, moodOf, contextWord, tapWord, allWords };
+  const api = { WORDS, TAP, HOME, SHOW_MS, moodOf, contextWord, tapWord, allWords };
   if (typeof module !== "undefined" && module.exports) module.exports = api; else root.BtHeaderWords = api;
 })(typeof window !== "undefined" ? window : this);

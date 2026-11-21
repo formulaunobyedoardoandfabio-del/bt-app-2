@@ -1,6 +1,7 @@
-// 16/11 (Edoardo): "usa questo codice (RollingText) per la parola sector 4 e fai che cambia": in alto a sinistra la
-// parola del momento (gara, qualifica, notte, giorno normale) che arriva rotolando lettera per lettera; toccandola ne
-// esce una motivazionale a caso, mai la stessa. Logica: test/unit/header-words.test.js.
+// 16/11 (Edoardo): "usa questo codice (RollingText) per la parola sector 4 e fai che cambia". 21/11: "le scritte
+// devono comparire solo quando si clicca su Sector 4, e dopo poco con la stessa animazione tornare a Sector 4".
+// Di serie SECTOR 4; il tocco fa rotolare una parola (del momento o motivazionale), dopo SHOW_MS torna SECTOR 4
+// rotolando. Logica: test/unit/header-words.test.js.
 // Uso: node test/build-test.js && node test/e2e/run126-rolling-word.js [filtro]
 const { open, w, tapSel, tapText, login, openAdmin, assert, run } = require('./helpers');
 const W = require('../../src/logic/header-words');
@@ -14,64 +15,84 @@ const word = p => p.evaluate(() => {
 const settle = p => p.waitForFunction(() => { const t = document.querySelector('[data-logo] [data-rolling-text]'); return t && t.getAttribute('data-rolling-settled') === '1'; }, null, { timeout: 4000 }).catch(() => {});
 
 run({
-  async 'la parola del momento: gara, qualifica, notte, giorno normale (dal calendario vero)'(b) {
+  async 'di serie SECTOR 4 (gara, qualifica, notte, giorno normale): le parole non escono da sole'(b) {
     const out = {};
-    // Las Vegas: gara il 22/11 alle 04:00 UTC; Qatar: qualifica il 28/11 alle 18:00 UTC.
     for (const [mood, now] of [['race', '2026-11-22T12:00:00Z'], ['quali', '2026-11-28T12:00:00Z'], ['night', '2026-11-18T02:00:00Z'], ['normal', '2026-11-18T12:00:00Z']]) {
-      const { ctx, p, errs } = await open(b, { now }); await login(p); await settle(p);
+      const { ctx, p, errs } = await open(b, { now }); await login(p); await settle(p); await w(p, W.SHOW_MS + 500);
       out[mood] = await word(p);
       if (errs.length) out[mood + 'Err'] = errs.join(' | ');
       await ctx.close();
     }
     for (const mood of ['race', 'quali', 'night', 'normal']) {
       const r = out[mood];
-      assert(r && W.WORDS[mood].includes(r.target), mood + ': parola fuori lista ' + JSON.stringify(r));
-      assert(r.shown === r.target && r.letters === r.target.length && r.settled === '1', mood + ': a fine giro si legge la parola intera, niente lettere a caso: ' + JSON.stringify(r));
-      assert(r.label === 'Sector 4', 'il tasto si chiama ancora Sector 4: ' + r.label);
-      assert(r.anim === 'rlIn', mood + ': le lettere arrivano rotolando: ' + r.anim);
+      assert(r && r.target === 'SECTOR 4' && r.shown === 'SECTOR 4' && r.settled === '1', mood + ': ci deve essere SECTOR 4: ' + JSON.stringify(r));
+      assert(r.label === 'Sector 4' && r.anim === 'rlIn', mood + ': ' + JSON.stringify(r));
       assert(!out[mood + 'Err'], out[mood + 'Err']);
     }
   },
 
-  async 'tocco: una parola motivazionale a caso, mai la stessa, e la larghezza non cambia'(b) {
-    const { ctx, p, errs } = await open(b); await login(p); await settle(p);
-    const seen = [await word(p)];
-    for (let i = 0; i < 4; i++) { await tapSel(p, '[data-logo]'); await w(p, 120); seen.push(await word(p)); await settle(p); await w(p, 500); }
+  async 'tocco: rotola una parola (del momento o motivazionale), poi da sola torna SECTOR 4 rotolando'(b) {
+    const { ctx, p, errs } = await open(b, { now: '2026-11-22T12:00:00Z' }); await login(p); await settle(p);
+    const start = await word(p);
+    await tapSel(p, '[data-logo]'); await w(p, 120);
+    const rolling = await word(p);
+    await settle(p);
+    const shown = await word(p);
+    await p.waitForFunction(() => { const t = document.querySelector('[data-logo] [data-rolling-text]'); return t && t.getAttribute('data-rolling-text') === 'SECTOR 4'; }, null, { timeout: W.SHOW_MS + 1500 }).catch(() => {});
+    await w(p, 80);
+    const back = await word(p);
+    await settle(p);
     const end = await word(p);
     await ctx.close();
-    for (let i = 1; i < seen.length; i++) {
-      assert(seen[i] && W.TAP.includes(seen[i].target), 'tocco ' + i + ': non è una delle motivazionali: ' + JSON.stringify(seen[i]));
-      assert(seen[i].target !== seen[i - 1].target, 'tocco ' + i + ': è uscita la stessa parola ' + seen[i].target);
-    }
-    assert(seen[1].settled === '0', 'subito dopo il tocco le lettere stanno ancora girando: ' + JSON.stringify(seen[1]));
-    assert(end.shown === end.target, 'alla fine si legge la parola intera: ' + JSON.stringify(end));
-    assert(new Set(seen.map(s => s.w)).size === 1, 'il tasto cambia larghezza con la parola: ' + seen.map(s => s.target + '=' + s.w).join(', '));
+    const pool = [...W.WORDS.race, ...W.TAP];
+    assert(start.target === 'SECTOR 4', 'prima del tocco: ' + JSON.stringify(start));
+    assert(rolling && pool.includes(rolling.target) && rolling.settled === '0', 'subito dopo il tocco la parola nuova sta rotolando: ' + JSON.stringify(rolling));
+    assert(shown.shown === shown.target && shown.target === rolling.target, 'poi si legge intera: ' + JSON.stringify(shown));
+    assert(back.target === 'SECTOR 4' && back.settled === '0', 'torna SECTOR 4 con la stessa animazione (lettere che girano): ' + JSON.stringify(back));
+    assert(end.shown === 'SECTOR 4' && end.settled === '1', 'alla fine SECTOR 4 intera: ' + JSON.stringify(end));
+    assert(new Set([start, rolling, shown, back, end].map(s => s.w)).size === 1, 'il tasto cambia larghezza: ' + [start, rolling, shown, back, end].map(s => s.target + '=' + s.w).join(', '));
     assert(!errs.length, errs.join(' | '));
   },
 
-  async 'la parola resta la stessa per tutta la sessione (andando nel Profilo e tornando), cambia solo col tocco'(b) {
+  async 'tocchi di fila: ogni volta una parola diversa, e si torna a SECTOR 4 solo dopo l\'ultimo tocco'(b) {
     const { ctx, p, errs } = await open(b); await login(p); await settle(p);
-    const a = await word(p);
+    const seen = [];
+    for (let i = 0; i < 4; i++) { await tapSel(p, '[data-logo]'); await w(p, 900); seen.push(await word(p)); }
+    await w(p, W.SHOW_MS - 1500);
+    const stillWord = await word(p);
+    await w(p, 1500 + 1200);
+    const end = await word(p);
+    await ctx.close();
+    for (let i = 0; i < seen.length; i++) {
+      assert(seen[i] && seen[i].target !== 'SECTOR 4' && W.allWords().includes(seen[i].target), 'tocco ' + (i + 1) + ': ' + JSON.stringify(seen[i]));
+      if (i) assert(seen[i].target !== seen[i - 1].target, 'tocco ' + (i + 1) + ': è uscita la stessa parola ' + seen[i].target);
+    }
+    assert(stillWord.target === seen[3].target, 'il tempo riparte a ogni tocco: ' + JSON.stringify(stillWord));
+    assert(end.target === 'SECTOR 4' && end.shown === 'SECTOR 4', 'alla fine torna SECTOR 4: ' + JSON.stringify(end));
+    assert(!errs.length, errs.join(' | '));
+  },
+
+  async 'andando nel Profilo e tornando c\'è SECTOR 4'(b) {
+    const { ctx, p, errs } = await open(b); await login(p); await settle(p);
+    await tapSel(p, '[data-logo]'); await w(p, 300);
     await tapSel(p, '[aria-label="Profilo"]'); await w(p, 500); await tapSel(p, '[aria-label="Indietro"]'); await w(p, 600); await settle(p);
     const back = await word(p);
-    await tapSel(p, '[data-logo]'); await settle(p);
-    const tapped = await word(p);
-    await tapSel(p, '[aria-label="Profilo"]'); await w(p, 500); await tapSel(p, '[aria-label="Indietro"]'); await w(p, 600); await settle(p);
-    const back2 = await word(p);
     await ctx.close();
-    assert(a && back && a.target === back.target, 'tornando dal Profilo la parola è cambiata: ' + (a && a.target) + ' → ' + (back && back.target));
-    assert(tapped && back2 && tapped.target === back2.target && W.TAP.includes(back2.target), 'la parola del tocco si perde tornando dal Profilo: ' + (tapped && tapped.target) + ' → ' + (back2 && back2.target));
+    assert(back && back.target === 'SECTOR 4' && back.shown === 'SECTOR 4', 'tornando dal Profilo: ' + JSON.stringify(back));
     assert(!errs.length, errs.join(' | '));
   },
 
-  async 'Rimuovi animazioni: la parola è subito intera e ferma'(b) {
+  async 'Rimuovi animazioni: parola subito intera e ferma, poi SECTOR 4 subito intera'(b) {
     const { ctx, p, errs } = await open(b, { reducedMotion: 'reduce' }); await login(p);
     const r = await word(p);
     await tapSel(p, '[data-logo]'); await w(p, 60);
     const after = await word(p);
+    await w(p, W.SHOW_MS + 200);
+    const back = await word(p);
     await ctx.close();
-    assert(r && r.shown === r.target && r.anim === 'none' && r.settled === '1', 'senza animazioni: ' + JSON.stringify(r));
-    assert(after && W.TAP.includes(after.target) && after.shown === after.target && after.settled === '1', 'tocco senza animazioni: subito la parola nuova intera: ' + JSON.stringify(after));
+    assert(r && r.target === 'SECTOR 4' && r.shown === 'SECTOR 4' && r.anim === 'none' && r.settled === '1', 'senza animazioni: ' + JSON.stringify(r));
+    assert(after && after.target !== 'SECTOR 4' && after.shown === after.target && after.settled === '1', 'tocco senza animazioni: subito la parola intera: ' + JSON.stringify(after));
+    assert(back && back.target === 'SECTOR 4' && back.shown === 'SECTOR 4' && back.settled === '1', 'poi subito SECTOR 4: ' + JSON.stringify(back));
     assert(!errs.length, errs.join(' | '));
   },
 
