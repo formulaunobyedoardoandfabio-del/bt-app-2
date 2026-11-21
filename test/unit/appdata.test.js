@@ -406,6 +406,32 @@ t('15/11 interruttore d\'emergenza (codice 08): maintenance nei bt-flags solo qu
   assert.deepStrictEqual(KINDS.flags.from({ 'bt-flags': { maintenance: 'sì' } }), { pitSwipe: false, hiddenQs: [] }, 'solo true accende');
 });
 
+// 21/11 (Edoardo): codici promo da 6 cifre (src/logic/promo.js) in shared/bt-promo. Li legge solo chi ne scrive uno
+// (o l'admin): all'avvio non si legge (lazy), così niente letture in più per tutti. Nell'account: app2.promo.
+t('21/11 codici promo: kind promo pulito, non letto all\'avvio, letto quando si chiede; promo nei dati dell\'account', async () => {
+  const P = require('../../src/logic/promo');
+  const k = P.emailKey('a@b.it');
+  assert.deepStrictEqual(D.KINDS.promo.from({ 'bt-promo': { codes: [{ code: '274851', to: k, days: 7, at: 5 }, { code: '1', to: k, days: 1 }] } }), { codes: [{ code: '274851', to: k, days: 7, at: 5 }] });
+  assert.deepStrictEqual(D.KINDS.promo.to({ codes: [{ code: '274851', to: k, days: 7, at: 5 }] }), { 'bt-promo': { codes: [{ code: '274851', to: k, days: 7, at: 5 }] } });
+  assert.strictEqual(D.KINDS.promo.lazy, true);
+  seed({ 'shared/bt-promo': { codes: [{ code: '274851', to: k, days: 7, at: 5 }] } });
+  const A = D.createAppData();
+  const all = await A.loadShared(NOW);
+  assert.ok(!('promo' in all.values), 'all\'avvio non si legge');
+  const one = await A.loadShared(NOW, { kinds: ['promo'] });
+  assert.deepStrictEqual(one.values.promo.codes.map(c => c.code), ['274851']);
+  assert.ok(D.USER_KEYS.includes('promo'));
+});
+t('21/11 codici promo: senza il documento su Firebase si legge e si scrive lo stesso (il primo codice dell\'admin)', async () => {
+  setupWindow();
+  const A = D.createAppData();
+  const one = await A.loadShared(NOW, { kinds: ['promo'] });
+  assert.deepStrictEqual(one.values.promo, { codes: [] });
+  const P = require('../../src/logic/promo');
+  const v = await A.saveShared('promo', cur => P.addCode(cur, { code: '274851', email: 'a@b.it', days: 7, at: 5 }), NOW);
+  assert.deepStrictEqual(v.codes.map(c => c.code), ['274851']);
+});
+
 // 21/11 (Edoardo: "se viene sbloccata è solo momentanea su quel telefono"): il documento si scrive con merge, quindi
 // spegnendo bisogna scrivere maintenance: false; prima la chiave mancava e su Firebase restava true.
 t('21/11 codice 08 spento: si scrive maintenance: false (con merge non resta il true di prima)', () => {
@@ -445,7 +471,7 @@ t('loadUserData: solo le chiavi dei dati personali; flushUserData salva subito',
   await A.flushUserData();
   assert.deepStrictEqual(firebase.__fake.doc('users/a@b.it').app2, { saved: ['n1'], votes: { home: 'norris' }, strano: 1, pitBest: 2.41 });
   // Tappa 3: colori dell'app, suoni, vibrazioni, casco e notizie nascoste si salvano nell'account.
-  assert.ok(D.USER_KEYS.includes('notifSeenAt') && ['theme', 'sounds', 'haptics', 'helmet', 'hidden'].every(k => D.USER_KEYS.includes(k)) && ['squadLog', 'leagues'].every(k => D.USER_KEYS.includes(k)) && D.USER_KEYS.length === 28 && D.USER_KEYS.includes('autoLeagues') && D.USER_KEYS.includes('swipe') && D.USER_KEYS.includes('holidays'))   // 31/10: storia della squadra e leghe FantaF1;
+  assert.ok(D.USER_KEYS.includes('notifSeenAt') && ['theme', 'sounds', 'haptics', 'helmet', 'hidden'].every(k => D.USER_KEYS.includes(k)) && ['squadLog', 'leagues'].every(k => D.USER_KEYS.includes(k)) && D.USER_KEYS.length === 29 && D.USER_KEYS.includes('autoLeagues') && D.USER_KEYS.includes('swipe') && D.USER_KEYS.includes('holidays'))   // 31/10: storia della squadra e leghe FantaF1;
   // Trofei vinti (G31): { id: data in ms } nell'account.
   assert.ok(D.USER_KEYS.includes('trophies'), 'trofei nei dati dell\'account');
   // 24/10: il Premium dell'anteprima (abbonamento di prova e prova per un GP) resta nell'account.

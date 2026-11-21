@@ -1227,3 +1227,27 @@ Misure prima del lavoro (pagina di prova, CPU rallentata 4x come un telefono med
   (gara, qualifica, notte, giorno normale) e le motivazionali; dopo `SHOW_MS` (3 s) torna SECTOR 4 rotolando; ogni tocco
   fa ripartire il tempo. Tolta la parola fissa per la sessione del 16/11 (`headerWordNow`). Prove: unit header-words,
   `run126` (7), run125 e run64 di nuovo su SECTOR 4.
+
+## 21/11: codici promo da 6 cifre
+- Edoardo: codici promo con l'animazione del video "Digit Spin" e tempi "Smooth" (stagger 65 ms, 260 ms ease-out,
+  scheda a molla ω0 16 ζ 0.62); l'admin li scrive su Firebase. Premio (sua risposta): Funzioni Pro per X giorni + un
+  trofeo, codice valido solo per un account. Il Premium vero non si regala coi codici (regole Play, prompt-1-sector4).
+- Logica `src/logic/promo.js` (prove `test/unit/promo.test.js`): SHA-256 in JS, `emailKey`, `cleanPromo`, `redeem`
+  (formato / ospite / nessuno / altro / usato), `newCode` (6 cifre, non comincia con 0), `addCode`, `dropCode`.
+- Firebase: `shared/bt-promo` = `{ codes: [{ code, to: sha256(email), days, at }] }` (KINDS.promo, `lazy`: non si legge
+  all'avvio, solo quando si scrive un codice o l'admin apre PROMO; `eagerKinds` in appdata). Nell'account
+  `app2.promo = { until, used }`. `isPremium` (= Funzioni Pro) ora è `isPaid || adPro || promoPro`.
+- Trofeo nuovo "Codice scritto" (id `codice`, dopo "Il mio casco", evento `promo`); non conta per "tutti i trofei =
+  Premium" (`NOT_FOR_ALL` in trophypro). Interpretazione mia di "+ al trofeo Il mio casco codice scritto".
+- Interfaccia: `src/ui/promo-code.jsx` (PromoCodeInput), `PromoSheet` in App.jsx (Profilo → Codice promo, con
+  "Pro fino al ..." quando attivo), Pannello Admin → PROMO (`AdminPromoTab`: email, giorni, codice proposto, CREA,
+  lista, cancella; a chi è ogni codice lo ricorda solo il telefono dell'admin, `bt-promo-notes`).
+- Corretto anche: tasto in alto e scheda Premium del Profilo ora usano `isPaid`: col video o col codice non dicono più
+  "Sei B&T Premium" (prima col video sì).
+- Prove: nuova `run127-codici-promo` (5), unit promo, trofei, trophypro, appdata. `data-pro="on|off"` sul contenitore
+  dell'app (invisibile) dice se le Funzioni Pro sono attive: lo leggono run76 (video) e run127 (codice), visto che il
+  tasto in alto non lo dice più.
+- Suite completa 21/11 (JOBS=2): 174 file, 171 verdi; run33 e run71 rossi solo sotto carico (da soli verdi: 22/22 e
+  9/9), run76 aggiornata per il tasto in alto e verde (8/8).
+- Per Edoardo: Privacy Policy da aggiornare (codici promo: impronta dell'email nel documento dei codici, codici usati
+  nell'account). Regole di Firestore: `shared/bt-promo` deve essere scrivibile solo dagli admin, come gli altri shared.

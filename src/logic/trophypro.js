@@ -6,7 +6,9 @@
 const PIT_SWIPE_TROPHIES = ["boxbox", "opinionista"];
 
 // I trofei che servono: quelli attivi (defs), meno quelli da saltare.
-const trophyGoal = (defs, { skip = [] } = {}) => (Array.isArray(defs) ? defs : []).map(t => t && t.id).filter(id => id && !skip.includes(id));
+// 21/11: trofei che non si vincono da soli (il codice promo lo dà l'admin): non servono per il Premium coi trofei.
+const NOT_FOR_ALL = ["codice"];
+const trophyGoal = (defs, { skip = [] } = {}) => (Array.isArray(defs) ? defs : []).map(t => t && t.id).filter(id => id && !skip.includes(id) && !NOT_FOR_ALL.includes(id));
 
 // won: { <id>: data in ms } dei trofei vinti.
 function allDone(won, defs, opts) {
@@ -21,4 +23,4 @@ function premiumHint(won, defs, opts) {
   return `Oppure vinci tutti i ${need.length} trofei: il Premium è tuo, gratis. Ne hai ${have}.`;
 }
 
-module.exports = { PIT_SWIPE_TROPHIES, trophyGoal, allDone, premiumHint };
+module.exports = { PIT_SWIPE_TROPHIES, NOT_FOR_ALL, trophyGoal, allDone, premiumHint };

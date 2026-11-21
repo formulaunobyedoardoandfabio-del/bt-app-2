@@ -15,6 +15,7 @@ const H = require("../logic/holidays");
 const F1 = require("../data/f1-2026");
 const T = require("../logic/trophies");
 const SC = require("../logic/secret-codes");   // 15/11: codici del terminale aggiunti dall'admin
+const PR = require("../logic/promo");   // 21/11: codici promo da 6 cifre
 
 const isObj = v => v && typeof v === "object" && !Array.isArray(v);
 const list = v => (Array.isArray(v) ? v.filter(isObj) : []);
@@ -70,6 +71,7 @@ const SHARED_DOCS = {
   "bt-holidays": { force: null, off: [] }, // 31/10: temi delle feste: force = tema acceso sempre, off = temi spenti
   "bt-takes": [],
   "bt-terminal-codes": [],                 // 15/11: codici del terminale aggiunti dall'admin nel Pannello
+  "bt-promo": { codes: [] },               // 21/11: codici promo da 6 cifre (src/logic/promo.js)
   "bt-flags": { pitSwipe: false },         // 7/11: funzioni accese dall'admin (Pit Swipe spento di serie)                          // 1/11: opinioni di Pit Swipe scritte dall'admin [{ id, text, on, at }]
 };
 // Opinioni di Pit Swipe: solo quelle con id e testo, al massimo 140 caratteri, le più nuove prima, al massimo 60.
@@ -113,16 +115,20 @@ const KINDS = {
   takes: { docs: ["bt-takes"], from: d => cleanTakes(d["bt-takes"]), to: v => ({ "bt-takes": cleanTakes(v) }) },
   // 21/11: in scrittura maintenance c'è sempre (true o false). shared/ si scrive con merge: senza la chiave, spegnendo
   // il codice 08 su Firebase restava true e l'app era aperta solo su quel telefono fino al riavvio.
+  // 21/11: codici promo (src/logic/promo.js). lazy: non si legge all'avvio, solo quando qualcuno scrive un codice o
+  // l'admin apre la sua sezione (loadShared con kinds: ["promo"]).
+  promo: { docs: ["bt-promo"], lazy: true, from: d => PR.cleanPromo(d["bt-promo"]), to: v => ({ "bt-promo": PR.cleanPromo(v) }) },
   flags: { docs: ["bt-flags"], from: d => cleanFlags(d["bt-flags"]), to: v => ({ "bt-flags": { ...cleanFlags(v), maintenance: !!(isObj(v) && v.maintenance === true) } }) },
   // 15/11: codici del terminale aggiunti dall'admin (src/logic/secret-codes.js, cleanCustom): solo messaggi e azioni di serie.
   termCodes: { docs: ["bt-terminal-codes"], from: d => SC.cleanCustom(list(d["bt-terminal-codes"])), to: v => ({ "bt-terminal-codes": SC.cleanCustom(v) }) },
 };
+const eagerKinds = () => Object.keys(KINDS).filter(k => !KINDS[k].lazy);
 
 // Dati personali dell'account (users/<email>.app2): ognuno vede e modifica solo i suoi.
 // Tappa 3: colori dell'app (theme), suoni e vibrazioni (sounds, haptics), casco (helmet), notizie nascoste (hidden).
 // 24/10: Premium dell'anteprima (premium = { sub, trial }): prima restava solo in memoria e chiudendo l'app spariva.
 const USER_KEYS = ["saved", "favTeam", "favDriver", "notifPrefs", "votes", "squad", "squadBase", "freeTransfers", "predAnswers", "sillyPreds", "stratPreds", "pitBest", "wxGuess", "ratings", "dotd", "notifSeenAt",
-  "theme", "sounds", "haptics", "helmet", "hidden", "trophies", "premium", "squadLog", "leagues", "holidays", "swipe", "autoLeagues"];   // 1/11: Pit Swipe (gusti, mazzo, serie, missioni, easter egg)   // 31/10: temi delle feste   // 31/10: FantaF1 vero
+  "theme", "sounds", "haptics", "helmet", "hidden", "trophies", "premium", "squadLog", "leagues", "holidays", "swipe", "autoLeagues", "promo"];   // 1/11: Pit Swipe (gusti, mazzo, serie, missioni, easter egg)   // 31/10: temi delle feste   // 31/10: FantaF1 vero
 const USER_SAVE_MS = 800;
 const pickUser = v => { const out = {}; if (isObj(v)) USER_KEYS.forEach(k => { if (v[k] !== undefined) out[k] = v[k]; }); return out; };
 // 13/11 (accesso lento): i dati personali stanno nel profilo (users/<email>.app2) che l'accesso ha appena letto: l'app li
@@ -171,7 +177,7 @@ function createAppData({ fb = FB } = {}) {
   // Legge i documenti dei contenuti richiesti (tutti, se non si dice). values: un valore per ogni contenuto (quello di
   // serie se il documento manca o non si è potuto leggere); fresh: i contenuti letti davvero; offline: qualcosa non si
   // è potuto leggere.
-  async function loadShared(now = Date.now(), { kinds = Object.keys(KINDS) } = {}) {
+  async function loadShared(now = Date.now(), { kinds = eagerKinds() } = {}) {
     const docs = docsOf(kinds), raw = {}, ok = new Set();
     await Promise.all(docs.map(async k => {
       try {
@@ -187,16 +193,17 @@ function createAppData({ fb = FB } = {}) {
   }
   // 14/11: i contenuti dell'ultima volta, dalla copia sul telefono (senza Firebase). values: solo i contenuti che hanno
   // la copia di tutti i loro documenti; kinds: quali; complete: ci sono tutti (l'app può aprirsi senza aspettare).
+  // 21/11: i contenuti lazy (codici promo) non contano: non si leggono all'avvio.
   function sharedCached(now = Date.now()) {
-    const values = {}, kinds = [];
-    Object.keys(KINDS).forEach(kind => {
+    const values = {}, kinds = [], eager = eagerKinds();
+    eager.forEach(kind => {
       const raw = {};
       for (const d of KINDS[kind].docs) { const c = cacheGet(d); if (!c) return; raw[d] = c.v; }
       try { values[kind] = valueOf(kind, raw, now); kinds.push(kind); } catch (e) { delete values[kind]; }
     });
-    return { values, kinds, complete: kinds.length === Object.keys(KINDS).length };
+    return { values, kinds, complete: kinds.length === eager.length };
   }
-  const staleKinds = () => Object.keys(KINDS).filter(k => !isFresh(k));
+  const staleKinds = () => eagerKinds().filter(k => !isFresh(k));
 
   // Converte e scrive un contenuto; restituisce il valore per l'app come si rilegge da quello che si è scritto.
   // update: funzione (valore riletto → valore da scrivere) oppure il valore intero da scrivere (vedi in cima).
@@ -316,7 +323,7 @@ function createAppData({ fb = FB } = {}) {
 // I valori di serie di tutti i contenuti, già convertiti per l'app: quelli che si vedono finché Firebase non risponde.
 function sharedDefaults(now = Date.now()) {
   const data = clone(SHARED_DOCS), values = {};
-  Object.keys(KINDS).forEach(kind => { values[kind] = KINDS[kind].from(data, now); });
+  eagerKinds().forEach(kind => { values[kind] = KINDS[kind].from(data, now); });   // 21/11: senza i lazy, come loadShared
   return values;
 }
 

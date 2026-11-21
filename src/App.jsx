@@ -17,6 +17,8 @@ import BtGhost from "./logic/bt-ghost";
 import BtWk from "./logic/bt-weekend";
 import BtHolidays from "./logic/holidays";
 import BtHeaderWords from "./logic/header-words";
+import BtPromo from "./logic/promo";   // 21/11: codici promo da 6 cifre
+import { PromoCodeInput, PROMO_CSS } from "./ui/promo-code";
 import BtSwipe from "./logic/pitswipe";
 import BtElo from "./logic/elo";
 import BtReplay from "./logic/replay";
@@ -247,6 +249,7 @@ function Icon({ name, size = 18, color = C.text, sw = 2 }) {
     case "back": return <svg {...s}><polyline points="15,18 9,12 15,6" /></svg>;
     case "tv": return <svg {...s}><rect x="3" y="5" width="18" height="12" rx="2" /><line x1="8" y1="21" x2="16" y2="21" /><line x1="12" y1="17" x2="12" y2="21" /></svg>;
     case "close": return <svg {...s}><line x1="6" y1="6" x2="18" y2="18" /><line x1="18" y1="6" x2="6" y2="18" /></svg>;
+    case "ticket": return <svg {...s}><path d="M15 5v2M15 11v2M15 17v2" /><path d="M5 5h14a2 2 0 0 1 2 2v3a2 2 0 0 0 0 4v3a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-3a2 2 0 0 0 0-4V7a2 2 0 0 1 2-2" /></svg>;
     case "chevron": return <svg {...s}><polyline points="9,6 15,12 9,18" /></svg>;
     case "garage": return <svg {...s}><path d="M3 21V9l9-6 9 6v12" /><path d="M7 21v-9h10v9" /><line x1="7" y1="15" x2="17" y2="15" /><line x1="7" y1="18" x2="17" y2="18" /></svg>;
     case "bell": return <svg {...s}><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9" /><path d="M13.73 21a2 2 0 0 1-3.46 0" /></svg>;
@@ -1378,6 +1381,62 @@ function HelmetEditor({ helmet, onSave, onClose }) {
         {chips("finish", HELMET_FINISHES)}
         <button className="press" onClick={save} style={{ display: "block", width: "100%", marginTop: 20, padding: "14px 0", borderRadius: 14, background: C.accent, fontFamily: F_HEAD, fontWeight: 900, fontStyle: "italic", fontSize: 14, color: C.onAccent }}>SALVA IL CASCO</button>
         <button className="press" onClick={onClose} style={{ display: "block", width: "100%", padding: "12px 0", fontFamily: F_BODY, fontWeight: 600, fontSize: 13, color: C.muted }}>Annulla</button>
+      </div>
+    </div>
+  );
+}
+
+// 21/11 (Edoardo): Profilo → "Codice promo". Il codice di 6 cifre che l'admin ha creato per questo account (shared/
+// bt-promo, src/logic/promo.js): Funzioni Pro per quei giorni e il trofeo "Codice scritto". Cifre a rullo e scheda a
+// molla (src/ui/promo-code.jsx, tempi "Smooth": 65 ms tra una cifra e l'altra, 260 ms ciascuna).
+const PROMO_WHY = {
+  formato: "Il codice ha 6 cifre.",
+  ospite: "Per usare un codice serve un account: accedi o registrati.",
+  nessuno: "Questo codice non esiste. Controlla le cifre.",
+  altro: "Questo codice è di un altro account.",
+  usato: "Hai già usato questo codice.",
+  rete: "Niente rete: riprova tra poco.",
+  attesa: "Un attimo: sto caricando il tuo account. Riprova tra qualche secondo.",
+};
+function PromoSheet({ guest, onRedeem, onLogin, onClose }) {
+  const [code, setCode] = useState("");
+  const [status, setStatus] = useState("idle");   // idle | checking | ok | err
+  const [run, setRun] = useState(0);
+  const [msg, setMsg] = useState(null);
+  const ready = code.length === 6 && status !== "checking" && status !== "ok";
+  const type = v => { setCode(v); if (status === "err") { setStatus("idle"); setMsg(null); } };
+  const verify = () => {
+    if (!ready) return;
+    setStatus("checking"); setMsg(null);
+    Promise.resolve(onRedeem(code)).then(r => {
+      setRun(n => n + 1);
+      if (r && r.ok) { setStatus("ok"); fx.play("flag"); fx.buzz("flag"); setMsg({ ok: true, text: `Funzioni Pro sbloccate per ${r.days} ${r.days === 1 ? "giorno" : "giorni"}, fino al ${new Date(r.until).toLocaleDateString("it-IT", { day: "numeric", month: "long" })}. E il trofeo "Codice scritto" è tuo.` }); }
+      else { setStatus("err"); fx.buzz("light"); setMsg({ ok: false, why: (r && r.why) || "rete", text: PROMO_WHY[(r && r.why) || "rete"] || PROMO_WHY.rete }); }
+    }, () => { setRun(n => n + 1); setStatus("err"); setMsg({ ok: false, why: "rete", text: PROMO_WHY.rete }); });
+  };
+  const btnBg = status === "ok" ? "#2BD9A0" : ready ? `linear-gradient(90deg, ${C.accent}, ${C.accentInk})` : "rgba(255,255,255,.06)";
+  return (
+    <div style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,.75)", zIndex: 620, display: "flex", alignItems: "flex-end" }} onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
+      <style>{PROMO_CSS}</style>
+      <div className="pc-card" data-promo-sheet="" style={{ background: C.card, borderRadius: "24px 24px 0 0", width: "100%", padding: "20px 20px 26px" }}>
+        <div style={{ display: "flex", alignItems: "center", marginBottom: 6 }}>
+          <h2 style={{ flex: 1, fontFamily: F_HEAD, fontWeight: 900, fontStyle: "italic", fontSize: 17, color: C.text, margin: 0 }}>CODICE PROMO</h2>
+          <button className="press" aria-label="Chiudi" onClick={onClose} style={{ width: 32, height: 32, borderRadius: "50%", background: "rgba(255,255,255,.08)", display: "flex", alignItems: "center", justifyContent: "center" }}><Icon name="close" size={13} sw={2.2} /></button>
+        </div>
+        <p style={{ margin: "0 0 16px", fontFamily: F_BODY, fontSize: 12.5, color: C.muted, lineHeight: 1.5 }}>Scrivi il codice di 6 cifre che ti ha mandato B&T: sblocca le Funzioni Pro per qualche giorno. Vale solo per il tuo account.</p>
+        <PromoCodeInput value={code} onChange={type} status={status} run={run} accent={C.accentInk} text={C.text} font={F_HEAD} disabled={status === "checking" || status === "ok"} />
+        <button className="press" data-promo-verify="" disabled={!ready && status !== "ok"} onClick={status === "ok" ? onClose : verify}
+          style={{ width: "100%", height: 46, marginTop: 14, borderRadius: 23, background: btnBg, border: ready || status === "ok" ? "none" : `1px solid ${C.border}`, display: "flex", alignItems: "center", justifyContent: "center", gap: 8, fontFamily: F_HEAD, fontWeight: 900, fontStyle: "italic", fontSize: 14, letterSpacing: .4, color: status === "ok" ? "#06281D" : ready ? "#fff" : C.dim }}>
+          {status === "ok" && <Icon name="check" size={16} color="#06281D" sw={2.6} />}
+          {status === "ok" ? "VERIFICATO" : status === "checking" ? "CONTROLLO..." : "VERIFICA"}
+        </button>
+        {msg && (
+          <p role="status" data-promo-msg={msg.ok ? "ok" : msg.why} style={{ margin: "12px 2px 0", fontFamily: F_BODY, fontSize: 12.5, lineHeight: 1.5, color: msg.ok ? "#2BD9A0" : "#FF8A8D" }}>{msg.text}</p>
+        )}
+        {msg && msg.why === "ospite" && onLogin && (
+          <button className="press" onClick={onLogin} style={{ marginTop: 10, padding: "9px 14px", borderRadius: 18, background: "rgba(255,255,255,.08)", fontFamily: F_HEAD, fontWeight: 800, fontSize: 12.5, color: C.text }}>ACCEDI O REGISTRATI</button>
+        )}
+        {guest && !msg && <p style={{ margin: "12px 2px 0", fontFamily: F_BODY, fontSize: 12, color: C.dim }}>Serve un account per usare un codice.</p>}
       </div>
     </div>
   );
@@ -8959,7 +9018,7 @@ function TrophyCase({ trophies = {}, helmet = null, defs = TROPHIES, onOpen }) {
   );
 }
 
-function ProfiloScreen({ tv = false, onTv = null, onChangelog = null, onHack = null, onCoffee = null, coffeePrice = null, fanLevel = null, reminders = true, onReminders = null, halfway = true, onHalfway = null, news = true, onNews = null, trophiesOn = true, onTrophiesOn = null, holidays = true, onHolidays = null, miniPit = true, onMiniPit = null, ig, onOpenIg, trial = null, trialUsed = false, onBack, onNotifiche, onPremium, onAdmin, onLogout, isPremium, onAbout, onHelp, onFeedback, aboutMe, onSaveAboutMe, favTeam, favDriver, onPickTeam, onPickDriver, guest, onLogin, onTerms, blocked = [], onUnblock, onDeleteAccount, savedCount = 0, onOpenSaved, account = null, onSaveName, isAdmin = false, onTheme, sounds = true, haptics = true, onSounds, onHaptics, helmet = null, onHelmet, trophies = {}, trophyProg = {}, trophyList = TROPHIES, onAdPrivacy = null }) {
+function ProfiloScreen({ onPromo = null, promoUntil = 0, tv = false, onTv = null, onChangelog = null, onHack = null, onCoffee = null, coffeePrice = null, fanLevel = null, reminders = true, onReminders = null, halfway = true, onHalfway = null, news = true, onNews = null, trophiesOn = true, onTrophiesOn = null, holidays = true, onHolidays = null, miniPit = true, onMiniPit = null, ig, onOpenIg, trial = null, trialUsed = false, onBack, onNotifiche, onPremium, onAdmin, onLogout, isPremium, onAbout, onHelp, onFeedback, aboutMe, onSaveAboutMe, favTeam, favDriver, onPickTeam, onPickDriver, guest, onLogin, onTerms, blocked = [], onUnblock, onDeleteAccount, savedCount = 0, onOpenSaved, account = null, onSaveName, isAdmin = false, onTheme, sounds = true, haptics = true, onSounds, onHaptics, helmet = null, onHelmet, trophies = {}, trophyProg = {}, trophyList = TROPHIES, onAdPrivacy = null }) {
   const ft = favTeam ? teamById(favTeam) : null;
   const fd = favDriver ? driverById(favDriver) : null;
   const favRows = [
@@ -9004,6 +9063,8 @@ function ProfiloScreen({ tv = false, onTv = null, onChangelog = null, onHack = n
   const rows = [
     { icon: "person", label: "Profilo pubblico", value: guest ? "Preferiti" : "Su di te e preferiti", onClick: () => setPubPage(true), chevron: true },
     { icon: "bell", label: "Notifiche", onClick: onNotifiche, chevron: true },
+    // 21/11 (Edoardo): codici promo da 6 cifre (PromoSheet); con i giorni attivi dice fino a quando.
+    ...(onPromo ? [{ icon: "ticket", label: "Codice promo", value: promoUntil > nowMs() ? "Pro fino al " + new Date(promoUntil).toLocaleDateString("it-IT", { day: "numeric", month: "short" }) : null, onClick: onPromo, chevron: true }] : []),
     // 8/11 (Edoardo): colori, suoni, vibrazioni, temi delle feste, Pit Board e promemoria in una sola voce che si apre.
     { icon: "palette", label: "Personalizza l'app", onClick: () => setPersOpen(o => !o), chevron: true, group: true, open: persOpen },
     ...(persOpen ? [
@@ -9529,7 +9590,7 @@ function HackTerminal({ isAdmin, unlocks, onToggle, onAdmin, onClose, onOpenIg, 
 }
 
 /* ── PANNELLO ADMIN (stesse sezioni della versione vecchia) ─────────── */
-const ADMIN_TABS = ["NEWS", "SONDAGGI", "OPINIONI", "FANTA F1", "PREVISIONI", "CLASSIFICHE", "GARA LIVE", "MERCATO", "INSTAGRAM", "VIDEO", "NOTIFICHE", "CHAT", "TEMI", "FUNZIONI", "TERMINALE"];
+const ADMIN_TABS = ["NEWS", "SONDAGGI", "OPINIONI", "FANTA F1", "PREVISIONI", "CLASSIFICHE", "GARA LIVE", "MERCATO", "INSTAGRAM", "VIDEO", "NOTIFICHE", "CHAT", "TEMI", "FUNZIONI", "PROMO", "TERMINALE"];
 // 31/10: temi delle feste dal Pannello Admin (shared/bt-holidays): di serie seguono le date; si può accenderne uno
 // sempre (per provarlo o per un evento) o spegnerne uno.
 // 7/11 (Edoardo): funzioni che si accendono solo da qui. Pit Swipe (le notizie come carte da scorrere) è spento di
@@ -10423,7 +10484,7 @@ function AdminChatTab({ chats, reports, banned, onDeleteMsg, onSuspend, onUnsusp
 // Impronta di un valore: le schede con la bozza (classifiche, prezzi FantaF1, Instagram) si rifanno da capo quando i
 // dati sotto cambiano (riletti da Firebase o appena salvati), così SALVA non riscrive valori vecchi (revisione Fase B, C2).
 const versionOf = v => { const s = JSON.stringify(v) || ""; let h = 5381; for (let i = 0; i < s.length; i++) h = (Math.imul(h, 33) + s.charCodeAt(i)) | 0; return (h >>> 0).toString(36) + "." + s.length; };
-function AdminScreen({ termCodes = [], onTermCodes = null, histAuto = [], hiddenQs = [], onHideQ = null, flags = null, onFlags = null, takes = [], onTakes = null, photos, setPhotos, silly = {}, onSilly, highlights = [], setHighlights, onBack, onPublish, articles, setArticles, fantaStats, fantaLatestRound = null, setFantaStats, standings, setStandings, races, setRaces, extraRaces = [], setExtraRaces, ig, setIg, sentNotifs, onSendNotif, onDeleteNotif, onToast, tab, setTab, chats, reports, banned, onDeleteMsg, onSuspend, onUnsuspend, onIgnoreReport, liveProps = {}, polls = [], votes = {}, onPollAnswer, predictions = [], setPredictions, predAnswers = {}, holidayCfg = null, onHolidays = null, holiday = null }) {
+function AdminScreen({ promo = null, onPromoLoad = null, onPromo = null, termCodes = [], onTermCodes = null, histAuto = [], hiddenQs = [], onHideQ = null, flags = null, onFlags = null, takes = [], onTakes = null, photos, setPhotos, silly = {}, onSilly, highlights = [], setHighlights, onBack, onPublish, articles, setArticles, fantaStats, fantaLatestRound = null, setFantaStats, standings, setStandings, races, setRaces, extraRaces = [], setExtraRaces, ig, setIg, sentNotifs, onSendNotif, onDeleteNotif, onToast, tab, setTab, chats, reports, banned, onDeleteMsg, onSuspend, onUnsuspend, onIgnoreReport, liveProps = {}, polls = [], votes = {}, onPollAnswer, predictions = [], setPredictions, predAnswers = {}, holidayCfg = null, onHolidays = null, holiday = null }) {
   return (
     <div className="scrollcol" style={{ height: "100%" }}>
       <SubHeader title="PANNELLO ADMIN" onBack={onBack} />
@@ -10435,6 +10496,7 @@ function AdminScreen({ termCodes = [], onTermCodes = null, histAuto = [], hidden
         {tab === "SONDAGGI" && <AdminPollsTab polls={polls} votes={votes} onAnswer={onPollAnswer} />}
         {tab === "FANTA F1" && <AdminFantaTab key={"fs:" + versionOf(fantaStats)} fantaStats={fantaStats} setFantaStats={setFantaStats} onToast={onToast} latestRound={fantaLatestRound} />}
         {tab === "FUNZIONI" && <AdminFlagsTab flags={flags} onSave={onFlags} />}
+        {tab === "PROMO" && <AdminPromoTab doc={promo} onLoad={onPromoLoad} onSave={onPromo} />}
         {tab === "TERMINALE" && <AdminTerminalTab codes={termCodes} />}
         {tab === "TEMI" && <AdminHolidaysTab cfg={holidayCfg} active={holiday} onSave={v => onHolidays && onHolidays(v)} />}
         {tab === "OPINIONI" && <AdminTakesTab takes={takes} onSave={v => onTakes && onTakes(v)} />}
@@ -11059,6 +11121,7 @@ const USER_INIT = {
   predAnswers: {}, sillyPreds: {}, stratPreds: {}, pitBest: null, wxGuess: {}, ratings: {}, dotd: {}, notifSeenAt: 0,
   theme: { mode: "team", color: null }, sounds: true, haptics: true, helmet: null, hidden: [], trophies: {},
   premium: { sub: false, trial: null }, squadLog: [], leagues: [], holidays: true, swipe: {},
+  promo: { until: 0, used: [] },   // 21/11: codici promo usati e Funzioni Pro fino a (src/logic/promo.js)
   autoLeagues: [],   // 14/11: leghe in cui l'app ti ha già messo da sola (una volta per account: la lega B&T)
 };
 // 14/11 (Edoardo): "tutti gli utenti in automatico nella lega B&T". Codice della lega che esiste già.
@@ -11360,6 +11423,64 @@ function PsEnd({ info, onSaved, onShare, onDuel }) {
 // (src/logic/secret-codes.js): azioni 01-08 (quelle solo per l'admin segnate), codici segreti delle storie Instagram e,
 // se ci sono, i codici aggiunti prima su Firebase (shared/bt-terminal-codes, che funzionano ancora). Niente modulo.
 const TERM_ACTION_LABEL = { "": "Solo messaggio", video: "Video di presentazione", tour: "Giro guidato", demo: "Gara demo dal 5° giro" };
+// 21/11 (Edoardo): codici promo da 6 cifre (src/logic/promo.js). Si crea un codice per l'email di un account e un numero
+// di giorni: si scrive su Firebase (shared/bt-promo) e lo si manda a quella persona. Nel documento c'è l'impronta
+// dell'email, non l'email: a chi è ogni codice lo ricorda solo questo telefono (bt-promo-notes).
+function AdminPromoTab({ doc = null, onLoad = null, onSave = null }) {
+  const [loaded, setLoaded] = useState(false);
+  const [email, setEmail] = useState("");
+  const [days, setDays] = useState("7");
+  const [code, setCode] = useState(() => BtPromo.newCode(Math.random, []));
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState(null);
+  const [notes, setNotes] = useState(() => { const n = local.get("bt-promo-notes"); return n && typeof n === "object" ? n : {}; });
+  useEffect(() => { let live = true; Promise.resolve(onLoad && onLoad()).finally(() => { if (live) setLoaded(true); }); return () => { live = false; }; }, []);   // eslint-disable-line react-hooks/exhaustive-deps
+  const codes = (doc && doc.codes) || [];
+  const note = (c, e) => setNotes(n => { const x = { ...n }; if (e) x[c] = e; else delete x[c]; local.set("bt-promo-notes", x); return x; });
+  const create = () => {
+    const d = Number(days);
+    let next;
+    try { next = BtPromo.addCode(doc || { codes: [] }, { code, email, days: d, at: nowMs() }); } catch (e) { setMsg({ ok: false, text: "Non creato: " + e.message + "." }); return; }
+    setBusy(true); setMsg(null);
+    const made = code, to = email.trim().toLowerCase();
+    Promise.resolve(onSave && onSave(cur => BtPromo.addCode(cur, { code: made, email: to, days: d, at: nowMs() }))).then(ok => {
+      setBusy(false);
+      if (ok === false) { setMsg({ ok: false, text: "Non salvato su Firebase: riprova." }); return; }
+      note(made, to);
+      setMsg({ ok: true, text: `Codice ${made} creato per ${to}: ${d} ${d === 1 ? "giorno" : "giorni"} di Funzioni Pro. Mandalo tu a quella persona.` });
+      setEmail(""); setCode(BtPromo.newCode(Math.random, [...next.codes.map(c => c.code)]));
+    }, () => { setBusy(false); setMsg({ ok: false, text: "Non salvato su Firebase: riprova." }); });
+  };
+  const drop = c => { setBusy(true); Promise.resolve(onSave && onSave(cur => BtPromo.dropCode(cur, c))).then(ok => { setBusy(false); if (ok !== false) note(c, null); }, () => setBusy(false)); };
+  const field = { width: "100%", padding: "11px 12px", borderRadius: 12, background: "rgba(255,255,255,.05)", border: `1px solid ${C.border}`, fontFamily: F_BODY, fontSize: 14, color: C.text };
+  const label = t => <div style={{ margin: "12px 0 6px", fontFamily: F_BODY, fontWeight: 700, fontSize: 11, color: C.dim, letterSpacing: .4 }}>{t}</div>;
+  return (
+    <div data-admin-promo="" style={{ padding: "0 0 24px" }}>
+      <p style={{ fontFamily: F_BODY, fontSize: 12.5, color: C.muted, lineHeight: 1.5, margin: "0 0 4px" }}>Un codice di 6 cifre per un account: chi lo scrive in Profilo, Codice promo ha le Funzioni Pro per quei giorni e il trofeo "Codice scritto". Solo quell'account lo può usare, una volta. Il Premium vero non si regala coi codici (regole di Google Play).</p>
+      {label("EMAIL DELL'ACCOUNT")}
+      <input data-promo-email="" type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="nome@esempio.it" style={field} />
+      <div style={{ display: "flex", gap: 10 }}>
+        <div style={{ flex: 1 }}>{label("GIORNI DI FUNZIONI PRO")}<input data-promo-days="" inputMode="numeric" value={days} onChange={e => setDays(e.target.value.replace(/\D/g, "").slice(0, 3))} style={field} /></div>
+        <div style={{ flex: 1 }}>{label("CODICE")}<input data-promo-new="" inputMode="numeric" value={code} onChange={e => setCode(e.target.value.replace(/\D/g, "").slice(0, 6))} style={{ ...field, fontFamily: F_TERM, letterSpacing: 2 }} /></div>
+      </div>
+      <button className="press" data-promo-create="" disabled={busy || !loaded} onClick={create} style={{ width: "100%", height: 44, marginTop: 14, borderRadius: 22, background: C.accent, fontFamily: F_HEAD, fontWeight: 900, fontStyle: "italic", fontSize: 14, color: "#fff", opacity: busy || !loaded ? .5 : 1 }}>{busy ? "SALVO..." : "CREA CODICE"}</button>
+      {msg && <p role="status" data-promo-admin-msg={msg.ok ? "ok" : "no"} style={{ margin: "10px 2px 0", fontFamily: F_BODY, fontSize: 12.5, lineHeight: 1.5, color: msg.ok ? "#2BD9A0" : "#FF8A8D" }}>{msg.text}</p>}
+      {label(loaded ? `CODICI SU FIREBASE (${codes.length})` : "CODICI SU FIREBASE: LI LEGGO...")}
+      {loaded && !codes.length && <p style={{ margin: 0, fontFamily: F_BODY, fontSize: 12.5, color: C.muted }}>Nessun codice.</p>}
+      {[...codes].reverse().map(c => (
+        <div key={c.code} data-promo-row={c.code} style={{ display: "flex", alignItems: "center", gap: 12, padding: "10px 0", borderBottom: `1px solid ${C.divider}` }}>
+          <span style={{ fontFamily: F_TERM, fontSize: 16, letterSpacing: 2, color: C.text }}>{c.code}</span>
+          <div style={{ flex: 1, minWidth: 0, fontFamily: F_BODY, fontSize: 12, color: C.muted, lineHeight: 1.4 }}>
+            <div style={{ color: C.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{notes[c.code] || "account non annotato su questo telefono"}</div>
+            <div>{c.days} {c.days === 1 ? "giorno" : "giorni"}{c.at ? " · creato il " + new Date(c.at).toLocaleDateString("it-IT", { day: "numeric", month: "short" }) : ""}</div>
+          </div>
+          <button className="press" aria-label={"Cancella il codice " + c.code} disabled={busy} onClick={() => drop(c.code)} style={{ width: 32, height: 32, borderRadius: "50%", background: "rgba(255,255,255,.08)", display: "flex", alignItems: "center", justifyContent: "center" }}><Icon name="close" size={13} sw={2.2} /></button>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function AdminTerminalTab({ codes = [] }) {
   const row = (code, title, desc, tag, key) => (
     <div key={key} data-term-row={code} style={{ display: "flex", alignItems: "flex-start", gap: 12, padding: "11px 0", borderBottom: `1px solid ${C.divider}` }}>
@@ -11567,6 +11688,7 @@ function App() {
   const [squadLog, setSquadLog] = useState(USER_INIT.squadLog);
   const [leagueCodes, setLeagueCodes] = useState(USER_INIT.leagues);
   const [autoLeagues, setAutoLeagues] = useState(USER_INIT.autoLeagues);
+  const [promoMine, setPromoMine] = useState(USER_INIT.promo);   // 21/11: codici promo (src/logic/promo.js)
   const [leagues, setLeagues] = useState([]);
   const [fantaRounds, setFantaRounds] = useState([]);
   const [homePoll, setHomePoll] = useState(shared0.homePoll);    // sondaggio della Home (Premium); null = nessuno
@@ -11637,7 +11759,10 @@ function App() {
       ["ORA DI ROMA", fmtRome(nowMs())],
     ];
   };
-  const isPremium = isPaid || adPro;
+  // 21/11: un codice promo dà le Funzioni Pro per qualche giorno (come il video, mai il Premium vero). Il tasto in alto
+  // e la scheda Premium del Profilo usano isPaid: col video o col codice non dicono "Sei B&T Premium".
+  const promoPro = BtPromo.proActive(promoMine, nowMs());
+  const isPremium = isPaid || adPro || promoPro;
   // 14/11: archivio storico dei GP (Contenuti Premium): senza Premium si apre la finestra Premium.
   const openArchive = () => { if (!isPremium) { setPremiumOpen(true); return; } setView("archivio"); fx.play("tick"); };
   adsTestForAdmin = isAdminNow;
@@ -11942,7 +12067,9 @@ function App() {
   // ── Contenuti condivisi su Firebase (src/services/appdata.js) ──────────
   // Un nuovo valore uguale a quello che c'è già non cambia lo stato (niente ridisegni inutili a ogni rilettura).
   const keep = set => v => set(cur => (sameJson(cur, v) ? cur : v));
+  const [promoDoc, setPromoDoc] = useState({ codes: [] });   // 21/11: codici promo (solo l'admin li legge tutti)
   const sharedSet = {
+    promo: keep(setPromoDoc),
     news: keep(setArticles), races: keep(setRacesDoc), notifs: keep(setNotifsRaw), ig: keep(setIg),
     standings: v => { addStandingsGuests(v.guests); keep(setStandings)(v); },
     highlights: keep(setHighlights), silly: keep(setSillyOfficial), predictions: keep(setPredictions),
@@ -11990,7 +12117,7 @@ function App() {
   const userReady = useRef(false);   // dati dell'account letti: da qui in poi le modifiche si salvano
   const userSnap = useRef({});       // ultimo valore letto o salvato di ogni dato (JSON): si manda solo quello che cambia
   const userVals = { saved, favTeam, favDriver, notifPrefs, votes, squad, squadBase, freeTransfers, predAnswers, sillyPreds, stratPreds, pitBest, wxGuess, ratings, dotd, notifSeenAt,
-    theme, sounds, haptics, helmet, hidden, trophies, premium, squadLog, leagues: leagueCodes, holidays: holidaysOn, swipe, autoLeagues };
+    theme, sounds, haptics, helmet, hidden, trophies, premium, squadLog, leagues: leagueCodes, holidays: holidaysOn, swipe, autoLeagues, promo: promoMine };
   const userValsRef = useRef(userVals);
   userValsRef.current = userVals;
   const userSet = { saved: setSaved, favTeam: setFavTeam, favDriver: setFavDriver, notifPrefs: setNotifPrefs, votes: setVotes, squad: setSquad, squadBase: setSquadBase,
@@ -12002,7 +12129,8 @@ function App() {
     helmet: v => setHelmet(v == null ? null : cleanHelmet(v)), hidden: v => setHidden(Array.isArray(v) ? v : []),
     trophies: v => setTrophies(cleanTrophies(v)), premium: v => setPremium(cleanPremium(v)),
     squadLog: v => setSquadLog(FantaSeason.cleanLog(v).slice(-80)), leagues: v => setLeagueCodes(Array.isArray(v) ? v.filter(c => /^BT-[A-Z0-9]{4,6}$/.test(c)).slice(0, 10) : []),
-    autoLeagues: v => setAutoLeagues(Array.isArray(v) ? v.filter(c => /^BT-[A-Z0-9]{4,6}$/.test(c)).slice(0, 10) : []) };
+    autoLeagues: v => setAutoLeagues(Array.isArray(v) ? v.filter(c => /^BT-[A-Z0-9]{4,6}$/.test(c)).slice(0, 10) : []),
+    promo: v => setPromoMine(BtPromo.cleanUserPromo(v)) };
   // Dati dell'account arrivati (per quale email): finché non arrivano, il colore dell'app resta quello del telefono.
   const [userLoaded, setUserLoaded] = useState(null);
   // 13/11 (accesso lento): seed = app2 del profilo che l'accesso ha appena letto; con quello non si rilegge users/<email>.
@@ -13068,6 +13196,19 @@ function App() {
   useBack(!!infoModal, () => setInfoModal(null));
   useBack(!!picker, () => setPicker(null));
   useBack(themeOpen, () => setThemeOpen(false));
+  // 21/11: Profilo → Codice promo. Il documento dei codici si legge solo adesso (KINDS.promo è lazy).
+  const [promoOpen, setPromoOpen] = useState(false);
+  useBack(promoOpen, () => setPromoOpen(false));
+  const redeemPromo = code => {
+    if (guest || !account || !account.email) return Promise.resolve({ ok: false, why: "ospite" });
+    if (userDataWait()) return Promise.resolve({ ok: false, why: "attesa" });
+    return AppData.loadShared(nowMs(), { kinds: ["promo"] }).then(r => {
+      if (!r || !r.fresh.includes("promo")) return { ok: false, why: "rete" };
+      const res = BtPromo.redeem({ promo: r.values.promo, code, email: account.email, mine: promoMine, now: nowMs() });
+      if (res.ok) setPromoMine(res.mine);
+      return res;
+    }, () => ({ ok: false, why: "rete" }));
+  };
   useBack(helmetOpen, () => setHelmetOpen(false));
   useBack(shareId != null, () => setShareId(null));
   useBack(termsOpen, () => setTermsOpen(false));
@@ -13184,7 +13325,7 @@ function App() {
     about: aboutMe, helmet, squad: squadOwn ? squad : null, saved, pitBest, sillyPreds,
     ratings: { ...demoVotes.ratings, ...ratings }, dotd: { ...demoVotes.dotd, ...dotd },
     correctPreds: bonus.filter(x => x.kind === "previsione").length, correctWx: bonus.filter(x => x.kind === "meteo").length,
-    correctPolls: bonus.filter(x => x.kind === "sondaggio").length, events: { chat: chatMine, egg: eggFound, pumpkins: holiday === "halloween" && pumpkins.day === BtHolidays.romeDay(nowMs()) ? pumpkins.n : 0, eggs: Array.isArray(swipe.eggs) ? swipe.eggs : [] },
+    correctPolls: bonus.filter(x => x.kind === "sondaggio").length, events: { chat: chatMine, egg: eggFound, pumpkins: holiday === "halloween" && pumpkins.day === BtHolidays.romeDay(nowMs()) ? pumpkins.n : 0, eggs: Array.isArray(swipe.eggs) ? swipe.eggs : [], promo: promoMine.used.length },
     swipe: { box: (swipe.tot || {}).box, votes: (swipe.tot || {}).votes, tfBest: (swipe.tf || {}).best },
   }, trophyList);
   const trophyReady = !!userEmail && userLoaded === userEmail;
@@ -13225,7 +13366,7 @@ function App() {
   const overlay = useOverlayOpen(!!adMobPlugin());
   const appShown = !(account === undefined && !guest) && !((!authed || loginHold) && !guest) && !(loginOpen && (!authed || loginHold));
   const adsPaused = splash || !termsAccepted || !appShown || overlay || premiumOpen || !!selectedDriver || liveTrackOpen || ssOpen || !!lapList || !!telemetry
-    || !!infoModal || helmetOpen || themeOpen || !!picker || termsOpen || feedbackOpen;
+    || !!infoModal || helmetOpen || themeOpen || promoOpen || !!picker || termsOpen || feedbackOpen;
   const bannerSlot = !isPaid && view === "tab" && !adsPaused && !proAsk && (tab === "home" || tab === "race") ? tab : null;
   useEffect(() => { Ads.setBanner(bannerSlot); }, [bannerSlot]);
   // Interstitial tra le notizie: si conta ogni notizia aperta e si mostra tornando alla lista (src/services/ads.js).
@@ -13626,7 +13767,7 @@ function App() {
   if (view === "article" && activeArticle) body = <ArticleScreen article={activeArticle} onBack={viewBack.article} isPremium={isPaid || adNews.includes(activeArticle.id)} onAdUnlock={Ads.canReward() ? () => watchAdNews(activeArticle.id) : null} adBusy={adBusy} onPremium={() => setPremiumOpen(true)} onTag={filterByTag} saved={saved.includes(activeArticle.id)} onToggleSave={() => toggleSave(activeArticle.id)} onShare={() => setShareId(activeArticle.id)} vote={votes["art-" + activeArticle.id] || null} onVote={castVote} />;
   else if (view === "circuit" && circuitId) body = <CircuitScreen circuitId={circuitId} races={races} articles={newsAll} onBack={viewBack.circuit} onTag={filterByTag} onOpenArticle={openArticle} />;
   else if (view === "adminLock" || view === "hack") body = <HackTerminal custom={termCodes} onPublish={() => { setAdminTab("NEWS"); setAdminUnlocked(true); setView("admin"); }} onReset={forceReset} onNotify={notifyTest} onEmergency={toggleEmergency} isAdmin={!!account && Account.isAdmin()} unlocks={unlocks} onToggle={toggleUnlock} onAdmin={() => { setAdminUnlocked(true); setView("admin"); }} onClose={viewBack.hack} onOpenIg={() => { setIgFrom("profilo"); setView("instagram"); }} telemetry={hackTelemetry} panelOpen={adminUnlocked && !!account && Account.isAdmin()} onTour={() => { setView("tab"); setTab("home"); setTourOn(true); }} onDemoRace={demoFromLap5} />;
-  else if (view === "admin" && adminUnlocked && Account.isAdmin()) body = <AdminScreen termCodes={termCodes} onTermCodes={v => commitShared("termCodes", () => v).then(ok => { if (ok) showToast("Codici del terminale salvati"); })} histAuto={histQs.filter(q => q.raceId === (weekendRace(races) || {}).id)} hiddenQs={hiddenQs} onHideQ={(id, hide) => commitShared("flags", latest => { const cur = latest && Array.isArray(latest.hiddenQs) ? latest.hiddenQs : []; return { ...latest, hiddenQs: hide ? [...cur.filter(x => x !== id), id] : cur.filter(x => x !== id) }; }).then(ok => { if (ok) showToast(hide ? "Domanda tolta dal FantaF1 per tutti" : "Domanda rimessa nel FantaF1"); })} flags={flags} onFlags={v => commitShared("flags", () => v).then(ok => { if (ok) showToast(v.pitSwipe ? "Pit Swipe acceso per tutti" : "Pit Swipe spento per tutti"); })} takes={takes} onTakes={v => commitShared("takes", () => v).then(ok => { if (ok) showToast("Opinioni salvate"); })} holidayCfg={holidayCfg} holiday={holiday} onHolidays={v => commitShared("holidays", () => v).then(ok => { if (ok) showToast("Temi delle feste salvati"); })} photos={commonsPhotos} setPhotos={adminSet.commonsPhotos} silly={sillyOfficial} onSilly={officialSeat} highlights={highlights} setHighlights={adminSet.highlights} onBack={viewBack.admin} onPublish={publishArticle} articles={articles} setArticles={adminSet.articles} fantaStats={shownFantaStats} fantaLatestRound={latestRaceRound} setFantaStats={adminSet.fantaStats} standings={standings} setStandings={adminSet.standings} races={races} setRaces={adminSet.races} extraRaces={racesDoc.extra} setExtraRaces={adminSet.extraRaces} ig={ig} setIg={adminSet.ig} sentNotifs={sentNotifs} onSendNotif={sendNotif} onDeleteNotif={deleteNotif} onToast={showToast} tab={adminTab} setTab={setAdminTab} chats={chats} reports={reports} banned={banned} onDeleteMsg={deleteChatMsg} onSuspend={suspendUser} onUnsuspend={unsuspendUser} onIgnoreReport={ignoreReport} liveProps={liveProps} polls={allPolls} votes={votes} onPollAnswer={setPollAnswer} predictions={predictions} setPredictions={adminSet.predictions} predAnswers={predAnswers} />;
+  else if (view === "admin" && adminUnlocked && Account.isAdmin()) body = <AdminScreen promo={promoDoc} onPromoLoad={() => refreshShared(["promo"])} onPromo={u => commitShared("promo", u)} termCodes={termCodes} onTermCodes={v => commitShared("termCodes", () => v).then(ok => { if (ok) showToast("Codici del terminale salvati"); })} histAuto={histQs.filter(q => q.raceId === (weekendRace(races) || {}).id)} hiddenQs={hiddenQs} onHideQ={(id, hide) => commitShared("flags", latest => { const cur = latest && Array.isArray(latest.hiddenQs) ? latest.hiddenQs : []; return { ...latest, hiddenQs: hide ? [...cur.filter(x => x !== id), id] : cur.filter(x => x !== id) }; }).then(ok => { if (ok) showToast(hide ? "Domanda tolta dal FantaF1 per tutti" : "Domanda rimessa nel FantaF1"); })} flags={flags} onFlags={v => commitShared("flags", () => v).then(ok => { if (ok) showToast(v.pitSwipe ? "Pit Swipe acceso per tutti" : "Pit Swipe spento per tutti"); })} takes={takes} onTakes={v => commitShared("takes", () => v).then(ok => { if (ok) showToast("Opinioni salvate"); })} holidayCfg={holidayCfg} holiday={holiday} onHolidays={v => commitShared("holidays", () => v).then(ok => { if (ok) showToast("Temi delle feste salvati"); })} photos={commonsPhotos} setPhotos={adminSet.commonsPhotos} silly={sillyOfficial} onSilly={officialSeat} highlights={highlights} setHighlights={adminSet.highlights} onBack={viewBack.admin} onPublish={publishArticle} articles={articles} setArticles={adminSet.articles} fantaStats={shownFantaStats} fantaLatestRound={latestRaceRound} setFantaStats={adminSet.fantaStats} standings={standings} setStandings={adminSet.standings} races={races} setRaces={adminSet.races} extraRaces={racesDoc.extra} setExtraRaces={adminSet.extraRaces} ig={ig} setIg={adminSet.ig} sentNotifs={sentNotifs} onSendNotif={sendNotif} onDeleteNotif={deleteNotif} onToast={showToast} tab={adminTab} setTab={setAdminTab} chats={chats} reports={reports} banned={banned} onDeleteMsg={deleteChatMsg} onSuspend={suspendUser} onUnsuspend={unsuspendUser} onIgnoreReport={ignoreReport} liveProps={liveProps} polls={allPolls} votes={votes} onPollAnswer={setPollAnswer} predictions={predictions} setPredictions={adminSet.predictions} predAnswers={predAnswers} />;
   else if (view === "chatThread" && activeChat) body = <ChatThreadScreen since={chatSince(activeChat && activeChat.id)} chat={activeChat} onBack={viewBack.chatThread} onSend={guest ? () => needLogin("Per scrivere in chat serve un account.") : sendMessage} isPremium={isPremium} blocked={blocked} onReport={guest ? () => needLogin("Per segnalare un messaggio serve un account.") : reportMessage} onBlock={blockUser} onReact={guest ? () => needLogin("Per reagire ai messaggi serve un account.") : reactMessage} trophyList={trophyList} myWon={trophies} pendingLink={pendingLink} onPendingUsed={() => setPendingLink(null)} onOpenLink={openLink} liveRace={races.find(r => r.status === "LIVE") || null} />;
   else if (view === "instagram") body = <InstagramView ig={ig} onToast={showToast} onBack={viewBack.instagram} />;
   else if (view === "archivio") body = <ArchiveScreen archive={Archive} weekend={BtWeekend} calendar={races} onBack={viewBack.archivio} />;
@@ -13637,7 +13778,7 @@ function App() {
     mode={swipe.mode || "taste"} onMode={m => { if (!guest && !userDataWait()) setSwipe(s => ({ ...s, mode: m })); }} rain={psRain} onEgg={psEgg} streak={{ n: (swipe.streak || {}).n || 0 }}
     endInfo={psEndInfo} onSaved={() => { setSavedOnly(true); setView("tab"); goTab("home"); }} onShare={psShare} onDuel={!guest ? sendDuel : null} />;
   else if (view === "chats") body = <ChatsView chats={chats} onOpen={openChat} blocked={blocked} onBack={viewBack.chats} unreadOf={(id, ms) => Chat.unread(id, ms)} />;
-  else if (view === "profilo") body = <ProfiloScreen tv={tvMode} onTv={v => { setTvMode(v); local.set("bt-tv", v); fx.play("tick"); showToast(v ? "Modalità TV: lo schermo resta acceso finché l'app è aperta" : "Modalità TV spenta"); }} onChangelog={changelogGo} onCoffee={Billing.where() ? buyCoffee : null} coffeePrice={playPrices.coffee || null} ig={ig} onOpenIg={() => { setIgFrom("profilo"); setView("instagram"); }} aboutMe={aboutMe} onSaveAboutMe={a => Account.updateAbout(a).catch(e => showToast(e && (e.code === "too-young" || e.code === "not-loaded") ? messageOf(e) : NOT_SAVED))} account={account} onSaveName={n => Account.updateName(n)} isAdmin={Account.isAdmin()} trial={trialActive ? trial : null} trialUsed={!!trial} onBack={viewBack.profilo} onNotifiche={() => setView("notifiche")} onPremium={() => setPremiumOpen(true)} onAdmin={() => guest ? needLogin("Accedi per usare il pannello admin.") : setView(adminUnlocked ? "admin" : "hack")} onHack={() => { setView("hack"); if (account && Account.refreshAdmin) Account.refreshAdmin().catch(() => {}); }} onLogout={logout} isPremium={isPremium} onAbout={() => setInfoModal({ title: "Info su B&T", body: ABOUT_TEXT, credits: true })} onFeedback={() => setFeedbackOpen(true)} onHelp={() => setInfoModal({ title: "Assistenza", body: HELP_TEXT })} favTeam={favTeam} favDriver={favDriver} onPickTeam={() => guest ? needLogin("Per scegliere scuderia e pilota del cuore serve un account.") : setPicker("team")} onPickDriver={() => guest ? needLogin("Per scegliere scuderia e pilota del cuore serve un account.") : setPicker("driver")} guest={guest} onLogin={() => needLogin(null)} onTerms={() => setTermsOpen(true)} blocked={blocked} onUnblock={unblockUser} onDeleteAccount={deleteAccount} savedCount={saved.length} onOpenSaved={openSaved} onTheme={() => setThemeOpen(true)} helmet={helmet} onHelmet={() => setHelmetOpen(true)} trophies={trophies} trophyProg={trophyProg} trophyList={trophyList}
+  else if (view === "profilo") body = <ProfiloScreen onPromo={() => setPromoOpen(true)} promoUntil={promoMine.until} tv={tvMode} onTv={v => { setTvMode(v); local.set("bt-tv", v); fx.play("tick"); showToast(v ? "Modalità TV: lo schermo resta acceso finché l'app è aperta" : "Modalità TV spenta"); }} onChangelog={changelogGo} onCoffee={Billing.where() ? buyCoffee : null} coffeePrice={playPrices.coffee || null} ig={ig} onOpenIg={() => { setIgFrom("profilo"); setView("instagram"); }} aboutMe={aboutMe} onSaveAboutMe={a => Account.updateAbout(a).catch(e => showToast(e && (e.code === "too-young" || e.code === "not-loaded") ? messageOf(e) : NOT_SAVED))} account={account} onSaveName={n => Account.updateName(n)} isAdmin={Account.isAdmin()} trial={trialActive ? trial : null} trialUsed={!!trial} onBack={viewBack.profilo} onNotifiche={() => setView("notifiche")} onPremium={() => setPremiumOpen(true)} onAdmin={() => guest ? needLogin("Accedi per usare il pannello admin.") : setView(adminUnlocked ? "admin" : "hack")} onHack={() => { setView("hack"); if (account && Account.refreshAdmin) Account.refreshAdmin().catch(() => {}); }} onLogout={logout} isPremium={isPaid} onAbout={() => setInfoModal({ title: "Info su B&T", body: ABOUT_TEXT, credits: true })} onFeedback={() => setFeedbackOpen(true)} onHelp={() => setInfoModal({ title: "Assistenza", body: HELP_TEXT })} favTeam={favTeam} favDriver={favDriver} onPickTeam={() => guest ? needLogin("Per scegliere scuderia e pilota del cuore serve un account.") : setPicker("team")} onPickDriver={() => guest ? needLogin("Per scegliere scuderia e pilota del cuore serve un account.") : setPicker("driver")} guest={guest} onLogin={() => needLogin(null)} onTerms={() => setTermsOpen(true)} blocked={blocked} onUnblock={unblockUser} onDeleteAccount={deleteAccount} savedCount={saved.length} onOpenSaved={openSaved} onTheme={() => setThemeOpen(true)} helmet={helmet} onHelmet={() => setHelmetOpen(true)} trophies={trophies} trophyProg={trophyProg} trophyList={trophyList}
     onAdPrivacy={Ads.privacyRequired() ? () => Ads.openPrivacy().catch(() => showToast("Le preferenze sulla privacy degli annunci non sono disponibili in questo momento.")) : null}
     sounds={sounds} haptics={haptics} onSounds={v => { if (userDataWait()) return; setSounds(v); fx.setSounds(v); if (v) fx.play("tick"); }} onHaptics={v => { if (userDataWait()) return; setHaptics(v); fx.setHaptics(v); if (v) fx.buzz("light"); }}
     holidays={holidaysOn} onHolidays={v => { if (userDataWait()) return; setHolidaysOn(v); local.set("bt-holidays-on", v); fx.play("tick"); }}
@@ -13707,8 +13848,8 @@ function App() {
   };
 
   return shell(
-      <div data-bg={pageBg || undefined} data-retro={unlocks.includes("retro") ? "" : undefined} style={{ height: "100%", display: "flex", flexDirection: "column", position: "relative", background: pageBg && PAGE_BG[pageBg] ? PAGE_BG[pageBg] : undefined, transition: "background .3s" }}>
-        {showTopHeader && <TopHeader onLaunch={ok => { if (ok) { setLaunchFx(nowMs()); setTimeout(() => setLaunchFx(0), 800); psEgg("launch"); } else showToast("Anti-stallo: tieni premuto il logo per 3 secondi"); }} trialDays={trialActive ? trialDaysLeft(trial) : 0} isPremium={isPremium} unread={unreadCount} onPremium={() => setPremiumOpen(true)} onBell={() => setView("notifiche")} onProfile={() => { setView("profilo"); if (account && Account.refreshAdmin) Account.refreshAdmin().catch(() => {}); }} helmet={helmet} onTrack={isDemoLive(live) || !!sessionNow(realLiveRace, nowMs())} onLogoEgg={() => setEggFound(true)} holiday={holiday} />}
+      <div data-bg={pageBg || undefined} data-retro={unlocks.includes("retro") ? "" : undefined} data-pro={isPremium ? "on" : "off"} style={{ height: "100%", display: "flex", flexDirection: "column", position: "relative", background: pageBg && PAGE_BG[pageBg] ? PAGE_BG[pageBg] : undefined, transition: "background .3s" }}>
+        {showTopHeader && <TopHeader onLaunch={ok => { if (ok) { setLaunchFx(nowMs()); setTimeout(() => setLaunchFx(0), 800); psEgg("launch"); } else showToast("Anti-stallo: tieni premuto il logo per 3 secondi"); }} trialDays={trialActive ? trialDaysLeft(trial) : 0} isPremium={isPaid} unread={unreadCount} onPremium={() => setPremiumOpen(true)} onBell={() => setView("notifiche")} onProfile={() => { setView("profilo"); if (account && Account.refreshAdmin) Account.refreshAdmin().catch(() => {}); }} helmet={helmet} onTrack={isDemoLive(live) || !!sessionNow(realLiveRace, nowMs())} onLogoEgg={() => setEggFound(true)} holiday={holiday} />}
         {showTopHeader && offline && <div role="status" data-offline="" style={{ margin: "-6px 16px 10px", padding: "8px 12px", borderRadius: 10, background: "rgba(231,179,76,.12)", border: "1px solid rgba(231,179,76,.35)", fontFamily: F_BODY, fontSize: 12, color: C.text, lineHeight: 1.4, flexShrink: 0 }}>{OFFLINE_LINE} <button type="button" className="press" data-offline-open="" onClick={() => { setOffPick(true); setOffTry("idle"); fx.play("tick"); }} style={{ padding: "6px 0", minHeight: 32, background: "none", border: "none", fontFamily: F_BODY, fontWeight: 700, fontSize: 12, color: C.gold, textDecoration: "underline" }}>Cosa puoi fare senza rete</button></div>}
         <div ref={swipeBoxRef} data-tab-swipe={showBottomNav ? "" : undefined} className={launchFx ? "ps-launch-zoom" : undefined} style={{ flex: 1, minHeight: 0, overflow: "hidden", position: "relative" }}
           onTouchStart={showBottomNav ? e => { const k = e.touches[0]; if (e.touches.length === 1) swipeStart(k.clientX, k.clientY, e.timeStamp, e.target, e.currentTarget); else swipeCancel(); } : undefined}
@@ -13761,6 +13902,7 @@ function App() {
         {telemetry && live && liveSt && <TelemetryModal live={live} st={liveSt} carId={telemetry.carId} lapNo={telemetry.lapNo} sector={telemetry.sector} onClose={() => setTelemetry(null)} />}
         {infoModal && <InfoModal title={infoModal.title} body={infoModal.body} extra={infoModal.credits ? <CommonsCredits /> : null} onClose={() => setInfoModal(null)} />}
         {helmetOpen && <HelmetEditor helmet={helmet} onSave={v => { if (!userDataWait()) setHelmet(v); }} onClose={() => setHelmetOpen(false)} />}
+        {promoOpen && <PromoSheet guest={guest || !account} onRedeem={redeemPromo} onLogin={() => { setPromoOpen(false); needLogin("Per usare un codice promo serve un account."); }} onClose={() => setPromoOpen(false)} />}
         {themeOpen && <ThemeSheet theme={theme} favTeam={favTeam} onPick={v => { if (!userDataWait()) setTheme(v); }} onClose={() => setThemeOpen(false)} />}
         {picker === "team" && <PickerModal title="SCUDERIA DEL CUORE" selected={favTeam} onPick={v => { if (!userDataWait()) setFavTeam(v); }} onClose={() => setPicker(null)}
           options={TEAMS.map(t => ({ id: t.id, label: t.name, color: t.color, sub: t.tag }))} />}

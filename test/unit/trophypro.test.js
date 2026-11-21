@@ -30,5 +30,13 @@ t('frase del lucchetto: quanti ne mancano; niente frase se ci sei', () => {
   assert.strictEqual(T.premiumHint(won(['casco', 'griglia', 'radio']), defs, { skip: T.PIT_SWIPE_TROPHIES }), null);
 });
 
+// 21/11: "Codice scritto" si vince solo con un codice dell'admin: non conta per "tutti i trofei = Premium".
+t('il trofeo Codice scritto non serve per il Premium coi trofei', () => {
+  const d = [...defs, { id: 'codice' }];
+  assert.ok(!T.trophyGoal(d).includes('codice'));
+  assert.strictEqual(T.allDone({ casco: 1, griglia: 1, radio: 1, boxbox: 1, opinionista: 1 }, d), true, 'senza codice: Premium lo stesso');
+  assert.ok(T.NOT_FOR_ALL.includes('codice'));
+});
+
 console.log(`\n${pass} passati, ${fail} falliti`);
 process.exit(fail ? 1 : 0);

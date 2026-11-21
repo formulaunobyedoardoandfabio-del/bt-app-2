@@ -58,9 +58,9 @@ const tests = {
     assert.strictEqual(medalOf(undefined), null);
   },
 
-  'elenco: 23 trofei, 6 segreti (Sgasata, i 4 delle feste, Ingegnere di pista), nomi del progetto'() {
-    assert.strictEqual(TROPHIES.length, 23);
-    assert.strictEqual(new Set(TROPHIES.map(t => t.id)).size, 23, 'id ripetuti');
+  'elenco: 24 trofei (21/11 + Codice scritto), 6 segreti (Sgasata, i 4 delle feste, Ingegnere di pista), nomi del progetto'() {
+    assert.strictEqual(TROPHIES.length, 24);
+    assert.strictEqual(new Set(TROPHIES.map(t => t.id)).size, 24, 'id ripetuti');
     assert.deepStrictEqual(TROPHIES.filter(t => t.secret).map(t => t.id), ['sgasata', 'zucche', 'avvento', 'calza', 'monza', 'ingegnere']);
     const names = TROPHIES.map(t => t.name);
     ['Superlicenza', 'Il mio casco', 'Griglia completa', 'Indovino', 'Oracolo', 'Uomo radar', 'Sondaggista', 'Pit crew', 'Pit stop perfetto',
@@ -82,7 +82,7 @@ const tests = {
       ratings: { 'r16:RACE': { leclerc: { pace: 8 } } },
       dotd: { r16: { driver: 'leclerc' } },
       correctPreds: 5, correctWx: 1, correctPolls: 1,
-      events: { chat: true, egg: true, pumpkins: 3, advent: true, stocking: true, monza: true, eggs: ['donuts', 'limiti', 'pioggia', 'launch', 'radio', 'muretto'] },
+      events: { chat: true, egg: true, pumpkins: 3, advent: true, stocking: true, monza: true, eggs: ['donuts', 'limiti', 'pioggia', 'launch', 'radio', 'muretto'], promo: 1 },
       swipe: { box: 100, votes: 50, tfBest: 10 },
     });
     assert.deepStrictEqual(done(all), TROPHIES.map(t => t.id).sort(), 'tutti i trofei con tutti i dati');
@@ -115,6 +115,15 @@ const tests = {
     assert.strictEqual(q.pitcrew.done, false);
     assert.strictEqual(q.pitcrew.value, 2.73);
     assert.strictEqual(q.pitcrew.goal, 2.35);   // 25/10: era 2,5
+  },
+  // 21/11 (Edoardo): codici promo da 6 cifre (src/logic/promo.js): usarne uno dà il trofeo "Codice scritto", subito
+  // dopo "Il mio casco" nella bacheca.
+  'trofeo Codice scritto: dopo Il mio casco, si vince usando un codice promo'() {
+    const i = TROPHIES.findIndex(t => t.id === 'casco');
+    assert.deepStrictEqual(TROPHIES[i + 1], { id: 'codice', name: 'Codice scritto', how: 'Usa un codice promo' });
+    assert.strictEqual(trophyProgress({ events: { promo: 1 } }).codice.done, true);
+    assert.strictEqual(trophyProgress({ events: { promo: 0 } }).codice.done, false);
+    assert.strictEqual(trophyProgress({}).codice.done, false);
   },
 };
 

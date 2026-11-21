@@ -7,6 +7,8 @@
 const TROPHIES = [
   { id: "superlicenza", name: "Superlicenza", how: "Completa \"Su di te\" nel Profilo" },
   { id: "casco", name: "Il mio casco", how: "Cambia i colori del tuo casco nel Profilo" },
+  // 21/11: codici promo da 6 cifre dell'admin (src/logic/promo.js).
+  { id: "codice", name: "Codice scritto", how: "Usa un codice promo" },
   { id: "griglia", name: "Griglia completa", how: "Fai la tua squadra del FantaF1: 5 piloti e 2 scuderie" },
   { id: "indovino", name: "Indovino", how: "Indovina 1 previsione del weekend", goal: 1 },
   { id: "oracolo", name: "Oracolo", how: "Indovina 5 previsioni del weekend", goal: 5 },
@@ -99,6 +101,7 @@ function trophyProgress(input, defs = TROPHIES) {
     paddock: () => ({ done: someEntry(x.dotd, v => isObj(v) && filled(v.driver)) }),
     archivio: g => count(Array.isArray(x.saved) ? x.saved.length : 0, g),
     radio: () => ({ done: !!ev.chat }),
+    codice: () => ({ done: num(ev.promo) > 0 }),
     sgasata: () => ({ done: !!ev.egg }),
     zucche: () => ({ done: num(ev.pumpkins) >= 3, value: num(ev.pumpkins), goal: 3 }),
     avvento: () => ({ done: !!ev.advent }),
