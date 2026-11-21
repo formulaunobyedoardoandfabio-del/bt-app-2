@@ -2888,11 +2888,43 @@ function sessionTimes(utc, tz) {
 }
 
 // Pagina del circuito ("Mostra di più"), come la scheda circuito dell'app F1.
+// 21/11 (Edoardo, "ho tutti i permessi da I Built Things"): Trackside di I Built Things (Riska), la vista in 3D da ogni
+// posto del GP di Singapore: mappa notturna, tribuna, settore, fila e sedile, poi la vista da quel posto col prezzo e il
+// link ai biglietti ufficiali. Dentro l'app in un riquadro a tutto schermo (il sito è loro e si aggiorna da solo), col
+// nostro Indietro, il credito e "Apri fuori" se il telefono non lo mostra bene. Garage (Tracciati) e pagina di Marina Bay.
+const TRACKSIDE_URL = "https://ibuiltthings.com/trackside", TRACKSIDE_CIRCUIT = "sg-2008";
+function TracksideScreen({ onBack }) {
+  const [ready, setReady] = useState(false);
+  return (
+    <div data-trackside="" style={{ height: "100%", display: "flex", flexDirection: "column", background: "#0b0f14" }}>
+      <SubHeader title="TRACKSIDE · MARINA BAY" onBack={onBack} />
+      <div style={{ position: "relative", flex: 1, minHeight: 0 }}>
+        <iframe title="Trackside: la vista da ogni posto del GP di Singapore" src={TRACKSIDE_URL} allow="fullscreen; accelerometer; gyroscope; xr-spatial-tracking" allowFullScreen
+          referrerPolicy="strict-origin-when-cross-origin" onLoad={() => setReady(true)} style={{ position: "absolute", inset: 0, width: "100%", height: "100%", border: 0, background: "#0b0f14" }} />
+        {!ready && (
+          <div data-trackside-loading="" role="status" style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 10, background: "#0b0f14" }}>
+            <GarageIcon id="trackside" size={54} />
+            <span style={{ fontFamily: F_BODY, fontSize: 13, color: C.muted }}>Apro Trackside...</span>
+          </div>
+        )}
+      </div>
+      <div data-trackside-credit="" style={{ display: "flex", alignItems: "center", gap: 12, padding: "10px 16px calc(12px + env(safe-area-inset-bottom, 0px))", borderTop: `1px solid ${C.border}` }}>
+        <span style={{ flex: 1, minWidth: 0, fontFamily: F_BODY, fontSize: 11.5, color: C.dim, lineHeight: 1.4 }}>Trackside è di I Built Things (Riska), nell'app con il suo permesso.</span>
+        <button className="press" data-trackside-out="" onClick={() => openUrl(TRACKSIDE_URL)} style={{ flexShrink: 0, padding: "8px 12px", borderRadius: 16, background: "rgba(255,255,255,.08)", fontFamily: F_HEAD, fontWeight: 800, fontSize: 12, color: C.text }}>APRI FUORI</button>
+      </div>
+    </div>
+  );
+}
+
 function CircuitScreen({ circuitId, races, articles, onBack, onTag, onOpenArticle }) {
   const info = CIRCUIT_INFO[circuitId], circ = CIRCUITS[circuitId];
   const race = races.find(r => r.circuitId === circuitId) || raceOfCircuit(circuitId);
   const track = trackOf(circuitId);
-  const [openQ, setOpenQ] = useState(null);  if (!info || !circ) return <div style={{ padding: 24 }}><SubHeader title="Circuito" onBack={onBack} /></div>;
+  const [openQ, setOpenQ] = useState(null);
+  const [tsOpen, setTsOpen] = useState(false);   // 21/11: Trackside (solo Marina Bay)
+  useBack(tsOpen, () => setTsOpen(false));
+  if (tsOpen) return <TracksideScreen onBack={() => setTsOpen(false)} />;
+  if (!info || !circ) return <div style={{ padding: 24 }}><SubHeader title="Circuito" onBack={onBack} /></div>;
   const tag = circuitTagOf(circuitId);
   const related = articles.filter(a => a.published !== false && (a.circuits || []).includes(circuitId));
   const rec = info.lapRecord;
@@ -2916,6 +2948,17 @@ function CircuitScreen({ circuitId, races, articles, onBack, onTag, onOpenArticl
           <HashtagChips tags={[tag]} onTag={onTag} size="sm" />
         </div>
       </div>
+
+      {circuitId === TRACKSIDE_CIRCUIT && (
+        <button className="press" data-trackside-open="" onClick={() => setTsOpen(true)} style={{ display: "flex", alignItems: "center", gap: 12, width: "calc(100% - 32px)", margin: "0 16px 16px", padding: 14, borderRadius: 16, textAlign: "left", background: "#0b0f14", border: `1px solid ${C.border}` }}>
+          <GarageIcon id="trackside" size={46} />
+          <span style={{ flex: 1, minWidth: 0 }}>
+            <span style={{ display: "block", fontFamily: F_HEAD, fontWeight: 900, fontStyle: "italic", fontSize: 15, color: C.text }}>TRACKSIDE: LA PISTA DAL TUO POSTO</span>
+            <span style={{ display: "block", marginTop: 3, fontFamily: F_BODY, fontSize: 12, color: C.muted, lineHeight: 1.4 }}>Scegli tribuna, fila e sedile e guarda la vista in 3D. Di I Built Things.</span>
+          </span>
+          <Icon name="chevron" size={16} color={C.dim} />
+        </button>
+      )}
 
       <div style={{ padding: "0 16px 4px" }}><Eyebrow>CIRCUITO</Eyebrow></div>
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, margin: "0 16px 16px" }}>
@@ -6087,6 +6130,12 @@ function BluffTool({ races, live, tags = [], onRefresh, onBack }) {
 const GARAGE_INK = accent => ({ w: "#F4F2EF", a: accent, g: "#E7B34C", m: "#3A3A42", k: "#0C0C0F", soft: "#FF1801", med: "#F2C230", hard: "#F4F2EF", pu: "#B35CFF", gr: "#3ED66B", ye: "#F2C230" });
 const GARAGE_INK_SOON = { w: "#8E8D94", a: "#BDBCC2", g: "#8E8D94", m: "#2A2A30", k: "#0C0C0F", soft: "#BDBCC2", med: "#8E8D94", hard: "#6E6D74", pu: "#6E6D74", gr: "#8E8D94", ye: "#BDBCC2" };
 const GARAGE_GLYPHS = {
+  // 21/11: Trackside (I Built Things): una tribuna a gradini col tuo posto.
+  trackside: c => (<>
+    <path d="M5 31 H35" stroke={c.m} strokeWidth="2.5" strokeLinecap="round" />
+    <path d="M7 31 V25 H13 V20 H19 V15 H25 V10 H33 V31" fill="none" stroke={c.w} strokeWidth="2.4" strokeLinejoin="round" />
+    <circle cx="16" cy="22.5" r="2.8" fill={c.a} stroke={c.k} strokeWidth="1.4" />
+  </>),
   pitstop: c => (<>
     <circle cx="20" cy="21.5" r="15.5" fill="none" stroke={c.m} strokeWidth="2.5" />
     <path d="M20 6 A15.5 15.5 0 1 1 4.5 21.5" fill="none" stroke={c.a} strokeWidth="2.5" strokeLinecap="round" />
@@ -6315,6 +6364,7 @@ function GarageScreen({ openGame = null, onGameOpened = null, races, pitBest, on
   if (game === "strategy") return <StrategyPredictor races={races} preds={stratPreds} onSave={onStrat} onBack={back} />;
   if (game === "deg") return <TyreDegTool races={races} live={live} onBack={back} />;
   if (game === "mates") return <TeammatesTool races={races} onBack={back} />;
+  if (game === "trackside") return <TracksideScreen onBack={back} />;   // 21/11: Trackside di I Built Things
   if (game === "bluff") return <BluffTool races={races} live={live} tags={bluffTags} onRefresh={onBluffRefresh} onBack={back} />;
   const open = Object.keys(sillyPreds || {}).length;
   const sNow = nowMs(), sRace = races.find(r => raceStartMs(r) + 3 * 3600e3 > sNow), sLock = sRace ? raceStartMs(sRace) - 15 * 60e3 : 0;
@@ -6330,6 +6380,7 @@ function GarageScreen({ openGame = null, onGameOpened = null, races, pitBest, on
     { id: "bluff", sec: "weekend", title: "Rilevatore di bluff", sub: "Radio contro tempi: le gomme sono davvero finite o è un bluff per ingannare gli altri?", tag: isOf1Live(live) ? "Radio vere · " + OF1_SRC : isDemoLive(live) ? "Prova DEMO (simulata)" : "Durante la gara" },
     { id: "guide", sec: "tracciati", title: "Guida 2D dei tracciati", sub: "Tocca le curve: marcia, velocità, punto di staccata, rischio di bloccaggio e il momento storico B&T.", tag: "Dati veri" },
     { id: "clash", sec: "tracciati", title: "Circuit Spec Clash", sub: "Due piste a confronto: Safety Car, sorpassi, frenate, gas a tavoletta e carico aerodinamico.", tag: null },
+    { id: "trackside", sec: "tracciati", title: "Trackside · Singapore", sub: "La vista in 3D da ogni posto del GP di Singapore: tribuna, fila e sedile. Di I Built Things, col suo permesso.", tag: null },
     { id: "ghost", sec: "analisi", title: `Ghost Lap · qualifiche di ${(ghostForNow(races, nowMs()) || ghostSessions()[0] || [null, "Baku"])[1]}`, sub: "Due giri veri a confronto: velocità, frenate e replay 2D di ogni curva.", tag: "Dati veri" },
     // Idee di Edoardo del 3-6/10 (documento "Idee nuove"): per ora solo annunciate (18/10: "creale ma mettile come in arrivo").
     ...GARAGE_SOON.map(([id, title, sub]) => ({ id, sec: "soon", title, sub, soon: true })),

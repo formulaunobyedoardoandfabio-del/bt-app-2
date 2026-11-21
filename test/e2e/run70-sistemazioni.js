@@ -258,7 +258,8 @@ run({
       return { games, soon };
     });
     await ctx.close();
-    assert(r.games.length === 11 && r.games.every(g => g.icon === g.id && g.shapes >= 2), 'giochi: ' + JSON.stringify(r.games));
+    // 21/11: + Trackside (I Built Things): 12 giochi.
+    assert(r.games.length === 12 && r.games.every(g => g.icon === g.id && g.shapes >= 2), 'giochi: ' + JSON.stringify(r.games));
     assert(r.soon.length === 11 && r.soon.some(g => g.id === 'telecronaca') && r.soon.every(g => g.icon === g.id && g.clock), 'in arrivo (1/11: + telecronaca AI): ' + JSON.stringify(r.soon.map(g => [g.id, g.icon, g.clock])));
     const grey = /^#(8E8D94|BDBCC2|2A2A30|0C0C0F|6E6D74)$/i;
     assert(r.soon.every(g => g.colors.length && g.colors.every(c => grey.test(c))), 'le icone in arrivo devono essere grigie: ' + JSON.stringify(r.soon.map(g => g.colors.filter(c => !grey.test(c)))));

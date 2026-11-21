@@ -1251,3 +1251,19 @@ Misure prima del lavoro (pagina di prova, CPU rallentata 4x come un telefono med
   9/9), run76 aggiornata per il tasto in alto e verde (8/8).
 - Per Edoardo: Privacy Policy da aggiornare (codici promo: impronta dell'email nel documento dei codici, codici usati
   nell'account). Regole di Firestore: `shared/bt-promo` deve essere scrivibile solo dagli admin, come gli altri shared.
+
+## 21/11: Trackside di I Built Things dentro l'app
+- Edoardo: "come integrare e rendere parte dell'app https://ibuiltthings.com/trackside", poi il video del sito e
+  "ho tutti i permessi da I Built Things". Il sito (di Riska) è un'app 3D del solo GP di Singapore: mappa notturna con
+  le tribune e i prezzi, settori, fila e sedile, vista in prima persona dal posto, link ai biglietti ufficiali.
+  Nessun codice pubblico: da qui il sito non si raggiunge (filtro di rete), si è capito dal video.
+- Fatto: `TracksideScreen` (App.jsx, accanto a CircuitScreen): il sito in un iframe a tutto schermo, SubHeader col
+  nostro Indietro, credito "Trackside è di I Built Things (Riska), nell'app con il suo permesso", "APRI FUORI"
+  (`openUrl`: browser dell'app su Android). Si apre dal Garage (Tracciati, piastrella `trackside` con icona nuova) e
+  dalla pagina del circuito di Marina Bay (`TRACKSIDE_CIRCUIT = "sg-2008"`).
+- Prove: nuova `run128-trackside` (2, col sito sostituito da una pagina finta); run70 conta 12 giochi.
+- Da provare sul telefono (non si può da qui): che il sito si veda nel riquadro (se il sito vieta i riquadri, resta
+  vuoto: allora "APRI FUORI", o chiedere a Riska di permetterlo), la grafica 3D e il link "Buy on the official site".
+- Per Edoardo: Privacy Policy, contenuto di un sito terzo dentro l'app (Trackside).
+- Più avanti, se Riska dà il codice o i modelli 3D: rifarlo dentro l'app (senza riquadro) e collegarlo al resto
+  (salvare il proprio posto, vista dal posto nel replay).
