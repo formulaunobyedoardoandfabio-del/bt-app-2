@@ -64,7 +64,7 @@ function NextRace({ race, onGo, sub }) {
     <button type="button" className="pm-btn" data-premium-next={race.id || ""} onClick={onGo} style={{ display: "flex", alignItems: "center", gap: 12, width: "100%", padding: "12px 14px", borderRadius: 18, background: P.card, border: `1px solid ${P.line}`, color: P.text, textAlign: "left", fontFamily: P.font }}>
       <span style={{ width: 40, height: 40, borderRadius: 12, background: "#1A1A1E", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}><Svg d="M5 21V4M5 4h11l-2 4l2 4H5" size={20} /></span>
       <span style={{ flex: 1, minWidth: 0 }}>
-        <span style={{ display: "block", fontSize: 15, fontWeight: 800 }}>Prossima gara: {race.name}</span>
+        <span style={{ display: "block", fontSize: 15, fontWeight: 800, textWrap: "balance" }}>Prossima gara: {race.name}</span>
         <span style={{ display: "block", fontSize: 12, fontWeight: 600, color: P.muted }}>{sub}</span>
       </span>
       <Svg d="M9 5l7 7l-7 7" size={16} stroke={P.muted} />
@@ -303,9 +303,10 @@ export default function PremiumFlow(props) {
       </div>
       <div style={{ marginTop: 18, fontSize: 12, fontWeight: 800, letterSpacing: .4, color: P.muted }}>IL TUO PREMIUM IN NUMERI</div>
       <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 8, marginTop: 8 }}>
-        {[[trophyCount, "trofei vinti"], ["5 su 5", "funzioni Pro accese"], [racesLeft == null ? "–" : racesLeft, racesLeft === 1 ? "gara rimasta" : "gare rimaste"]].map(([n, l]) => (
-          <div key={l} data-premium-stat="" style={{ padding: 12, borderRadius: 16, backgroundColor: P.card, backgroundImage: "repeating-linear-gradient(45deg, rgba(255,255,255,0.03) 0 2px, transparent 2px 7px)", border: `1px solid ${P.line}` }}>
-            <div style={{ fontSize: 24, fontWeight: 800, fontVariantNumeric: "tabular-nums" }}>{n}</div><div style={{ fontSize: 12, fontWeight: 600, color: P.muted }}>{l}</div>
+        {/* 21/11 (Edoardo: a capo brutti): "funzioni Pro" invece di "funzioni Pro accese", che in una casella di ~70 px andava su 3 righe */}
+        {[[trophyCount, "trofei vinti"], ["5 su 5", "funzioni Pro"], [racesLeft == null ? "–" : racesLeft, racesLeft === 1 ? "gara rimasta" : "gare rimaste"]].map(([n, l]) => (
+          <div key={l} data-premium-stat="" style={{ padding: "12px 10px", borderRadius: 16, backgroundColor: P.card, backgroundImage: "repeating-linear-gradient(45deg, rgba(255,255,255,0.03) 0 2px, transparent 2px 7px)", border: `1px solid ${P.line}` }}>
+            <div style={{ fontSize: "min(24px, 6.6vw)", fontWeight: 800, fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap" }}>{n}</div><div style={{ fontSize: "min(12px, 3.4vw)", fontWeight: 600, color: P.muted, textWrap: "balance" }}>{l}</div>
           </div>
         ))}
       </div>

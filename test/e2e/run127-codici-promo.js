@@ -66,6 +66,9 @@ run({
     const user = await p.evaluate(() => (window.firebase.__fake.doc('users/a@b.it') || {}).app2 || {});
     await tapSel(p, '[data-promo-verify]'); await w(p, 400);   // VERIFICATO chiude
     const rowVal = await p.evaluate(() => { const r = [...document.querySelectorAll('button, div')].find(e => e.innerText && e.innerText.startsWith('Codice promo')); return r ? r.innerText : ''; });
+    // 21/11 (Edoardo): "Codice promo" subito sotto "Offrici un caffè"
+    const order = await p.evaluate(() => [...document.querySelectorAll('[data-profile-row]')].map(e => e.getAttribute('data-profile-row')));
+    assert(order.indexOf('Codice promo') === order.indexOf('Offrici un caffè') + 1 && order.indexOf('Codice promo') > 0, 'Codice promo sotto Offrici un caffè: ' + order.join(' | '));
     // Il codice dà le Funzioni Pro, non il Premium: niente "Sei B&T Premium" e il tasto in alto resta "Premium" da prendere.
     const card = await p.evaluate(() => document.body.innerText.includes('Sei B&T Premium'));
     await tapSel(p, '[aria-label="Indietro"]'); await w(p, 600);

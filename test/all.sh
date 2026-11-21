@@ -12,7 +12,7 @@ if [ -f src/App.jsx ]; then
 fi
 files=()
 for f in test/unit/*.test.js test/e2e/*.js; do
-  case "$(basename "$f" .js)" in helpers|app) continue ;; esac   # aiuti e app costruita: non sono prove
+  case "$(basename "$f" .js)" in helpers|app|wrap-lib) continue ;; esac   # aiuti e app costruita: non sono prove
   files+=("$f")
 done
 run_one() {

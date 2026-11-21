@@ -2934,8 +2934,9 @@ function CircuitScreen({ circuitId, races, articles, onBack, onTag, onOpenArticl
   const stat = (label, value, sub, wide) => (
     <div style={{ gridColumn: wide ? "1 / -1" : "auto", padding: "12px 14px 13px", borderRadius: 14, background: C.card, border: `1px solid ${C.border}` }}>
       <div style={{ fontFamily: F_BODY, fontWeight: 600, fontSize: 11, color: C.dim, marginBottom: 5 }}>{label}</div>
-      <div style={{ fontFamily: F_HEAD, fontWeight: 900, fontSize: 21, color: C.text, lineHeight: 1.1, fontVariantNumeric: "tabular-nums" }}>{value}</div>
-      {sub && <div style={{ fontFamily: F_BODY, fontSize: 12, color: C.muted, marginTop: 3 }}>{sub}</div>}
+      {/* 21/11: i numeri corti (es. "305,337 km") su una riga, un poco più piccoli sugli schermi stretti */}
+      <div style={{ fontFamily: F_HEAD, fontWeight: 900, fontSize: "min(21px, 6vw)", color: C.text, lineHeight: 1.1, fontVariantNumeric: "tabular-nums", whiteSpace: String(value).length <= 12 ? "nowrap" : undefined, textWrap: "balance" }}>{value}</div>
+      {sub && <div style={{ fontFamily: F_BODY, fontSize: 12, color: C.muted, marginTop: 3, textWrap: "balance" }}>{sub}</div>}
     </div>
   );
   const status = race ? (race.status === "CONCLUSA" ? `Gara disputata il ${fmtDate(race.date)}` : race.status === "LIVE" ? "Weekend in corso" : `In programma il ${fmtDate(race.date)}`) : "";
@@ -2979,7 +2980,7 @@ function CircuitScreen({ circuitId, races, articles, onBack, onTag, onOpenArticl
           <CircuitMap track={track} />
           <div style={{ display: "flex", gap: 12, alignItems: "center", marginTop: 6, padding: "0 4px", fontFamily: F_BODY, fontSize: 10.5, color: C.dim }}>
             {SECTOR_COLORS.map((c, i) => <span key={i} style={{ display: "inline-flex", alignItems: "center", gap: 5 }}><span style={{ width: 14, height: 3, borderRadius: 2, background: c }} />Settore {i + 1}</span>)}
-            <span style={{ marginLeft: "auto" }}>Settori stimati</span>
+            <span style={{ marginLeft: "auto", whiteSpace: "nowrap", flexShrink: 0 }}>Settori stimati</span>
           </div>
         </div>
       )}
@@ -3435,7 +3436,7 @@ function LiveCard({ race, st, track, source, onExpand, replay, live }) {
       )}
       <div style={{ display: "flex", gap: 12, alignItems: "center", marginTop: 8, fontFamily: F_BODY, fontSize: 10.5, color: C.dim }}>
         {SECTOR_COLORS.map((c, i) => <span key={i} style={{ display: "inline-flex", alignItems: "center", gap: 5 }}><span style={{ width: 14, height: 3, borderRadius: 2, background: c }} />S{i + 1}</span>)}
-        <span style={{ marginLeft: "auto" }}>Settori stimati</span>
+        <span style={{ marginLeft: "auto", whiteSpace: "nowrap", flexShrink: 0 }}>Settori stimati</span>
       </div>
       {lastMsg && (
         <div style={{ marginTop: 10, padding: "9px 11px", borderRadius: 10, background: "rgba(255,255,255,.04)", fontFamily: F_BODY, fontSize: 11.5, color: C.muted, lineHeight: 1.4 }}>
@@ -5306,8 +5307,8 @@ function IgBigButton({ ig, onOpen }) {
   return (
     <button className="press" data-ig-big="" onClick={onOpen} style={{ display: "flex", alignItems: "center", gap: 12, width: "calc(100% - 32px)", margin: "0 16px 16px", padding: "14px 14px 14px 12px", borderRadius: 18, background: "linear-gradient(115deg, #F58529 0%, #DD2A7B 45%, #8134AF 78%, #515BD4 100%)", textAlign: "left", boxShadow: "0 12px 26px -14px rgba(221,42,123,.8)" }}>
       <span style={{ width: 46, height: 46, borderRadius: 15, background: "rgba(255,255,255,.2)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}><Icon name="instagram" size={24} color="#fff" sw={2.2} /></span>
-      <span style={{ flex: 1, minWidth: 0 }}>
-        <span style={{ display: "block", fontFamily: F_HEAD, fontWeight: 900, fontStyle: "italic", fontSize: 17, color: "#fff", letterSpacing: .3 }}>SEGUICI SU INSTAGRAM</span>
+      <span style={{ flex: 1, minWidth: 0, containerType: "inline-size" }}>
+        <span style={{ display: "block", whiteSpace: "nowrap", fontFamily: F_HEAD, fontWeight: 900, fontStyle: "italic", fontSize: "min(17px, 8.6cqw)", color: "#fff", letterSpacing: .3 }}>SEGUICI SU INSTAGRAM</span>
         <span style={{ display: "block", marginTop: 1, fontFamily: F_BODY, fontSize: 12, color: "rgba(255,255,255,.9)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>@{ig.handle}{ig.followers != null && ig.followers !== "" ? ` · ${fmtK(ig.followers)} follower` : ""} · video e reazioni</span>
       </span>
       <Icon name="chevron" size={18} color="#fff" sw={2.6} />
@@ -5493,7 +5494,7 @@ function SillySeason({ preds, onPredict, official, onBack }) {
             <div key={r.name} data-silly-row="" data-me={r.me ? "true" : "false"} data-points={r.points} style={{ display: "flex", alignItems: "center", gap: 10, padding: "9px 10px", borderRadius: 11, marginBottom: 5, background: r.me ? alpha(C.accentInk, .14) : C.card, border: `1px solid ${r.me ? C.accentInk : C.border}` }}>
               <span style={{ width: 20, fontFamily: F_HEAD, fontWeight: 900, fontSize: 13, color: i < 3 ? C.gold : C.muted }}>{i + 1}</span>
               <span style={{ flex: 1, fontFamily: F_BODY, fontWeight: r.me ? 800 : 600, fontSize: 12.5, color: C.text }}>{r.name}</span>
-              <span style={{ fontFamily: F_HEAD, fontWeight: 900, fontSize: 14, color: C.text }}>{r.points} pt</span>
+              <span style={{ flexShrink: 0, whiteSpace: "nowrap", fontFamily: F_HEAD, fontWeight: 900, fontSize: 14, color: C.text }}>{r.points} pt</span>
             </div>
           ))}
           <p style={{ margin: "8px 2px 0", fontFamily: F_BODY, fontSize: 11.5, color: C.muted, lineHeight: 1.45 }}>Come si fanno punti: 10 per il pilota giusto, più un bonus per quanto prima l'avevi detto (60 giorni o più +20, 30 +15, 14 +10, 7 +5); +5 se indovini se il pilota rinnova o cambia. Le previsioni degli altri tifosi sono simulate (demo).</p>
@@ -5598,8 +5599,8 @@ function CircuitCta({ circuitId, onOpen }) {
   return (
     <button className="press cta-shine" data-circuit-cta={circuitId} onClick={onOpen} style={{ position: "relative", display: "flex", alignItems: "center", gap: 12, width: "100%", minHeight: 62, marginTop: 14, padding: "10px 12px 10px 10px", borderRadius: 14, overflow: "hidden", background: `linear-gradient(100deg, ${C.accent} 0%, ${shade(C.accent, .79)} 58%, ${shade(C.accent, .5)} 100%)`, border: "1px solid rgba(255,255,255,.22)", boxShadow: `0 10px 24px -8px ${alpha(C.accent, .65)}`, textAlign: "left" }}>
       <span style={{ width: 44, height: 44, borderRadius: 12, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(0,0,0,.22)" }}><GuideMini circuitId={circuitId} size={34} /></span>
-      <span style={{ flex: 1, minWidth: 0 }}>
-        <b style={{ display: "block", fontFamily: F_HEAD, fontWeight: 900, fontStyle: "italic", fontSize: 16, color: "#fff", letterSpacing: .3 }}>ESPLORA IL CIRCUITO</b>
+      <span style={{ flex: 1, minWidth: 0, containerType: "inline-size" }}>
+        <b style={{ display: "block", whiteSpace: "nowrap", fontFamily: F_HEAD, fontWeight: 900, fontStyle: "italic", fontSize: "min(16px, 9.4cqw)", color: "#fff", letterSpacing: .3 }}>ESPLORA IL CIRCUITO</b>
         <span style={{ display: "block", marginTop: 1, fontFamily: F_BODY, fontWeight: 600, fontSize: 11.5, color: "rgba(255,255,255,.88)" }}>{has ? "Guida 2D delle curve · staccate · momenti storici" : "Numeri, programma del weekend e curiosità"}</span>
       </span>
       <span style={{ width: 32, height: 32, borderRadius: "50%", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", background: "#fff" }}><Icon name="chevron" size={15} color={C.accent} sw={2.8} /></span>
@@ -6640,7 +6641,7 @@ function OfflineScreen({ news = [], saved = [], standings = null, races = [], pi
             <div key={r.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 0", borderTop: i ? `1px solid ${C.divider}` : "none" }}>
               <span style={{ width: 22, fontFamily: F_HEAD, fontWeight: 800, fontSize: 13, color: r.position <= 3 ? C.gold : C.text }}>{r.position}</span>
               <span style={{ flex: 1, fontFamily: F_BODY, fontWeight: 600, fontSize: 12.5, color: C.text }}>{d ? d.full : r.id}</span>
-              <span style={{ fontFamily: F_HEAD, fontWeight: 800, fontSize: 12.5, color: C.muted }}>{r.points} pt</span>
+              <span style={{ flexShrink: 0, whiteSpace: "nowrap", fontFamily: F_HEAD, fontWeight: 800, fontSize: 12.5, color: C.muted }}>{r.points} pt</span>
             </div>
           ); })}
         </div>
@@ -7452,7 +7453,7 @@ function Of1Status({ of1, standings, onRefresh }) {
             <div key={r.id} data-of1-standing={r.position} style={{ display: "flex", alignItems: "center", gap: 10, padding: "7px 2px", borderBottom: `1px solid ${C.divider}` }}>
               <span style={{ width: 20, fontFamily: F_HEAD, fontWeight: 800, fontSize: 13, color: r.position <= 3 ? C.gold : C.text }}>{r.position}</span>
               <span style={{ flex: 1, fontFamily: F_BODY, fontWeight: 600, fontSize: 12.5, color: C.text }}>{d ? d.full : r.id}</span>
-              <span style={{ fontFamily: F_HEAD, fontWeight: 800, fontSize: 12.5, color: C.text }}>{r.points}<span style={{ fontFamily: F_BODY, fontWeight: 600, fontSize: 10, color: C.dim }}> pt</span></span>
+              <span style={{ flexShrink: 0, whiteSpace: "nowrap", fontFamily: F_HEAD, fontWeight: 800, fontSize: 12.5, color: C.text }}>{r.points}<span style={{ fontFamily: F_BODY, fontWeight: 600, fontSize: 10, color: C.dim }}> pt</span></span>
             </div>
           ); })}
         </div>
@@ -7710,7 +7711,7 @@ function RaceScreen({ onOpenArchive = null, champion = null, proUnlocked = [], p
                       <div style={{ fontFamily: F_BODY, fontWeight: 600, fontSize: 13, color: C.text }}>{d ? d.full : t.name}{d && champion && champion.id === row.id && <span data-champ-tag="" style={{ marginLeft: 6, padding: "2px 6px", borderRadius: 6, background: C.gold, fontFamily: F_HEAD, fontStyle: "italic", fontWeight: 900, fontSize: 9.5, color: "#141414" }}>CAMPIONE</span>}</div>
                       <div style={{ fontFamily: F_BODY, fontSize: 10, color: C.dim }}>{d ? t.name : t.tag}</div>
                     </div>
-                    <span style={{ fontFamily: F_HEAD, fontWeight: 800, fontSize: 14, color: C.text }}>{row.points}<span style={{ fontFamily: F_BODY, fontWeight: 600, fontSize: 10, color: C.dim }}> pt</span></span>
+                    <span style={{ flexShrink: 0, whiteSpace: "nowrap", fontFamily: F_HEAD, fontWeight: 800, fontSize: 14, color: C.text }}>{row.points}<span style={{ fontFamily: F_BODY, fontWeight: 600, fontSize: 10, color: C.dim }}> pt</span></span>
                   </button>
                   {i < arr.length - 1 && <div style={{ height: 1, background: C.divider, margin: "0 14px" }} />}
                 </div>
@@ -8735,8 +8736,8 @@ function FantaSquadCard({ squad, setSquad, base, freeTransfers, budget, stats, l
           </div>
         ) : (
           <div data-team-lock="open" style={{ display: "flex", alignItems: "center", marginTop: 12, padding: "10px 14px", borderRadius: 14, background: "#F2F1EE", color: "#101014" }}>
-            <span style={{ flex: 1, fontFamily: F_HEAD, fontWeight: 800, fontSize: 14 }}>Chiusura squadra</span>
-            {cd ? <span data-countdown="" aria-label={`Mancano ${cd.d} giorni, ${cd.h} ore e ${cd.m} minuti`} style={{ fontFamily: F_HEAD, fontWeight: 900, fontSize: 19, letterSpacing: .3 }}><RollNumber value={pad(cd.d)} /><small style={{ fontSize: 11 }}>G</small> : <RollNumber value={pad(cd.h)} /><small style={{ fontSize: 11 }}>H</small> : <RollNumber value={pad(cd.m)} /><small style={{ fontSize: 11 }}>M</small></span>
+            <span style={{ flex: 1, minWidth: 0, whiteSpace: "nowrap", fontFamily: F_HEAD, fontWeight: 800, fontSize: "min(14px, 3.9vw)" }}>Chiusura squadra</span>
+            {cd ? <span data-countdown="" aria-label={`Mancano ${cd.d} giorni, ${cd.h} ore e ${cd.m} minuti`} style={{ flexShrink: 0, marginLeft: 8, whiteSpace: "nowrap", fontFamily: F_HEAD, fontWeight: 900, fontSize: "min(19px, 5.6vw)", letterSpacing: .3 }}><RollNumber value={pad(cd.d)} /><small style={{ fontSize: 11 }}>G</small> : <RollNumber value={pad(cd.h)} /><small style={{ fontSize: 11 }}>H</small> : <RollNumber value={pad(cd.m)} /><small style={{ fontSize: 11 }}>M</small></span>
               : <span style={{ fontFamily: F_BODY, fontSize: 12 }}>all'inizio delle qualifiche</span>}
           </div>
         )}
@@ -9088,10 +9089,10 @@ function FantaScreen({ elo = null, squad, setSquad, base, freeTransfers, budget,
   const input = { flex: 1, minWidth: 0, padding: "10px 12px", borderRadius: 10, background: "rgba(255,255,255,.05)", border: `1px solid ${C.border}`, fontFamily: F_BODY, fontSize: 13, color: C.text, outline: "none" };
   const smallBtn = (label, onClick, opts = {}) => <button className="press" onClick={onClick} disabled={opts.disabled} aria-label={opts.aria} style={{ flexShrink: 0, padding: "9px 12px", borderRadius: 10, background: opts.primary ? C.accent : "rgba(255,255,255,.07)", border: `1px solid ${opts.primary ? C.accent : C.border}`, fontFamily: F_HEAD, fontWeight: 800, fontSize: 12, color: "#fff", opacity: opts.disabled ? .45 : 1 }}>{label}</button>;
   const heading = (icon, text, right) => (
-    <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 16px 10px" }}>
+    <div style={{ display: "flex", alignItems: "center", flexWrap: "wrap", columnGap: 8, rowGap: 2, padding: "6px 16px 10px" }}>
       <Icon name={icon} size={15} color={C.accentInk} />
-      <h2 style={{ fontFamily: F_HEAD, fontWeight: 900, fontStyle: "italic", fontSize: 16, color: C.text, margin: 0 }}>{text}</h2>
-      {right && <span style={{ marginLeft: "auto", fontFamily: F_BODY, fontSize: 11, color: C.dim }}>{right}</span>}
+      <h2 style={{ whiteSpace: "nowrap", fontFamily: F_HEAD, fontWeight: 900, fontStyle: "italic", fontSize: "min(16px, 4.6vw)", color: C.text, margin: 0 }}>{text}</h2>
+      {right && <span style={{ marginLeft: "auto", whiteSpace: "nowrap", fontFamily: F_BODY, fontSize: 11, color: C.dim }}>{right}</span>}
     </div>
   );
   const wkLive = race ? weekends.filter(w => w.raceId === race.id) : [];
@@ -9387,8 +9388,6 @@ function ProfiloScreen({ onPromo = null, promoUntil = 0, tv = false, onTv = null
   const rows = [
     { icon: "person", label: "Profilo pubblico", value: guest ? "Preferiti" : "Su di te e preferiti", onClick: () => setPubPage(true), chevron: true },
     { icon: "bell", label: "Notifiche", onClick: onNotifiche, chevron: true },
-    // 21/11 (Edoardo): codici promo da 6 cifre (PromoSheet); con i giorni attivi dice fino a quando.
-    ...(onPromo ? [{ icon: "ticket", label: "Codice promo", value: promoUntil > nowMs() ? "Pro fino al " + new Date(promoUntil).toLocaleDateString("it-IT", { day: "numeric", month: "short" }) : null, onClick: onPromo, chevron: true }] : []),
     // 8/11 (Edoardo): colori, suoni, vibrazioni, temi delle feste, Pit Board e promemoria in una sola voce che si apre.
     { icon: "palette", label: "Personalizza l'app", onClick: () => setPersOpen(o => !o), chevron: true, group: true, open: persOpen },
     ...(persOpen ? [
@@ -9409,6 +9408,9 @@ function ProfiloScreen({ onPromo = null, promoUntil = 0, tv = false, onTv = null
     { icon: "chat", label: "Invia feedback", onClick: onFeedback, chevron: true },   // come oggi, ma dal Profilo (niente pulsante fluttuante)
     // "Offrici un caffè" (1/11): Google Play nell'APK, Stripe sul sito; "in arrivo" solo nell'APK senza Google Play.
     { icon: "star", label: "Offrici un caffè", onClick: onCoffee || undefined, ...(onCoffee ? { chevron: true, value: coffeePrice || undefined } : { badge: "IN ARRIVO" }) },
+    // 21/11 (Edoardo): codici promo da 6 cifre (PromoSheet), subito sotto "Offrici un caffè"; con i giorni attivi dice
+    // fino a quando.
+    ...(onPromo ? [{ icon: "ticket", label: "Codice promo", value: promoUntil > nowMs() ? "Pro fino al " + new Date(promoUntil).toLocaleDateString("it-IT", { day: "numeric", month: "short" }) : null, onClick: onPromo, chevron: true }] : []),
     { icon: "info", label: "Info su B&T", onClick: onAbout, chevron: true },
     { icon: "lock", label: "Privacy Policy", onClick: () => openUrl(PRIVACY_URL), chevron: true },
     // Scelte sul consenso degli annunci (UE): Google chiede che si possano cambiare quando servono (Termini, punto 7).
@@ -9520,19 +9522,20 @@ function ProfiloScreen({ onPromo = null, promoUntil = 0, tv = false, onTv = null
       <div style={{ padding: "0 24px 10px" }}><span style={{ fontFamily: F_BODY, fontWeight: 700, fontSize: 11, color: C.dim, letterSpacing: 1 }}>IMPOSTAZIONI</span></div>
       <div style={{ margin: "0 20px 18px", borderRadius: 18, background: C.card, border: `1px solid ${C.border}`, overflow: "hidden" }}>
         {rows.map((r, i) => (
-          <div key={r.label}>
+          <div key={r.label} data-profile-row={r.label}>
             {r.toggle ? (
-              <div data-settings-sub={r.sub ? "" : undefined} style={{ display: "flex", alignItems: "center", gap: 12, width: "100%", padding: r.sub ? "11px 14px 11px 30px" : 14, background: r.sub ? "rgba(255,255,255,.02)" : undefined }}>
+              <div data-settings-sub={r.sub ? "" : undefined} style={{ display: "flex", alignItems: "center", gap: 12, width: "100%", padding: r.sub ? "11px 14px 11px min(30px, 5vw)" : 14, background: r.sub ? "rgba(255,255,255,.02)" : undefined }}>
                 <div style={{ width: r.sub ? 30 : 36, height: r.sub ? 30 : 36, borderRadius: 10, background: "rgba(255,255,255,.06)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}><Icon name={r.icon} size={r.sub ? 14 : 16} /></div>
-                <span style={{ flex: 1, fontFamily: F_BODY, fontWeight: 600, fontSize: r.sub ? 13.5 : 14, color: C.text }}>{r.label}</span>
+                <span style={{ flex: 1, minWidth: 0, textWrap: "balance", fontFamily: F_BODY, fontWeight: 600, fontSize: r.sub ? "min(13.5px, 3.8vw)" : 14, color: C.text }}>{r.label}</span>
                 <Toggle on={!!r.toggle.on} onChange={v => r.toggle.onChange && r.toggle.onChange(v)} label={r.label} />
               </div>
             ) : (
-            <button className="press" data-settings-group={r.group ? "" : undefined} data-settings-sub={r.sub ? "" : undefined} aria-expanded={r.group ? !!r.open : undefined} onClick={r.onClick || undefined} style={{ display: "flex", alignItems: "center", gap: 12, width: "100%", padding: r.sub ? "11px 14px 11px 30px" : 14, textAlign: "left", background: r.sub ? "rgba(255,255,255,.02)" : undefined }}>
+            <button className="press" data-settings-group={r.group ? "" : undefined} data-settings-sub={r.sub ? "" : undefined} aria-expanded={r.group ? !!r.open : undefined} onClick={r.onClick || undefined} style={{ display: "flex", alignItems: "center", gap: 12, width: "100%", padding: r.sub ? "11px 14px 11px min(30px, 5vw)" : 14, textAlign: "left", background: r.sub ? "rgba(255,255,255,.02)" : undefined }}>
               <div style={{ width: r.sub ? 30 : 36, height: r.sub ? 30 : 36, borderRadius: 10, background: "rgba(255,255,255,.06)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}><Icon name={r.icon} size={r.sub ? 14 : 16} /></div>
-              <span style={{ flex: 1, fontFamily: F_BODY, fontWeight: 600, fontSize: r.sub ? 13.5 : 14, color: C.text }}>{r.label}</span>
-              {r.badge && <span style={{ padding: "2px 8px", borderRadius: 6, background: "rgba(231,179,76,.16)", fontFamily: F_HEAD, fontWeight: 800, fontSize: 9, color: C.gold, letterSpacing: .4 }}>{r.badge}</span>}
-              {r.value && <span style={{ fontFamily: F_BODY, fontSize: 12, color: C.muted, whiteSpace: "nowrap" }}>{r.value}</span>}
+              {/* 21/11: il nome della riga resta intero; la scritta grigia a destra, se non c'è spazio, si accorcia coi puntini */}
+              <span style={{ flex: r.value ? "1 0 auto" : 1, minWidth: 0, textWrap: "balance", fontFamily: F_BODY, fontWeight: 600, fontSize: r.sub ? "min(13.5px, 3.8vw)" : 14, color: C.text }}>{r.label}</span>
+              {r.badge && <span style={{ flexShrink: 0, whiteSpace: "nowrap", padding: "2px 8px", borderRadius: 6, background: "rgba(231,179,76,.16)", fontFamily: F_HEAD, fontWeight: 800, fontSize: 9, color: C.gold, letterSpacing: .4 }}>{r.badge}</span>}
+              {r.value && <span style={{ flex: "0 1 auto", minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", fontFamily: F_BODY, fontSize: 12, color: C.muted, whiteSpace: "nowrap" }}>{r.value}</span>}
               {r.chevron && <span style={{ display: "inline-flex", transform: r.group && r.open ? "rotate(90deg)" : undefined, transition: "transform .2s ease" }}><Icon name="chevron" size={16} color={C.dim} /></span>}
             </button>
             )}

@@ -52,6 +52,10 @@
   .scrollcol::-webkit-scrollbar-thumb{ background:rgba(255,255,255,.12); border-radius:6px; }
   .press{ transition:opacity .12s ease, transform .12s ease; }
   .press:active{ opacity:.7; transform:scale(.98); }
+  /* 21/11 (Edoardo: "cambi di riga a caso che rendono tutto brutto"): niente parola sola sull'ultima riga nei testi,
+     righe bilanciate nei titoli e nei bottoni (i telefoni che non lo sanno fare vanno a capo come prima). */
+  body p, body span, body div, body li, body label{ text-wrap:pretty; }
+  body h1, body h2, body h3, body button{ text-wrap:balance; }
   .toast{
     position:absolute; left:50%; bottom:104px; transform:translateX(-50%);
     background:#26262c; border:1px solid rgba(255,255,255,.12); color:#F4F2EF;

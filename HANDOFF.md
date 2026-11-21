@@ -1316,3 +1316,14 @@ Misure prima del lavoro (pagina di prova, CPU rallentata 4x come un telefono med
 - App: nel Replay sulla mappa l'interruttore è Mappa | Box | Distacchi; `RaceTraceView` con scala fino al distacco del
   10° (o del pilota scelto) tra 20 e 150 s, linee oltre la scala tagliate in basso, pallino ai pit, pilota scelto in
   evidenza. Prova nuova in `test/e2e/run129-quadrante-box.js` (punti uguali al calcolo).
+
+### 21/11 pomeriggio: Codice promo sotto "Offrici un caffè" e a-capo brutti
+- Profilo: la riga "Codice promo" subito sotto "Offrici un caffè" (righe con `data-profile-row`, prova in run127).
+- A-capo: regola generale in `App.css` (`text-wrap: pretty` sui testi, `balance` su titoli e bottoni, su tutto `body`
+  perché la pagina Premium sta fuori da `#root`). Una riga sola per: punti delle classifiche ("186 pt"), conto alla
+  rovescia della squadra Fanta, "SEGUICI SU INSTAGRAM" ed "ESPLORA IL CIRCUITO" (testo che si adatta al bottone),
+  intestazioni del Fanta, "Settori stimati", numeri corti delle caselle del circuito. Righe del Profilo: il nome resta
+  intero, la scritta grigia si accorcia coi puntini. Premium: "funzioni Pro" invece di "funzioni Pro accese".
+- Strumento `node tools/wrap-scan.js` (320/360/390 px, elenco in /tmp/bt/wrap-scan.json) e prova fissa
+  `test/e2e/run133-a-capo.js` (360 e 390 px: zero a-capo brutti), misura comune in `test/e2e/wrap-lib.js` (esclusa
+  dalla suite in test/all.sh). A 320 px restano 5 etichette di 2-3 parole su 2 righe bilanciate.
