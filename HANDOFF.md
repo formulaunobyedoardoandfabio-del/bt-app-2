@@ -1332,3 +1332,28 @@ Misure prima del lavoro (pagina di prova, CPU rallentata 4x come un telefono med
 - Fanta: conto alla rovescia "Chiusura squadra" e intestazioni ("PREVISIONI AVANZATE") tornati com'erano (Edoardo:
   "quella nel Fanta era messa bene").
 - Accesso: "Bentornato su Sector 4" con "Sector 4" sempre insieme (prima il "4" finiva da solo sotto); idem nei Termini.
+
+### 21/11 notte: Collega PC (schermo grande col QR) e PC + telefono insieme
+- Grafiche di Edoardo: "B&T: Collega PC" (QR, codice, telecomando, scaduto) e "B&T: Second Screen PC" (pannelli).
+- PC: `bt-app-2.vercel.app/schermo` (rewrite in `vercel.json`) o `/?schermo` → QR + 6 cifre, codice nuovo ogni 2
+  minuti (`PcWaitScreen`, QR senza librerie in `src/logic/qr.js`, uguale a python qrcode: `test/unit/qr.test.js`,
+  dati in `test/fixtures/qr-python.json` da `tools/qr-fixture.py`). Collegato: `PcDashboard`, pannelli in 3 colonne
+  (mappa, classifica, quadrante dei box, telemetria, meteo, radio, gomme, chat, B&T Trophies, direzione; si possono
+  aggiungere settori, insights, voto) con i dati veri del Second Screen; grafiche pensate a 960 px e ingrandite con la
+  finestra (`zoom`). Sul PC: "Modifica" accende/spegne/sposta i pannelli e sceglie il pilota della telemetria, un clic
+  su un pannello lo ingrandisce. Se il Pro del telefono non c'è: `PcProScreen`.
+- Telefono: Profilo → "Collega PC" (`PcLinkSheet`): presentazione, lettore QR di Google (plugin
+  `@capacitor-mlkit/barcode-scanning`, nessun permesso della fotocamera, `barcode_ui` nel manifest da
+  `scripts/prepare_android.py`) o tastierino delle 6 cifre; "Codice scaduto" se il PC non risponde in 15 s;
+  telecomando: stato del PC, pilota in primo piano, pannelli accesi in ordine (frecce) e spenti, Scollega. Funzione Pro
+  (`proGate("ss")`). Dal sito con `?collega=<cifre>` collega subito.
+- Collegamento in `pair/<cifre>` (`src/logic/pair.js`, prove `test/unit/pair.test.js`, 11): il telefono scrive
+  proprietario, Pro, nome, pannelli, scelte, orologio del Replay; il PC legge ogni 2,5 s e risponde con
+  `pc = { seen, n, ua }` (niente confronti tra gli orologi dei due); il telefono legge ogni 4-6 s (solo a schermo
+  acceso) e prende le scelte fatte sul PC se nei 6 s prima non ha cambiato niente lui. Replay: il PC segue punto e
+  velocità della sessione rivista sul telefono.
+- Prova `test/e2e/run134-schermo-pc.js` (7): attesa e QR, collegamento col tastierino, pannelli scelti dal telefono,
+  uso insieme (Modifica sul PC arriva al telefono, pannello grande), QR col plugin, QR di un altro sito, codice che
+  nessun PC mostra, senza Pro. Le pagine che aspettano vanno in primo piano (Chrome rallenta i timer delle schede dietro).
+- DA FARE A MANO (Edoardo): pubblicare in Firebase le regole nuove di `docs/firestore.rules` (blocco 8, `pair/`),
+  sennò il collegamento dà "permessi mancanti".

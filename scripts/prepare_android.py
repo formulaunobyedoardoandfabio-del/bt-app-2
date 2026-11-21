@@ -71,6 +71,18 @@ if "com.google.android.gms.ads.APPLICATION_ID" not in manifest:
     open(MANIFEST, "w").write(manifest)
     print("AdMob App ID aggiunto al manifest")
 
+# 21/11: Collega PC. Il lettore QR di Google (@capacitor-mlkit/barcode-scanning, scan()) non chiede il permesso della
+# fotocamera; con questa riga Google Play scarica il suo modulo già all'installazione dell'app.
+manifest = open(MANIFEST).read()
+if "com.google.mlkit.vision.DEPENDENCIES" not in manifest:
+    manifest = manifest.replace(
+        "</application>",
+        '    <meta-data android:name="com.google.mlkit.vision.DEPENDENCIES" android:value="barcode_ui"/>\n    </application>',
+        1,
+    )
+    open(MANIFEST, "w").write(manifest)
+    print("Lettore QR di Google (barcode_ui) aggiunto al manifest")
+
 # 1/11: promemoria sul telefono (@capacitor/local-notifications): da Android 13 serve il permesso delle notifiche.
 manifest = open(MANIFEST).read()
 if "android.permission.POST_NOTIFICATIONS" not in manifest:

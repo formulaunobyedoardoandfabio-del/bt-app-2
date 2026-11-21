@@ -26,6 +26,8 @@ import TrackReplay from "./logic/track-replay";
 import PitDial from "./logic/pit-dial";   // 21/11: Quadrante dei box nel Replay sulla mappa
 import BtContagiri from "./logic/contagiri";   // 21/11: contagiri circolare nel Ghost Lap
 import RaceTrace from "./logic/race-trace";   // 21/11: Race Trace nel Replay sulla mappa
+import PairLogic from "./logic/pair";   // 21/11: Collega PC (pair/<codice>)
+import QR from "./logic/qr";   // 21/11: QR del PC, senza librerie
 import { LiveOrb, TypeText, ChangelogCard, VanishCanvas, RollingText } from "./ui/effetti";
 import { AppGuide, EnzoChat, DuoGuide, FlashSpot } from "./ui/guida";
 import { createArchive, findReplay } from "./services/archive";
@@ -49,7 +51,7 @@ import Compat from "./services/compat";
 import { createAccount, MESSAGES as ACCOUNT_MSG, messageOf, MIN_AGE, pwStrength } from "./services/account";
 import { createChat, CHAT_MSG, ROOM_IDS, nextPollDelay } from "./services/chat";
 import { createFeedback, FEEDBACK_CATS, FEEDBACK_MSG, APP_VERSION } from "./services/feedback";
-import { local, IMG_REF, uploadImage, loadImage as loadStoredImage, dropImage, errLog } from "./services/firebase";
+import { local, IMG_REF, uploadImage, loadImage as loadStoredImage, dropImage, errLog, dbGet, dbSet, dbDelete } from "./services/firebase";
 import ErrLogMod from "./services/errlog";
 // 15/11 (codice 06): console, errori non presi e rete finiscono nel registro degli errori del telefono
 if (typeof window !== "undefined") ErrLogMod.install(window, errLog);
@@ -5099,6 +5101,549 @@ function SecondScreen({ race, live, st, standings, layout, setLayout, prefs, set
   );
 }
 
+/* ── COLLEGA PC (21/11, grafica di Edoardo "B&T: Collega PC") ─────────────────────────────────────────────
+// Il PC apre bt-app-2.vercel.app/schermo (o /?schermo) e mostra un QR e 6 cifre; il telefono con l'account (Profilo →
+// Collega PC) legge il QR col lettore di Google (plugin @capacitor-mlkit/barcode-scanning, nessun permesso della
+// fotocamera) o scrive le cifre sul tastierino, e scrive pair/<cifre>: proprietario, Pro, riquadri e scelte del Second
+// Screen, orologio del Replay. Il PC lo legge ogni 2,5 secondi, diventa il Second Screen a tutta finestra e risponde
+// (pc.seen, pc.n); il telefono fa da telecomando. Calcoli in src/logic/pair.js, QR in src/logic/qr.js.
+// Prove: test/unit/pair.test.js, test/unit/qr.test.js, test/e2e/run134-schermo-pc.js. */
+const PAGE = PairLogic.pageMode(typeof window !== "undefined" ? window.location : null);
+const PCX = { bg: "#000000", card: "#111113", line: "#1E1E22", key: "#1C1C1F", text: "#F4F4F5", muted: "#A1A1AA", yellow: "#FACC15", green: "#34D399", red: "#FF5A4D", brand: "#FF1801", track: "#26262B", btnLine: "#2A2A2E", ring: "#3A3A40" };
+const PC_ICO = {
+  close: "M18 6l-12 12 M6 6l12 12", back: "M15 6l-6 6l6 6", check: "M5 12l5 5l10 -10",
+  phone: "M7 4a1 1 0 0 1 1 -1h8a1 1 0 0 1 1 1v16a1 1 0 0 1 -1 1h-8a1 1 0 0 1 -1 -1z M11 18h2",
+  grid: "M4 4h6v6h-6z M14 4h6v6h-6z M4 14h6v6h-6z M14 14h6v6h-6z",
+  qr: "M4 4h6v6h-6z M14 4h6v6h-6z M4 14h6v6h-6z M14 14h2v2h-2z M18 14h2v2h-2z M14 18h2v2h-2z M18 18h2v2h-2z",
+  keys: "M3 7a2 2 0 0 1 2 -2h14a2 2 0 0 1 2 2v10a2 2 0 0 1 -2 2h-14a2 2 0 0 1 -2 -2z M7 10v.01 M11 10v.01 M15 10v.01 M7 14h10",
+  bolt: "M13 3v7h6l-8 11v-7h-6z",
+  tv: "M3 5a1 1 0 0 1 1 -1h16a1 1 0 0 1 1 1v10a1 1 0 0 1 -1 1h-16a1 1 0 0 1 -1 -1z M7 20h10 M9 16l-1 4 M15 16l1 4",
+  warn: "M12 9v4 M10.363 3.591l-8.106 13.534a1.914 1.914 0 0 0 1.636 2.871h16.214a1.914 1.914 0 0 0 1.636 -2.87l-8.106 -13.536a1.914 1.914 0 0 0 -3.274 0z M12 16h.01",
+  retry: "M20 11a8 8 0 1 0 -2.3 5.7 M20 5v6h-6",
+  list: "M9 6h11 M9 12h11 M9 18h11 M5 6v.01 M5 12v.01 M5 18v.01",
+  radio: "M4 8a2 2 0 0 1 2 -2h12a2 2 0 0 1 2 2v10a2 2 0 0 1 -2 2h-12a2 2 0 0 1 -2 -2z M4 12h16 M8 16h.01 M12 16h.01 M7 6l9 -3",
+  drop: "M7.502 19.423c2.602 2.105 6.395 2.105 8.996 0c2.602 -2.105 3.262 -5.708 1.566 -8.546l-4.89 -7.26c-.42 -.625 -1.287 -.803 -1.936 -.397a1.376 1.376 0 0 0 -.41 .397l-4.893 7.26c-1.695 2.838 -1.035 6.441 1.567 8.546z",
+  tyre: "M12 12m-9 0a9 9 0 1 0 18 0a9 9 0 1 0 -18 0 M12 12m-4 0a4 4 0 1 0 8 0a4 4 0 1 0 -8 0",
+  flag: "M5 5a5 5 0 0 1 7 0a5 5 0 0 0 7 0v9a5 5 0 0 1 -7 0a5 5 0 0 0 -7 0v-9z M5 21v-7",
+  star: "M12 17.75l-6.172 3.245l1.179 -6.873l-5 -4.867l6.9 -1l3.086 -6.253l3.086 6.253l6.9 1l-5 4.867l1.179 6.873z",
+  spark: "M12 3l1.9 5.1l5.1 1.9l-5.1 1.9l-1.9 5.1l-1.9 -5.1l-5.1 -1.9l5.1 -1.9z M19 16l.8 2.2l2.2 .8l-2.2 .8l-.8 2.2l-.8 -2.2l-2.2 -.8l2.2 -.8z",
+  chat: "M8 9h8 M8 13h6 M18 4a3 3 0 0 1 3 3v8a3 3 0 0 1 -3 3h-5l-5 3v-3h-2a3 3 0 0 1 -3 -3v-8a3 3 0 0 1 3 -3h12z",
+  map: "M3 7l6 -3l6 3l6 -3v13l-6 3l-6 -3l-6 3z M9 4v13 M15 7v13",
+  dial: "M12 12m-9 0a9 9 0 1 0 18 0a9 9 0 1 0 -18 0 M12 12l4 -3 M12 3v2",
+  trophy: "M8 21h8 M12 17v4 M7 4h10v5a5 5 0 0 1 -10 0z M17 5h3v2a3 3 0 0 1 -3 3 M7 5h-3v2a3 3 0 0 0 3 3",
+  up: "M6 15l6 -6l6 6", down: "M6 9l6 6l6 -6",
+};
+// Pannelli dello schermo grande (src/logic/pair.js PANELS): icona e nome sul telecomando, titolo sul PC.
+const PC_PANEL_UI = {
+  mappa: ["map", "Mappa", "MAPPA"], classifica: ["list", "Classifica"], quadrante: ["dial", "Quadrante dei box", "QUADRANTE DEI BOX"],
+  telemetria: ["bolt", "Telemetria"], meteo: ["drop", "Meteo"], radio: ["radio", "Radio"], gomme: ["tyre", "Gomme"], chat: ["chat", "Chat"],
+  trophies: ["trophy", "B&T Trophies", "B&T TROPHIES"], direzione: ["flag", "Direzione gara"], settori: ["grid", "Settori"], insights: ["spark", "Insights"], voto: ["star", "Voto del giorno"],
+};
+const PC_CSS = `
+@keyframes pcxin{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
+@keyframes pcxring{0%{transform:scale(.7);opacity:.7}100%{transform:scale(1.7);opacity:0}}
+@keyframes pcxpkt{0%{transform:translateX(0);opacity:0}12%,88%{opacity:1}100%{transform:translateX(100%);opacity:0}}
+@keyframes pcxline{0%,100%{transform:translateY(0)}50%{transform:translateY(var(--h,220px))}}
+@keyframes pcxok{from{opacity:0;transform:scale(.6)}to{opacity:1;transform:scale(1)}}
+@keyframes pcxblink{0%,100%{opacity:1}50%{opacity:.3}}
+@keyframes pcxshake{0%,100%{transform:translateX(0)}20%{transform:translateX(-6px)}40%{transform:translateX(6px)}60%{transform:translateX(-4px)}80%{transform:translateX(3px)}}
+[data-pc-ui] button{font-family:inherit;cursor:pointer;-webkit-tap-highlight-color:transparent}
+[data-pc-ui] button:focus-visible{outline:2px solid #F4F4F5;outline-offset:2px}
+[data-pc-ui] button:disabled{cursor:default}
+.pcx-press{transition:transform 120ms ease-out}
+.pcx-press:active{transform:scale(.97)}
+.pcx-knob{transition:transform 150ms ease-out}
+@media (prefers-reduced-motion: reduce){[data-pc-ui],[data-pc-ui] *{animation:none!important;transition:none!important}}
+`;
+function PcIco({ d, size = 22, color = "currentColor", sw = 2 }) {
+  return <svg width={size} height={size} viewBox="0 0 24 24" aria-hidden="true" style={{ display: "block", flex: "none" }} fill="none" stroke={color} strokeWidth={sw} strokeLinecap="round" strokeLinejoin="round"><path d={PC_ICO[d] || d} /></svg>;
+}
+// QR del PC: un solo <path> coi moduli neri (src/logic/qr.js), su bianco con il margine di 4 moduli.
+function PcQr({ text, size = 250 }) {
+  const q = React.useMemo(() => QR.svgPath(QR.encode(text)), [text]);
+  return (
+    <svg data-pc-qr="" viewBox={`0 0 ${q.size} ${q.size}`} width={size} height={size} shapeRendering="crispEdges" role="img" aria-label="QR per collegare il telefono">
+      <rect width={q.size} height={q.size} fill="#fff" /><path d={q.d} fill="#000" />
+    </svg>
+  );
+}
+const pcMmss = ms => { const s = Math.max(0, Math.ceil(ms / 1000)); return Math.floor(s / 60) + ":" + String(s % 60).padStart(2, "0"); };
+const PcLogo = () => (
+  <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
+    <span aria-hidden="true" style={{ display: "flex", alignItems: "center", justifyContent: "center", width: 34, height: 34, borderRadius: 10, background: PCX.brand, fontFamily: F_HEAD, fontSize: 13, fontWeight: 900, color: "#fff", flex: "none" }}>B&amp;T</span>
+    <span style={{ fontFamily: F_HEAD, fontSize: 15, fontWeight: 800, letterSpacing: .3, whiteSpace: "nowrap" }}>Sector 4</span>
+    <span style={{ fontFamily: F_BODY, color: PCX.muted, fontSize: 14, fontWeight: 600, marginLeft: 6, whiteSpace: "nowrap" }}>Schermo grande</span>
+  </div>
+);
+const pcPill = (text, color = PCX.muted) => <span style={{ display: "inline-flex", alignItems: "center", height: 22, padding: "0 10px", borderRadius: 11, border: `1px solid ${color}`, fontFamily: F_HEAD, fontSize: 11, fontWeight: 800, letterSpacing: .4, color, whiteSpace: "nowrap" }}>{text}</span>;
+
+// PC: in attesa del telefono (schermata "6 PC: attesa QR"). Il conto alla rovescia va per conto suo, ogni secondo.
+function PcWaitScreen({ code, since }) {
+  const [, tick] = useState(0);
+  useEffect(() => { const iv = setInterval(() => tick(n => n + 1), 1000); return () => clearInterval(iv); }, []);
+  const left = code ? Math.max(0, PairLogic.CODE_MS - (nowMs() - since)) : PairLogic.CODE_MS;
+  const steps = [["Apri l'app sul telefono", "Profilo → Collega PC"], ["Scansiona il QR", "oppure scrivi le 6 cifre"], ["Fatto: il PC si accende", "Il telefono diventa il telecomando"]];
+  return (
+    <div data-pc-ui="" data-pc-wait="" style={{ position: "fixed", inset: 0, overflow: "auto", background: PCX.bg, color: PCX.text, fontFamily: F_BODY, display: "flex", flexDirection: "column" }}>
+      <style>{PC_CSS}</style>
+      <div data-pc-head="" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16, minHeight: 72, padding: "0 40px", borderBottom: `1px solid ${PCX.line}`, flex: "none" }}>
+        <PcLogo />{pcPill("IN ATTESA DEL TELEFONO")}
+      </div>
+      <div style={{ flex: 1, display: "flex", flexWrap: "wrap", alignItems: "center", justifyContent: "center", gap: "40px clamp(40px, 7vw, 90px)", padding: "32px clamp(20px, 5vw, 60px)" }}>
+        <div style={{ width: "min(440px, 100%)" }}>
+          <h1 style={{ margin: 0, fontFamily: F_HEAD, fontSize: "clamp(32px, 3.6vw, 46px)", lineHeight: 1.13, fontWeight: 800, letterSpacing: -1, textWrap: "balance" }}>Collega il telefono.<br />Prendi tutto lo schermo.</h1>
+          <ol style={{ listStyle: "none", margin: "20px 0 0", padding: 0 }}>
+            {steps.map(([a, b], i) => (
+              <li key={i} style={{ display: "flex", gap: 16, alignItems: "center", padding: "16px 0", borderTop: i ? `1px solid ${PCX.line}` : "none", animation: `pcxin .6s ease-out ${0.2 + i * 0.2}s both` }}>
+                <span aria-hidden="true" style={{ display: "flex", alignItems: "center", justifyContent: "center", flex: "none", width: 44, height: 44, borderRadius: "50%", background: PCX.key, border: `1px solid ${PCX.ring}`, fontFamily: F_HEAD, fontSize: 18, fontWeight: 800 }}>{i + 1}</span>
+                <div><div style={{ fontFamily: F_HEAD, fontSize: 20, fontWeight: 800 }}>{a}</div><div style={{ fontSize: 15, fontWeight: 600, color: PCX.muted, marginTop: 2 }}>{b}</div></div>
+              </li>
+            ))}
+          </ol>
+        </div>
+        <div style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
+          <div style={{ position: "relative", width: 320, height: 320, display: "flex", alignItems: "center", justifyContent: "center" }}>
+            {/* anello del tempo che resta: si accorcia ogni secondo (niente animazione, è il conto vero) */}
+            <svg width="320" height="320" viewBox="0 0 320 320" aria-hidden="true" style={{ position: "absolute", inset: 0, transform: "rotate(-90deg)" }}>
+              <circle cx="160" cy="160" r="150" fill="none" stroke={PCX.track} strokeWidth="4" />
+              <circle data-pc-ring={Math.round(left / 1000)} cx="160" cy="160" r="150" fill="none" stroke={PCX.yellow} strokeWidth="4" strokeLinecap="round" pathLength="1" strokeDasharray="1" strokeDashoffset={1 - left / PairLogic.CODE_MS} />
+            </svg>
+            <div style={{ position: "relative", width: 250, height: 250, borderRadius: 18, overflow: "hidden", background: "#fff" }}>
+              {code && <PcQr text={PairLogic.qrText(code)} />}
+              <span aria-hidden="true" style={{ position: "absolute", left: 0, right: 0, top: 0, height: 3, background: PCX.yellow, boxShadow: `0 0 16px ${PCX.yellow}`, "--h": "246px", animation: "pcxline 3.2s ease-in-out infinite" }} />
+            </div>
+          </div>
+          <div data-pc-code={code || ""} aria-label={code ? "Codice " + code.split("").join(" ") : "Codice in arrivo"} style={{ marginTop: 18, fontFamily: F_HEAD, fontSize: 44, fontWeight: 800, letterSpacing: 10, fontVariantNumeric: "tabular-nums", paddingLeft: 10 }}>{code ? code.slice(0, 3) + " " + code.slice(3) : "… …"}</div>
+          <div style={{ marginTop: 6, display: "flex", alignItems: "center", gap: 8, fontSize: 14, fontWeight: 600, color: PCX.muted }}>
+            <PcIco d="bolt" size={16} color={PCX.yellow} />Il codice scade tra {pcMmss(left)} · poi ne arriva uno nuovo
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+// PC collegato a un telefono senza Pro (il Pro può essere finito dopo il collegamento).
+function PcProScreen({ name }) {
+  return (
+    <div data-pc-ui="" data-pc-pro="" style={{ position: "fixed", inset: 0, background: PCX.bg, color: PCX.text, fontFamily: F_BODY, display: "flex", flexDirection: "column" }}>
+      <style>{PC_CSS}</style>
+      <div data-pc-head="" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", minHeight: 72, padding: "0 40px", borderBottom: `1px solid ${PCX.line}` }}><PcLogo />{pcPill("FUNZIONE PRO", PCX.yellow)}</div>
+      <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", textAlign: "center", padding: 24 }}>
+        <h1 style={{ margin: 0, fontFamily: F_HEAD, fontSize: 36, fontWeight: 800, letterSpacing: -.5 }}>Lo schermo grande è una funzione Pro</h1>
+        <p style={{ margin: "12px 0 0", maxWidth: 520, fontSize: 16, lineHeight: 1.5, color: PCX.muted }}>{name ? `Il telefono di ${name} è collegato, ma il Pro non è attivo.` : "Il telefono è collegato, ma il Pro non è attivo."} Attivalo nell'app, poi il PC si accende da solo.</p>
+      </div>
+    </div>
+  );
+}
+// Testata del Second Screen sul PC (schermata "7 PC: Second Screen"): logo, sessione vera, telefono collegato.
+function PcSsHead({ race, live, st, name, edit = false, onEdit = null }) {
+  const mode = !live || !st ? null : live.ongoing ? "IN DIRETTA" : isOf1Live(live) ? "REPLAY" : null;
+  return (
+    <div data-pc-head="" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16, height: 52, padding: "0 6px 6px", borderBottom: `1px solid ${PCX.line}`, flexShrink: 0, color: PCX.text }}>
+      <PcLogo />
+      <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
+        {mode && <span style={{ display: "flex", alignItems: "center", gap: 8, height: 30, padding: "0 12px", borderRadius: 15, background: PCX.brand, fontFamily: F_HEAD, fontSize: 12, fontWeight: 800, color: "#fff", whiteSpace: "nowrap" }}><span aria-hidden="true" style={{ width: 7, height: 7, borderRadius: "50%", background: "#fff", animation: "pcxblink 1.2s ease-in-out infinite" }} />{mode} · {liveCounter(st)}</span>}
+        <span style={{ fontFamily: F_BODY, fontSize: 13, fontWeight: 600, color: PCX.muted, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{race ? race.name : ""}{st ? " · " + sessionName(st.type) : race ? "" : "Nessuna sessione in corso"}{!st && race ? " · nessuna sessione in corso" : ""}</span>
+        {st && FLAG_UI[st.flag] && <span style={{ padding: "3px 8px", borderRadius: 7, background: FLAG_UI[st.flag].color, fontFamily: F_HEAD, fontWeight: 900, fontSize: 10, color: FLAG_UI[st.flag].ink, whiteSpace: "nowrap" }}>{st.flag === "yellow" ? "GIALLA" : st.flag === "red" ? "ROSSA" : st.flag.toUpperCase()}</span>}
+      </div>
+      <div style={{ display: "flex", alignItems: "center", gap: 10, fontFamily: F_BODY, fontSize: 13, fontWeight: 700, whiteSpace: "nowrap" }}>
+        {onEdit && (
+          <button className="pcx-press" data-pc-edit="" aria-pressed={edit ? "true" : "false"} onClick={onEdit}
+            style={{ display: "flex", alignItems: "center", gap: 7, height: 34, padding: "0 12px", marginRight: 6, borderRadius: 10, background: edit ? PCX.yellow : PCX.key, border: "none", color: edit ? "#000" : PCX.text, fontFamily: F_HEAD, fontSize: 13, fontWeight: 800 }}>
+            <PcIco d={edit ? "check" : "grid"} size={16} color={edit ? "#000" : PCX.text} />{edit ? "Fatto" : "Modifica"}
+          </button>
+        )}
+        <span style={{ position: "relative", display: "flex", alignItems: "center", justifyContent: "center", width: 34, height: 34, borderRadius: 10, background: PCX.key }}>
+          <PcIco d="phone" size={18} color={PCX.text} />
+          <span aria-hidden="true" style={{ position: "absolute", right: -3, top: -3, width: 10, height: 10, borderRadius: "50%", background: PCX.green, border: "2px solid #000" }} />
+        </span>Telefono collegato{name ? ` (${name})` : ""}
+      </div>
+    </div>
+  );
+}
+
+// Schermo grande del PC (grafica "B&T: Second Screen PC"): testata e i pannelli scelti dal telefono, nel suo ordine, in
+// tre colonne (la prima più larga) a tutta finestra; la pagina scorre se sono tanti. Dati veri: gli stessi del Second
+// Screen (SsWidget), la mappa della diretta, il quadrante dei box e i B&T Trophies della sessione. Le grafiche sono
+// pensate a ~960 px e si ingrandiscono con la finestra (zoom).
+const PC_W = 960;
+function PcCard({ id, title, children }) {
+  return (
+    <div data-ss-widget={id} style={{ height: "100%", width: "100%", display: "flex", flexDirection: "column", padding: "7px 9px 8px", boxSizing: "border-box", borderRadius: 12, background: "rgba(24,24,28,.92)", border: `1px solid ${C.border}`, overflow: "hidden", minHeight: 0, minWidth: 0 }}>
+      <span data-ss-title="" style={{ fontFamily: F_BODY, fontWeight: 700, fontSize: 9, letterSpacing: .6, color: C.dim, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", marginBottom: 4, flexShrink: 0 }}>{title}</span>
+      <div style={{ flex: 1, minHeight: 0, minWidth: 0, position: "relative", overflow: "hidden" }}>{children}</div>
+    </div>
+  );
+}
+const pcNote = text => <p style={{ margin: 0, fontFamily: F_BODY, fontSize: 11, color: C.dim, lineHeight: 1.4 }}>{text}</p>;
+// 21/11 (Edoardo: "entrambe le funzionalità: Cell che controlla lo schermo PC ma anche che si possano usare entrambi"):
+// sul PC Modifica accende, spegne e sposta i pannelli e sceglie il pilota (onPanels, onTel: arrivano anche al telefono);
+// un clic su un pannello lo ingrandisce (solo sul PC).
+function PcDashboard({ race, live, st, standings, panels, prefs, chat, name, onPanels = () => {}, onTel = () => {} }) {
+  useKeepAwake(true);
+  const [edit, setEdit] = useState(false);
+  const [big, setBig] = useState(null);
+  const bigClose = useRef(null);
+  useEffect(() => { if (big && bigClose.current) bigClose.current.focus(); }, [big]);
+  useEffect(() => { if (big && !panels.includes(big)) setBig(null); }, [big, panels]);
+  const [zoom, setZoom] = useState(1);
+  useEffect(() => {
+    const fit = () => setZoom(Math.max(0.8, Math.min(2.4, window.innerWidth / PC_W)));
+    fit(); window.addEventListener("resize", fit);
+    return () => window.removeEventListener("resize", fit);
+  }, []);
+  const track = live ? live.track : race ? trackOf(race.circuitId) : null;
+  // B&T Trophies: in diretta provvisori sui dati arrivati finora; nel Replay solo a sessione finita (prima
+  // svelerebbero il risultato). Ricalcolati al massimo una volta al minuto di sessione.
+  const sessionDone = !!st && !!live && !live.ongoing && !!live.sim && live.sim.t >= live.sim.duration - 1;
+  const trophyKey = panels.includes("trophies") && live && live.raw && (live.ongoing || sessionDone) ? `${live.sessionKey}:${live.type}:${sessionDone ? "fine" : Math.floor(((st && st.t) || 0) / 60)}` : null;
+  const trophies = React.useMemo(() => { try { return trophyKey ? computeGpTrophies(live.raw, { type: live.type }) : null; } catch (e) { return null; } }, [trophyKey]);   // eslint-disable-line react-hooks/exhaustive-deps
+  const nop = () => {};
+  const panel = (id, large) => {
+    const head = (PC_PANEL_UI[id] || [])[2];
+    if (id === "mappa") return (
+      <PcCard id={id} title={head}>
+        <div data-ss-map="" style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
+          {track ? <LiveMap track={track} st={st} big svgStyle={{ width: "100%", height: "100%" }} /> : pcNote("Mappa non disponibile")}
+        </div>
+      </PcCard>
+    );
+    if (id === "quadrante") {
+      const can = !!st && isRaceType(st.type) && !!track && track.lenM > 0;
+      return <PcCard id={id} title={head}>{can ? <LivePitDial race={race} st={st} track={track} live={live} /> : pcNote("Il quadrante dei box si vede durante le gare e le Sprint.")}</PcCard>;
+    }
+    if (id === "trophies") {
+      const all = trophies && Array.isArray(trophies.all) ? trophies.all.slice(0, large ? 16 : 8) : [];
+      return (
+        <PcCard id={id} title={head + (all.length && !sessionDone ? " · PROVVISORI" : "")}>
+          {all.length ? all.map(t => (
+            <div key={t.id} data-pc-trophy={t.id} style={{ display: "flex", alignItems: "baseline", gap: 6, padding: "3px 0", borderTop: `1px solid ${C.border}`, fontFamily: F_BODY, fontSize: 10.5, color: C.text }}>
+              <span style={{ flex: "none", fontFamily: F_HEAD, fontWeight: 800 }}>{t.name}</span>
+              <span style={{ flex: 1, minWidth: 0, color: C.muted, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{t.stat}</span>
+              <span style={{ flex: "none", fontFamily: F_HEAD, fontWeight: 800, color: C.gold }}>{t.who}</span>
+            </div>
+          )) : pcNote(live && live.ongoing ? "I trofei della sessione arrivano coi primi giri." : "I B&T Trophies compaiono durante la sessione in diretta o a fine Replay.")}
+        </PcCard>
+      );
+    }
+    return <SsWidget id={id} h={large || id === "classifica" || id === "gomme" || id === "settori" ? 4 : 3} st={st} live={live} race={race} standings={standings} prefs={prefs} setPrefs={nop} onPicker={nop} vote={{}} onVote={nop} chat={chat} blocked={[]} />;
+  };
+  const label = id => (PC_PANEL_UI[id] || [])[1] || id;
+  const cars = st ? [...st.cars].sort((a, b) => (a.dnf ? 99 : a.pos) - (b.dnf ? 99 : b.pos)) : [];
+  const smallBtn = (txt, attrs, onClick, on, dis) => (
+    <button className="pcx-press" {...attrs} disabled={dis} onClick={onClick}
+      style={{ display: "inline-flex", alignItems: "center", gap: 5, height: 26, padding: "0 10px", borderRadius: 13, border: `1px solid ${on ? PCX.yellow : PCX.btnLine}`, background: on ? "rgba(250,204,21,.14)" : "rgba(17,17,19,.92)", color: dis ? PCX.ring : PCX.text, fontFamily: F_HEAD, fontSize: 11, fontWeight: 800, whiteSpace: "nowrap" }}>{txt}</button>
+  );
+  return (
+    <div data-pc-ui="" data-pc-dash="" style={{ position: "fixed", inset: 0, overflowY: "auto", overflowX: "hidden", background: "#000", color: PCX.text }}>
+      {/* sul PC le schede si guardano: niente freccette e tasti nelle loro testate; ogni scheda riempie il suo posto */}
+      <style>{PC_CSS + "[data-pc-panel] > [data-ss-widget],[data-pc-bigbox] > [data-ss-widget]{flex:1 1 auto;min-width:0}[data-pc-dash] [data-ss-widget] > div:first-child > span[aria-hidden=\"true\"], [data-pc-dash] [data-ss-widget] > div:first-child > button{display:none!important}"}</style>
+      <div data-pc-zoom={zoom.toFixed(2)} style={{ zoom, padding: "10px 14px 14px", minHeight: `calc(100vh / ${zoom})`, boxSizing: "border-box", display: "flex", flexDirection: "column" }}>
+        <PcSsHead race={race} live={live} st={st} name={name} edit={edit} onEdit={() => setEdit(e => !e)} />
+        {edit && (
+          <div data-pc-editbar="" style={{ marginTop: 10, padding: "10px 12px", borderRadius: 12, background: "rgba(24,24,28,.96)", border: `1px solid ${C.border}`, display: "flex", flexDirection: "column", gap: 8 }}>
+            <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 6 }}>
+              <span style={{ fontFamily: F_BODY, fontSize: 11, fontWeight: 700, color: C.muted, marginRight: 4 }}>Pannelli ({panels.length}):</span>
+              {PairLogic.PANELS.map(id => { const on = panels.includes(id); return <React.Fragment key={id}>{smallBtn(label(id), { "data-pc-chip": id, "aria-pressed": on ? "true" : "false" }, () => onPanels(PairLogic.togglePanel(panels, id)), on)}</React.Fragment>; })}
+            </div>
+            {cars.length > 0 && (
+              <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 6 }}>
+                <span style={{ fontFamily: F_BODY, fontSize: 11, fontWeight: 700, color: C.muted, marginRight: 4 }}>Pilota della telemetria:</span>
+                {cars.map(c => <React.Fragment key={c.id}>{smallBtn(<><span aria-hidden="true" style={{ width: 3, height: 12, borderRadius: 2, background: c.color }} />{c.code}</>, { "data-pc-tel": c.id, "aria-pressed": prefs.tel === c.id ? "true" : "false" }, () => onTel(c.id), prefs.tel === c.id)}</React.Fragment>)}
+              </div>
+            )}
+            <span style={{ fontFamily: F_BODY, fontSize: 10.5, color: C.dim }}>Le frecce sui pannelli li spostano. Quello che cambi qui lo vede anche il telefono, e viceversa.</span>
+          </div>
+        )}
+        {panels.length ? (
+          // "dense": se Gomme (a tutta larghezza) lascia un buco a fine riga, lo riempie il pannello dopo
+          <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 1.35fr) minmax(0, 1fr) minmax(0, 1fr)", gridAutoRows: "226px", gridAutoFlow: "row dense", gap: 10, marginTop: 10 }}>
+            {panels.map((id, k) => (
+              <div key={id} data-pc-panel={id} style={{ position: "relative", gridColumn: id === "gomme" ? "1 / -1" : "auto", minWidth: 0, minHeight: 0, display: "flex", animation: "pcxin .4s ease-out both" }}>
+                {panel(id)}
+                {!edit && <button data-pc-open="" aria-label={`Ingrandisci ${label(id)}`} onClick={() => setBig(id)} style={{ position: "absolute", inset: 0, background: "transparent", border: "none", borderRadius: 12, cursor: "zoom-in" }} />}
+                {edit && (
+                  <div style={{ position: "absolute", inset: 0, borderRadius: 12, border: `1.5px dashed ${PCX.yellow}`, background: "rgba(0,0,0,.35)", display: "flex", alignItems: "flex-end", justifyContent: "center", gap: 6, padding: 8 }}>
+                    {smallBtn("← Prima", { "data-pc-shift": "prima", "aria-label": `${label(id)}: prima` }, () => onPanels(PairLogic.movePanel(panels, id, -1)), false, k === 0)}
+                    {smallBtn("Dopo →", { "data-pc-shift": "dopo", "aria-label": `${label(id)}: dopo` }, () => onPanels(PairLogic.movePanel(panels, id, 1)), false, k === panels.length - 1)}
+                    {smallBtn("Togli", { "data-pc-remove": "", "aria-label": `Togli ${label(id)}` }, () => onPanels(PairLogic.togglePanel(panels, id)))}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div data-pc-empty="" style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", textAlign: "center", fontFamily: F_BODY, fontSize: 14, color: PCX.muted, padding: 24 }}>Nessun pannello acceso: sceglili dal telefono o con Modifica qui sopra.</div>
+        )}
+      </div>
+      {big && (
+        <div data-pc-big={big} role="dialog" aria-modal="true" aria-label={label(big)} onKeyDown={e => { if (e.key === "Escape") setBig(null); }} onClick={e => { if (e.target === e.currentTarget) setBig(null); }}
+          style={{ position: "fixed", inset: 0, zIndex: 50, background: "rgba(0,0,0,.82)", display: "flex", alignItems: "center", justifyContent: "center", padding: "3vh 4vw", boxSizing: "border-box" }}>
+          <div style={{ width: "100%", height: "100%", display: "flex", flexDirection: "column", gap: 10 }}>
+            <button ref={bigClose} className="pcx-press" data-pc-big-close="" aria-label="Chiudi" onClick={() => setBig(null)}
+              style={{ alignSelf: "flex-end", flex: "none", display: "flex", alignItems: "center", gap: 8, height: 40, padding: "0 14px", borderRadius: 20, background: "rgba(17,17,19,.95)", border: `1px solid ${PCX.btnLine}`, color: PCX.text, fontFamily: F_HEAD, fontSize: 14, fontWeight: 800 }}>
+              <PcIco d="close" size={18} />Chiudi
+            </button>
+            {/* le percentuali non risentono dello zoom: 100% è tutto il riquadro, ingrandite sono le scritte */}
+            <div style={{ zoom, width: "100%", flex: 1, minHeight: 0, display: "flex" }}>
+              <div data-pc-bigbox="" style={{ flex: 1, display: "flex", minWidth: 0, minHeight: 0 }}>{panel(big, true)}</div>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+const pcId = v => typeof v === "string" || (typeof v === "number" && isFinite(v));
+function pcPrefsOf(p) {
+  const o = p && typeof p === "object" && !Array.isArray(p) ? p : {};
+  const ids = v => (Array.isArray(v) ? v.filter(pcId).slice(0, 10) : null);
+  return { ...SS_PREFS_INIT, tyre: ids(o.tyre), sec: ids(o.sec), tel: pcId(o.tel) ? o.tel : null, radar: o.radar === true };
+}
+
+// PC: codice nuovo ogni 2 minuti finché nessuno lo usa; ogni 2,5 secondi legge pair/<codice>. Collegato: tiene il
+// documento (riquadri, scelte, orologio) e risponde ogni ~10 secondi con pc.seen/pc.n; scollegato o scaduto: codice nuovo.
+function usePcScreen(on) {
+  const [s, setS] = useState({ code: null, since: 0, doc: null, state: "attesa" });
+  useEffect(() => {
+    if (!on) return undefined;
+    let alive = true, cur = null, busy = false, lastAck = 0;
+    const ua = PairLogic.browserName(typeof navigator !== "undefined" ? navigator.userAgent : "");
+    const fresh = () => {
+      cur = { code: PairLogic.newCode(Math.random), since: nowMs(), linked: false };
+      setS({ code: cur.code, since: cur.since, doc: null, state: "attesa" });
+    };
+    const poll = async () => {
+      if (!alive || busy || !cur) return;
+      busy = true;
+      const c = cur;
+      try {
+        // una lettura che non torna (rete appesa) non deve fermare i giri dopo: dopo 8 secondi si lascia perdere
+        const doc = await Promise.race([dbGet("pair", c.code), new Promise((_, no) => setTimeout(() => no(new Error("lenta")), 8000))]);
+        if (!alive || c !== cur) return;
+        // Un collegamento vecchio con lo stesso codice è già scaduto (12 ore) o cancellato con Scollega. Niente "quello
+        // che c'era alla prima lettura": se la prima lettura arriva tardi (rete lenta), il telefono può aver già scritto.
+        const st = PairLogic.status(doc, { old: null, now: nowMs() });
+        if (st === "collegato") {
+          c.linked = true;
+          setS(x => (x.code === c.code && x.state === "collegato" && sameJson(x.doc, doc) ? x : { ...x, doc, state: "collegato" }));
+          if (Date.now() - lastAck > 9000 || !PairLogic.acked(doc, doc.at)) {
+            lastAck = Date.now();
+            dbSet("pair", c.code, { pc: PairLogic.ackOf(doc, ua) }, { fields: ["pc"] }).catch(() => {});
+          }
+        } else if (c.linked || st === "scaduto" || PairLogic.codeStale(c.since, nowMs())) fresh();
+      } catch (e) { /* senza rete: si riprova al giro dopo */ }
+      finally { busy = false; }
+    };
+    fresh();
+    const first = setTimeout(poll, 50), iv = setInterval(poll, 2500);
+    return () => { alive = false; clearTimeout(first); clearInterval(iv); };
+  }, [on]);
+  return s;
+}
+
+// Telefono: Profilo → Collega PC (schermate 1-5). view: intro | scan | code | expired | remote.
+function PcLinkSheet({ view, scanAvail, digits, busy, msg, scanOk, onGo, onKey, onClose, link, st, panels, prefs, onFocus, onPanel, onMove, onUnlink }) {
+  const top = (title, close = true) => (
+    <div style={{ display: "flex", alignItems: "center", height: 44, flex: "none" }}>
+      {close && <button className="pcx-press" aria-label="Chiudi" onClick={onClose} style={{ display: "flex", alignItems: "center", justifyContent: "center", width: 44, height: 44, marginLeft: -10, background: "none", border: "none", color: PCX.text }}><PcIco d="close" size={24} /></button>}
+      <h2 style={{ margin: 0, fontFamily: F_HEAD, fontSize: 17, fontWeight: 800 }}>{title}</h2>
+    </div>
+  );
+  const big = (text, center) => <div style={{ marginTop: 6, fontFamily: F_HEAD, fontSize: 26, lineHeight: "32px", fontWeight: 800, letterSpacing: -.5, textAlign: center ? "center" : "left" }}>{text}</div>;
+  const small = (text, extra) => <div style={{ fontSize: 12.5, fontWeight: 500, color: PCX.muted, lineHeight: "17px", ...extra }}>{text}</div>;
+  const btn = (label, icon, onClick, primary, data = {}) => (
+    <button className="pcx-press" onClick={onClick} disabled={busy} {...data} style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 10, width: "100%", height: 54, borderRadius: 16, background: primary ? PCX.text : "transparent", border: `1px solid ${primary ? PCX.text : PCX.btnLine}`, color: primary ? "#000" : PCX.text, fontFamily: F_HEAD, fontSize: 17, fontWeight: 800, opacity: busy ? .5 : 1 }}>
+      {icon && <PcIco d={icon} size={22} color={primary ? "#000" : PCX.text} sw={primary ? 2.2 : 2} />}{label}
+    </button>
+  );
+  const note = msg ? <p role="status" data-pc-msg="" style={{ margin: 0, fontSize: 13, lineHeight: "18px", fontWeight: 600, color: PCX.red, textAlign: "center" }}>{msg}</p> : null;
+  let body;
+  if (view === "intro") body = (
+    <>
+      {top("Collega PC")}
+      <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 6 }}>
+        <div style={{ flex: 1, fontFamily: F_HEAD, fontSize: 26, lineHeight: "32px", fontWeight: 800, letterSpacing: -.5 }}>Tutta l'app<br />sullo schermo grande</div>
+        {pcPill("FUNZIONE PRO", PCX.yellow)}
+      </div>
+      <div aria-hidden="true" style={{ marginTop: 14, borderRadius: 18, background: PCX.card, border: `1px solid ${PCX.line}`, height: 150, display: "flex", alignItems: "center", padding: "0 18px", flex: "none" }}>
+        <div style={{ position: "relative", display: "flex", alignItems: "center", justifyContent: "center", width: 64, height: 88, borderRadius: 16, border: `2px solid ${PCX.text}`, background: "#0B0B0C", flex: "none" }}>
+          <PcIco d="phone" size={30} color={PCX.text} />
+          <span style={{ position: "absolute", inset: -2, borderRadius: 16, border: `2px solid ${PCX.yellow}`, opacity: 0, animation: "pcxring 2.2s ease-out infinite" }} />
+        </div>
+        <div style={{ position: "relative", flex: 1, height: 2, margin: "0 10px", backgroundImage: `repeating-linear-gradient(90deg, ${PCX.ring} 0 6px, transparent 6px 12px)` }}>
+          {[PCX.yellow, PCX.green, PCX.brand].map((c, i) => (
+            <span key={i} style={{ position: "absolute", inset: 0, animation: `pcxpkt 2.4s linear ${i * 0.8}s infinite`, opacity: 0 }}><span style={{ position: "absolute", left: -5, top: -4, width: 10, height: 10, borderRadius: "50%", background: c }} /></span>
+          ))}
+        </div>
+        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", flex: "none" }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "center", width: 104, height: 70, borderRadius: 10, border: `2px solid ${PCX.text}`, background: "#0B0B0C" }}><PcIco d="grid" size={34} color={PCX.yellow} /></div>
+          <div style={{ width: 3, height: 10, background: PCX.text }} /><div style={{ width: 40, height: 3, borderRadius: 2, background: PCX.text }} />
+        </div>
+      </div>
+      <ul style={{ listStyle: "none", margin: "6px 0 0", padding: 0 }}>
+        {[["grid", "Più riquadri insieme", "Mappa, classifica, quadrante dei box, telemetria, gomme, radio e meteo sullo stesso schermo."], ["phone", "Telefono e PC insieme", "Scegli i pannelli e il pilota da tutti e due, ingrandisci un pannello col mouse e intanto usa l'app sul telefono."], ["bolt", "Stessi dati, stesso orologio", "Telefono e PC restano allineati, in diretta e nel Replay."]].map(([ic, a, b], i) => (
+          <li key={i} style={{ display: "flex", gap: 12, alignItems: "flex-start", padding: "12px 0", borderTop: i ? `1px solid ${PCX.line}` : "none", animation: `pcxin .5s ease-out ${0.3 + i * 0.15}s both` }}>
+            <span style={{ display: "flex", alignItems: "center", justifyContent: "center", flex: "none", width: 40, height: 40, borderRadius: 12, background: PCX.key }}><PcIco d={ic} size={22} color={PCX.text} /></span>
+            <div><div style={{ fontFamily: F_HEAD, fontSize: 15, fontWeight: 800 }}>{a}</div>{small(b, { marginTop: 2 })}</div>
+          </li>
+        ))}
+      </ul>
+      <div style={{ marginTop: "auto", paddingTop: 14, display: "flex", flexDirection: "column", gap: 12 }}>
+        {small("Sul PC apri bt-app-2.vercel.app/schermo e segui i passi.", { textAlign: "center" })}
+        {note}
+        {scanAvail && btn("Scansiona il QR", "qr", () => onGo("scan"), true, { "data-pc-go": "scan" })}
+        {btn("Scrivi il codice", "keys", () => onGo("code"), !scanAvail, { "data-pc-go": "code" })}
+      </div>
+    </>
+  );
+  else if (view === "scan") body = (
+    <>
+      {top("Scansiona il QR")}
+      {big(<>Inquadra il QR<br />sullo schermo del PC</>, true)}
+      <div style={{ position: "relative", width: 280, height: 280, margin: "36px auto 0", flex: "none" }}>
+        {[0, 90, 180, 270].map(r => <span key={r} aria-hidden="true" style={{ position: "absolute", left: r === 90 || r === 180 ? "auto" : 0, right: r === 90 || r === 180 ? 0 : "auto", top: r === 180 || r === 270 ? "auto" : 0, bottom: r === 180 || r === 270 ? 0 : "auto", width: 44, height: 44, boxSizing: "border-box", borderTop: `4px solid ${scanOk ? PCX.green : PCX.text}`, borderLeft: `4px solid ${scanOk ? PCX.green : PCX.text}`, borderRadius: "14px 0 0 0", transform: `rotate(${r}deg)` }} />)}
+        <div aria-hidden="true" style={{ position: "absolute", inset: 26, display: "flex", alignItems: "center", justifyContent: "center", opacity: .18 }}><PcIco d="qr" size={200} color={PCX.text} sw={1.2} /></div>
+        {!scanOk && <div aria-hidden="true" style={{ position: "absolute", left: 14, right: 14, top: 14, height: 3, borderRadius: 2, background: PCX.yellow, boxShadow: `0 0 18px ${PCX.yellow}`, "--h": "250px", animation: "pcxline 3s ease-in-out infinite" }} />}
+        {scanOk && <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center" }}><span data-pc-scan-ok="" style={{ display: "flex", alignItems: "center", justifyContent: "center", width: 72, height: 72, borderRadius: "50%", background: PCX.green, animation: "pcxok .35s ease-out both" }}><PcIco d="check" size={40} color="#000" sw={3} /></span></div>}
+      </div>
+      <div style={{ marginTop: 24, textAlign: "center" }}>{small(scanOk ? (busy ? "QR letto: collego il PC…" : "QR letto.") : "Il lettore si apre a tutto schermo: inquadra il QR sul PC e il codice si legge da solo.")}</div>
+      <div style={{ marginTop: "auto", paddingTop: 14, display: "flex", flexDirection: "column", gap: 12 }}>
+        {note}
+        {small("La fotocamera si usa solo per leggere il QR. Non salviamo foto.", { textAlign: "center" })}
+        {!scanOk && btn("Inquadra il QR", "qr", () => onGo("scan"), true, { "data-pc-go": "scan" })}
+        {btn("Scrivi il codice", "keys", () => onGo("code"), false, { "data-pc-go": "code" })}
+      </div>
+    </>
+  );
+  else if (view === "code") body = (
+    <>
+      {top("Scrivi il codice")}
+      {big(<>Il codice<br />sullo schermo del PC</>)}
+      <div role="group" aria-label={`Codice del PC: ${digits.length} cifre su 6`} style={{ display: "flex", gap: 8, marginTop: 24 }}>
+        {[0, 1, 2, 3, 4, 5].map(i => {
+          const on = i === digits.length && !busy;
+          return <div key={i} data-pc-digit="" style={{ flex: 1, height: 64, borderRadius: 14, border: `2px solid ${on ? PCX.yellow : PCX.line}`, background: PCX.key, boxSizing: "border-box", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: F_HEAD, fontSize: 30, fontWeight: 800, fontVariantNumeric: "tabular-nums" }}>{digits[i] || ""}</div>;
+        })}
+      </div>
+      <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 14 }}>
+        <PcIco d="bolt" size={16} color={PCX.yellow} />
+        {small(busy ? "Collego il PC…" : "Il codice cambia ogni 2 minuti: se non va, scrivi quello nuovo che compare sul PC.")}
+      </div>
+      <div style={{ marginTop: "auto", paddingTop: 14, display: "flex", flexDirection: "column", gap: 12 }}>
+        {note}
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 10 }}>
+          {["1", "2", "3", "4", "5", "6", "7", "8", "9", "", "0", "del"].map((k, i) => k === "" ? <div key={i} /> : (
+            <button key={i} className="pcx-press" data-pc-key={k} aria-label={k === "del" ? "Cancella una cifra" : k} disabled={busy} onClick={() => onKey(k)}
+              style={{ display: "flex", alignItems: "center", justifyContent: "center", height: 60, borderRadius: 16, background: PCX.card, border: `1px solid ${PCX.line}`, color: PCX.text, fontFamily: F_HEAD, fontSize: 24, fontWeight: 800 }}>
+              {k === "del" ? <PcIco d="back" size={26} color={PCX.text} /> : k}
+            </button>
+          ))}
+        </div>
+      </div>
+    </>
+  );
+  else if (view === "expired") body = (
+    <>
+      {top("Collega PC")}
+      <div style={{ display: "flex", flexDirection: "column", alignItems: "center", textAlign: "center", marginTop: 44 }}>
+        <div aria-hidden="true" style={{ position: "relative", width: 120, height: 120, display: "flex", alignItems: "center", justifyContent: "center", animation: "pcxshake .6s ease-out 1" }}>
+          <span style={{ position: "absolute", inset: 0, borderRadius: "50%", border: "2px solid rgba(255,90,77,.4)" }} />
+          <span style={{ display: "flex", alignItems: "center", justifyContent: "center", width: 84, height: 84, borderRadius: "50%", background: "rgba(255,90,77,.14)" }}><PcIco d="warn" size={44} color={PCX.red} /></span>
+        </div>
+        <div style={{ marginTop: 22, fontFamily: F_HEAD, fontSize: 26, lineHeight: "32px", fontWeight: 800 }}>Codice scaduto</div>
+        {small("Il codice vale solo 2 minuti, oppure il PC non l'ha ricevuto. Sul PC ne compare uno nuovo da solo.", { marginTop: 8, maxWidth: 290 })}
+      </div>
+      <ol style={{ listStyle: "none", margin: "24px 0 0", padding: "0 14px", borderRadius: 18, background: PCX.card, border: `1px solid ${PCX.line}` }}>
+        {["Guarda il nuovo QR sul PC", scanAvail ? "Scansionalo di nuovo da qui" : "Scrivi di nuovo le 6 cifre", "Se non va, controlla la rete"].map((s, i) => (
+          <li key={i} style={{ display: "flex", gap: 12, alignItems: "center", minHeight: 44, borderTop: i ? `1px solid ${PCX.line}` : "none", fontSize: 14, fontWeight: 600 }}>
+            <span aria-hidden="true" style={{ display: "flex", alignItems: "center", justifyContent: "center", width: 24, height: 24, borderRadius: "50%", background: PCX.track, fontFamily: F_HEAD, fontSize: 12, fontWeight: 800, flex: "none" }}>{i + 1}</span>{s}
+          </li>
+        ))}
+      </ol>
+      <div style={{ marginTop: "auto", paddingTop: 14, display: "flex", flexDirection: "column", gap: 12 }}>
+        {note}
+        {scanAvail && btn("Scansiona di nuovo", "retry", () => onGo("scan"), true, { "data-pc-go": "scan" })}
+        {btn("Scrivi il codice", "keys", () => onGo("code"), !scanAvail, { "data-pc-go": "code" })}
+      </div>
+    </>
+  );
+  else if (view === "remote") {
+    const cars = st ? [...st.cars].sort((a, b) => (a.dnf ? 99 : a.pos) - (b.dnf ? 99 : b.pos)) : [];
+    const race = st && isRaceType(st.type) && st.totalLaps ? Math.min(1, st.lap / st.totalLaps) : null;
+    body = (
+      <>
+        {top("Telecomando")}
+        <div style={{ marginTop: 4, padding: "12px 14px", borderRadius: 18, background: PCX.card, border: `1px solid ${PCX.line}`, display: "flex", alignItems: "center", gap: 12, flex: "none" }}>
+          <span style={{ position: "relative", display: "flex", alignItems: "center", justifyContent: "center", width: 44, height: 44, borderRadius: 12, background: PCX.key, flex: "none" }}>
+            <PcIco d="tv" size={22} color={PCX.text} />
+            <span aria-hidden="true" style={{ position: "absolute", right: -3, top: -3, width: 12, height: 12, borderRadius: "50%", background: link.fresh ? PCX.green : PCX.muted, border: `2px solid ${PCX.card}`, animation: link.fresh ? "pcxblink 1.6s ease-in-out infinite" : "none" }} />
+          </span>
+          <div data-pc-status={link.fresh ? "ok" : "lost"} style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontFamily: F_HEAD, fontSize: 15, fontWeight: 800 }}>{link.fresh ? "PC collegato" : "Il PC non risponde"}</div>
+            {small(link.fresh ? `${link.ua || "Browser"} · connessione stabile` : "Controlla che sul PC la pagina sia ancora aperta.")}
+          </div>
+        </div>
+        <div style={{ marginTop: 16, fontFamily: F_HEAD, fontSize: 12, fontWeight: 800, letterSpacing: .4, color: PCX.muted }}>PILOTA IN PRIMO PIANO</div>
+        {cars.length ? (
+          <div data-swipe-own="" style={{ display: "flex", gap: 8, marginTop: 8, overflowX: "auto", paddingBottom: 2, flex: "none", scrollbarWidth: "none" }}>
+            {cars.map(c => { const sel = prefs.tel === c.id; return (
+              <button key={c.id} className="pcx-press" data-pc-focus={c.id} aria-pressed={sel ? "true" : "false"} onClick={() => onFocus(c.id)}
+                style={{ flex: "none", display: "flex", alignItems: "center", gap: 6, height: 44, padding: "0 14px", borderRadius: 22, boxSizing: "border-box", border: `2px solid ${sel ? PCX.yellow : PCX.line}`, background: sel ? PCX.key : PCX.card, color: PCX.text, fontFamily: F_HEAD, fontSize: 14, fontWeight: 800 }}>
+                <span aria-hidden="true" style={{ width: 4, height: 18, borderRadius: 2, background: c.color }} />{c.code}
+              </button>
+            ); })}
+          </div>
+        ) : small("Il pilota della telemetria si sceglie quando c'è una sessione.", { marginTop: 6 })}
+        {/* 21/11 (Edoardo: "fai che si possa anche dall'app del Cell decidere cosa mettere sul PC"): i pannelli accesi,
+            nell'ordine in cui il PC li mette (frecce per spostarli), poi quelli spenti da aggiungere. */}
+        <div style={{ marginTop: 16, display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 8 }}>
+          <span style={{ fontFamily: F_HEAD, fontSize: 12, fontWeight: 800, letterSpacing: .4, color: PCX.muted }}>COSA C'È SUL PC</span>
+          <span style={{ fontSize: 12, fontWeight: 600, color: PCX.muted }}>{panels.length} pannelli accesi</span>
+        </div>
+        {small("Si cambiano anche dal PC col tasto Modifica: quello che scegli lì arriva qui.", { marginTop: 4 })}
+        <div data-pc-panels="" style={{ marginTop: 8, borderRadius: 18, background: PCX.card, border: `1px solid ${PCX.line}`, padding: "0 10px", flex: "none" }}>
+          {[...panels, ...PairLogic.PANELS.filter(id => !panels.includes(id))].map((id, i) => {
+            const [ic, label] = PC_PANEL_UI[id] || ["grid", id], sel = panels.includes(id), k = panels.indexOf(id);
+            const arrow = (dir, dis) => (
+              <button className="pcx-press" data-pc-move={id + (dir < 0 ? ":su" : ":giu")} aria-label={`${label}: ${dir < 0 ? "più in alto" : "più in basso"} sul PC`} disabled={dis} onClick={() => onMove(id, dir)}
+                style={{ display: "flex", alignItems: "center", justifyContent: "center", width: 36, height: 44, background: "none", border: "none", color: dis ? PCX.track : PCX.text, flex: "none" }}><PcIco d={dir < 0 ? "up" : "down"} size={20} /></button>
+            );
+            return (
+              <div key={id} data-pc-row={id} style={{ display: "flex", alignItems: "center", gap: 6, minHeight: 52, borderTop: i ? `1px solid ${PCX.line}` : "none" }}>
+                {sel && <span aria-hidden="true" style={{ width: 18, fontFamily: F_HEAD, fontSize: 12, fontWeight: 800, color: PCX.muted, textAlign: "center", flex: "none" }}>{k + 1}</span>}
+                <PcIco d={ic} size={20} color={sel ? PCX.text : PCX.muted} />
+                <span style={{ flex: 1, minWidth: 0, fontFamily: F_HEAD, fontSize: 14, fontWeight: 800, color: sel ? PCX.text : PCX.muted, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{label}</span>
+                {sel && arrow(-1, k === 0)}
+                {sel && arrow(1, k === panels.length - 1)}
+                <button className="pcx-press" data-pc-tile={id} role="switch" aria-checked={sel ? "true" : "false"} aria-label={`${label} sul PC`} onClick={() => onPanel(id)}
+                  style={{ display: "flex", alignItems: "center", justifyContent: "center", width: 52, height: 44, background: "none", border: "none", flex: "none" }}>
+                  <span aria-hidden="true" style={{ position: "relative", width: 40, height: 22, borderRadius: 11, background: sel ? PCX.green : PCX.track }}>
+                    <span className="pcx-knob" style={{ position: "absolute", left: 2, top: 2, width: 18, height: 18, borderRadius: "50%", background: "#fff", transform: sel ? "translateX(18px)" : "none" }} />
+                  </span>
+                </button>
+              </div>
+            );
+          })}
+        </div>
+        {st && (
+          <div style={{ marginTop: 14, padding: "12px 14px", borderRadius: 18, background: PCX.card, border: `1px solid ${PCX.line}`, flex: "none" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", fontFamily: F_HEAD, fontSize: 12, fontWeight: 700, color: PCX.muted }}><span>{sessionName(st.type)}</span><span>{liveCounter(st)}</span></div>
+            {race != null && <div style={{ marginTop: 8, height: 6, borderRadius: 3, background: PCX.track, overflow: "hidden" }}><div style={{ width: "100%", height: 6, borderRadius: 3, background: PCX.yellow, transform: `scaleX(${race})`, transformOrigin: "left" }} /></div>}
+          </div>
+        )}
+        <div style={{ marginTop: "auto", paddingTop: 14 }}>{btn("Scollega il PC", null, onUnlink, false, { "data-pc-unlink": "" })}</div>
+      </>
+    );
+  }
+  return (
+    <div data-pc-ui="" data-pc-sheet={view} role="dialog" aria-modal="true" aria-label="Collega PC" className="scrollcol" style={{ position: "absolute", inset: 0, zIndex: 630, background: PCX.bg, color: PCX.text, fontFamily: F_BODY, display: "flex", flexDirection: "column", boxSizing: "border-box", padding: "calc(env(safe-area-inset-top, 0px) + 12px) 20px calc(env(safe-area-inset-bottom, 0px) + 24px)", overflowY: "auto" }}>
+      <style>{PC_CSS}</style>
+      {body}
+    </div>
+  );
+}
+
 /* ── PILOTA E SCUDERIA DEL GIORNO ─────────────────────────────────────── */
 // Si vota durante il GP da metà gara, un voto per il pilota e uno per la scuderia. I voti degli altri tifosi
 // sono simulati (demo): contano la posizione, le posizioni guadagnate e un po' di caso; poi c'è il tuo.
@@ -9344,7 +9889,7 @@ function TrophyCase({ trophies = {}, helmet = null, defs = TROPHIES, onOpen }) {
   );
 }
 
-function ProfiloScreen({ onPromo = null, promoUntil = 0, tv = false, onTv = null, onChangelog = null, onHack = null, onCoffee = null, coffeePrice = null, fanLevel = null, reminders = true, onReminders = null, halfway = true, onHalfway = null, news = true, onNews = null, trophiesOn = true, onTrophiesOn = null, holidays = true, onHolidays = null, miniPit = true, onMiniPit = null, ig, onOpenIg, trial = null, trialUsed = false, onBack, onNotifiche, onPremium, onAdmin, onLogout, isPremium, onAbout, onHelp, onFeedback, aboutMe, onSaveAboutMe, favTeam, favDriver, onPickTeam, onPickDriver, guest, onLogin, onTerms, blocked = [], onUnblock, onDeleteAccount, savedCount = 0, onOpenSaved, account = null, onSaveName, isAdmin = false, onTheme, sounds = true, haptics = true, onSounds, onHaptics, helmet = null, onHelmet, trophies = {}, trophyProg = {}, trophyList = TROPHIES, onAdPrivacy = null }) {
+function ProfiloScreen({ onPcLink = null, pcLinked = false, onPromo = null, promoUntil = 0,tv = false, onTv = null, onChangelog = null, onHack = null, onCoffee = null, coffeePrice = null, fanLevel = null, reminders = true, onReminders = null, halfway = true, onHalfway = null, news = true, onNews = null, trophiesOn = true, onTrophiesOn = null, holidays = true, onHolidays = null, miniPit = true, onMiniPit = null, ig, onOpenIg, trial = null, trialUsed = false, onBack, onNotifiche, onPremium, onAdmin, onLogout, isPremium, onAbout, onHelp, onFeedback, aboutMe, onSaveAboutMe, favTeam, favDriver, onPickTeam, onPickDriver, guest, onLogin, onTerms, blocked = [], onUnblock, onDeleteAccount, savedCount = 0, onOpenSaved, account = null, onSaveName, isAdmin = false, onTheme, sounds = true, haptics = true, onSounds, onHaptics, helmet = null, onHelmet, trophies = {}, trophyProg = {}, trophyList = TROPHIES, onAdPrivacy = null }) {
   const ft = favTeam ? teamById(favTeam) : null;
   const fd = favDriver ? driverById(favDriver) : null;
   const favRows = [
@@ -9389,6 +9934,8 @@ function ProfiloScreen({ onPromo = null, promoUntil = 0, tv = false, onTv = null
   const rows = [
     { icon: "person", label: "Profilo pubblico", value: guest ? "Preferiti" : "Su di te e preferiti", onClick: () => setPubPage(true), chevron: true },
     { icon: "bell", label: "Notifiche", onClick: onNotifiche, chevron: true },
+    // 21/11 (Edoardo): il Second Screen grande sul PC, collegato col QR; il telefono fa da telecomando.
+    ...(onPcLink ? [{ icon: "tv", label: "Collega PC", value: pcLinked ? "Collegato" : null, onClick: onPcLink, chevron: true }] : []),
     // 8/11 (Edoardo): colori, suoni, vibrazioni, temi delle feste, Pit Board e promemoria in una sola voce che si apre.
     { icon: "palette", label: "Personalizza l'app", onClick: () => setPersOpen(o => !o), chevron: true, group: true, open: persOpen },
     ...(persOpen ? [
@@ -13964,6 +14511,200 @@ function App() {
     if (nativeShareKind()) shareNative({ title: "Il mio giro di Pit Swipe", text }, "Condividi il giro");
     else { copyText(text); showToast("Testo del giro copiato"); }
   };
+  // ── Collega PC (21/11) ── Sul PC (PAGE.pc) la pagina è solo il Second Screen grande del telefono collegato; sul
+  // telefono Profilo → Collega PC (PcLinkSheet) e, collegato, il telecomando. Il collegamento resta sul telefono
+  // (bt-pc-link) finché vale (12 ore) o finché non si scollega.
+  const pcScr = usePcScreen(PAGE.pc);
+  const [pcLink, setPcLink] = useState(() => { const v = local.get("bt-pc-link"); return v && PairLogic.CODE_RE.test(String(v.code)) && v.exp > nowMs() ? v : null; });
+  const [pcView, setPcView] = useState(null);
+  const [pcDigits, setPcDigits] = useState("");
+  const [pcBusy, setPcBusy] = useState(false);
+  const [pcMsg, setPcMsg] = useState(null);
+  const [pcScanOk, setPcScanOk] = useState(false);
+  // Pannelli dello schermo grande, nell'ordine scelto sul telefono (restano per la volta dopo).
+  const [pcPanels, setPcPanels] = useState(() => { const v = local.get("bt-pc-panels"); return v ? PairLogic.cleanPanels(v) : PairLogic.PANELS_INIT.slice(); });
+  const pcPanelsSet = f => { const v = f(pcPanels); if (v === pcPanels) return; local.set("bt-pc-panels", v); setPcPanels(v); fx.play("tick"); };
+  const [pcRemote, setPcRemote] = useState(null);   // { n: battito del PC, seenAt: quando è cambiato (orologio del telefono), ua }
+  const pcTry = useRef(0);   // tentativo in corso: chiudendo o riprovando, quello di prima si ferma
+  const pcScanAvail = !!(capPlugin("BarcodeScanner") && capPlugin("BarcodeScanner").scan);
+  useBack(!!pcView, () => { pcTry.current++; setPcBusy(false); setPcView(null); });
+  const pcSetLink = v => { if (v) local.set("bt-pc-link", v); else local.del("bt-pc-link"); setPcLink(v); };
+  const pcClaim = async code => {
+    if (!account || !account.uid) { needLogin("Per collegare il PC serve un account."); return; }
+    const n = ++pcTry.current, at = nowMs();
+    setPcBusy(true); setPcMsg(null);
+    const doc = PairLogic.claim({ owner: account.uid, pro: isPremium, name: account.name || "", layout: ssLayout, prefs: ssPrefs, now: at });
+    try {
+      const old = await dbGet("pair", code).catch(() => null);
+      if (n !== pcTry.current) return;
+      if (old && old.owner && old.owner !== account.uid && old.exp > nowMs()) {
+        setPcBusy(false); setPcScanOk(false); setPcDigits(""); setPcMsg("Questo codice lo sta usando un altro telefono. Aspetta quello nuovo sul PC."); return;
+      }
+      await dbSet("pair", code, { ...doc, panels: pcPanels.slice(), pc: null }, { fields: [...Object.keys(doc), "panels", "pc"] });
+      // Risposta del PC: la cerca per 15 secondi (il PC legge ogni 2,5 secondi).
+      for (let i = 0; i < 12; i++) {
+        await new Promise(r => setTimeout(r, 1250));
+        if (n !== pcTry.current) return;
+        const d = await dbGet("pair", code).catch(() => null);
+        if (n !== pcTry.current) return;
+        if (PairLogic.acked(d, at)) {
+          pcSetLink({ code, at, exp: doc.exp });
+          setPcRemote({ n: d.pc.n, seenAt: nowMs(), ua: d.pc.ua });
+          setPcBusy(false); setPcDigits(""); setPcScanOk(false); setPcView("remote");
+          fx.play("flag"); fx.buzz("flag"); showToast("PC collegato");
+          return;
+        }
+      }
+      dbDelete("pair", code).catch(() => {});
+      setPcBusy(false); setPcDigits(""); setPcScanOk(false); setPcView("expired");
+    } catch (e) {
+      if (n !== pcTry.current) return;
+      setPcBusy(false); setPcScanOk(false); setPcMsg("Non riesco a collegare il PC: controlla la rete e riprova.");
+    }
+  };
+  // Lettore QR di Google (plugin @capacitor-mlkit/barcode-scanning): si apre a tutto schermo e torna col testo letto.
+  const pcScan = async () => {
+    setPcView("scan"); setPcMsg(null); setPcScanOk(false);
+    const p = capPlugin("BarcodeScanner");
+    if (!p || !p.scan) { setPcMsg("Su questo telefono il lettore QR non c'è: scrivi il codice."); return; }
+    try {
+      if (p.isGoogleBarcodeScannerModuleAvailable) {
+        const a = await p.isGoogleBarcodeScannerModuleAvailable();
+        if (a && a.available === false) {
+          if (p.installGoogleBarcodeScannerModule) Promise.resolve().then(() => p.installGoogleBarcodeScannerModule()).catch(() => {});
+          setPcMsg("Sto scaricando il lettore QR di Google: riprova tra qualche secondo."); return;
+        }
+      }
+      const r = await p.scan({ formats: ["QR_CODE"] });
+      const b0 = r && Array.isArray(r.barcodes) ? r.barcodes[0] : null, raw = b0 ? (b0.rawValue || b0.displayValue || "") : "";
+      if (!raw) return;   // chiuso senza leggere niente
+      const code = PairLogic.parseCode(raw);
+      if (!code) { fx.buzz("light"); setPcMsg("Questo QR non è di Sector 4: inquadra quello sullo schermo del PC."); return; }
+      setPcScanOk(true); fx.buzz("select");
+      pcClaim(code);
+    } catch (e) {
+      if (!/cancel/i.test(String((e && e.message) || e || ""))) setPcMsg("Il lettore QR non si è aperto: riprova o scrivi il codice.");
+    }
+  };
+  const pcGo = kind => {
+    if (guest || !account) { setPcView(null); needLogin("Per collegare il PC serve un account."); return; }
+    proGate("ss", () => { pcTry.current++; setPcBusy(false); if (kind === "scan") pcScan(); else { setPcDigits(""); setPcMsg(null); setPcView("code"); } });
+  };
+  const pcKey = k => {
+    if (pcBusy) return;
+    setPcMsg(null);
+    if (k === "del") { setPcDigits(d => d.slice(0, -1)); return; }
+    if (pcDigits.length >= 6) return;
+    const v = pcDigits + k;
+    setPcDigits(v);
+    if (v.length === 6) { const c = PairLogic.parseCode(v); if (c) pcClaim(c); else setPcMsg("Il codice del PC non comincia con 0: controlla le cifre."); }
+  };
+  const pcUnlink = () => {
+    const code = pcLink && pcLink.code;
+    pcTry.current++; pcSetLink(null); setPcRemote(null); setPcView(null);
+    if (code) dbDelete("pair", code).catch(() => {});
+    showToast("PC scollegato");
+  };
+  // Collegato, a telefono acceso: ogni 4 secondi col telecomando aperto (6 se chiuso) si guarda il documento: se il PC
+  // risponde ancora (pc.n che cresce), se il collegamento c'è e le scelte fatte sul PC (pannelli, pilota), che il
+  // telefono prende se nei 6 secondi prima non ha cambiato niente lui (sennò vince la sua, che sta per partire).
+  const pcMineAt = useRef(0);
+  const pcPanelsRef = useRef(pcPanels); pcPanelsRef.current = pcPanels;
+  const ssPrefsRef = useRef(ssPrefs); ssPrefsRef.current = ssPrefs;
+  const pcRemoteOpen = pcView === "remote";
+  useEffect(() => {
+    if (!pcLink) return undefined;
+    let off = false;
+    const look = () => {
+      if (typeof document !== "undefined" && document.hidden) return;
+      dbGet("pair", pcLink.code).then(d => {
+        if (off) return;
+        if (!d || (account && d.owner !== account.uid)) { pcSetLink(null); setPcRemote(null); setPcView(v => (v ? "intro" : null)); showToast("Il collegamento col PC è finito"); return; }
+        const pc = d.pc && d.pc.seen === pcLink.at ? d.pc : null;
+        setPcRemote(r => (pc && (!r || r.n !== pc.n) ? { n: pc.n, seenAt: nowMs(), ua: pc.ua } : r));
+        if (Date.now() - pcMineAt.current <= 6000) return;
+        if (Array.isArray(d.panels)) {
+          const dp = PairLogic.cleanPanels(d.panels);
+          if (dp.join() !== pcPanelsRef.current.join()) { local.set("bt-pc-panels", dp); setPcPanels(dp); }
+        }
+        const tel = d.prefs && pcId(d.prefs.tel) ? d.prefs.tel : null;
+        if (d.prefs && tel !== ssPrefsRef.current.tel) setSsPrefs(p => ({ ...p, tel }));
+      }).catch(() => {});
+    };
+    look();
+    const iv = setInterval(look, pcRemoteOpen ? 4000 : 6000);
+    return () => { off = true; clearInterval(iv); };
+  }, [pcRemoteOpen, pcLink && pcLink.code]);   // eslint-disable-line react-hooks/exhaustive-deps
+  // Collegato: i pannelli (da soli, così una scelta fatta sul PC non torna indietro quando il telefono cambia altro), poi
+  // le scelte del Second Screen (pilota della telemetria…) e il Pro del telefono vanno sul PC, dopo 0,6 secondi di calma.
+  const pcProNow = isPremium;   // come proHas("ss"), che è dichiarato più sotto
+  useEffect(() => {
+    if (!pcLink) return undefined;
+    if (pcLink.exp <= nowMs()) { pcSetLink(null); return undefined; }
+    pcMineAt.current = Date.now();
+    const t = setTimeout(() => { dbSet("pair", pcLink.code, { panels: pcPanels.slice() }, { fields: ["panels"] }).catch(() => {}); }, 600);
+    return () => clearTimeout(t);
+  }, [pcLink && pcLink.code, pcPanels]);   // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (!pcLink || pcLink.exp <= nowMs()) return undefined;
+    pcMineAt.current = Date.now();
+    const t = setTimeout(() => {
+      dbSet("pair", pcLink.code, { layout: JSON.parse(JSON.stringify(ssLayout)), prefs: JSON.parse(JSON.stringify(ssPrefs)), pro: pcProNow }, { fields: ["layout", "prefs", "pro"] }).catch(() => {});
+    }, 600);
+    return () => clearTimeout(t);
+  }, [pcLink && pcLink.code, ssLayout, ssPrefs, pcProNow]);   // eslint-disable-line react-hooks/exhaustive-deps
+  // Sul PC: le scelte fatte lì (Modifica) si vedono subito e vanno nel documento; valgono finché il documento non le
+  // riporta (al massimo 8 secondi: se la scrittura non è passata, il PC torna a quello che c'è davvero).
+  const [pcOwn, setPcOwn] = useState(null);
+  useEffect(() => { setPcOwn(null); }, [pcScr.code]);
+  const pcOwnPut = fields => {
+    const code = pcScr.code, d = pcScr.doc;
+    if (!code || !d) return;
+    setPcOwn(o => ({ ...(o && Date.now() - o.at < 8000 ? o : {}), ...fields, at: Date.now() }));
+    const data = {};
+    if (fields.panels) data.panels = fields.panels.slice();
+    if ("tel" in fields) data.prefs = { ...pcPrefsOf(d.prefs), tel: fields.tel };
+    dbSet("pair", code, data, { fields: Object.keys(data) }).catch(() => {});
+  };
+  // Replay: il punto della sessione rivista e se va avanti (ogni 15 secondi mentre va) vanno sul PC.
+  const pcReplayKey = isOf1Live(live) && !live.ongoing ? live.sessionKey : null;
+  useEffect(() => {
+    if (!pcLink || !pcReplayKey || !live || !live.sim) return undefined;
+    const put = () => dbSet("pair", pcLink.code, { clock: { key: pcReplayKey, t: Math.round(live.sim.t * 10) / 10, playing: !!replay.playing, speed: replay.speed, at: nowMs() } }, { fields: ["clock"] }).catch(() => {});
+    put();
+    if (!replay.playing) return undefined;
+    const iv = setInterval(put, 15000);
+    return () => clearInterval(iv);
+  }, [pcLink && pcLink.code, pcReplayKey, replay.playing, replay.speed]);   // eslint-disable-line react-hooks/exhaustive-deps
+  // Sul PC: stessa sessione rivista del telefono → stesso punto e stessa velocità (salta se è lontano più di 4 s × velocità).
+  const pcClock = PAGE.pc && pcScr.doc && pcScr.doc.clock && typeof pcScr.doc.clock === "object" ? pcScr.doc.clock : null;
+  const pcClockSig = pcClock ? [pcClock.key, pcClock.t, pcClock.playing, pcClock.speed, pcClock.at].join(":") : null;
+  useEffect(() => {
+    if (!pcClock || !isOf1Live(live) || live.ongoing || !live.sim || live.sessionKey !== pcClock.key) return;
+    const speed = pcClock.speed === 60 ? 60 : 10, playing = pcClock.playing === true;
+    const t = Math.max(0, Math.min(live.sim.duration, (Number(pcClock.t) || 0) + (playing ? 1.25 * speed : 0)));
+    if (Math.abs(live.sim.t - t) > (playing ? 4 * speed : 1)) { live.sim.jumpTo(t); syncNotices(live); }
+    setReplay(r => (r.playing === playing && r.speed === speed ? r : { ...r, playing, speed }));
+    setLiveTick(x => x + 1);
+  }, [pcClockSig, isOf1Live(live) ? live.sessionKey : null]);   // eslint-disable-line react-hooks/exhaustive-deps
+  // Arrivati dal QR con la fotocamera del telefono (sito con ?collega=<cifre>): con l'account si collega subito.
+  const pcLinkDone = useRef(false);
+  useEffect(() => {
+    if (!PAGE.link || pcLinkDone.current || !authed || guest) return;
+    pcLinkDone.current = true;
+    try { window.history.replaceState(null, "", window.location.pathname); } catch (e) { /* niente */ }
+    proGate("ss", () => { setPcView("code"); setPcDigits(PAGE.link); pcClaim(PAGE.link); });
+  }, [authed, guest]);   // eslint-disable-line react-hooks/exhaustive-deps
+  if (PAGE.pc) {
+    const d = pcScr.doc;
+    if (pcScr.state !== "collegato" || !d) return <PcWaitScreen code={pcScr.code} since={pcScr.since} />;
+    if (!d.pro) return <PcProScreen name={d.name} />;
+    const pcSt = live ? (st0 => (st0 && live.ongoing && st0.finished ? { ...st0, finished: false } : st0))(live.sim.state()) : null;
+    const own = pcOwn && Date.now() - pcOwn.at < 8000 ? pcOwn : null;
+    const panels = own && own.panels ? own.panels : PairLogic.cleanPanels(d.panels);
+    const prefs = own && "tel" in own ? { ...pcPrefsOf(d.prefs), tel: own.tel } : pcPrefsOf(d.prefs);
+    return <PcDashboard name={typeof d.name === "string" ? d.name.slice(0, 30) : ""} chat={chats.find(c => c.id === "generale")} race={live ? races.find(r => r.id === live.raceId) : weekendRace(races)} live={live} st={pcSt} standings={shownStandings} panels={panels} prefs={prefs} onPanels={l => pcOwnPut({ panels: PairLogic.cleanPanels(l) })} onTel={id => pcOwnPut({ tel: id })} />;
+  }
   if (account === undefined && !guest) {   // si aspetta Authentication: forse c'è già una sessione
     return shell(
       <div data-auth-wait="" style={{ height: "100%", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 12, fontFamily: F_BODY, fontSize: 13, color: C.muted }}>
@@ -14106,7 +14847,7 @@ function App() {
     mode={swipe.mode || "taste"} onMode={m => { if (!guest && !userDataWait()) setSwipe(s => ({ ...s, mode: m })); }} rain={psRain} onEgg={psEgg} streak={{ n: (swipe.streak || {}).n || 0 }}
     endInfo={psEndInfo} onSaved={() => { setSavedOnly(true); setView("tab"); goTab("home"); }} onShare={psShare} onDuel={!guest ? sendDuel : null} />;
   else if (view === "chats") body = <ChatsView chats={chats} onOpen={openChat} blocked={blocked} onBack={viewBack.chats} unreadOf={(id, ms) => Chat.unread(id, ms)} />;
-  else if (view === "profilo") body = <ProfiloScreen onPromo={() => setPromoOpen(true)} promoUntil={promoMine.until} tv={tvMode} onTv={v => { setTvMode(v); local.set("bt-tv", v); fx.play("tick"); showToast(v ? "Modalità TV: lo schermo resta acceso finché l'app è aperta" : "Modalità TV spenta"); }} onChangelog={changelogGo} onCoffee={Billing.where() ? buyCoffee : null} coffeePrice={playPrices.coffee || null} ig={ig} onOpenIg={() => { setIgFrom("profilo"); setView("instagram"); }} aboutMe={aboutMe} onSaveAboutMe={a => Account.updateAbout(a).catch(e => showToast(e && (e.code === "too-young" || e.code === "not-loaded") ? messageOf(e) : NOT_SAVED))} account={account} onSaveName={n => Account.updateName(n)} isAdmin={Account.isAdmin()} trial={trialActive ? trial : null} trialUsed={!!trial} onBack={viewBack.profilo} onNotifiche={() => setView("notifiche")} onPremium={() => setPremiumOpen(true)} onAdmin={() => guest ? needLogin("Accedi per usare il pannello admin.") : setView(adminUnlocked ? "admin" : "hack")} onHack={() => { setView("hack"); if (account && Account.refreshAdmin) Account.refreshAdmin().catch(() => {}); }} onLogout={logout} isPremium={isPaid} onAbout={() => setInfoModal({ title: "Info su B&T", body: ABOUT_TEXT, credits: true })} onFeedback={() => setFeedbackOpen(true)} onHelp={() => setInfoModal({ title: "Assistenza", body: HELP_TEXT })} favTeam={favTeam} favDriver={favDriver} onPickTeam={() => guest ? needLogin("Per scegliere scuderia e pilota del cuore serve un account.") : setPicker("team")} onPickDriver={() => guest ? needLogin("Per scegliere scuderia e pilota del cuore serve un account.") : setPicker("driver")} guest={guest} onLogin={() => needLogin(null)} onTerms={() => setTermsOpen(true)} blocked={blocked} onUnblock={unblockUser} onDeleteAccount={deleteAccount} savedCount={saved.length} onOpenSaved={openSaved} onTheme={() => setThemeOpen(true)} helmet={helmet} onHelmet={() => setHelmetOpen(true)} trophies={trophies} trophyProg={trophyProg} trophyList={trophyList}
+  else if (view === "profilo") body = <ProfiloScreen onPcLink={() => { setPcMsg(null); setPcView(pcLink ? "remote" : "intro"); }} pcLinked={!!pcLink} onPromo={() => setPromoOpen(true)}promoUntil={promoMine.until} tv={tvMode} onTv={v => { setTvMode(v); local.set("bt-tv", v); fx.play("tick"); showToast(v ? "Modalità TV: lo schermo resta acceso finché l'app è aperta" : "Modalità TV spenta"); }} onChangelog={changelogGo} onCoffee={Billing.where() ? buyCoffee : null} coffeePrice={playPrices.coffee || null} ig={ig} onOpenIg={() => { setIgFrom("profilo"); setView("instagram"); }} aboutMe={aboutMe} onSaveAboutMe={a => Account.updateAbout(a).catch(e => showToast(e && (e.code === "too-young" || e.code === "not-loaded") ? messageOf(e) : NOT_SAVED))} account={account} onSaveName={n => Account.updateName(n)} isAdmin={Account.isAdmin()} trial={trialActive ? trial : null} trialUsed={!!trial} onBack={viewBack.profilo} onNotifiche={() => setView("notifiche")} onPremium={() => setPremiumOpen(true)} onAdmin={() => guest ? needLogin("Accedi per usare il pannello admin.") : setView(adminUnlocked ? "admin" : "hack")} onHack={() => { setView("hack"); if (account && Account.refreshAdmin) Account.refreshAdmin().catch(() => {}); }} onLogout={logout} isPremium={isPaid} onAbout={() => setInfoModal({ title: "Info su B&T", body: ABOUT_TEXT, credits: true })} onFeedback={() => setFeedbackOpen(true)} onHelp={() => setInfoModal({ title: "Assistenza", body: HELP_TEXT })} favTeam={favTeam} favDriver={favDriver} onPickTeam={() => guest ? needLogin("Per scegliere scuderia e pilota del cuore serve un account.") : setPicker("team")} onPickDriver={() => guest ? needLogin("Per scegliere scuderia e pilota del cuore serve un account.") : setPicker("driver")} guest={guest} onLogin={() => needLogin(null)} onTerms={() => setTermsOpen(true)} blocked={blocked} onUnblock={unblockUser} onDeleteAccount={deleteAccount} savedCount={saved.length} onOpenSaved={openSaved} onTheme={() => setThemeOpen(true)} helmet={helmet} onHelmet={() => setHelmetOpen(true)} trophies={trophies} trophyProg={trophyProg} trophyList={trophyList}
     onAdPrivacy={Ads.privacyRequired() ? () => Ads.openPrivacy().catch(() => showToast("Le preferenze sulla privacy degli annunci non sono disponibili in questo momento.")) : null}
     sounds={sounds} haptics={haptics} onSounds={v => { if (userDataWait()) return; setSounds(v); fx.setSounds(v); if (v) fx.play("tick"); }} onHaptics={v => { if (userDataWait()) return; setHaptics(v); fx.setHaptics(v); if (v) fx.buzz("light"); }}
     holidays={holidaysOn} onHolidays={v => { if (userDataWait()) return; setHolidaysOn(v); local.set("bt-holidays-on", v); fx.play("tick"); }}
@@ -14225,6 +14966,7 @@ function App() {
         {ssOpen && <SecondScreen chat={chats.find(c => c.id === "generale")} blocked={blocked} onChatSend={guest ? () => needLogin("Per scrivere in chat serve un account.") : t => sendMessage("generale", t)} race={live ? races.find(r => r.id === live.raceId) : weekendRace(races)} live={live} st={liveSt} standings={shownStandings} layout={ssLayout} setLayout={setSsLayout} prefs={ssPrefs} setPrefs={setSsPrefs} vote={live ? votesNow.dotd[live.raceId] || {} : {}} onVote={(k, id) => live && voteDotd(live.raceId, k, id)} notice={notice} onCloseNotice={nextNotice} onClose={() => setSsOpen(false)} />}
         {payFail && <PayFailCard onDone={() => setPayFail(false)} />}
         {champShow && <ChampionTakeover champ={champion} onClose={() => { local.set(champKey, true); setChampSeen(true); }} />}
+        {pcView && <PcLinkSheet view={pcView} scanAvail={pcScanAvail} digits={pcDigits} busy={pcBusy} msg={pcMsg} scanOk={pcScanOk} onGo={pcGo} onKey={pcKey} onClose={() => { pcTry.current++; setPcBusy(false); setPcView(null); }} link={{ fresh: !!pcRemote && nowMs() - pcRemote.seenAt < PairLogic.ACK_MS, ua: pcRemote && pcRemote.ua }} st={liveSt} panels={pcPanels} prefs={ssPrefs} onFocus={id => setSsPrefs(p => ({ ...p, tel: id }))} onPanel={id => pcPanelsSet(l => PairLogic.togglePanel(l, id))} onMove={(id, dir) => pcPanelsSet(l => PairLogic.movePanel(l, id, dir))} onUnlink={pcUnlink} />}
         {proAsk && <ProGateSheet what={proAsk.what} hint={proHintOf(proAsk.what)} busy={adBusy} onAd={Ads.canReward() ? () => watchAdPro(proAsk.then) : null} onPremium={() => { setProAsk(null); setPremiumOpen(true); }} onClose={() => setProAsk(null)} />}
         {lapList && live && liveSt && <LapTimesModal live={live} st={liveSt} carId={lapList} onOpenLap={n => setTelemetry({ carId: lapList, lapNo: n, sector: 0 })} onClose={() => setLapList(null)} />}
         {telemetry && live && liveSt && <TelemetryModal live={live} st={liveSt} carId={telemetry.carId} lapNo={telemetry.lapNo} sector={telemetry.sector} onClose={() => setTelemetry(null)} />}

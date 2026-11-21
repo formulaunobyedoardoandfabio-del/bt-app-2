@@ -80,5 +80,23 @@ service cloud.firestore {
     match /resets/{document=**} {
       allow read, write: if isAuthenticated();
     }
+
+    // 8. COLLEGA PC (21/11): pair/<6 cifre> collega il telefono allo schermo grande del PC (src/logic/pair.js).
+    // Il PC non ha l'account: legge il documento del suo codice e può cambiare solo pc (la sua risposta), panels
+    // (i pannelli scelti con Modifica) e prefs (il pilota). Tutto il resto lo scrive solo il telefono che l'ha creato;
+    // un collegamento scaduto (12 ore) può essere preso da un altro account.
+    match /pair/{code} {
+      allow get: if code.matches('^[1-9][0-9]{5}$');
+      allow create: if isAuthenticated() && code.matches('^[1-9][0-9]{5}$')
+        && request.resource.data.owner == request.auth.uid;
+      allow update: if isAuthenticated() && request.resource.data.owner == request.auth.uid
+        && (resource.data.owner == request.auth.uid || resource.data.exp < request.time.toMillis());
+      allow update: if request.resource.data.diff(resource.data).affectedKeys().hasOnly(['pc', 'panels', 'prefs'])
+        && resource.data.exp > request.time.toMillis()
+        && (!('panels' in request.resource.data) || (request.resource.data.panels is list && request.resource.data.panels.size() <= 13))
+        && (!('prefs' in request.resource.data) || request.resource.data.prefs is map)
+        && (!('pc' in request.resource.data) || request.resource.data.pc == null || request.resource.data.pc is map);
+      allow delete: if isAuthenticated() && resource.data.owner == request.auth.uid;
+    }
   }
 }

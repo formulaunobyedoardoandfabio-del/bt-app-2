@@ -4,6 +4,9 @@
   "installCommand": "npm install",
   "buildCommand": "CI=false DISABLE_ESLINT_PLUGIN=true GENERATE_SOURCEMAP=false NODE_OPTIONS=--max-old-space-size=6144 npm run build",
   "outputDirectory": "build",
+  "rewrites": [
+    { "source": "/schermo", "destination": "/index.html" }
+  ],
   "headers": [
     {
       "source": "/data/(.*)",
