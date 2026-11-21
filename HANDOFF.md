@@ -1309,3 +1309,10 @@ Misure prima del lavoro (pagina di prova, CPU rallentata 4x come un telefono med
   iniziata da meno di 3). Prove in `test/unit/meteo.test.js` (prova dell'ora intera aggiornata con `dir`).
 - App: riquadro "PIOGGIA A BREVE · PROSSIME 6 ORE" sopra le previsioni del weekend. Niente probabilità di pioggia (il
   formato compact di MET non la dà). Prova `test/e2e/run132-pioggia-breve.js` (2).
+
+### 21/11: Race Trace nel Replay (piano claude/multiviewer-in-sector4.md)
+- `src/logic/race-trace.js` (prove `test/unit/race-trace.test.js`, 3): distacco dal primo a ogni traguardo, una linea
+  per pilota, fino all'istante del replay; giri del pit. Tabella calcolata una volta per gara.
+- App: nel Replay sulla mappa l'interruttore è Mappa | Box | Distacchi; `RaceTraceView` con scala fino al distacco del
+  10° (o del pilota scelto) tra 20 e 150 s, linee oltre la scala tagliate in basso, pallino ai pit, pilota scelto in
+  evidenza. Prova nuova in `test/e2e/run129-quadrante-box.js` (punti uguali al calcolo).

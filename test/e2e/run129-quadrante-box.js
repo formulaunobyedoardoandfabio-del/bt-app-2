@@ -102,6 +102,32 @@ run({
     assert(!errs.length, errs.join(' | '));
   },
 
+  // 21/11: terza vista Distacchi (Race Trace, src/logic/race-trace.js): una linea per pilota fino all'istante del replay
+  async 'Distacchi: Race Trace col distacco giro per giro uguale al calcolo, pilota scelto in evidenza'(b) {
+    const RT = require('../../src/logic/race-trace');
+    const { ctx, p, errs } = await open(b, { seed: { pro: true }, routes: ROUTES });
+    await login(p); await w(p, 800);
+    await toMap(p);
+    await tapSel(p, '[data-map-view="trace"]'); await w(p, 300);
+    await seek(p, 2400); await w(p, 400);
+    const read = () => p.evaluate(() => ({
+      k: +(document.querySelector('[data-trace]') || { getAttribute: () => -1 }).getAttribute('data-trace-k'),
+      lines: [...document.querySelectorAll('[data-trace-line]')].map(g => [g.getAttribute('data-trace-line'), +g.getAttribute('data-trace-n'), +g.getAttribute('opacity')]),
+      wide: document.documentElement.scrollWidth,
+    }));
+    const a = await read();
+    await tapSel(p, '[data-tower-row="HAD"]'); await w(p, 300);
+    const s = await read();
+    await ctx.close();
+    const want = RT.trace(REP, 2400), withPts = want.lines.filter(l => l.pts.length);
+    assert(a.k === want.K && a.k > 20, 'giri della traccia come il calcolo: ' + a.k + ' invece di ' + want.K);
+    assert(a.lines.length === withPts.length, 'una linea per pilota: ' + a.lines.length);
+    assert(withPts.every(l => (a.lines.find(x => x[0] === l.code) || [])[1] === l.pts.length), 'punti di ogni linea come il calcolo');
+    assert(s.lines.find(x => x[0] === 'HAD')[2] === 1 && s.lines.filter(x => x[0] !== 'HAD').every(x => x[2] < .5), 'HAD in evidenza, gli altri attenuati');
+    assert(a.wide <= 390, 'niente scorrimento di lato: ' + a.wide);
+    assert(!errs.length, errs.join(' | '));
+  },
+
   async 'con la Safety Car in pista la stima grande usa il tempo perso con la SC, e sotto il caso a bandiera verde (Suzuka 2026)'(b) {
     const { ctx, p, errs } = await open(b, { seed: { pro: true }, routes: routesFor(11253, SUZ) });
     await login(p); await w(p, 800);

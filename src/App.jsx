@@ -25,6 +25,7 @@ import BtReplay from "./logic/replay";
 import TrackReplay from "./logic/track-replay";
 import PitDial from "./logic/pit-dial";   // 21/11: Quadrante dei box nel Replay sulla mappa
 import BtContagiri from "./logic/contagiri";   // 21/11: contagiri circolare nel Ghost Lap
+import RaceTrace from "./logic/race-trace";   // 21/11: Race Trace nel Replay sulla mappa
 import { LiveOrb, TypeText, ChangelogCard, VanishCanvas, RollingText } from "./ui/effetti";
 import { AppGuide, EnzoChat, DuoGuide, FlashSpot } from "./ui/guida";
 import { createArchive, findReplay } from "./services/archive";
@@ -6810,6 +6811,42 @@ function PitDialView({ dd, done, sel, onSel, els, ringCol }) {
   );
 }
 
+// Race Trace (21/11, src/logic/race-trace.js): distacco dal primo a ogni giro, una linea per pilota, fino all'istante
+// del replay; pallino ai giri del pit. Scala fino al distacco del 10° (o del pilota scelto, se è più indietro), tra 20
+// e 150 s: oltre, la linea resta sul bordo (doppiati e ritirati).
+function RaceTraceView({ tr, sel, top }) {
+  const X0 = 34, X1 = 330, Y0 = 16, Y1 = 214, N = Math.max(2, tr.N);
+  const lastG = tr.lines.filter(l => l.pts.length && l.pts[l.pts.length - 1][0] === tr.K).map(l => ({ code: l.code, g: l.pts[l.pts.length - 1][1] })).sort((a, b) => a.g - b.g);
+  const p10 = lastG.length ? lastG[Math.min(9, lastG.length - 1)].g : 0, selG = (lastG.find(x => x.code === sel) || { g: 0 }).g;
+  const ymax = Math.max(20, Math.min(150, Math.ceil((Math.max(p10, selG) * 1.1) / 10) * 10)), step = ymax <= 20 ? 5 : ymax <= 60 ? 10 : 20;
+  // oltre la scala le linee escono dal grafico in basso (tagliate), invece di schiacciarsi sul bordo
+  const xs = k => X0 + ((k - 1) / (N - 1)) * (X1 - X0), ys = g => Y0 + (Math.min(g, ymax * 3) / ymax) * (Y1 - Y0);
+  const lines = tr.lines.filter(l => l.pts.length).sort((a, b) => (a.code === sel) - (b.code === sel));
+  const label = new Set([...top, sel].filter(Boolean));
+  const lapTicks = []; for (let k = 10; k <= N; k += 10) lapTicks.push(k);
+  const gTicks = []; for (let g = 0; g <= ymax; g += step) gTicks.push(g);
+  return (
+    <svg data-trace="" data-trace-k={tr.K} viewBox="0 0 340 236" preserveAspectRatio="xMidYMid meet" style={{ width: "100%", height: "100%", display: "block" }} role="img" aria-label={`Distacchi dal primo giro per giro, fino al giro ${tr.K}`}>
+      <defs><clipPath id="bt-trace-clip"><rect x={X0 - 4} y={Y0 - 6} width={X1 - X0 + 30} height={Y1 - Y0 + 8} /></clipPath></defs>
+      {gTicks.map(g => <g key={g}><line x1={X0} x2={X1} y1={ys(g)} y2={ys(g)} stroke="#1E1E23" strokeWidth="1" /><text x={X0 - 5} y={ys(g) + 3} textAnchor="end" fontSize="8.5" fontFamily={F_BODY} fill={C.dim}>{g ? "+" + g : "0"}</text></g>)}
+      {lapTicks.map(k => <text key={k} x={xs(k)} y={Y1 + 13} textAnchor="middle" fontSize="8.5" fontFamily={F_BODY} fill={C.dim}>{k}</text>)}
+      <text x={X0} y={Y1 + 13} textAnchor="middle" fontSize="8.5" fontFamily={F_BODY} fill={C.dim}>1</text>
+      <text x={X1} y={Y1 + 25} textAnchor="end" fontSize="8" fontFamily={F_HEAD} fontWeight="800" letterSpacing=".4" fill={C.dim}>GIRO</text>
+      {lines.map(l => {
+        const on = l.code === sel, dim = sel && !on, last = l.pts[l.pts.length - 1];
+        return (
+          <g key={l.code} data-trace-line={l.code} data-trace-n={l.pts.length} opacity={dim ? .22 : 1} clipPath="url(#bt-trace-clip)">
+            <polyline points={l.pts.map(([k, g]) => xs(k).toFixed(1) + "," + ys(g).toFixed(1)).join(" ")} fill="none" stroke={l.color} strokeWidth={on ? 2.8 : 1.5} strokeLinejoin="round" strokeLinecap="round" />
+            {l.pits.map(pk => { const p = l.pts.find(([k]) => k === pk + 1) || l.pts.find(([k]) => k === pk); return p ? <circle key={pk} cx={xs(p[0])} cy={ys(p[1])} r={on ? 3.4 : 2.4} fill="#0B0B0D" stroke={l.color} strokeWidth="1.6" /> : null; })}
+            {label.has(l.code) && last && <text x={Math.min(xs(last[0]) + 4, X1 - 2)} y={ys(last[1]) + 3} fontSize="9.5" fontFamily={F_HEAD} fontWeight="800" fill="#fff" stroke="#0B0B0D" strokeWidth="3" paintOrder="stroke" textAnchor={xs(last[0]) > X1 - 24 ? "end" : "start"}>{l.code}</text>}
+          </g>
+        );
+      })}
+      {!tr.K && <text x={(X0 + X1) / 2} y={(Y0 + Y1) / 2} textAnchor="middle" fontSize="11" fontFamily={F_BODY} fill={C.muted}>Le linee partono dal primo giro finito</text>}
+    </svg>
+  );
+}
+
 function MapReplay({ file, title, onBack }) {
   const rep = useMemo(() => TrackReplay.decode(file), [file]);
   const tMin = rep ? rep.start : 0, tMax = rep ? rep.start + rep.drivers[0].prog.length - 1 : 0;
@@ -6881,8 +6918,8 @@ function MapReplay({ file, title, onBack }) {
         <span data-map-lap="" style={{ fontFamily: F_HEAD, fontWeight: 900, fontStyle: "italic", fontSize: 17, color: C.text, fontVariantNumeric: "tabular-nums" }}>{st.done ? "BANDIERA A SCACCHI" : t < 0 ? "GRIGLIA" : `GIRO ${st.lap}/${rep.N}`}</span>
         <span style={{ fontFamily: F_HEAD, fontWeight: 700, fontSize: 12, color: C.dim, fontVariantNumeric: "tabular-nums" }}>{t < 0 ? "via tra " + Math.ceil(-t) + " s" : raceClock(t)}</span>
         <div role="group" aria-label="Vista" style={{ marginLeft: "auto", display: "flex", borderRadius: 12, background: "#141418", border: `1px solid ${C.border}`, overflow: "hidden" }}>
-          {[["map", "Mappa"], ["box", "Box"]].map(([k, l]) => { const on = view === k; return (
-            <button key={k} type="button" className="press" data-map-view={k} aria-pressed={on ? "true" : "false"} aria-label={k === "box" ? "Box: quadrante dei box, dove rientra chi si ferma adesso" : undefined}
+          {[["map", "Mappa"], ["box", "Box"], ["trace", "Distacchi"]].map(([k, l]) => { const on = view === k; return (
+            <button key={k} type="button" className="press" data-map-view={k} aria-pressed={on ? "true" : "false"} aria-label={k === "box" ? "Box: quadrante dei box, dove rientra chi si ferma adesso" : k === "trace" ? "Distacchi: il distacco dal primo giro per giro" : undefined}
               onClick={() => { if (!on) { setView(k); fx.play("tick"); } }}
               style={{ minHeight: 44, minWidth: 56, padding: "0 12px", background: on ? C.accent : "transparent", border: "none", fontFamily: F_HEAD, fontWeight: 800, fontSize: 12.5, color: on ? "#fff" : C.muted }}>{l}</button>
           ); })}
@@ -6891,6 +6928,7 @@ function MapReplay({ file, title, onBack }) {
       <div style={{ position: "relative", flexShrink: 0, padding: "0 12px", height: "38vh", minHeight: 210 }}>
         {flag && <span data-map-flag="" style={{ position: "absolute", top: 0, left: 14, zIndex: 1, pointerEvents: "none", padding: "4px 9px", borderRadius: 8, background: flag[1], fontFamily: F_HEAD, fontWeight: 800, fontSize: 10.5, letterSpacing: .5, color: flag[2] }}>{flag[0]}</span>}
         {view === "box" ? <PitDialView dd={PitDial.dial(rep, t, { sel: selIdx >= 0 ? selIdx : null })} done={st.done} sel={sel} onSel={setSel} els={dialEls} ringCol={trackCol} /> :
+        view === "trace" ? <RaceTraceView tr={RaceTrace.trace(rep, t)} sel={sel} top={st.rows.filter(r => !r.out).slice(0, 3).map(r => r.code)} /> :
         <svg data-map-svg="" viewBox={`0 0 ${geo.W.toFixed(1)} ${geo.H.toFixed(1)}`} preserveAspectRatio="xMidYMid meet" style={{ width: "100%", height: "100%", display: "block" }} role="img" aria-label={"Tracciato di " + title + " con le auto"}>
           <path d={geo.d} fill="none" stroke="#1E1E23" strokeWidth={13 * k} strokeLinejoin="round" />
           <path data-map-track="" d={geo.d} fill="none" stroke={trackCol} strokeWidth={6 * k} strokeLinejoin="round" />
