@@ -1972,7 +1972,8 @@ function LoginScreen({ auth, onDone, onGuest, onBack, onDoor, reason, onHold, in
           <img src={BT_LOGO} alt="B&T" style={{ width: 42, height: 42, objectFit: "contain" }} />
         </div>
         <h1 style={{ fontFamily: WT.font, fontWeight: 800, fontSize: 30, lineHeight: 1.1, letterSpacing: -0.5, color: WT.ink, margin: "20px 0 8px" }}>
-          {isLogin ? `Bentornato su ${APP_NAME}` : "Crea il tuo account"}
+          {/* 21/11 (Edoardo): "Sector 4" sempre insieme, mai il "4" da solo sulla riga sotto */}
+          {isLogin ? <>Bentornato su <span style={{ whiteSpace: "nowrap" }}>{APP_NAME}</span></> : "Crea il tuo account"}
         </h1>
         <p style={{ fontFamily: WT.font, fontWeight: 500, fontSize: 15, lineHeight: "22px", color: WT.muted, margin: 0 }}>
           {isLogin ? "Notizie, classifiche live, FantaF1 e la community B&T, tutto in un'app." : "Salvi squadra, chat e casco, e ritrovi tutto su ogni telefono."}
@@ -8736,8 +8737,8 @@ function FantaSquadCard({ squad, setSquad, base, freeTransfers, budget, stats, l
           </div>
         ) : (
           <div data-team-lock="open" style={{ display: "flex", alignItems: "center", marginTop: 12, padding: "10px 14px", borderRadius: 14, background: "#F2F1EE", color: "#101014" }}>
-            <span style={{ flex: 1, minWidth: 0, whiteSpace: "nowrap", fontFamily: F_HEAD, fontWeight: 800, fontSize: "min(14px, 3.9vw)" }}>Chiusura squadra</span>
-            {cd ? <span data-countdown="" aria-label={`Mancano ${cd.d} giorni, ${cd.h} ore e ${cd.m} minuti`} style={{ flexShrink: 0, marginLeft: 8, whiteSpace: "nowrap", fontFamily: F_HEAD, fontWeight: 900, fontSize: "min(19px, 5.6vw)", letterSpacing: .3 }}><RollNumber value={pad(cd.d)} /><small style={{ fontSize: 11 }}>G</small> : <RollNumber value={pad(cd.h)} /><small style={{ fontSize: 11 }}>H</small> : <RollNumber value={pad(cd.m)} /><small style={{ fontSize: 11 }}>M</small></span>
+            <span style={{ flex: 1, fontFamily: F_HEAD, fontWeight: 800, fontSize: 14 }}>Chiusura squadra</span>
+            {cd ? <span data-countdown="" aria-label={`Mancano ${cd.d} giorni, ${cd.h} ore e ${cd.m} minuti`} style={{ fontFamily: F_HEAD, fontWeight: 900, fontSize: 19, letterSpacing: .3 }}><RollNumber value={pad(cd.d)} /><small style={{ fontSize: 11 }}>G</small> : <RollNumber value={pad(cd.h)} /><small style={{ fontSize: 11 }}>H</small> : <RollNumber value={pad(cd.m)} /><small style={{ fontSize: 11 }}>M</small></span>
               : <span style={{ fontFamily: F_BODY, fontSize: 12 }}>all'inizio delle qualifiche</span>}
           </div>
         )}
@@ -9089,10 +9090,10 @@ function FantaScreen({ elo = null, squad, setSquad, base, freeTransfers, budget,
   const input = { flex: 1, minWidth: 0, padding: "10px 12px", borderRadius: 10, background: "rgba(255,255,255,.05)", border: `1px solid ${C.border}`, fontFamily: F_BODY, fontSize: 13, color: C.text, outline: "none" };
   const smallBtn = (label, onClick, opts = {}) => <button className="press" onClick={onClick} disabled={opts.disabled} aria-label={opts.aria} style={{ flexShrink: 0, padding: "9px 12px", borderRadius: 10, background: opts.primary ? C.accent : "rgba(255,255,255,.07)", border: `1px solid ${opts.primary ? C.accent : C.border}`, fontFamily: F_HEAD, fontWeight: 800, fontSize: 12, color: "#fff", opacity: opts.disabled ? .45 : 1 }}>{label}</button>;
   const heading = (icon, text, right) => (
-    <div style={{ display: "flex", alignItems: "center", flexWrap: "wrap", columnGap: 8, rowGap: 2, padding: "6px 16px 10px" }}>
+    <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 16px 10px" }}>
       <Icon name={icon} size={15} color={C.accentInk} />
-      <h2 style={{ whiteSpace: "nowrap", fontFamily: F_HEAD, fontWeight: 900, fontStyle: "italic", fontSize: "min(16px, 4.6vw)", color: C.text, margin: 0 }}>{text}</h2>
-      {right && <span style={{ marginLeft: "auto", whiteSpace: "nowrap", fontFamily: F_BODY, fontSize: 11, color: C.dim }}>{right}</span>}
+      <h2 style={{ fontFamily: F_HEAD, fontWeight: 900, fontStyle: "italic", fontSize: 16, color: C.text, margin: 0 }}>{text}</h2>
+      {right && <span style={{ marginLeft: "auto", fontFamily: F_BODY, fontSize: 11, color: C.dim }}>{right}</span>}
     </div>
   );
   const wkLive = race ? weekends.filter(w => w.raceId === race.id) : [];
@@ -10886,7 +10887,7 @@ function TermsSheet({ review, onAccept, onClose }) {
       <div style={{ background: C.card, borderRadius: "24px 24px 0 0", width: "100%", height: "88%", display: "flex", flexDirection: "column" }}>
         <div style={{ padding: "22px 22px 8px", flexShrink: 0 }}>
           <h2 style={{ fontFamily: F_HEAD, fontWeight: 900, fontStyle: "italic", fontSize: 19, color: C.text, margin: "0 0 4px" }}>TERMINI E CONDIZIONI</h2>
-          {!review && <p style={{ fontFamily: F_BODY, fontSize: 12, color: C.muted, margin: 0 }}>Leggili fino in fondo e accettali per usare {APP_NAME}.</p>}
+          {!review && <p style={{ fontFamily: F_BODY, fontSize: 12, color: C.muted, margin: 0 }}>Leggili fino in fondo e accettali per usare <span style={{ whiteSpace: "nowrap" }}>{APP_NAME}.</span></p>}
         </div>
         <div ref={bodyRef} data-terms-body="" className="scrollcol" onScroll={e => { if (atEnd(e.currentTarget)) setScrolled(true); }} style={{ flex: 1, minHeight: 0, padding: "8px 22px 6px" }}>
           <div>{S.map(([h, b, b2]) => (

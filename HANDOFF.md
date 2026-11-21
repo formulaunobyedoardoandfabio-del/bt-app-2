@@ -1327,3 +1327,8 @@ Misure prima del lavoro (pagina di prova, CPU rallentata 4x come un telefono med
 - Strumento `node tools/wrap-scan.js` (320/360/390 px, elenco in /tmp/bt/wrap-scan.json) e prova fissa
   `test/e2e/run133-a-capo.js` (360 e 390 px: zero a-capo brutti), misura comune in `test/e2e/wrap-lib.js` (esclusa
   dalla suite in test/all.sh). A 320 px restano 5 etichette di 2-3 parole su 2 righe bilanciate.
+
+### 21/11 sera: ritocchi a-capo
+- Fanta: conto alla rovescia "Chiusura squadra" e intestazioni ("PREVISIONI AVANZATE") tornati com'erano (Edoardo:
+  "quella nel Fanta era messa bene").
+- Accesso: "Bentornato su Sector 4" con "Sector 4" sempre insieme (prima il "4" finiva da solo sotto); idem nei Termini.
