@@ -1267,3 +1267,16 @@ Misure prima del lavoro (pagina di prova, CPU rallentata 4x come un telefono med
 - Per Edoardo: Privacy Policy, contenuto di un sito terzo dentro l'app (Trackside).
 - Più avanti, se Riska dà il codice o i modelli 3D: rifarlo dentro l'app (senza riquadro) e collegarlo al resto
   (salvare il proprio posto, vista dal posto nel replay).
+
+### 21/11: Quadrante dei box nel Replay (piano claude/multiviewer-in-sector4.md, passi 1-3)
+- `src/logic/pit-dial.js` (prove `test/unit/pit-dial.test.js`, 12): tempo perso ai box misurato sui pit veri della
+  gara (crescita del distacco dai rivali vicini che non si fermano), stima del rientro (posizione, davanti/dietro,
+  aria libera > 2 s), quadrante (auto sul giro in tempo), stima principale che segue la bandiera (SC → tempo perso
+  con la SC; rossa → niente), prova sui pit veri `node tools/pit-dial-backtest.js [lead] [chiave]`.
+- Risultato sui 417 pit 2026 (394 normali + 23 di massa a parte, Monza giro 3): rientro esatto 56%, ±1 78%;
+  da solo ai box 80% / 96%; con altri ai box nello stesso momento 41% / 67%. "Resta dov'è" indovina il 23%.
+- Con la SC misurato 0,87-0,89 del tempo normale (Spa, Suzuka, Shanghai): SC_FACTOR 0,88 (era 0,5 a stima, sbagliato).
+- Scoperto: nei file il tempo del pit (date di OpenF1) è l'USCITA dalla corsia. Il badge BOX del Replay si accendeva
+  dopo l'uscita: ora da t - durata a t (`track-replay.js`, prova aggiornata in track-replay.test.js).
+- App: nel Replay sulla mappa interruttore Mappa | Box (`PitDialView`, `dialPlace`); cartello della bandiera sopra la
+  mappa. Prova `test/e2e/run129-quadrante-box.js` (3, São Paulo e Suzuka veri).

@@ -46,11 +46,15 @@ t('ordine, giro, distacco dal primo e da chi sta davanti', () => {
   assert.strictEqual(T.stateAt(rep, 10).lap, 2);
 });
 
-t('gomme del giro, box dopo il pit, bandiera del momento', () => {
+// 21/11: il tempo del pit nei file (date di OpenF1) è l'USCITA dalla corsia (sui 417 pit veri del 2026 la macchina è
+// più lenta ~12 s prima di quel tempo): BOX si vede nei secondi di corsia PRIMA del tempo, non dopo (prima era dopo).
+t('gomme del giro, box nella corsia (prima del tempo del pit, che è l\'uscita), bandiera del momento', () => {
   assert.strictEqual(T.stateAt(rep, 4).rows.find(r => r.code === 'AAA').tyre, 'S');
   assert.strictEqual(T.stateAt(rep, 10).rows.find(r => r.code === 'AAA').tyre, 'M');
-  assert.ok(T.stateAt(rep, 6).rows.find(r => r.code === 'AAA').box, 'ai box subito dopo il pit');
-  assert.ok(!T.stateAt(rep, 4).rows.find(r => r.code === 'AAA').box);
+  assert.ok(T.stateAt(rep, 4).rows.find(r => r.code === 'AAA').box, 'in corsia box prima dell\'uscita');
+  assert.ok(T.stateAt(rep, 5).rows.find(r => r.code === 'AAA').box, 'al tempo dell\'uscita');
+  assert.ok(!T.stateAt(rep, 6).rows.find(r => r.code === 'AAA').box, 'già fuori dopo l\'uscita');
+  assert.ok(!T.stateAt(rep, 4).rows.find(r => r.code === 'BBB').box, 'chi non si ferma no');
   assert.deepStrictEqual([2, 4, 10, 15].map(x => T.stateAt(rep, x).flag), ['green', 'sc', 'green', 'red']);
 });
 

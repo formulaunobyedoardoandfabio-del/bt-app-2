@@ -23,6 +23,7 @@ import BtSwipe from "./logic/pitswipe";
 import BtElo from "./logic/elo";
 import BtReplay from "./logic/replay";
 import TrackReplay from "./logic/track-replay";
+import PitDial from "./logic/pit-dial";   // 21/11: Quadrante dei box nel Replay sulla mappa
 import { LiveOrb, TypeText, ChangelogCard, VanishCanvas, RollingText } from "./ui/effetti";
 import { AppGuide, EnzoChat, DuoGuide, FlashSpot } from "./ui/guida";
 import { createArchive, findReplay } from "./services/archive";
@@ -6641,12 +6642,93 @@ const TYRE = { S: ["#FF3B3B", "#111"], M: ["#FFD43B", "#111"], H: ["#F2F2F2", "#
 const MAP_SPEEDS = [1, 10, 30, 60];
 const MAP_FLAG = { sc: ["SAFETY CAR", "#FFD43B", "#111"], vsc: ["VIRTUAL SAFETY CAR", "#FFD43B", "#111"], red: ["BANDIERA ROSSA", "#E10600", "#fff"] };
 const raceClock = x => { const v = Math.max(0, Math.floor(x)), h = Math.floor(v / 3600), m = Math.floor((v % 3600) / 60), q = v % 60; return (h ? h + ":" + String(m).padStart(2, "0") : m) + ":" + String(q).padStart(2, "0"); };
+
+// Quadrante dei box (21/11, dal "Circle of Doom" di MultiViewer; calcoli in src/logic/pit-dial.js). Il cerchio è un
+// giro del primo misurato in tempo: 0° = traguardo, in senso di marcia; la distanza tra due auto sul cerchio è il loro
+// distacco in secondi. Per il pilota scelto: l'ombra dove rientrerebbe fermandosi adesso, l'arco del tempo perso e il
+// segno giallo del rientro con la Safety Car. Posizioni messe a mano a ogni fotogramma (solo transform), come la mappa.
+const DIAL_C = 150, DIAL_R = 112;
+const dialXY = (a, r) => { const q = (a * Math.PI) / 180; return [DIAL_C + r * Math.sin(q), DIAL_C - r * Math.cos(q)]; };
+const dialArc = (a0, a1, r) => {
+  const sw = (((a1 - a0) % 360) + 360) % 360, [x0, y0] = dialXY(a0, r), [x1, y1] = dialXY(a1, r);
+  return `M${x0.toFixed(1)} ${y0.toFixed(1)} A${r} ${r} 0 ${sw > 180 ? 1 : 0} 1 ${x1.toFixed(1)} ${y1.toFixed(1)}`;
+};
+const dialMove = (el, a, r) => { if (!el) return; const [x, y] = dialXY(a, r); el.setAttribute("transform", `translate(${x.toFixed(1)} ${y.toFixed(1)})`); };
+function dialPlace(els, dd) {
+  if (!dd) return;
+  dd.cars.forEach(c => { dialMove(els["c:" + c.code], c.angle, DIAL_R); dialMove(els["l:" + c.code], c.angle, DIAL_R + 22); });
+  const rj = dd.rejoin, me = dd.sel;
+  if (rj && rj.now && me) {
+    dialMove(els.g, rj.now.angle, DIAL_R);
+    dialMove(els.gl, rj.now.angle, DIAL_R + 22);
+    if (els.arc) els.arc.setAttribute("d", dialArc(rj.now.angle, me.angle, DIAL_R));
+  }
+  if (rj && rj.alt) dialMove(els.s, rj.alt.angle, DIAL_R);
+}
+const dialNum = x => String(x).replace(".", ",");
+function PitDialView({ dd, done, sel, onSel, els, ringCol }) {
+  const rj = dd && dd.rejoin, me = dd && dd.sel, g = rj && rj.now, m = dd && dd.model;
+  const label = new Set(dd ? [...dd.cars.filter(c => c.pos <= 3).map(c => c.code), sel].filter(Boolean) : []);
+  // testi in proporzione al cerchio (cqmin: il lato più corto del riquadro), con un minimo leggibile
+  const line = { margin: 0, fontFamily: F_BODY, fontSize: "max(9.5px, min(11.5px, 3.9cqmin))", lineHeight: 1.28, color: C.muted };
+  const head = { ...line, fontFamily: F_HEAD, fontWeight: 800, fontSize: "max(8.5px, min(10px, 3.3cqmin))", letterSpacing: .5, color: C.dim };
+  const reg = k => el => { els.current[k] = el; };
+  const measured = k => (k === "sc" ? rj.scMeasured : k === "vsc" ? rj.vscMeasured : true);
+  const altCol = rj && rj.altKey === "sc" ? "#FFD43B" : "#fff";
+  let info;
+  if (!dd) info = <><p style={{ ...line, color: C.text, fontWeight: 700 }}>Il cerchio parte dal giro 2</p><p style={line}>serve un giro intero del primo per misurarlo</p></>;
+  else if (done) info = <><p style={{ ...line, color: C.text, fontWeight: 700 }}>Gara finita</p><p style={line}>ai box nessuno si ferma più</p></>;
+  else if (!me) info = <>
+    <p style={head}>QUADRANTE BOX</p>
+    <p style={{ ...line, color: C.text, fontWeight: 700 }}>Tocca un pilota: dove rientra se si ferma adesso</p>
+    <p style={line}>{m && m.green != null ? <>Ai box si perdono {dialNum(m.green)} s (misurati su {m.nGreen} pit veri di questa gara)</> : "In questa gara il tempo perso ai box non si misura"}</p>
+  </>;
+  else if (rj && rj.red) info = <><p style={{ ...line, color: C.text, fontWeight: 700 }}>Bandiera rossa</p><p style={line}>le gomme si cambiano in corsia durante la sospensione: nessuna posizione persa</p></>;
+  else if (!g) info = <><p style={{ ...line, color: C.text, fontWeight: 700 }}>{me.code}</p><p style={line}>In questa gara il tempo perso ai box non si misura</p></>;
+  else info = <>
+    <p style={head}>{rj.nowKey === "green" ? `${me.code} SE SI FERMA ORA` : `${me.code} AI BOX CON LA ${rj.nowKey === "sc" ? "SC" : "VSC"}${measured(rj.nowKey) ? "" : " (STIMA)"}`}</p>
+    <p data-dial-pos="" style={{ margin: "1px 0 2px", fontFamily: F_HEAD, fontWeight: 900, fontStyle: "italic", fontSize: "max(22px, min(32px, 10cqmin))", lineHeight: 1, color: C.text }}>P{g.pos}</p>
+    {g.ahead && <p style={line}>Davanti: {g.ahead.code} a {dialNum(g.gapAhead)} s</p>}
+    {g.behind && <p style={line}>Dietro: {g.behind.code} a {dialNum(g.gapBehind)} s</p>}
+    <p data-dial-free="" style={{ ...line, fontWeight: 800, color: g.free ? "#2BD9A0" : "#FF8A8D" }}>{g.free ? "Aria libera" : "Nel traffico"}</p>
+    {rj.alt && <p data-dial-alt="" style={{ ...line, color: altCol }}>{rj.altKey === "sc" ? "Con la Safety Car" : "A bandiera verde"}: P{rj.alt.pos}{measured(rj.altKey) ? "" : " (stima)"}</p>}
+  </>;
+  return (
+    <div style={{ position: "relative", width: "100%", height: "100%", containerType: "size" }}>
+      <svg data-dial="" viewBox="0 0 300 300" preserveAspectRatio="xMidYMid meet" style={{ width: "100%", height: "100%", display: "block" }} role="img" aria-label="Quadrante dei box: le auto sul giro, distanze in secondi">
+        <circle cx={DIAL_C} cy={DIAL_C} r={DIAL_R} fill="none" stroke="#1E1E23" strokeWidth={24} />
+        <circle cx={DIAL_C} cy={DIAL_C} r={DIAL_R} fill="none" stroke={ringCol} strokeWidth={2} />
+        <line x1={DIAL_C} y1={DIAL_C - DIAL_R - 14} x2={DIAL_C} y2={DIAL_C - DIAL_R + 14} stroke="#fff" strokeWidth={3} />
+        {g && me && <path data-dial-arc="" ref={reg("arc")} fill="none" stroke={alpha(me.color, .42)} strokeWidth={12} strokeLinecap="round" />}
+        {me && rj && rj.alt && <g data-dial-ghost="alt" ref={reg("s")}><rect x={-5.5} y={-5.5} width={11} height={11} transform="rotate(45)" fill={altCol} stroke="#0B0B0D" strokeWidth={1.6} /></g>}
+        {g && me && <g data-dial-ghost="now" ref={reg("g")}><circle r={9.5} fill="#0B0B0D" stroke={me.color} strokeWidth={2.6} strokeDasharray="3.2 2.4" /></g>}
+        {g && me && <text data-dial-ghost-label="" ref={reg("gl")} textAnchor="middle" dominantBaseline="central" fontSize={12} fontFamily={F_HEAD} fontWeight="900" fill="#fff" stroke="#0B0B0D" strokeWidth={3} paintOrder="stroke">P{g.pos}</text>}
+        {dd && dd.cars.slice().sort((a, b) => (a.code === sel) - (b.code === sel)).map(c => { const on = c.code === sel; return (
+          <g key={c.code} data-dial-car={c.code} ref={reg("c:" + c.code)} opacity={c.down >= 1 ? .55 : 1} onClick={() => onSel(on ? null : c.code)}>
+            <circle r={on ? 9.5 : 7} fill={c.color} stroke={c.box ? C.gold : on ? "#fff" : "#0B0B0D"} strokeWidth={c.box ? 2.4 : on ? 2.4 : 1.6} strokeDasharray={c.box ? "2.6 1.8" : undefined} />
+          </g>
+        ); })}
+        {dd && dd.cars.filter(c => label.has(c.code)).map(c => (
+          <text key={"l" + c.code} ref={reg("l:" + c.code)} textAnchor="middle" dominantBaseline="central" fontSize={11} fontFamily={F_HEAD} fontWeight="800" fill={c.code === sel ? "#fff" : C.muted} stroke="#0B0B0D" strokeWidth={3} paintOrder="stroke">{c.box ? c.code + " BOX" : c.code}</text>
+        ))}
+      </svg>
+      <div data-dial-info="" style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", pointerEvents: "none" }}>
+        <div style={{ width: "52cqmin", textAlign: "center", display: "flex", flexDirection: "column", alignItems: "center", gap: 1 }}>{info}</div>
+      </div>
+    </div>
+  );
+}
+
 function MapReplay({ file, title, onBack }) {
   const rep = useMemo(() => TrackReplay.decode(file), [file]);
   const tMin = rep ? rep.start : 0, tMax = rep ? rep.start + rep.drivers[0].prog.length - 1 : 0;
   const [t, setT] = useState(tMin), [playing, setPlaying] = useState(false), [speed, setSpeed] = useState(10);
-  const [sel, setSel] = useState(null), [mode, setMode] = useState("gap");
+  const [sel, setSel] = useState(null), [mode, setMode] = useState("gap"), [view, setView] = useState("map");
   const tRef = useRef(tMin), cars = useRef({}), lastUi = useRef(0);
+  // quadrante dei box: le sue auto si muovono nello stesso ciclo della mappa; vista e pilota scelto letti dai ref
+  // perché il ciclo del play resta quello partito col play
+  const dialEls = useRef({}), viewRef = useRef(view), selRef = useRef(sel);
+  viewRef.current = view; selRef.current = sel;
   const geo = useMemo(() => {
     if (!rep) return null;
     const minX = Math.min(...rep.xs), maxX = Math.max(...rep.xs), minY = Math.min(...rep.ys), maxY = Math.max(...rep.ys);
@@ -6667,8 +6749,12 @@ function MapReplay({ file, title, onBack }) {
       const [x, y] = TrackReplay.pointAt(rep, pr);
       el.setAttribute("transform", `translate(${geo.tx(x).toFixed(1)} ${geo.ty(y).toFixed(1)})`);
     });
+    if (viewRef.current === "box") {
+      const si = selRef.current ? rep.drivers.findIndex(d => d.code === selRef.current) : -1;
+      dialPlace(dialEls.current, PitDial.dial(rep, tt, { sel: si >= 0 ? si : null }));
+    }
   };
-  useEffect(() => { place(tRef.current); });
+  useLayoutEffect(() => { place(tRef.current); });
   useEffect(() => {
     if (!playing) return undefined;
     let raf = 0, prev = performance.now();
@@ -6692,6 +6778,7 @@ function MapReplay({ file, title, onBack }) {
   const trackCol = st.flag === "red" ? "#E10600" : st.flag === "sc" || st.flag === "vsc" ? "#FFD43B" : "#5A5A63";
   const byCode = {}; st.rows.forEach(r => { byCode[r.code] = r; });
   const label = new Set([...st.rows.slice(0, 3).map(r => r.code), sel].filter(Boolean));
+  const selIdx = sel ? rep.drivers.findIndex(d => d.code === sel) : -1;
   const span = tMax - tMin || 1;
   const bands = (rep.status || []).map((x, i, a) => x[1] === "green" ? null : { from: x[0], to: i + 1 < a.length ? a[i + 1][0] : tMax, s: x[1] }).filter(Boolean);
   const gapText = r => (r.out ? "RIT" : r.box ? "BOX" : r.pos === 1 ? (st.done ? "Vince" : "Leader") : r.down >= 1 ? `+${r.down} ${r.down === 1 ? "giro" : "giri"}` : (mode === "int" ? r.int : r.gap) == null ? "" : "+" + (mode === "int" ? r.int : r.gap).toFixed(1).replace(".", ","));
@@ -6699,12 +6786,20 @@ function MapReplay({ file, title, onBack }) {
   return (
     <div data-map-replay="" style={{ height: "100%", display: "flex", flexDirection: "column", background: "#0B0B0D" }}>
       <SubHeader title={title} onBack={onBack} />
-      <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "0 16px 6px", flexShrink: 0 }}>
+      <div style={{ display: "flex", alignItems: "center", flexWrap: "wrap", columnGap: 10, rowGap: 4, padding: "0 16px 6px", flexShrink: 0 }}>
         <span data-map-lap="" style={{ fontFamily: F_HEAD, fontWeight: 900, fontStyle: "italic", fontSize: 17, color: C.text, fontVariantNumeric: "tabular-nums" }}>{st.done ? "BANDIERA A SCACCHI" : t < 0 ? "GRIGLIA" : `GIRO ${st.lap}/${rep.N}`}</span>
         <span style={{ fontFamily: F_HEAD, fontWeight: 700, fontSize: 12, color: C.dim, fontVariantNumeric: "tabular-nums" }}>{t < 0 ? "via tra " + Math.ceil(-t) + " s" : raceClock(t)}</span>
-        {flag && <span data-map-flag="" style={{ marginLeft: "auto", padding: "4px 9px", borderRadius: 8, background: flag[1], fontFamily: F_HEAD, fontWeight: 800, fontSize: 10.5, letterSpacing: .5, color: flag[2] }}>{flag[0]}</span>}
+        <div role="group" aria-label="Vista" style={{ marginLeft: "auto", display: "flex", borderRadius: 12, background: "#141418", border: `1px solid ${C.border}`, overflow: "hidden" }}>
+          {[["map", "Mappa"], ["box", "Box"]].map(([k, l]) => { const on = view === k; return (
+            <button key={k} type="button" className="press" data-map-view={k} aria-pressed={on ? "true" : "false"} aria-label={k === "box" ? "Box: quadrante dei box, dove rientra chi si ferma adesso" : undefined}
+              onClick={() => { if (!on) { setView(k); fx.play("tick"); } }}
+              style={{ minHeight: 44, minWidth: 56, padding: "0 12px", background: on ? C.accent : "transparent", border: "none", fontFamily: F_HEAD, fontWeight: 800, fontSize: 12.5, color: on ? "#fff" : C.muted }}>{l}</button>
+          ); })}
+        </div>
       </div>
-      <div style={{ flexShrink: 0, padding: "0 12px", height: "38vh", minHeight: 210 }}>
+      <div style={{ position: "relative", flexShrink: 0, padding: "0 12px", height: "38vh", minHeight: 210 }}>
+        {flag && <span data-map-flag="" style={{ position: "absolute", top: 0, left: 14, zIndex: 1, pointerEvents: "none", padding: "4px 9px", borderRadius: 8, background: flag[1], fontFamily: F_HEAD, fontWeight: 800, fontSize: 10.5, letterSpacing: .5, color: flag[2] }}>{flag[0]}</span>}
+        {view === "box" ? <PitDialView dd={PitDial.dial(rep, t, { sel: selIdx >= 0 ? selIdx : null })} done={st.done} sel={sel} onSel={setSel} els={dialEls} ringCol={trackCol} /> :
         <svg data-map-svg="" viewBox={`0 0 ${geo.W.toFixed(1)} ${geo.H.toFixed(1)}`} preserveAspectRatio="xMidYMid meet" style={{ width: "100%", height: "100%", display: "block" }} role="img" aria-label={"Tracciato di " + title + " con le auto"}>
           <path d={geo.d} fill="none" stroke="#1E1E23" strokeWidth={13 * k} strokeLinejoin="round" />
           <path data-map-track="" d={geo.d} fill="none" stroke={trackCol} strokeWidth={6 * k} strokeLinejoin="round" />
@@ -6715,7 +6810,7 @@ function MapReplay({ file, title, onBack }) {
               {label.has(d.code) && <text x={9 * k} y={4 * k} fontSize={11 * k} fontFamily={F_HEAD} fontWeight="800" fill="#fff" stroke="#0B0B0D" strokeWidth={3 * k} paintOrder="stroke">{d.code}</text>}
             </g>
           ); })}
-        </svg>
+        </svg>}
       </div>
       <div style={{ padding: "6px 16px 8px", flexShrink: 0 }}>
         {bands.length > 0 && <div data-map-bands="" style={{ position: "relative", height: 5, borderRadius: 3, background: "#1E1E23", overflow: "hidden" }} title="Safety Car, VSC e bandiera rossa lungo la gara">

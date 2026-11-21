@@ -74,7 +74,8 @@ function stateAt(rep, t) {
     if (done) p = Math.min(p, d.cap);
     const lap = Math.max(1, Math.min(N || Infinity, Math.floor(Math.max(0, p) / L) + 1));
     const st = (d.stints || []).find(s => s[0] <= lap && (s[1] == null || lap <= s[1]));
-    const pit = (rep.pits || []).find(x => x[1] === d.n && x[0] <= t && t < x[0] + Math.max(20, x[3] || 0));
+    // il tempo del pit nel file è l'uscita dalla corsia (21/11, misurato sui 417 pit del 2026): box da t - durata a t
+    const pit = (rep.pits || []).find(x => x[1] === d.n && x[0] - (x[3] > 0 ? x[3] : 22) <= t && t <= x[0]);
     return { i, n: d.n, code: d.code, name: d.name, team: d.team, color: d.color, p, lap, tyre: st ? st[2] : "", box: !!pit, out: !!d.status && t >= d.lastMove, fin: done && d.fin != null && t >= d.fin };
   });
   rows.sort((a, b) => (a.out - b.out) || b.p - a.p || (a.fin && b.fin ? rep.drivers[a.i].fin - rep.drivers[b.i].fin : 0) || String(a.code).localeCompare(String(b.code)));
