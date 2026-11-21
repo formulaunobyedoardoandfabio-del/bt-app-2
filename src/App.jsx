@@ -3358,10 +3358,44 @@ const liveCounter = st => isRaceType(st.type) ? `GIRO ${st.lap}/${st.totalLaps}`
 // Riquadro in cima alla pagina Race durante una sessione: nome, giro o cronometro, bandiera e mappa.
 // source "openf1": la sessione finita, rivista con i dati veri di OpenF1 (parte dalla fine; si può rivedere dall'inizio).
 // source "demo": la "Prova diretta" del Pannello Admin (simulata, solo sul telefono dell'admin), con la scritta DEMO.
-function LiveCard({ race, st, track, source, onExpand, replay }) {
+// Quadrante dei box nella gara in diretta (21/11, Edoardo: "falli anche e soprattutto per la live gara"): stesso
+// disegno del Replay (PitDialView), dati dallo stato della diretta (src/logic/pit-dial.js liveDial). Tempo perso: dai
+// pit di questa gara appena misurabili, prima dalla pista nei replay 2026, altrimenti la mediana 2026 (stima).
+function LivePitDial({ race, st, track, live }) {
+  const [sel, setSel] = useState(null);
+  const els = useRef({});
+  const sim = live && live.sim, raw = live && live.raw, slot = Math.floor((st.t || 0) / 15);
+  // il tempo perso si ricalcola ogni 15 s di gara (i dati della diretta arrivano ogni 15 s)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const model = useMemo(() => PitDial.liveModel(raw, { tOf: sim && sim.tOf, flagAt: sim && sim.flagAt, now: st.t, circuitId: race.circuitId }), [raw, sim, slot, race.circuitId]);
+  const dd = PitDial.liveDial(st, { sel, model, L: track.lenM });
+  useLayoutEffect(() => { dialPlace(els.current, dd); });
+  const ringCol = st.flag === "red" ? FLAG_UI.red.color : st.flag === "sc" || st.flag === "vsc" ? FLAG_UI.sc.color : "#5A5A63";
+  const order = (dd ? dd.cars : []).slice().sort((a, b) => a.pos - b.pos);
+  return (
+    <div data-live-dial="">
+      <div style={{ height: "min(84vw, 340px)", marginTop: 8, borderRadius: 12, background: "#0D0D10", padding: 6 }}>
+        <PitDialView dd={dd} done={!!st.finished} sel={sel} onSel={setSel} els={els} ringCol={ringCol} />
+      </div>
+      <div role="group" aria-label="Scegli il pilota del quadrante" style={{ display: "flex", gap: 6, overflowX: "auto", padding: "8px 0 2px", scrollbarWidth: "none" }}>
+        {order.map(c => { const on = c.code === sel; return (
+          <button key={c.code} type="button" className="press" data-dial-pick={c.code} aria-pressed={on ? "true" : "false"} onClick={() => setSel(on ? null : c.code)}
+            style={{ flexShrink: 0, minHeight: 44, minWidth: 52, padding: "0 10px", borderRadius: 10, display: "inline-flex", alignItems: "center", gap: 6, background: on ? alpha(c.color, .22) : "rgba(255,255,255,.05)", border: `1px solid ${on ? c.color : C.border}`, fontFamily: F_HEAD, fontWeight: 800, fontSize: 12, color: C.text }}>
+            <span style={{ fontVariantNumeric: "tabular-nums", color: C.dim, fontSize: 10.5 }}>{c.pos}</span>{c.code}
+          </button>
+        ); })}
+      </div>
+    </div>
+  );
+}
+
+function LiveCard({ race, st, track, source, onExpand, replay, live }) {
   const demo = source === "demo", of1 = source === "openf1";
   const lastMsg = st.messages[st.messages.length - 1];
   const rbtn = { padding: "7px 11px", borderRadius: 9, background: "rgba(255,255,255,.07)", border: `1px solid ${C.border}`, fontFamily: F_HEAD, fontWeight: 800, fontSize: 11.5, color: C.text, whiteSpace: "nowrap" };
+  const [view, setView] = useState("map");
+  const canDial = isRaceType(st.type) && !!track && track.lenM > 0;
+  const box = canDial && view === "box";
   return (
     <div data-live-card="" data-live-source={source} data-live-lap={st ? (st.lap != null ? st.lap : Math.max(0, ...(st.cars || []).map(c => c.lap || 0))) : undefined} style={{ margin: "4px 16px 14px", padding: "14px 14px 12px", borderRadius: 18, background: C.card, border: `1px solid ${C.border}` }}>
       <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
@@ -3374,11 +3408,23 @@ function LiveCard({ race, st, track, source, onExpand, replay }) {
       <h1 style={{ fontFamily: F_HEAD, fontWeight: 900, fontStyle: "italic", fontSize: 20, color: C.text, margin: "0 0 2px" }}>{race.name}</h1>
       <span style={{ fontFamily: F_BODY, fontSize: 12, color: C.muted }}>{race.circuit}{demo ? " · sessione simulata, la vedi solo tu" : of1 ? " · " + OF1_SRC : ""}</span>
       <FlagBanner st={st} style={{ marginTop: 10 }} />
+      {canDial && (
+        <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 8 }}>
+          <div role="group" aria-label="Vista" style={{ display: "flex", borderRadius: 12, background: "#141418", border: `1px solid ${C.border}`, overflow: "hidden" }}>
+            {[["map", "Mappa"], ["box", "Box"]].map(([k, l]) => { const on = view === k; return (
+              <button key={k} type="button" className="press" data-live-view={k} aria-pressed={on ? "true" : "false"} aria-label={k === "box" ? "Box: quadrante dei box, dove rientra chi si ferma adesso" : undefined}
+                onClick={() => { if (!on) { setView(k); fx.play("tick"); } }}
+                style={{ minHeight: 44, minWidth: 56, padding: "0 12px", background: on ? C.accent : "transparent", border: "none", fontFamily: F_HEAD, fontWeight: 800, fontSize: 12.5, color: on ? "#fff" : C.muted }}>{l}</button>
+            ); })}
+          </div>
+        </div>
+      )}
+      {box ? <LivePitDial race={race} st={st} track={track} live={live} /> : (
       <div data-live-card-map="" style={{ position: "relative", marginTop: 8, borderRadius: 12, background: "#0D0D10", padding: "6px 4px" }}>
         <LiveMap track={track} st={st} />
         <Watermark style={{ left: 10, right: "auto", bottom: 8 }} />
         <button className="press" onClick={onExpand} style={{ position: "absolute", top: 6, right: 6, padding: "6px 10px", borderRadius: 8, background: "rgba(24,24,28,.9)", border: `1px solid ${C.border}`, fontFamily: F_BODY, fontWeight: 700, fontSize: 11, color: C.text }}>Ingrandisci</button>
-      </div>
+      </div>)}
       {of1 && replay && (
         <div data-replay-bar="" style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 8 }}>
           <button className="press" data-replay="play" onClick={replay.onPlay} style={rbtn}><span style={{ display: "inline-flex", alignItems: "center", gap: 5 }}><Icon name={replay.playing ? "rotate" : "media-play"} size={12} sw={2.4} />{replay.playing ? "Di nuovo dall'inizio" : "Rivedi dall'inizio"}</span></button>
@@ -6648,7 +6694,7 @@ const raceClock = x => { const v = Math.max(0, Math.floor(x)), h = Math.floor(v 
 // giro del primo misurato in tempo: 0° = traguardo, in senso di marcia; la distanza tra due auto sul cerchio è il loro
 // distacco in secondi. Per il pilota scelto: l'ombra dove rientrerebbe fermandosi adesso, l'arco del tempo perso e il
 // segno giallo del rientro con la Safety Car. Posizioni messe a mano a ogni fotogramma (solo transform), come la mappa.
-const DIAL_C = 150, DIAL_R = 112;
+const DIAL_C = 150, DIAL_R = 104;
 const dialXY = (a, r) => { const q = (a * Math.PI) / 180; return [DIAL_C + r * Math.sin(q), DIAL_C - r * Math.cos(q)]; };
 const dialArc = (a0, a1, r) => {
   const sw = (((a1 - a0) % 360) + 360) % 360, [x0, y0] = dialXY(a0, r), [x1, y1] = dialXY(a1, r);
@@ -6657,11 +6703,19 @@ const dialArc = (a0, a1, r) => {
 const dialMove = (el, a, r) => { if (!el) return; const [x, y] = dialXY(a, r); el.setAttribute("transform", `translate(${x.toFixed(1)} ${y.toFixed(1)})`); };
 function dialPlace(els, dd) {
   if (!dd) return;
-  dd.cars.forEach(c => { dialMove(els["c:" + c.code], c.angle, DIAL_R); dialMove(els["l:" + c.code], c.angle, DIAL_R + 22); });
-  const rj = dd.rejoin, me = dd.sel;
+  dd.cars.forEach(c => dialMove(els["c:" + c.code], c.angle, DIAL_R));
+  // sigle in pila: se una sigla è a meno di 10° dalla precedente va sull'anello più esterno
+  const rj = dd.rejoin, me = dd.sel, labs = dd.cars.filter(c => els["l:" + c.code]).map(c => ({ k: "l:" + c.code, a: c.angle }));
+  if (rj && rj.now && me && els.gl) labs.push({ k: "gl", a: rj.now.angle });
+  labs.sort((x, y) => x.a - y.a);
+  let prev = null;
+  labs.forEach(l => {
+    const out = prev && !prev.out && l.a - prev.a < 10;
+    dialMove(els[l.k], l.a, DIAL_R + (out ? 34 : 20));
+    prev = { a: l.a, out };
+  });
   if (rj && rj.now && me) {
     dialMove(els.g, rj.now.angle, DIAL_R);
-    dialMove(els.gl, rj.now.angle, DIAL_R + 22);
     if (els.arc) els.arc.setAttribute("d", dialArc(rj.now.angle, me.angle, DIAL_R));
   }
   if (rj && rj.alt) dialMove(els.s, rj.alt.angle, DIAL_R);
@@ -6682,7 +6736,7 @@ function PitDialView({ dd, done, sel, onSel, els, ringCol }) {
   else if (!me) info = <>
     <p style={head}>QUADRANTE BOX</p>
     <p style={{ ...line, color: C.text, fontWeight: 700 }}>Tocca un pilota: dove rientra se si ferma adesso</p>
-    <p style={line}>{m && m.green != null ? <>Ai box si perdono {dialNum(m.green)} s (misurati su {m.nGreen} pit veri di questa gara)</> : "In questa gara il tempo perso ai box non si misura"}</p>
+    <p data-dial-loss={m && m.source ? m.source : "race"} style={line}>{m && m.green != null ? <>Ai box si perdono {dialNum(m.green)} s ({m.source === "track" ? "misurati su questa pista nel 2026" : m.source === "season" ? "stima: mediana delle gare 2026" : `misurati su ${m.nGreen} pit veri di questa gara`})</> : "In questa gara il tempo perso ai box non si misura"}</p>
   </>;
   else if (rj && rj.red) info = <><p style={{ ...line, color: C.text, fontWeight: 700 }}>Bandiera rossa</p><p style={line}>le gomme si cambiano in corsia durante la sospensione: nessuna posizione persa</p></>;
   else if (!g) info = <><p style={{ ...line, color: C.text, fontWeight: 700 }}>{me.code}</p><p style={line}>In questa gara il tempo perso ai box non si misura</p></>;
@@ -7414,7 +7468,7 @@ function RaceScreen({ onOpenArchive = null, champion = null, proUnlocked = [], p
       {st && st.flag === "red" && <div role="status" data-red-banner="" style={{ position: "sticky", top: 0, zIndex: 6, margin: "0 0 10px", padding: "10px 12px", background: FLAG_UI.red.color, fontFamily: F_HEAD, fontWeight: 900, fontStyle: "italic", fontSize: 15, letterSpacing: .8, color: "#fff", textAlign: "center", overflow: "hidden" }}><WarnPulse />BANDIERA ROSSA · SESSIONE SOSPESA</div>}
       {st && curTab === "classifica" && <PitBoard st={st} driverId={favDriver} visible={board} />}
       {realLive && (!live || live.source === "openf1") && <SessionPicker sessions={of1Sessions} onPick={onOf1Pick} note={st ? sessionNote : null} />}
-      {st && liveRace ? <LiveCard race={liveRace} st={st} track={live.track} source={live.source} onExpand={onExpandMap} replay={replay} /> : (
+      {st && liveRace ? <LiveCard race={liveRace} st={st} track={live.track} source={live.source} onExpand={onExpandMap} replay={replay} live={live} /> : (
       <div style={{ position: "relative", margin: "4px 16px 14px", borderRadius: 18, overflow: "hidden", background: C.card, border: `1px solid ${C.border}` }}>
         {shown && <CircuitArt circuitId={shown.circuitId} uid="next" />}
         {shown && <div style={{ position: "absolute", inset: 0, background: "linear-gradient(90deg, rgba(13,13,16,.94) 0%, rgba(13,13,16,.72) 48%, rgba(13,13,16,.18) 100%)" }} />}

@@ -505,6 +505,9 @@ function buildReplay(raw = {}, track = null, { drivers = [], of1 = null, live = 
   return {
     source: "openf1", type, totalLaps, duration, sessionKey,
     ended: chequeredT != null,   // nei dati c'è la bandiera a scacchi finale (in qualifica quella di Q3)
+    // 21/11 (Quadrante dei box in diretta, src/logic/pit-dial.js liveModel): data di OpenF1 → secondi della sessione, e
+    // bandiera di un momento, per misurare il tempo perso ai pit della gara in corso.
+    tOf, flagAt: at => flagAt(at).flag,
     get t() { return x; },
     advance(sec) { x = clamp(x + (isNum(sec) ? sec : 0), 0, duration + (live ? LIVE_AHEAD_S : 0)); },
     jumpTo(v) { x = clamp(isNum(v) ? v : 0, 0, duration + (live ? LIVE_AHEAD_S : 0)); },

@@ -143,17 +143,102 @@ function dial(rep, t, opts = {}) {
     i: r.i, n: r.n, code: r.code, team: r.team, color: r.color, pos: r.pos, tyre: r.tyre, box: r.box, down: r.down,
     angle: r1(norm(frac(ref, r.p) * 360)), rel: r.gap == null ? null : r1(r.gap - base),
   }));
-  let rejoin = null;
-  if (selRow) {
-    const me = cars.find(c => c.i === selRow.i);
-    const one = loss => { const p = predict(st, selRow.i, loss); return p && { ...p, loss, angle: r1(norm(me.angle - (loss / ref.T) * 360)) }; };
-    rejoin = { green: one(model.green), sc: one(model.sc), vsc: one(model.vsc), scMeasured: !!model.scMeasured, vscMeasured: !!model.vscMeasured };
-    // la stima principale segue la bandiera di adesso; l'altra è il caso opposto (verde ↔ SC). Con la rossa le gomme si
-    // cambiano in corsia durante la sospensione: nessuna posizione persa, niente stima.
-    const nowKey = st.flag === "sc" ? "sc" : st.flag === "vsc" ? "vsc" : "green", altKey = nowKey === "green" ? "sc" : "green";
-    Object.assign(rejoin, { nowKey, altKey, red: st.flag === "red", now: st.flag === "red" ? null : rejoin[nowKey], alt: st.flag === "red" ? null : rejoin[altKey] });
-  }
-  return { t, lap: st.lap, total: rep.laps || rep.N || null, flag: st.flag, T: r1(ref.T), refCode: ref.code, cars, sel: selRow ? cars.find(c => c.i === selRow.i) : null, rejoin, model };
+  const me = selRow ? cars.find(c => c.i === selRow.i) : null;
+  const rejoin = me ? rejoinFor(st, me, model, ref.T) : null;
+  return { t, lap: st.lap, total: rep.laps || rep.N || null, flag: st.flag, T: r1(ref.T), refCode: ref.code, cars, sel: me, rejoin, model };
+}
+
+// Rientro del pilota `me` (riga del quadrante) in normale, SC e VSC. La stima principale segue la bandiera di adesso;
+// l'altra è il caso opposto (verde ↔ SC). Con la rossa le gomme si cambiano in corsia durante la sospensione: nessuna
+// posizione persa, niente stima.
+function rejoinFor(st, me, model, T) {
+  const one = loss => { const p = predict(st, me.i, loss); return p && { ...p, loss, angle: r1(norm(me.angle - (loss / T) * 360)) }; };
+  const rj = { green: one(model.green), sc: one(model.sc), vsc: one(model.vsc), scMeasured: !!model.scMeasured, vscMeasured: !!model.vscMeasured };
+  const red = st.flag === "red", nowKey = st.flag === "sc" ? "sc" : st.flag === "vsc" ? "vsc" : "green", altKey = nowKey === "green" ? "sc" : "green";
+  return Object.assign(rj, { nowKey, altKey, red, now: red ? null : rj[nowKey], alt: red ? null : rj[altKey] });
+}
+
+// ── Diretta ────────────────────────────────────────────────────────────────────────────────────────────────────────
+// Tempo perso a bandiera verde misurato sui replay 2026 (node tools/pit-loss-table.js): per pista e mediana della
+// stagione (351 pit). Serve prima dei primi pit della gara in diretta.
+const PIT_LOSS_2026 = { season: 22.7, n: 351, tracks: { "br-1940": 25, "us-2012": 21.3, "sg-2008": 22.9, "es-2026": 25.5, "it-1922": 28.5, "be-1925": 21.2, "at-1969": 21, "es-1991": 23.8, "ca-1978": 21.1, "jp-1962": 23.3, "cn-2004": 25.5, "au-1953": 16 } };
+
+// Distacco dal primo da OpenF1: numero, null = è il primo (0), "+1 LAP" = doppiato (non usabile).
+const gapNum = g => (g == null ? 0 : typeof g === "number" ? g : /lap/i.test(String(g)) ? NaN : parseFloat(String(g).replace("+", "")));
+function gapSeries(intervals, tOf) {
+  const m = new Map();
+  (intervals || []).forEach(p => {
+    const t = tOf(p.date), g = gapNum(p.gap_to_leader);
+    if (t == null || !Number.isFinite(t)) return;
+    if (!m.has(p.driver_number)) m.set(p.driver_number, []);
+    m.get(p.driver_number).push({ t, g });
+  });
+  m.forEach(a => a.sort((x, y) => x.t - y.t));
+  return m;
+}
+const gapAt = (s, t) => {
+  if (!s || !s.length || s[0].t > t) return null;
+  let lo = 0, hi = s.length - 1;
+  while (lo < hi) { const mid = (lo + hi + 1) >> 1; if (s[mid].t <= t) lo = mid; else hi = mid - 1; }
+  return t - s[lo].t <= 20 && Number.isFinite(s[lo].g) ? s[lo].g : null;
+};
+
+// Tempo perso a ogni pit della gara in diretta: come nel Replay, quanto cresce il distacco dai rivali vicini che non si
+// fermano tra 15 s prima dell'entrata e 15 s dopo l'uscita (il tempo del pit di OpenF1 è l'uscita). null finché il
+// pilota non è fuori da 15 s, o con meno di 2 rivali.
+function liveLosses(raw, { tOf, flagAt = () => "green", now = Infinity } = {}) {
+  if (!raw || typeof tOf !== "function") return [];
+  const S = gapSeries(raw.intervals, tOf);
+  const pits = (raw.pit || []).map(p => ({ num: p.driver_number, t: tOf(p.date), lap: p.lap_number, dur: p.lane_duration > 0 ? p.lane_duration : p.pit_duration > 0 ? p.pit_duration : LANE }))
+    .filter(p => p.t != null && Number.isFinite(p.t));
+  return pits.map(p => {
+    const entry = p.t - p.dur, a = entry - 15, b = p.t + 15, flag = flagAt(entry) || "green";
+    let loss = null, n = 0;
+    if (now >= b) {
+      const ia = gapAt(S.get(p.num), a), ib = gapAt(S.get(p.num), b), ds = [];
+      if (ia != null && ib != null) S.forEach((s, j) => {
+        if (j === p.num || pits.some(q => q.num === j && q.t - q.dur - 5 < b && q.t + 5 > a)) return;
+        const ja = gapAt(s, a), jb = gapAt(s, b);
+        if (ja == null || jb == null || Math.abs(ia - ja) > NEAR) return;
+        ds.push((ib - jb) - (ia - ja));
+      });
+      n = ds.length;
+      if (n >= 2) loss = r1(med(ds));
+    }
+    return { num: p.num, t: p.t, entry, lap: p.lap, flag, loss, rivals: n };
+  });
+}
+
+function liveModel(raw, opts = {}) {
+  const ls = liveLosses(raw, opts).filter(x => x.loss != null);
+  const by = f => ls.filter(x => x.flag === f).map(x => x.loss);
+  const g = by("green"), sc = by("sc"), vsc = by("vsc");
+  const track = opts.circuitId && PIT_LOSS_2026.tracks[opts.circuitId];
+  const green = g.length ? r1(med(g)) : track != null ? track : PIT_LOSS_2026.season;
+  const source = g.length ? "race" : track != null ? "track" : "season";
+  const scM = sc.length >= 3, vscM = vsc.length >= 3;
+  return { green, sc: scM ? r1(med(sc)) : r1(green * SC_FACTOR), vsc: vscM ? r1(med(vsc)) : r1(green * VSC_FACTOR), nGreen: g.length, nSc: sc.length, nVsc: vsc.length, scMeasured: scM, vscMeasured: vscM, source };
+}
+
+// Quadrante della diretta dallo stato della diretta (st di services/openf1.js o della prova DEMO): la posizione sul
+// giro dai metri del giro in corso (già stimati col tempo del giro), distacchi dal primo, rientro come nel Replay.
+// Il giro di riferimento è la mediana degli ultimi giri fatti: prima del primo giro completo niente quadrante.
+function liveDial(st, { sel = null, model = null, L } = {}) {
+  if (!st || !Array.isArray(st.cars) || !(L > 0)) return null;
+  const run = st.cars.filter(c => !c.dnf);
+  const T = med(run.map(c => c.last && c.last.time).filter(x => x > 0));
+  if (!T) return null;
+  const rows = st.cars.map((c, k) => ({ i: k, code: c.code, color: c.color, pos: c.pos, out: !!c.dnf, gap: c.lapsDown >= 1 ? null : c.pos === 1 ? 0 : Number.isFinite(c.gap) ? c.gap : null }));
+  const selRow = sel ? rows.find(r => r.code === sel && !r.out) : null;
+  const base = selRow && selRow.gap != null ? selRow.gap : 0;
+  const cars = st.cars.map((c, k) => ({ c, k })).filter(x => !x.c.dnf).map(({ c, k }) => ({
+    i: k, n: c.number, code: c.code, color: c.color, pos: c.pos, tyre: c.tyre, box: !!c.pit, down: c.lapsDown || 0,
+    angle: r1(norm((((c.dist || 0) / L) % 1) * 360)), rel: rows[k].gap == null ? null : r1(rows[k].gap - base),
+  }));
+  const me = selRow ? cars.find(c => c.i === selRow.i) : null;
+  const flag = st.flag === "sc" || st.flag === "vsc" || st.flag === "red" ? st.flag : "green";
+  const rejoin = me && model ? rejoinFor({ rows, flag }, me, model, T) : null;
+  return { t: st.t, lap: st.lap, total: st.totalLaps || null, flag, T: r1(T), cars, sel: me, rejoin, model };
 }
 
 // Prova sui pit veri: `lead` secondi prima dell'entrata si stima il rientro (col tempo perso degli ALTRI pit della
@@ -186,4 +271,4 @@ function backtest(rep, opts = {}) {
   return { n: ok.length, exact: ok.filter(r => r.err === 0).length, within1: ok.filter(r => Math.abs(r.err) <= 1).length, nMass: rows.length - ok.length, rows };
 }
 
-module.exports = { SC_FACTOR, VSC_FACTOR, FREE_AIR, flagAt, lapTime, refLap, frac, predict, pitLosses, lossModel, dial, backtest };
+module.exports = { SC_FACTOR, VSC_FACTOR, FREE_AIR, PIT_LOSS_2026, flagAt, lapTime, refLap, frac, predict, pitLosses, lossModel, dial, backtest, liveLosses, liveModel, liveDial };

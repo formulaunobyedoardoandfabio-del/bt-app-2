@@ -1287,3 +1287,17 @@ Misure prima del lavoro (pagina di prova, CPU rallentata 4x come un telefono med
 - App: `Contagiri` (misura il suo riquadro con ResizeObserver) sotto la lettura del grafico della velocità e nel
   replay 2D della curva, per il pilota A e B. Niente giri motore né DRS (il dato non c'è). Prova
   `test/e2e/run130-contagiri.js` (3): numeri uguali alla lettura e alle etichette delle macchine, compatto a 320 px.
+
+### 21/11: Quadrante dei box anche nella gara in diretta (Edoardo: "falli anche e soprattutto per la live gara")
+- `src/logic/pit-dial.js`: `liveLosses` (tempo perso ai pit della gara in corso dai distacchi di OpenF1, come nel
+  Replay: crescita del distacco dai rivali che non si fermano, solo quando il pilota è fuori da 15 s), `liveModel`
+  (gara → pista nei replay 2026 → mediana 2026 22,7 s scritta come stima; tabella da `node tools/pit-loss-table.js`),
+  `liveDial` (posizione sul giro dai metri della diretta, rientro tra chi è a pieni giri), `rejoinFor` in comune col
+  Replay. Prove `test/unit/pit-dial-live.test.js` (4).
+- `services/openf1.js` espone `tOf` e `flagAt` della sessione.
+- App: nella scheda della diretta (solo gara e sprint) interruttore Mappa | Box; `LivePitDial` con la fila di sigle per
+  scegliere il pilota (44 px). Nel Replay resta Mappa | Box per tornare alla mappa. Sigle in pila sul cerchio (sotto
+  10° l'una dall'altra la seconda va fuori). Prova `test/e2e/run131-quadrante-diretta.js` (Baku 2026 vera).
+- Da sapere: nella fixture di Baku i distacchi sono a campione (ogni ~2 min), troppo radi per misurare i pit: lì vale la
+  mediana 2026. In diretta vera OpenF1 li manda ogni ~4 s.
+- Non fatto: il quadrante nella mappa a tutto schermo (Ingrandisci).
