@@ -1301,3 +1301,11 @@ Misure prima del lavoro (pagina di prova, CPU rallentata 4x come un telefono med
 - Da sapere: nella fixture di Baku i distacchi sono a campione (ogni ~2 min), troppo radi per misurare i pit: lì vale la
   mediana 2026. In diretta vera OpenF1 li manda ogni ~4 s.
 - Non fatto: il quadrante nella mappa a tutto schermo (Ingrandisci).
+
+### 21/11: Pioggia a breve in Race → Meteo (piano claude/multiviewer-in-sector4.md, al posto del radar)
+- `src/services/meteo.js`: `shapeForecast` tiene la direzione del vento (`dir`, anche nella funzione su Vercel
+  `api/meteo.js` al prossimo deploy); `shortTerm` = prossime 6 ore (voci di un'ora), freccia verso dove soffia il
+  vento, riga dell'ora in cui parte una sessione, visibile solo nei giorni della gara (sessione entro 24 ore o
+  iniziata da meno di 3). Prove in `test/unit/meteo.test.js` (prova dell'ora intera aggiornata con `dir`).
+- App: riquadro "PIOGGIA A BREVE · PROSSIME 6 ORE" sopra le previsioni del weekend. Niente probabilità di pioggia (il
+  formato compact di MET non la dà). Prova `test/e2e/run132-pioggia-breve.js` (2).

@@ -57,7 +57,7 @@ import { fx } from "./services/fx";
 import { createCommons, normFile as commonsFileOf } from "./services/commons";
 import { createOpenF1, buildReplay, lastRaceFromResult, sessionType as of1SessionType, sessionShort, replayTarget } from "./services/openf1";
 import { createJolpica, pick as pickStandings } from "./services/jolpica";
-import { createMeteo, sessionForecast, skyOf } from "./services/meteo";
+import { createMeteo, sessionForecast, shortTerm, skyOf } from "./services/meteo";
 import { createAds, under18 } from "./services/ads";
 import { createBilling, BUY_MSG } from "./services/billing";
 import { createF1Data, apply as applyF1Data } from "./services/f1data";
@@ -3818,6 +3818,42 @@ function WeatherPanel({ race, st, live, guesses = {}, results = {}, onGuess }) {
       ) : (
         <p data-wx-empty="" style={{ margin: 0, padding: 14, borderRadius: 18, background: C.card, border: `1px solid ${C.border}`, fontFamily: F_BODY, fontSize: 12.5, color: C.muted, lineHeight: 1.5 }}>{WX_EMPTY}</p>
       )}
+      {(() => {
+        // Pioggia a breve (21/11, al posto del radar di MultiViewer): le prossime 6 ore sul circuito, solo nei giorni
+        // della gara; riga evidenziata all'ora in cui parte una sessione. Dati MET Norway, niente probabilità (il
+        // formato che usiamo non la dà).
+        const info = CIRCUIT_INFO[race.circuitId];
+        const k = fc && info ? shortTerm(fc, info.weekend, nowMs()) : null;
+        if (!k || !k.visible) return null;
+        const hh = t => new Date(t).toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit" });
+        return (
+          <div data-wx-short="" style={{ padding: "12px 12px 10px", borderRadius: 18, background: C.card, border: `1px solid ${C.border}` }}>
+            <Eyebrow>PIOGGIA A BREVE · PROSSIME 6 ORE</Eyebrow>
+            {k.rows.map((h, i) => {
+              const on = i === k.hi, wet = h.rain != null && h.rain > 0;
+              return (
+                <div key={h.t} data-wx-hour={h.t} data-wx-hi={on ? k.hiKey : undefined} style={{ display: "flex", alignItems: "center", gap: 8, padding: "7px 6px", borderRadius: on ? 10 : 0, borderTop: on || i === 0 || i === k.hi + 1 ? "1px solid transparent" : `1px solid ${C.divider}`, background: on ? alpha(C.accent, .14) : "transparent", boxShadow: on ? `inset 0 0 0 1px ${alpha(C.accent, .6)}` : "none" }}>
+                  <span style={{ width: 44, flexShrink: 0, display: "flex", flexDirection: "column", gap: 1, fontFamily: F_HEAD, fontWeight: 800, fontSize: 12, color: C.text, fontVariantNumeric: "tabular-nums" }}>
+                    {hh(h.t)}
+                    {on && <span style={{ alignSelf: "flex-start", padding: "1px 5px", borderRadius: 5, background: C.accent, fontWeight: 900, fontSize: 9, letterSpacing: .5, color: "#fff" }}>{WX_SHORT[k.hiKey] || k.hiKey}</span>}
+                  </span>
+                  <span style={{ flex: 1 }} />
+                  <span style={{ flexShrink: 0, display: "inline-flex" }}><SkyIcon kind={skyOf(h.sym) || "cloud"} size={20} /></span>
+                  <span style={{ width: 32, flexShrink: 0, textAlign: "right", fontFamily: F_HEAD, fontWeight: 800, fontSize: 13, color: C.text }}>{Math.round(h.temp)}°</span>
+                  <span data-wx-wind="" style={{ width: 66, flexShrink: 0, display: "inline-flex", alignItems: "center", justifyContent: "flex-end", gap: 4, fontFamily: F_BODY, fontSize: 11, color: C.muted, whiteSpace: "nowrap" }}>
+                    {h.to != null && <svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true" style={{ flexShrink: 0, transform: `rotate(${h.to}deg)` }}><path d="M6 1 L9.5 9 L6 7.2 L2.5 9 Z" fill={C.muted} /></svg>}
+                    {h.wind == null ? "–" : `${h.wind} km/h`}
+                  </span>
+                  <span style={{ width: 56, flexShrink: 0, textAlign: "right", fontFamily: F_BODY, fontSize: 11, color: wet ? TIMING.pit : C.muted, whiteSpace: "nowrap" }}>{h.rain == null ? "–" : wet ? `${String(h.rain).replace(".", ",")} mm` : "Asciutto"}</span>
+                </div>
+              );
+            })}
+            <p style={{ margin: "8px 2px 0", fontFamily: F_BODY, fontSize: 10.5, color: C.dim, lineHeight: 1.45 }}>
+              Ora per ora sul circuito, nell'ora del tuo telefono; la freccia indica dove soffia il vento. Dati di <button className="press" onClick={() => openUrl(MET_LICENSE_URL)} style={{ padding: 0, fontFamily: F_BODY, fontSize: 10.5, color: C.muted, textDecoration: "underline" }}>MET Norway (CC BY 4.0)</button>.
+            </p>
+          </div>
+        );
+      })()}
       {(() => {
         const info = CIRCUIT_INFO[race.circuitId];
         const rows = fc && info ? sessionForecast(fc, info.weekend, nowMs()).filter(x => x.fc) : [];

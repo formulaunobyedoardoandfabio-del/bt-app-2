@@ -32,6 +32,7 @@ function shapeForecast(json) {
     hours.push({
       t: x.time, step, temp: round1(now.air_temperature),
       wind: finite(now.wind_speed) ? Math.round(now.wind_speed * 3.6) : null,
+      dir: finite(now.wind_from_direction) ? Math.round(now.wind_from_direction) % 360 : null,   // da dove soffia, gradi
       hum: finite(now.relative_humidity) ? Math.round(now.relative_humidity) : null,
       rain, sym: (next.summary && typeof next.summary.symbol_code === "string") ? next.summary.symbol_code : null,
     });
@@ -64,6 +65,21 @@ function sessionForecast(fc, sessions, now) {
   });
 }
 
+// Pioggia a breve (21/11, al posto del radar di MultiViewer): le prossime 6 ore (solo le voci di un'ora), con la
+// freccia del vento verso dove soffia (to) e la riga dell'ora in cui parte una sessione (hi, -1 se nessuna). Si vede
+// solo nei giorni della gara: una sessione che parte entro 24 ore o è iniziata da meno di 3.
+function shortTerm(fc, sessions, now) {
+  const H = 3600000, list = Array.isArray(sessions) ? sessions : [];
+  const starts = list.map(s => ({ key: s && s.key, at: Date.parse(s && s.utc) })).filter(s => isFinite(s.at));
+  const near = starts.some(s => s.at - 24 * H <= now && now < s.at + 3 * H);
+  const hours = fc && Array.isArray(fc.hours) ? fc.hours : [];
+  const rows = hours.filter(h => h.step === 1 && Date.parse(h.t) + H > now).slice(0, 6)
+    .map(h => ({ ...h, to: finite(h.dir) ? (h.dir + 180) % 360 : null }));
+  let hi = -1, hiKey = null;
+  rows.forEach((h, i) => { const t = Date.parse(h.t), s = hi < 0 && starts.find(x => t <= x.at && x.at < t + H); if (s) { hi = i; hiKey = s.key; } });
+  return { visible: near && rows.length > 0, rows, hi, hiKey };
+}
+
 function createMeteo({ fetch: f = (...a) => fetch(...a), now = () => Date.now(), store = null, url = METEO_URL } = {}) {
   const inflight = {};
   async function load(circuitId) {
@@ -86,4 +102,4 @@ function createMeteo({ fetch: f = (...a) => fetch(...a), now = () => Date.now(),
   return { forecast };
 }
 
-module.exports = { createMeteo, shapeForecast, sessionForecast, skyOf, CIRCUIT_COORDS, MET_URL, USER_AGENT, METEO_URL };
+module.exports = { createMeteo, shapeForecast, sessionForecast, shortTerm, skyOf, CIRCUIT_COORDS, MET_URL, USER_AGENT, METEO_URL };

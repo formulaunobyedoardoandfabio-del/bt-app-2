@@ -19,10 +19,29 @@ t('meteo: dalla risposta di MET Norway le ore con temperatura, vento in km/h, pi
   assert.strictEqual(fc.updated, '2026-10-24T19:17:01Z');
   assert.ok(fc.hours.length > 60);
   const h0 = fc.hours[0];
-  assert.deepStrictEqual(h0, { t: '2026-10-24T21:00:00Z', step: 1, temp: 28.8, wind: 17, hum: 41, rain: 0, sym: 'partlycloudy_day' });
+  // 21/11: anche la direzione del vento (da dove soffia, gradi) per la freccia di "Pioggia a breve"
+  assert.deepStrictEqual(h0, { t: '2026-10-24T21:00:00Z', step: 1, temp: 28.8, wind: 17, dir: 128, hum: 41, rain: 0, sym: 'partlycloudy_day' });
   assert.ok(fc.hours.some(h => h.step === 6), 'dopo 2-3 giorni MET dà le previsioni ogni 6 ore');
   assert.strictEqual(M.shapeForecast({}), null);
   assert.strictEqual(M.shapeForecast({ properties: { timeseries: [] } }), null);
+});
+
+// 21/11 (piano claude/multiviewer-in-sector4.md, "Pioggia a breve" al posto del radar di MultiViewer): le prossime 6
+// ore (solo le voci di un'ora), freccia del vento verso dove soffia, riga della sessione che parte in quell'ora; si vede
+// solo nei giorni della gara (una sessione entro 24 ore, o iniziata da meno di 3).
+t('pioggia a breve: prossime 6 ore, vento, riga della sessione, solo nei giorni della gara', () => {
+  const fc = M.shapeForecast(MET);
+  const r = M.shortTerm(fc, [{ key: 'RACE', utc: '2026-10-24T23:10:00Z' }], NOW);
+  assert.strictEqual(r.visible, true);
+  assert.deepStrictEqual(r.rows.map(h => h.t.slice(11, 13)), ['21', '22', '23', '00', '01', '02']);
+  assert.ok(r.rows.every(h => h.step === 1));
+  assert.strictEqual(r.rows[0].to, 308, 'vento da 128° → freccia verso 308°');
+  assert.strictEqual(r.hi, 2); assert.strictEqual(r.hiKey, 'RACE');
+  const late = M.shortTerm(fc, [{ key: 'RACE', utc: '2026-10-25T20:00:00Z' }], NOW);
+  assert.strictEqual(late.visible, true, 'gara domani entro 24 ore'); assert.strictEqual(late.hi, -1, 'fuori dalle 6 ore: nessuna riga evidenziata');
+  assert.strictEqual(M.shortTerm(fc, [{ key: 'RACE', utc: '2026-10-28T20:00:00Z' }], NOW).visible, false, 'gara tra 4 giorni: niente tabella');
+  assert.strictEqual(M.shortTerm(fc, [{ key: 'RACE', utc: '2026-10-24T19:00:00Z' }], NOW).visible, true, 'iniziata da 2 ore e mezza');
+  assert.strictEqual(M.shortTerm(null, [{ key: 'RACE', utc: '2026-10-24T23:10:00Z' }], NOW).visible, false);
 });
 
 t('meteo: ogni circuito del calendario ha le coordinate (al massimo 4 decimali, come chiede MET)', () => {
