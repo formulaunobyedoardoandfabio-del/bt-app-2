@@ -1463,3 +1463,23 @@ Misure prima del lavoro (pagina di prova, CPU rallentata 4x come un telefono med
   basta una (si ripete). La propria, appena mandata con "Mostra nelle recensioni", compare subito. Con testo sotto 8
   caratteri non si mostra (MSG_MIN in feedback.js): ora lo dice sotto l'interruttore.
 - Prove: run137 (5), run135 (8, aprono la lettura da FANTA), run138 (3), run125 (3, admin aggiornata) verdi.
+
+## 22/11 sera (3): Colori, icona e avvio (grafica "B&T: Colori, icona e avvio")
+- Profilo > Personalizza l'app > "Colori, icona e avvio" apre LookScreen (al posto di ThemeSheet): Colori (ANTEPRIMA
+  solo dopo aver cambiato colore), Icona dell'app (anteprima e "Applica icona" solo se la scelta è cambiata), Animazione
+  d'avvio ("Vedi anteprima" solo se la scelta è cambiata), anteprima a tutto schermo.
+- look = { icon, boot } sul telefono (bt-look) e nell'account (USER_KEYS "look", anche PHONE_KEYS).
+- Icone: classica (quella di sempre, resources/icons), logo, light, auto, d3, track, e "Scuderia del cuore" = l'icona
+  della scuderia preferita (racingbulls ... ferrari). Immagini di Edoardo in tools/icon/alt, risorse con
+  tools/icon/make-alt-icons.py in resources/app-icons e public/app-icons. Android: ogni icona è un activity-alias
+  "<package>.BtIcon_<id>" (scripts/prepare_android.py toglie LAUNCHER da MainActivity), plugin BtIcon
+  (resources/android-icon/BtIconPlugin.java): available(), set({ id, now }). "Applica" cambia subito; scuderia nuova o
+  8 agosto: al prossimo passaggio in secondo piano. Icona 17 (8 agosto, id "agosto"): manca l'immagine, basta metterla in
+  tools/icon/alt/agosto.png e rifare le risorse. Prova: test/unit/prepare-android-icons.test.js (progetto finto).
+- Avvii (dal secondo avvio): pit (il caricamento di sempre), mercurio, trasparente, liquid (su bianco con l'icona
+  Light: video al negativo con hue-rotate), sunshine. Video di Edoardo in public/splash/anim-<id>.webm (+ .jpg). AnimSplash:
+  il video una volta, se l'app è pronta va via (tocco per saltare), altrimenti il caricamento di sempre. Manca l'avvio "N"
+  collegato all'icona 3 (Edoardo lo manda).
+- Da provare sul telefono: cambio icona (alcuni launcher chiudono l'app; con l'aggiornamento l'icona sulla home può
+  sparire e va rimessa dal cassetto delle app, perché MainActivity non è più l'attività del launcher).
+- Prove: run139 (7), run50 aggiornata (6), unit appdata (35), prepare-android-icons (5).

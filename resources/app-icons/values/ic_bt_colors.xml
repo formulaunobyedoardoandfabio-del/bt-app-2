@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="ic_bt_alpine_bg">#38B6FF</color>
+    <color name="ic_bt_astonmartin_bg">#084141</color>
+    <color name="ic_bt_audi_bg">#A6A6A6</color>
+    <color name="ic_bt_auto_bg">#02184A</color>
+    <color name="ic_bt_cadillac_bg">#000000</color>
+    <color name="ic_bt_d3_bg">#0A0F13</color>
+    <color name="ic_bt_ferrari_bg">#FF3131</color>
+    <color name="ic_bt_haas_bg">#FFFFFF</color>
+    <color name="ic_bt_light_bg">#FFFFFF</color>
+    <color name="ic_bt_logo_bg">#050506</color>
+    <color name="ic_bt_mclaren_bg">#FF751F</color>
+    <color name="ic_bt_mercedes_bg">#000000</color>
+    <color name="ic_bt_racingbulls_bg">#004AAD</color>
+    <color name="ic_bt_redbull_bg">#1800AD</color>
+    <color name="ic_bt_track_bg">#44474C</color>
+    <color name="ic_bt_williams_bg">#004AAD</color>
+</resources>

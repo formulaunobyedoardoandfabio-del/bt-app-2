@@ -1518,64 +1518,251 @@ function PromoSheet({ guest, onRedeem, onLogin, onClose }) {
   );
 }
 
-// Profilo → "Colori dell'app" (G02): il colore della scuderia del cuore (di serie), uno dei 12 colori pronti o "Scegli
-// tu" con la ruota dei colori del telefono. Dal colore applyTheme ricava i toni dei tasti e dei testi: si vedono subito
-// in tutta l'app e nell'anteprima in fondo.
-function ThemeSheet({ theme, favTeam, onPick, onClose }) {
+// ── COLORI, ICONA E AVVIO (22/11 sera, grafica "B&T: Colori, icona e avvio") ──
+// Edoardo: icone "quella attuale e allegato 1 e il secondo è la stessa versione light ... 3 auto dettagliata, 4 3D,
+// 5 on track; dalla 6 in poi in base al team preferito (l'utente sceglie solo se mettere l'icona dei colori della scuderia
+// del cuore)"; "icona 17 in automatico per tutti l'8 agosto"; avvii: l'attuale, mercurio, trasparente, liquid glass
+// (sfondo bianco con l'icona Light), sunshine. "La parte anteprima solo se l'utente ha cambiato la sua selezione".
+// look = { icon, boot } sta sul telefono (bt-look: l'avvio si decide prima che l'account arrivi) e nell'account.
+const APP_ICONS = [
+  { id: "classica", name: "Classica" }, { id: "logo", name: "Logo" }, { id: "light", name: "Light" },
+  { id: "auto", name: "Auto dettagliata" }, { id: "d3", name: "3D" }, { id: "track", name: "On track" },
+];
+const TEAM_ICON_IDS = ["racingbulls", "haas", "astonmartin", "williams", "alpine", "cadillac", "audi", "mclaren", "mercedes", "redbull", "ferrari"];
+const AUG8_ICON = "agosto";   // icona 17: c'è quando la sua immagine è nelle risorse dell'APK (tools/icon/alt/agosto.*)
+const BOOT_ANIMS = [
+  { id: "pit", name: "Pit Exit Launch", sub: "LED, zoom, poi l'app. Circa 1,5 secondi.", secs: "1,5" },
+  { id: "mercurio", name: "Mercurio", sub: "Metallo liquido intorno al logo. Circa 8 secondi.", secs: "8" },
+  { id: "trasparente", name: "Trasparente", sub: "La monoposto che diventa trasparente. Circa 2 secondi.", secs: "2" },
+  { id: "liquid", name: "Liquid glass", sub: "Il logo dentro il vetro. Con l'icona Light, su bianco.", secs: "3" },
+  { id: "sunshine", name: "Sunshine", sub: "Il sole che attraversa il logo. Circa 3 secondi.", secs: "3" },
+];
+const LOOK_KEY = "bt-look";
+const cleanLook = v => {
+  const o = v && typeof v === "object" && !Array.isArray(v) ? v : {};
+  return { icon: APP_ICONS.some(i => i.id === o.icon) || o.icon === "team" ? o.icon : "classica", boot: BOOT_ANIMS.some(b => b.id === o.boot) ? o.boot : "pit" };
+};
+const animSrc = id => `splash/anim-${id}.webm`;   // come SPLASH_VIDEO
+const animPoster = id => `splash/anim-${id}.jpg`;
+const iconPlug = () => capPlugin("BtIcon");
+const romeMonthDay = ms => {
+  try {
+    const p = new Intl.DateTimeFormat("en-GB", { timeZone: "Europe/Rome", day: "numeric", month: "numeric" }).formatToParts(new Date(ms));
+    return { d: +p.find(x => x.type === "day").value, m: +p.find(x => x.type === "month").value };
+  } catch (e) { return { d: 0, m: 0 }; }
+};
+// L'icona che il telefono deve avere: l'8 agosto quella del giorno (se c'è), poi quella scelta; "team" = i colori della
+// scuderia del cuore (senza scuderia, o icona che l'APK non ha: la classica).
+function wantedIcon(look, favTeam, ms, ids = []) {
+  const md = romeMonthDay(ms);
+  if (md.m === 8 && md.d === 8 && ids.includes(AUG8_ICON)) return AUG8_ICON;
+  if (look.icon === "team") return favTeam && ids.includes(favTeam) ? favTeam : "classica";
+  return ids.includes(look.icon) ? look.icon : "classica";
+}
+const LOOK_CSS = ".lk-press{transition:transform .15s ease,opacity .15s ease}.lk-press:active{transform:scale(.97)}.lk-press:focus-visible{outline:2px solid #fff;outline-offset:2px}"
+  + "@keyframes lkIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}.lk-in{animation:lkIn .22s ease both}"
+  + "@media (prefers-reduced-motion: reduce){.lk-press,.lk-in{transition:none!important;animation:none!important}}";
+const LKX = { bg: "#0B0B0D", card: "#16161A", line: "#26262B", text: "#F4F4F5", muted: "#A1A1AA", dim: "#71717A" };
+// Video dell'avvio (anche nell'anteprima). light: liquid glass su bianco (il video al negativo, colori del vetro rimessi a posto).
+function BootVideo({ id, light = false, loop = false, onEnded, onError, onPlaying, vref }) {
+  return (
+    <video ref={vref} key={id} data-boot-video={id} data-boot-light={light ? "1" : undefined} src={animSrc(id)} poster={animPoster(id)} muted playsInline autoPlay loop={loop} preload="auto" aria-hidden="true"
+      onEnded={onEnded} onError={onError} onPlaying={onPlaying}
+      style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover", filter: light ? "invert(1) hue-rotate(180deg)" : undefined, pointerEvents: "none" }} />
+  );
+}
+
+function LookScreen({ theme, favTeam, look, iconInfo, onPickTheme, onLook, onApplyIcon, onClose }) {
+  const [page, setPage] = useState("colori");   // colori | icona | avvio | anteprima
+  const theme0 = useRef(theme);
+  const [iconPick, setIconPick] = useState(look.icon);
+  const [bootPick, setBootPick] = useState(look.boot);
+  const [loopKey, setLoopKey] = useState(0);
+  useBack(page !== "colori", () => setPage(page === "anteprima" ? "avvio" : "colori"));
   const team = favTeam ? teamById(favTeam) : null;
   const custom = theme && theme.mode === "custom" ? theme.color : null;
   const wheel = custom && !Colors.PALETTE.some(c => c.color === custom) ? custom : null;
-  const head = { fontFamily: F_BODY, fontWeight: 700, fontSize: 11, color: C.dim, letterSpacing: 1, margin: "18px 0 10px" };
-  const rowStyle = on => ({ position: "relative", display: "flex", alignItems: "center", gap: 12, width: "100%", padding: 12, borderRadius: 14, textAlign: "left", background: on ? alpha(C.accentInk, .1) : "rgba(255,255,255,.04)", border: `1px solid ${on ? C.accentInk : C.border}`, cursor: "pointer" });
-  const check = <Icon name="check" size={16} color={C.accentInk} sw={2.4} />;
-  return (
-    <div style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,.75)", zIndex: 620, display: "flex", alignItems: "flex-end" }} onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
-      <div className="scrollcol" data-theme-sheet="" style={{ background: C.card, borderRadius: "24px 24px 0 0", width: "100%", maxHeight: "88%", padding: "20px 20px 22px" }}>
-        <div style={{ display: "flex", alignItems: "center", marginBottom: 6 }}>
-          <h2 style={{ flex: 1, fontFamily: F_HEAD, fontWeight: 900, fontStyle: "italic", fontSize: 17, color: C.text, margin: 0 }}>COLORI DELL'APP</h2>
-          <button className="press" aria-label="Chiudi" onClick={onClose} style={{ width: 32, height: 32, borderRadius: "50%", background: "rgba(255,255,255,.08)", display: "flex", alignItems: "center", justifyContent: "center" }}><Icon name="close" size={13} sw={2.2} /></button>
+  const themeChanged = !sameJson(theme, theme0.current);
+  const canIcon = !!(iconInfo && iconInfo.ids && iconInfo.ids.length);
+  const iconName = id => (id === "team" ? "Scuderia" : (APP_ICONS.find(i => i.id === id) || APP_ICONS[0]).name);
+  const iconImg = id => `app-icons/${id === "team" ? (team && TEAM_ICON_IDS.includes(team.id) ? team.id : "classica") : id}.png`;
+  const bootName = id => (BOOT_ANIMS.find(b => b.id === id) || BOOT_ANIMS[0]).name;
+  const head = t => <div style={{ fontFamily: F_BODY, fontWeight: 800, fontSize: 11, letterSpacing: 1.2, color: LKX.muted, margin: "20px 2px 10px" }}>{t}</div>;
+  const top = (title, onX) => (
+    <div style={{ display: "flex", alignItems: "center", gap: 10, minHeight: 48 }}>
+      <h1 style={{ flex: 1, margin: 0, fontFamily: F_HEAD, fontWeight: 900, fontStyle: "italic", fontSize: 19, color: LKX.text }}>{title}</h1>
+      <button className="lk-press" aria-label="Chiudi" onClick={onX} style={{ width: 40, height: 40, borderRadius: 20, background: "rgba(255,255,255,.08)", display: "flex", alignItems: "center", justifyContent: "center" }}><Icon name="close" size={14} color={LKX.text} sw={2.2} /></button>
+    </div>
+  );
+  const sub = t => <p style={{ margin: "2px 0 14px", fontFamily: F_BODY, fontSize: 13, lineHeight: "19px", color: LKX.muted }}>{t}</p>;
+  const bigBtn = (label, onClick, primary, data = {}, disabled = false) => (
+    <button className="lk-press" onClick={onClick} disabled={disabled} {...data} style={{ width: "100%", height: 52, borderRadius: 16, background: primary ? (disabled ? "rgba(255,255,255,.1)" : "#E4E4E7") : "transparent", border: primary ? "none" : `1px solid ${LKX.line}`, fontFamily: F_BODY, fontWeight: 800, fontSize: 15, color: primary ? (disabled ? LKX.dim : "#0B0B0D") : LKX.text }}>{label}</button>
+  );
+  const rowBtn = (data, onClick, left, title, subT, right) => (
+    <button className="lk-press" onClick={onClick} {...data} style={{ display: "flex", alignItems: "center", gap: 12, width: "100%", minHeight: 64, padding: "10px 14px", borderRadius: 16, background: LKX.card, border: `1px solid ${LKX.line}`, textAlign: "left" }}>
+      {left}
+      <span style={{ flex: 1, minWidth: 0 }}>
+        <span style={{ display: "block", fontFamily: F_BODY, fontWeight: 800, fontSize: 14.5, color: LKX.text }}>{title}</span>
+        {subT && <span style={{ display: "block", marginTop: 2, fontFamily: F_BODY, fontSize: 12, color: LKX.muted }}>{subT}</span>}
+      </span>
+      {right}
+    </button>
+  );
+  const chev = <Icon name="chevron" size={14} color={LKX.muted} />;
+  const shell = (children, data) => (
+    <div {...data} role="dialog" aria-modal="true" className="scrollcol" style={{ position: "absolute", inset: 0, zIndex: 640, background: LKX.bg, color: LKX.text, overflowY: "auto", boxSizing: "border-box", padding: "calc(env(safe-area-inset-top, 0px) + 12px) 18px calc(env(safe-area-inset-bottom, 0px) + 18px)", display: "flex", flexDirection: "column" }}>
+      <style>{LOOK_CSS}</style>
+      {children}
+    </div>
+  );
+  const iconTile = (id, label, img, disabled = false, note = null) => {
+    const on = iconPick === id;
+    return (
+      <button key={id} className="lk-press" data-icon-pick={id} aria-pressed={on ? "true" : "false"} disabled={disabled} onClick={() => { setIconPick(id); fx.buzz("select"); }}
+        style={{ position: "relative", display: "flex", flexDirection: "column", alignItems: "center", gap: 8, padding: "14px 6px 12px", borderRadius: 18, background: LKX.card, border: `1.5px solid ${on ? LKX.text : LKX.line}`, opacity: disabled ? .45 : 1 }}>
+        <img src={img} alt="" width={56} height={56} style={{ width: 56, height: 56, borderRadius: 14, objectFit: "cover" }} />
+        <span style={{ fontFamily: F_BODY, fontWeight: 800, fontSize: 12.5, color: LKX.text, textAlign: "center", lineHeight: "15px" }}>{label}</span>
+        {note && <span style={{ fontFamily: F_BODY, fontSize: 10.5, color: LKX.muted, textAlign: "center", lineHeight: "13px" }}>{note}</span>}
+        {on && <span style={{ position: "absolute", top: 8, right: 8, width: 20, height: 20, borderRadius: 10, background: LKX.text, display: "flex", alignItems: "center", justifyContent: "center" }}><Icon name="check" size={11} color="#0B0B0D" sw={3} /></span>}
+      </button>
+    );
+  };
+  if (page === "anteprima") {
+    const light = bootPick === "liquid" && look.icon === "light";
+    const b = BOOT_ANIMS.find(x => x.id === bootPick) || BOOT_ANIMS[0];
+    return (
+      <div data-look="anteprima" role="dialog" aria-modal="true" aria-label={"Anteprima " + b.name} style={{ position: "absolute", inset: 0, zIndex: 650, background: light ? "#fff" : "#000", overflow: "hidden" }}>
+        {bootPick === "pit"
+          ? <LoadingScreen key={loopKey} ready onDone={() => setLoopKey(k => k + 1)} />
+          : <BootVideo id={bootPick} light={light} loop />}
+        <button className="lk-press" aria-label="Chiudi l'anteprima" onClick={() => setPage("avvio")} style={{ position: "absolute", zIndex: 10001, top: "calc(env(safe-area-inset-top, 0px) + 14px)", right: 16, width: 40, height: 40, borderRadius: 20, background: "rgba(127,127,127,.35)", display: "flex", alignItems: "center", justifyContent: "center" }}><Icon name="close" size={14} color="#fff" sw={2.2} /></button>
+        <p style={{ position: "absolute", zIndex: 10001, left: 16, right: 16, bottom: "calc(env(safe-area-inset-bottom, 0px) + 22px)", margin: 0, textAlign: "center", fontFamily: F_BODY, fontSize: 12.5, fontWeight: 600, color: light ? "#3F3F46" : "#A1A1AA" }}>Anteprima. Dura circa {b.secs} secondi all'avvio vero.</p>
+      </div>
+    );
+  }
+  if (page === "icona") {
+    const changed = iconPick !== look.icon;
+    return shell(<>
+      {top("ICONA DELL'APP", () => { setIconPick(look.icon); setPage("colori"); })}
+      {sub("Cambia l'icona sul telefono. I colori dell'app restano quelli scelti.")}
+      {changed && (
+        <div className="lk-in" data-icon-preview={iconPick} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 10, padding: "22px 0 18px", marginBottom: 14, borderRadius: 20, background: "radial-gradient(120% 90% at 50% 0%, #26262B, #16161A)", border: `1px solid ${LKX.line}` }}>
+          <img src={iconImg(iconPick)} alt="" width={76} height={76} style={{ width: 76, height: 76, borderRadius: 20, objectFit: "cover", boxShadow: "0 10px 30px rgba(0,0,0,.45)" }} />
+          <span style={{ fontFamily: F_BODY, fontWeight: 800, fontSize: 13, color: LKX.text }}>Sector 4 · {iconName(iconPick)}</span>
         </div>
-        <p style={{ margin: 0, fontFamily: F_BODY, fontSize: 12.5, color: C.muted, lineHeight: 1.5 }}>Il colore dei tasti, dei titoli e delle linee. Con qualsiasi colore i testi restano leggibili: se serve, l'app lo scurisce o lo schiarisce un po'.</p>
-        <div style={{ marginTop: 16 }}>
-          <button className="press" data-theme-team="" aria-pressed={theme && theme.mode === "team" ? "true" : "false"} onClick={() => onPick({ mode: "team", color: null })} style={rowStyle(theme && theme.mode === "team")}>
-            <span style={{ width: 30, height: 30, borderRadius: "50%", flexShrink: 0, background: team ? team.color : LED_RED, border: "2px solid rgba(255,255,255,.2)" }} />
-            <span style={{ flex: 1, minWidth: 0 }}>
-              <span style={{ display: "block", fontFamily: F_BODY, fontWeight: 700, fontSize: 14, color: C.text }}>Colore della mia scuderia</span>
-              <span style={{ display: "block", fontFamily: F_BODY, fontSize: 11.5, color: C.muted, marginTop: 2 }}>{team ? team.name : "Rosso LED: scegli la scuderia del cuore nel Profilo"}</span>
-            </span>
-            {theme && theme.mode === "team" && check}
-          </button>
-        </div>
-        <div style={head}>COLORI</div>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 10 }}>
-          {Colors.PALETTE.map(c => {
-            const on = custom === c.color;
-            return (
-              <button key={c.color} className="press" data-theme-color={c.color} aria-label={c.name} aria-pressed={on ? "true" : "false"} onClick={() => onPick({ mode: "custom", color: c.color })} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 6, padding: "6px 0" }}>
-                <span style={{ width: 38, height: 38, borderRadius: "50%", background: c.color, boxShadow: on ? `0 0 0 3px ${C.card}, 0 0 0 5px ${C.text}` : "inset 0 0 0 1px rgba(255,255,255,.18)", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                  {on && <Icon name="check" size={16} color={Colors.contrast(c.color, "#000000") > Colors.contrast(c.color, "#FFFFFF") ? "#000" : "#fff"} sw={2.6} />}
-                </span>
-                <span style={{ fontFamily: F_BODY, fontSize: 10.5, color: on ? C.text : C.muted, textAlign: "center", lineHeight: 1.2 }}>{c.name}</span>
-              </button>
-            );
-          })}
-        </div>
-        <div style={head}>COME VUOI TU</div>
-        <label htmlFor="themeWheel" style={rowStyle(!!wheel)}>
-          <span style={{ position: "relative", width: 30, height: 30, borderRadius: "50%", flexShrink: 0, overflow: "hidden", background: wheel || "conic-gradient(#FF1801, #FFD100, #4AE54A, #27F4D2, #3671C6, #A142F4, #FF87BC, #FF1801)", border: "2px solid rgba(255,255,255,.2)" }}>
-            <input id="themeWheel" data-theme-wheel="" type="color" aria-label="Scegli tu il colore" value={(wheel || custom || C.accentInk).toLowerCase()} onChange={e => { const v = Colors.normHex(e.target.value); if (v) onPick({ mode: "custom", color: v }); }} style={{ position: "absolute", inset: 0, width: "100%", height: "100%", opacity: 0, border: "none", padding: 0, cursor: "pointer" }} />
-          </span>
-          <span style={{ flex: 1, minWidth: 0 }}>
-            <span style={{ display: "block", fontFamily: F_BODY, fontWeight: 700, fontSize: 14, color: C.text }}>Scegli tu</span>
-            <span style={{ display: "block", fontFamily: F_BODY, fontSize: 11.5, color: C.muted, marginTop: 2 }}>{wheel || "Con la ruota dei colori del telefono"}</span>
-          </span>
-          {wheel && check}
-        </label>
-        <div data-theme-preview="" style={{ display: "flex", alignItems: "center", gap: 14, marginTop: 18, padding: 14, borderRadius: 14, background: C.bg, border: `1px solid ${C.border}` }}>
+      )}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 10 }}>
+        {APP_ICONS.map(i => iconTile(i.id, i.name, iconImg(i.id)))}
+        {iconTile("team", "Scuderia del cuore", iconImg("team"), !team, team ? team.name : "Scegli la scuderia nel Profilo")}
+      </div>
+      <div style={{ flex: 1, minHeight: 18 }} />
+      <p style={{ margin: "0 2px 12px", fontFamily: F_BODY, fontSize: 12, lineHeight: "17px", color: LKX.muted }}>
+        {canIcon ? "Cambiando icona, l'app si chiude un momento e il telefono aggiorna la schermata. Con \"Scuderia del cuore\" l'icona cambia da sola se cambi scuderia." : "L'icona si cambia dall'app Android, non dal sito."}
+      </p>
+      {bigBtn("Applica icona", () => { onApplyIcon(iconPick); setPage("colori"); }, true, { "data-icon-apply": "" }, !changed || !canIcon)}
+      <div style={{ height: 10 }} />
+      {bigBtn("Annulla", () => { setIconPick(look.icon); setPage("colori"); }, false)}
+    </>, { "data-look": "icona", "aria-label": "Icona dell'app" });
+  }
+  if (page === "avvio") {
+    const changed = bootPick !== look.boot;
+    return shell(<>
+      {top("ANIMAZIONE D'AVVIO", () => { setBootPick(look.boot); setPage("colori"); })}
+      {sub("Parte dal secondo avvio in poi. Al primo restano i tuoi tre video.")}
+      <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+        {BOOT_ANIMS.map(b => {
+          const on = bootPick === b.id;
+          const thumb = b.id === "pit"
+            ? <span style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 3, width: 66, height: 44, borderRadius: 10, background: "#000", flexShrink: 0 }}>{["#34D399", "#34D399", "#FF1801", "#FF1801", "#64C4FF", "#64C4FF"].map((c, i) => <span key={i} style={{ width: 5, height: 5, borderRadius: 3, background: c }} />)}</span>
+            : <img src={animPoster(b.id)} alt="" width={66} height={44} style={{ width: 66, height: 44, borderRadius: 10, objectFit: "cover", flexShrink: 0, filter: b.id === "liquid" && look.icon === "light" ? "invert(1) hue-rotate(180deg)" : undefined }} />;
+          return (
+            <button key={b.id} className="lk-press" data-boot-pick={b.id} aria-pressed={on ? "true" : "false"} onClick={() => { setBootPick(b.id); fx.buzz("select"); }}
+              style={{ display: "flex", alignItems: "center", gap: 12, width: "100%", minHeight: 64, padding: "10px 12px", borderRadius: 16, background: LKX.card, border: `1.5px solid ${on ? LKX.text : LKX.line}`, textAlign: "left" }}>
+              {thumb}
+              <span style={{ flex: 1, minWidth: 0 }}>
+                <span style={{ display: "block", fontFamily: F_BODY, fontWeight: 800, fontSize: 14.5, color: LKX.text }}>{b.name}</span>
+                <span style={{ display: "block", marginTop: 2, fontFamily: F_BODY, fontSize: 12, lineHeight: "16px", color: LKX.muted }}>{b.sub}</span>
+              </span>
+              <span style={{ width: 22, height: 22, borderRadius: 11, flexShrink: 0, border: on ? "none" : `1.5px solid ${LKX.dim}`, background: on ? LKX.text : "transparent", display: "flex", alignItems: "center", justifyContent: "center" }}>{on && <Icon name="check" size={12} color="#0B0B0D" sw={3} />}</span>
+            </button>
+          );
+        })}
+      </div>
+      <div style={{ flex: 1, minHeight: 18 }} />
+      {changed && <>{bigBtn("Vedi anteprima", () => { setLoopKey(k => k + 1); setPage("anteprima"); }, false, { "data-boot-preview": "" })}<div style={{ height: 10 }} /></>}
+      {bigBtn("Fatto", () => { if (changed) onLook({ ...look, boot: bootPick }); setPage("colori"); }, true, { "data-boot-done": "" })}
+    </>, { "data-look": "avvio", "aria-label": "Animazione d'avvio" });
+  }
+  const swatchOn = c => custom === c;
+  return shell(<>
+    {top("COLORI DELL'APP", onClose)}
+    {sub("Il colore di tasti, titoli e linee. I testi restano leggibili con qualsiasi colore.")}
+    {themeChanged && (
+      <div className="lk-in" data-theme-preview="" style={{ padding: 14, borderRadius: 18, background: "#000", border: `1px solid ${LKX.line}`, marginBottom: 12 }}>
+        <div style={{ fontFamily: F_BODY, fontWeight: 800, fontSize: 10.5, letterSpacing: 1.2, color: LKX.muted, marginBottom: 10 }}>ANTEPRIMA</div>
+        <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
           <span data-theme-sample="tasto" style={{ padding: "10px 16px", borderRadius: 11, background: C.accent, fontFamily: F_HEAD, fontWeight: 900, fontStyle: "italic", fontSize: 13, color: C.onAccent }}>TASTO</span>
-          <span data-theme-sample="testo" style={{ flex: 1, fontFamily: F_HEAD, fontWeight: 800, fontSize: 13, color: C.accentInk, borderBottom: `2px solid ${C.accentInk}`, paddingBottom: 3 }}>Titoli e linee</span>
+          <span data-theme-sample="testo" style={{ flex: 1, fontFamily: F_HEAD, fontWeight: 800, fontStyle: "italic", fontSize: 13, color: C.accentInk, borderBottom: `2px solid ${C.accentInk}`, paddingBottom: 4 }}>TITOLI E LINEE</span>
+        </div>
+        <div style={{ display: "flex", alignItems: "center", gap: 12, marginTop: 14 }} aria-hidden="true">
+          <span style={{ position: "relative", width: 36, height: 20, borderRadius: 10, background: C.accent, flexShrink: 0 }}><span style={{ position: "absolute", top: 2, right: 2, width: 16, height: 16, borderRadius: 8, background: "#fff" }} /></span>
+          <span style={{ flex: 1, height: 5, borderRadius: 3, background: "rgba(255,255,255,.12)", overflow: "hidden" }}><span style={{ display: "block", width: "62%", height: "100%", background: C.accentInk }} /></span>
         </div>
       </div>
+    )}
+    {rowBtn({ "data-theme-team": "", "aria-pressed": theme && theme.mode === "team" ? "true" : "false" }, () => onPickTheme({ mode: "team", color: null }),
+      <span style={{ width: 30, height: 30, borderRadius: 15, flexShrink: 0, background: team ? team.color : LED_RED, border: "2px solid rgba(255,255,255,.2)" }} />,
+      "Colore della mia scuderia", team ? team.name : "Rosso LED: scegli la scuderia del cuore nel Profilo",
+      theme && theme.mode === "team" ? <Icon name="check" size={16} color={LKX.text} sw={2.4} /> : null)}
+    {head("COLORI")}
+    <div style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(0, 1fr))", gap: 8 }}>
+      {Colors.PALETTE.map(c => (
+        <button key={c.color} className="lk-press" data-theme-color={c.color} aria-label={c.name} aria-pressed={swatchOn(c.color) ? "true" : "false"} onClick={() => onPickTheme({ mode: "custom", color: c.color })} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 6, padding: "6px 0", minHeight: 64 }}>
+          <span style={{ width: 40, height: 40, borderRadius: 20, background: c.color, boxShadow: swatchOn(c.color) ? `0 0 0 3px ${LKX.bg}, 0 0 0 5px ${LKX.text}` : "inset 0 0 0 1px rgba(255,255,255,.18)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+            {swatchOn(c.color) && <Icon name="check" size={16} color={Colors.contrast(c.color, "#000000") > Colors.contrast(c.color, "#FFFFFF") ? "#000" : "#fff"} sw={2.6} />}
+          </span>
+          <span style={{ fontFamily: F_BODY, fontSize: 11, fontWeight: swatchOn(c.color) ? 800 : 600, color: swatchOn(c.color) ? LKX.text : LKX.muted, textAlign: "center", lineHeight: 1.2 }}>{c.name}</span>
+        </button>
+      ))}
+    </div>
+    {head("COME VUOI TU")}
+    <label htmlFor="themeWheel" className="lk-press" style={{ position: "relative", display: "flex", alignItems: "center", gap: 12, minHeight: 64, padding: "10px 14px", borderRadius: 16, background: LKX.card, border: `1px solid ${wheel ? LKX.text : LKX.line}`, cursor: "pointer" }}>
+      <span style={{ position: "relative", width: 30, height: 30, borderRadius: 15, flexShrink: 0, overflow: "hidden", background: wheel || "conic-gradient(#FF1801, #FFD100, #4AE54A, #27F4D2, #3671C6, #A142F4, #FF87BC, #FF1801)", border: "2px solid rgba(255,255,255,.2)" }}>
+        <input id="themeWheel" data-theme-wheel="" type="color" aria-label="Scegli tu il colore" value={(wheel || custom || C.accentInk).toLowerCase()} onChange={e => { const v = Colors.normHex(e.target.value); if (v) onPickTheme({ mode: "custom", color: v }); }} style={{ position: "absolute", inset: 0, width: "100%", height: "100%", opacity: 0, border: "none", padding: 0, cursor: "pointer" }} />
+      </span>
+      <span style={{ flex: 1, minWidth: 0 }}>
+        <span style={{ display: "block", fontFamily: F_BODY, fontWeight: 800, fontSize: 14.5, color: LKX.text }}>Scegli tu</span>
+        <span style={{ display: "block", marginTop: 2, fontFamily: F_BODY, fontSize: 12, color: LKX.muted }}>{wheel || "Con la ruota dei colori del telefono"}</span>
+      </span>
+      {chev}
+    </label>
+    {head("ICONA E AVVIO")}
+    <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+      {rowBtn({ "data-look-open": "icona" }, () => { setIconPick(look.icon); setPage("icona"); },
+        <img src={iconImg(look.icon)} alt="" width={36} height={36} style={{ width: 36, height: 36, borderRadius: 10, objectFit: "cover", flexShrink: 0 }} />,
+        "Icona", iconName(look.icon) + (look.icon === "team" && team ? ": " + team.name : ""), chev)}
+      {rowBtn({ "data-look-open": "avvio" }, () => { setBootPick(look.boot); setPage("avvio"); },
+        <span style={{ width: 36, height: 36, borderRadius: 10, flexShrink: 0, background: "#000", border: `1px solid ${LKX.line}`, display: "flex", alignItems: "center", justifyContent: "center" }}><Icon name="play" size={14} color={LKX.text} /></span>,
+        "Animazione d'avvio", bootName(look.boot), chev)}
+    </div>
+    <div style={{ flex: 1, minHeight: 20 }} />
+    {bigBtn("Fatto", onClose, true, { "data-look-done": "" })}
+  </>, { "data-look": "colori", "data-theme-sheet": "", "aria-label": "Colori, icona e avvio" });
+}
+
+// Avvio scelto (dal secondo avvio): il video una volta; se l'app è pronta va via (si può anche toccare per saltarlo),
+// altrimenti resta il caricamento di sempre. Video che non parte: il caricamento di sempre.
+function AnimSplash({ id, light, ready, onDone, onFail }) {
+  const [fading, setFading] = useState(false);
+  const [ended, setEnded] = useState(false);
+  const started = useRef(false);
+  useEffect(() => { const t = setTimeout(() => { if (!started.current) onFail(); }, SPLASH_VIDEO_START_MS); return () => clearTimeout(t); }, []);   // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { if (ended) { if (ready) setFading(true); else onFail(); } }, [ended]);   // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { if (!fading) return undefined; const t = setTimeout(onDone, SPLASH_FADE_MS); return () => clearTimeout(t); }, [fading]);   // eslint-disable-line react-hooks/exhaustive-deps
+  return (
+    <div data-splash="" data-splash-phase="anim" data-splash-anim={id} onClick={() => { if (ready && started.current) setFading(true); }}
+      style={{ position: "fixed", inset: 0, zIndex: 9999, background: light ? "#fff" : "#000", transition: `opacity ${SPLASH_FADE_MS}ms ease`, opacity: fading ? 0 : 1, pointerEvents: fading ? "none" : "auto" }}>
+      <BootVideo id={id} light={light} onPlaying={() => { started.current = true; }} onEnded={() => setEnded(true)} onError={onFail} />
     </div>
   );
 }
@@ -10506,7 +10693,7 @@ function ProfiloScreen({ pubHide = {}, onPubHide = null, onGoNotifiche = null, o
     // 8/11 (Edoardo): colori, suoni, vibrazioni, temi delle feste, Pit Board e promemoria in una sola voce che si apre.
     { icon: "palette", label: "Personalizza l'app", onClick: () => setPersOpen(o => !o), chevron: true, group: true, open: persOpen },
     ...(persOpen ? [
-      { icon: "palette", label: "Colori dell'app", onClick: onTheme, chevron: true, sub: true },
+      { icon: "palette", label: "Colori, icona e avvio", onClick: onTheme, chevron: true, sub: true },
       { icon: "sound", label: "Suoni", toggle: { on: sounds, onChange: onSounds }, sub: true },
       { icon: "vibrate", label: "Vibrazioni", toggle: { on: haptics, onChange: onHaptics }, sub: true },
       // 15/11 (Edoardo: "la funzione TV: mantieni schermo attivo"): lo schermo non si spegne finché l'app è aperta
@@ -12362,7 +12549,11 @@ function TermsSheet({ review, onAccept, onClose }) {
 const INTRO_KEY = "bt-intro-seen";
 const prefersReduced = () => { try { return !!(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches); } catch (e) { return false; } };
 function SplashScreen({ ready, onDone, holiday = null }) {
-  const [mode, setMode] = useState(() => (!prefersReduced() && !local.get(INTRO_KEY) ? "video" : "loading"));
+  const look0 = useRef(null);
+  if (!look0.current) look0.current = cleanLook(local.get(LOOK_KEY));
+  // 22/11 sera: dal secondo avvio l'animazione scelta in Colori, icona e avvio (Pit Exit Launch = il caricamento di sempre)
+  const [mode, setMode] = useState(() => (prefersReduced() ? "loading" : !local.get(INTRO_KEY) ? "video" : look0.current.boot !== "pit" ? "anim" : "loading"));
+  if (mode === "anim") return <AnimSplash id={look0.current.boot} light={look0.current.boot === "liquid" && look0.current.icon === "light"} ready={ready} onDone={onDone} onFail={() => setMode("loading")} />;
   if (mode === "video") return <VideoSplash ready={ready} onFail={() => setMode("loading")} onDone={() => { local.set(INTRO_KEY, true); onDone(); }} />;
   return <LoadingScreen ready={ready} onDone={onDone} holiday={holiday} />;
 }
@@ -13050,6 +13241,7 @@ const USER_INIT = {
   promo: { until: 0, used: [] },   // 21/11: codici promo usati e Funzioni Pro fino a (src/logic/promo.js)
   pubHide: {},   // 22/11: campi del profilo pubblico nascosti agli altri (follow, fan, team, driver: true = nascosto)
   autoLeagues: [],   // 14/11: leghe in cui l'app ti ha già messo da sola (una volta per account: la lega B&T)
+  look: { icon: "classica", boot: "pit" },   // 22/11: icona dell'app e animazione d'avvio
 };
 // 14/11 (Edoardo): "tutti gli utenti in automatico nella lega B&T". Codice della lega che esiste già.
 const BT_LEAGUE = "BT-M7AS";
@@ -13064,7 +13256,7 @@ const cleanPremium = v => {
   return { sub: !!(v && v.sub), ...src, ...plan, ...(rec ? { receipt: rec } : {}), trial: ok ? { start: +t.start, end: +t.end, ...(t.converted ? { converted: true } : {}) } : null };
 };
 // Dati dell'account che restano anche sul telefono: uscendo dall'account non tornano quelli di serie.
-const PHONE_KEYS = ["theme", "sounds", "haptics"];
+const PHONE_KEYS = ["theme", "sounds", "haptics", "look"];
 const NOT_SAVED = "Non salvato: controlla la connessione e riprova.";
 const USER_WAIT = "I tuoi dati non sono ancora arrivati: controlla la connessione e riprova tra poco.";
 const DATA_CHANGED = "Non salvato: nel frattempo i dati sono stati cambiati. Ora vedi quelli aggiornati: rifai la modifica e salva di nuovo.";
@@ -13721,6 +13913,11 @@ function App() {
   const setTrophiesOn = on => { setTrophiesOff(!on); local.set("bt-trophies-off", !on); };
   // Tappa 3: colori dell'app (sul telefono e nell'account), suoni, vibrazioni, casco e notizie nascoste (account).
   const [theme, setTheme] = useState(() => cleanTheme(local.get(THEME_KEY)) || USER_INIT.theme);
+  const [look, setLook] = useState(() => cleanLook(local.get(LOOK_KEY)));   // 22/11: icona e animazione d'avvio
+  useEffect(() => { local.set(LOOK_KEY, look); }, [JSON.stringify(look)]);   // eslint-disable-line react-hooks/exhaustive-deps
+  const [iconInfo, setIconInfo] = useState(null);   // icone che l'APK ha e quella accesa (plugin BtIcon); null sul sito
+  const iconRefresh = () => { const pl = iconPlug(); if (pl && pl.available) Promise.resolve(pl.available()).then(r => setIconInfo(r && Array.isArray(r.ids) ? { ids: r.ids, current: r.current || null, pending: r.pending || null } : null), () => setIconInfo(null)); };
+  useEffect(iconRefresh, []);   // eslint-disable-line react-hooks/exhaustive-deps
   const [bootColor] = useState(() => { const t = local.get(THEME_KEY); return (t && Colors.normHex(t.color)) || null; });
   const [sounds, setSounds] = useState(() => fx.sounds());     // suoni e vibrazioni: la scelta del telefono (fx)
   const [haptics, setHaptics] = useState(() => fx.haptics());
@@ -14045,7 +14242,7 @@ function App() {
   const userReady = useRef(false);   // dati dell'account letti: da qui in poi le modifiche si salvano
   const userSnap = useRef({});       // ultimo valore letto o salvato di ogni dato (JSON): si manda solo quello che cambia
   const userVals = { saved, favTeam, favDriver, notifPrefs, votes, squad, squadBase, freeTransfers, predAnswers, sillyPreds, stratPreds, pitBest, wxGuess, ratings, dotd, notifSeenAt,
-    theme, sounds, haptics, helmet, hidden, trophies, premium, squadLog, leagues: leagueCodes, holidays: holidaysOn, swipe, autoLeagues, promo: promoMine, pubHide };
+    theme, sounds, haptics, helmet, hidden, trophies, premium, squadLog, leagues: leagueCodes, holidays: holidaysOn, swipe, autoLeagues, promo: promoMine, pubHide, look };
   const userValsRef = useRef(userVals);
   userValsRef.current = userVals;
   const userSet = { pubHide: v => setPubHide(v && typeof v === "object" && !Array.isArray(v) ? v : {}), saved: setSaved, favTeam: setFavTeam, favDriver: setFavDriver, notifPrefs: setNotifPrefs, votes: setVotes, squad: setSquad, squadBase: setSquadBase,
@@ -14058,7 +14255,7 @@ function App() {
     trophies: v => setTrophies(cleanTrophies(v)), premium: v => setPremium(cleanPremium(v)),
     squadLog: v => setSquadLog(FantaSeason.cleanLog(v).slice(-80)), leagues: v => setLeagueCodes(Array.isArray(v) ? v.filter(c => /^BT-[A-Z0-9]{4,6}$/.test(c)).slice(0, 10) : []),
     autoLeagues: v => setAutoLeagues(Array.isArray(v) ? v.filter(c => /^BT-[A-Z0-9]{4,6}$/.test(c)).slice(0, 10) : []),
-    promo: v => setPromoMine(BtPromo.cleanUserPromo(v)) };
+    promo: v => setPromoMine(BtPromo.cleanUserPromo(v)), look: v => setLook(cleanLook(v)) };
   // Dati dell'account arrivati (per quale email): finché non arrivano, il colore dell'app resta quello del telefono.
   const [userLoaded, setUserLoaded] = useState(null);
   // 13/11 (accesso lento): seed = app2 del profilo che l'accesso ha appena letto; con quello non si rilegge users/<email>.
@@ -14113,6 +14310,25 @@ function App() {
     setSquadLog(next);
     FantaL.pushLog(leagueCodes, { aid: account.aid, name: account.name, team: squad.name, bonus: fantaBonusRef.current }, next);
   }, [fantaUserReady, JSON.stringify([squad.drivers, squad.teams, squad.boost, squad.name])]);
+  // 22/11 sera: l'icona del telefono segue la scelta (look.icon), la scuderia del cuore ("team") e l'8 agosto. Quando non
+  // è stato l'utente a cambiarla (scuderia nuova, 8 agosto) cambia quando l'app va in secondo piano (now: false).
+  const iconWanted = iconInfo ? wantedIcon(look, favTeam, nowMs(), iconInfo.ids) : null;
+  useEffect(() => {
+    const pl = iconPlug();
+    if (!pl || !iconInfo || !iconWanted || iconWanted === iconInfo.current || iconWanted === iconInfo.pending) return;
+    if (!guest && !fantaUserReady) return;   // si aspettano i dati dell'account (la scelta e la scuderia vere)
+    Promise.resolve(pl.set({ id: iconWanted, now: false })).then(() => setIconInfo(x => (x ? { ...x, pending: iconWanted } : x)), () => {});
+  }, [iconWanted, iconInfo && iconInfo.current, fantaUserReady, guest]);   // eslint-disable-line react-hooks/exhaustive-deps
+  const applyIcon = id => {
+    if (userDataWait()) return;
+    const next = cleanLook({ ...look, icon: id });
+    setLook(next);
+    const pl = iconPlug();
+    if (!pl || !iconInfo) return;
+    const want = wantedIcon(next, favTeam, nowMs(), iconInfo.ids);
+    fx.play("done");
+    Promise.resolve(pl.set({ id: want, now: true })).then(() => iconRefresh(), () => showToast("Icona non cambiata: riprova."));
+  };
   // 22/11 sera (Edoardo: "quando ti unisci alla lega devi uscire e rientrare dall'app"): una rilettura partita prima di
   // entrare in una lega e arrivata dopo rimetteva l'elenco vecchio. Vale solo l'ultima (leaguesSeq; entrare o uscire la
   // fa scadere).
@@ -16115,7 +16331,7 @@ function App() {
         {infoModal && <InfoModal title={infoModal.title} body={infoModal.body} extra={infoModal.credits ? <CommonsCredits /> : null} onClose={() => setInfoModal(null)} />}
         {helmetOpen && <HelmetEditor helmet={helmet} onSave={v => { if (!userDataWait()) setHelmet(v); }} onClose={() => setHelmetOpen(false)} />}
         {promoOpen && <PromoSheet guest={guest || !account} onRedeem={redeemPromo} onLogin={() => { setPromoOpen(false); needLogin("Per usare un codice promo serve un account."); }} onClose={() => setPromoOpen(false)} />}
-        {themeOpen && <ThemeSheet theme={theme} favTeam={favTeam} onPick={v => { if (!userDataWait()) setTheme(v); }} onClose={() => setThemeOpen(false)} />}
+        {themeOpen && <LookScreen theme={theme} favTeam={favTeam} look={look} iconInfo={iconInfo} onPickTheme={v => { if (!userDataWait()) setTheme(v); }} onLook={v => { if (!userDataWait()) setLook(cleanLook(v)); }} onApplyIcon={applyIcon} onClose={() => setThemeOpen(false)} />}
         {picker === "team" && <PickerModal title="SCUDERIA DEL CUORE" selected={favTeam} onPick={v => { if (!userDataWait()) setFavTeam(v); }} onClose={() => setPicker(null)}
           options={TEAMS.map(t => ({ id: t.id, label: t.name, color: t.color, sub: t.tag }))} />}
         {picker === "driver" && <PickerModal title="PILOTA DEL CUORE" selected={favDriver} onPick={v => { if (!userDataWait()) setFavDriver(v); }} onClose={() => setPicker(null)}

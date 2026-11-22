@@ -37,7 +37,7 @@ const oldReds = p => p.evaluate(() => [...document.querySelectorAll('body *')].f
 // scivola sotto la scheda attiva ([data-nav-pill]); prima era dentro il tasto della scheda. 8/11: è la palla della
 // barra "Floating Notch" ([data-nav-ball]), col colore dei tasti.
 const navPill = p => p.evaluate(() => { const e = document.querySelector('[data-nav-ball]'); return e ? getComputedStyle(e).backgroundColor : null; });
-const openColors = async p => { await tapSel(p, '[aria-label="Profilo"]'); await w(p); await tapText(p, "Colori dell'app"); await w(p, 400); };
+const openColors = async p => { await tapSel(p, '[aria-label="Profilo"]'); await w(p); await tapText(p, "Colori, icona e avvio"); await w(p, 400); };
 // La ruota dei colori del telefono cambia il valore del campo da sé (come il selettore vero), poi l'evento "input".
 const setWheel = (p, hex) => p.evaluate(h => {
   const el = document.querySelector('[data-theme-wheel]');
@@ -80,7 +80,7 @@ run({
     await tapText(p, 'Ferrari'); await w(p, 500);
     await tapSel(p, '[data-profile-public] [aria-label="Indietro"]'); await w(p, 400);
     const avatar = await p.evaluate(() => { const e = document.querySelector('[data-profile-avatar]'); return e ? getComputedStyle(e).backgroundColor : null; });
-    await tapText(p, "Colori dell'app"); await w(p, 400);
+    await tapText(p, "Colori, icona e avvio"); await w(p, 400);
     const after = norm(await inner(p, '[data-theme-sheet]'));
     await tapSel(p, '[data-theme-sheet] [aria-label="Chiudi"]'); await w(p);
     await tapSel(p, '[aria-label="Indietro"]'); await w(p, 400);

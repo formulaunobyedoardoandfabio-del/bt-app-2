@@ -308,3 +308,59 @@ if "android.permission.CAMERA" not in manifest:
     )
 open(MANIFEST, "w").write(manifest)
 print("NFC e fotocamera (lettore QR) aggiunti al manifest")
+
+# ── 22/11 ICONA DELL'APP: si sceglie nell'app (Profilo > Personalizza l'app > Colori, icona e avvio) ──
+# Ogni icona è un <activity-alias> di MainActivity con la sua icona: ne è acceso uno solo (di serie "classica", l'icona di
+# resources/icons) e lo cambia il plugin BtIcon (resources/android-icon/BtIconPlugin.java). MainActivity non ha più la
+# categoria LAUNCHER: la mettono gli alias. Le immagini sono in resources/app-icons (tools/icon/make-alt-icons.py); un'icona
+# si aggiunge mettendo la sua immagine in tools/icon/alt e rifacendo le risorse (per esempio "agosto", l'icona dell'8 agosto).
+ALT_ICONS = "resources/app-icons"
+alt_ids = []
+if os.path.isdir(ALT_ICONS):
+    for density in os.listdir(ALT_ICONS):
+        src_dir = os.path.join(ALT_ICONS, density)
+        if not os.path.isdir(src_dir):
+            continue
+        dst_dir = os.path.join(RES_DIR, density)
+        os.makedirs(dst_dir, exist_ok=True)
+        for fname in os.listdir(src_dir):
+            shutil.copyfile(os.path.join(src_dir, fname), os.path.join(dst_dir, fname))
+            m = re.match(r"ic_bt_([a-z0-9]+)\.png$", fname)
+            if density == "mipmap-xxxhdpi" and m:
+                alt_ids.append(m.group(1))
+alt_ids.sort()
+tpl = open("resources/android-icon/BtIconPlugin.java", encoding="utf-8").read()
+open(os.path.join(java_dir, "BtIconPlugin.java"), "w", encoding="utf-8").write(tpl.replace("__PKG__", pkg))
+src = open(main_act, encoding="utf-8").read()
+if "BtIconPlugin" not in src:
+    anchor = "registerPlugin(BtNfcPlugin.class);"
+    if anchor not in src:
+        sys.exit(f"ERRORE: riga di BtNfc non trovata in {main_act}, plugin BtIcon non registrato")
+    src = src.replace(anchor, anchor + "\n        registerPlugin(BtIconPlugin.class);", 1)
+    open(main_act, "w", encoding="utf-8").write(src)
+
+manifest = open(MANIFEST).read()
+if "BtIcon_classica" not in manifest:
+    act = re.search(r'<activity\b[^>]*android:name="([^"]*MainActivity)"[^>]*>.*?</activity>', manifest, flags=re.S)
+    if not act:
+        sys.exit(f"ERRORE: <activity> di MainActivity non trovata in {MANIFEST} (icone)")
+    block = act.group(0)
+    launcher = re.compile(r"\s*<intent-filter>(?:(?!</intent-filter>).)*?android\.intent\.category\.LAUNCHER(?:(?!</intent-filter>).)*?</intent-filter>", re.S)
+    new_block, n = launcher.subn("", block, count=1)
+    if not n:
+        sys.exit("ERRORE: categoria LAUNCHER di MainActivity non trovata: senza toglierla ci sarebbero due icone")
+    main_name = act.group(1)
+
+    def alias(iid, on, icon, rnd):
+        return (f'\n        <activity-alias android:name="{pkg}.BtIcon_{iid}" android:targetActivity="{main_name}" '
+                f'android:enabled="{"true" if on else "false"}" android:exported="true" android:label="@string/app_name" '
+                f'android:icon="{icon}" android:roundIcon="{rnd}">'
+                '<intent-filter><action android:name="android.intent.action.MAIN" />'
+                '<category android:name="android.intent.category.LAUNCHER" /></intent-filter></activity-alias>')
+
+    aliases = alias("classica", True, "@mipmap/ic_launcher", "@mipmap/ic_launcher_round")
+    for iid in alt_ids:
+        aliases += alias(iid, False, f"@mipmap/ic_bt_{iid}", f"@mipmap/ic_bt_{iid}_round")
+    manifest = manifest.replace(block, new_block + aliases, 1)
+    open(MANIFEST, "w").write(manifest)
+print(f"Icone dell'app: classica + {len(alt_ids)} da scegliere ({', '.join(alt_ids)}), plugin BtIcon registrato")
