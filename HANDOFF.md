@@ -1493,3 +1493,17 @@ Misure prima del lavoro (pagina di prova, CPU rallentata 4x come un telefono med
   e screenshot dei feedback (non pubblici). Da far vedere a un avvocato.
 - Prova completa (test/all.sh) fermata a metà per i token: da rifare. Verdi: run139 (7), run137 (5), run125 (3), run50 (6).
 - Da fare: immagine dell'icona 17 (8 agosto) e avvio "N" collegato all'icona 3 (li manda Edoardo).
+
+## 22/11 notte: risultati come notifiche (non notizie), permesso notifiche solo col tocco
+- Edoardo: le notizie automatiche coi risultati (8/11) "non come news": ora sono notifiche (src/logic/auto-news.js
+  resultNotifs; App: resNotifs, calcolate sul telefono, niente su Firebase). Qualifica → tocco: pagina Race, scorre alla
+  griglia di partenza ([data-start-grid], c'è solo dopo la qualifica). Sprint → pagina Race. Gara → Replay di quella gara
+  (archivio, Premium; ArchiveScreen initRound apre la gara e subito il replay, mappa se c'è il file, se no giro per giro;
+  se i dati di quella gara non sono ancora nell'app si apre l'elenco). Lette dopo "Segna tutte come lette" o al tocco
+  (bt-res-read sul telefono). Dalle Notizie le notizie automatiche sono sparite (autoNews resta, la usa resultNotifs).
+- Permesso notifiche: finire un giro di Pit Swipe non chiede più niente da solo (Edoardo: "solo quando ce n'è bisogno");
+  a fine giro c'è "Avvisami quando c'è il prossimo mazzo" (data-ps-remind): chiede il permesso e programma i promemoria.
+  Restano: accendere i promemoria nelle impostazioni delle notifiche, la prova Premium. I plugin (LocalNotifications,
+  FirebaseMessaging) non chiedono niente da soli (controllato anche il sorgente del plugin FCM).
+- Prove: unit auto-news (6), run99 (5), run85 promemoria (2, aggiornate al tocco), run100, run102, run103, run136,
+  run137, run10-run19 verdi. La prova completa non è stata rifatta.

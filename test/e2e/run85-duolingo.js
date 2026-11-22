@@ -70,10 +70,15 @@ run({
     assert(!errs.length, errs.join(' | '));
   },
 
-  async 'promemoria: dopo il primo giro si chiede il permesso e si programmano; spenti dal Profilo si cancellano'(b) {
+  // 22/11 (Edoardo: "chiedi il consenso alle notifiche solo quando ce n'è bisogno"): finito il giro non si chiede da
+  // solo; si chiede toccando "Avvisami quando c'è il prossimo mazzo", poi i promemoria si programmano.
+  async 'promemoria: finito il giro niente domanda; "Avvisami" chiede il permesso e li programma; spenti si cancellano'(b) {
     const { ctx, p, errs } = await open(b, { capacitor: NOTIF, seed: { addDocs: { ...NEWS, ...user({ favDriver: 'leclerc' }) } } }); await login(p); await w(p, 800);
     const before = await p.evaluate(() => window.__notif.slice());
     await playDeck(p); await w(p, 600);
+    const mid = await p.evaluate(() => window.__notif.slice());
+    await tapSel(p, '[data-ps-remind]'); await w(p, 800);
+    const gone = await p.evaluate(() => !document.querySelector('[data-ps-remind]'));
     const after = await p.evaluate(() => window.__notif.slice());
     await tapSel(p, '[aria-label="Indietro"]'); await w(p, 300);
     // 22/11: l'interruttore è passato da Profilo alle impostazioni delle notifiche
@@ -83,21 +88,26 @@ run({
     const off = await p.evaluate(() => window.__notif.slice(-2));
     await ctx.close();
     assert(!before.some(x => x[0] === 'ask'), 'niente richiesta di permesso all\'avvio: ' + JSON.stringify(before));
-    assert(after.some(x => x[0] === 'ask') && after.some(x => x[0] === 'schedule' && x[1].includes('Il giro di oggi è pronto')), 'dopo il primo giro: ' + JSON.stringify(after));
+    assert(!mid.some(x => x[0] === 'ask'), 'finito il giro non si chiede da solo: ' + JSON.stringify(mid));
+    assert(gone, 'dopo il tocco il tasto non c\'è più');
+    assert(after.some(x => x[0] === 'ask') && after.some(x => x[0] === 'schedule' && x[1].includes('Il giro di oggi è pronto')), 'col tocco: ' + JSON.stringify(after));
     assert(off[off.length - 1][0] === 'cancel', 'spenti: l\'ultima cosa è cancellare: ' + JSON.stringify(off));
     assert(!errs.length, errs.join(' | '));
   },
 
   // 8/11 (Edoardo: "le notifiche chiedile solo prima che servano, non appena installata l'app"): reinstallando, con
   // tanti giri vecchi nell'account, all'accesso non si chiede niente; si chiede quando finisci un giro adesso.
-  async 'promemoria dopo una reinstallazione: giri vecchi nell\'account, all\'accesso nessuna richiesta; si chiede finito il giro'(b) {
+  async 'promemoria dopo una reinstallazione: giri vecchi nell\'account, all\'accesso e finito il giro nessuna richiesta; solo col tocco'(b) {
     const { ctx, p, errs } = await open(b, { capacitor: NOTIF, seed: { addDocs: { ...NEWS, ...user({ favDriver: 'leclerc', swipe: { tot: { decks: 12, box: 30 } } }) } } }); await login(p); await w(p, 1200);
     const before = await p.evaluate(() => window.__notif.slice());
     await playDeck(p); await w(p, 600);
+    const mid = await p.evaluate(() => window.__notif.slice());
+    await tapSel(p, '[data-ps-remind]'); await w(p, 800);
     const after = await p.evaluate(() => window.__notif.slice());
     await ctx.close();
     assert(!before.some(x => x[0] === 'ask'), 'all\'accesso non si chiede il permesso: ' + JSON.stringify(before));
-    assert(after.some(x => x[0] === 'ask'), 'finito il giro si chiede: ' + JSON.stringify(after));
+    assert(!mid.some(x => x[0] === 'ask'), 'finito il giro non si chiede da solo: ' + JSON.stringify(mid));
+    assert(after.some(x => x[0] === 'ask'), 'col tocco si chiede: ' + JSON.stringify(after));
     assert(!errs.length, errs.join(' | '));
   },
 

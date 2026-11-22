@@ -56,5 +56,22 @@ t('Sprint: notizia propria; pilota senza nome noto = round saltato senza errori'
   assert.deepStrictEqual(bad, []);
 });
 
+// 22/11 (Edoardo: "non deve esser così, almeno deve andare nelle notifiche che poi clicchi e ti fa vedere i risultati per
+// le qualifiche andando sulla schermata race la griglia e per la gara far vedere il replay, non come news").
+t('resultNotifs: una notifica per qualifica e gara, col tipo, la gara, il titolo e cosa succede al tocco', () => {
+  const list = N.resultNotifs(rounds, races, { ...opt, weekendOf: c => WK[c] });
+  assert.deepStrictEqual(list.map(n => n.id), ['res-r-20', 'res-q-20', 'res-r-19']);
+  const q = list.find(n => n.id === 'res-q-20'), r = list.find(n => n.id === 'res-r-20');
+  assert.deepStrictEqual([q.kind, q.round, q.raceId], ['quali', 20, 'r20']);
+  assert.ok(/Russell in pole al GP del Brasile/.test(q.title) && /griglia di partenza/.test(q.body), JSON.stringify(q));
+  assert.deepStrictEqual([r.kind, r.round, r.raceId], ['race', 20, 'r20']);
+  assert.ok(/Antonelli vince il GP del Brasile/.test(r.title) && /Replay/.test(r.body), JSON.stringify(r));
+  assert.strictEqual(r.date, '2026-11-08T19:00:00.000Z');
+});
+t('resultNotifs: senza risultati nessuna notifica', () => {
+  assert.deepStrictEqual(N.resultNotifs([], races, opt), []);
+  assert.deepStrictEqual(N.resultNotifs(null, null, opt), []);
+});
+
 console.log(`\n${pass} passati, ${fail} falliti`);
 process.exit(fail ? 1 : 0);

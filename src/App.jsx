@@ -8187,12 +8187,15 @@ function MapReplay({ file, title, onBack }) {
   );
 }
 
-function ArchiveScreen({ archive, weekend, calendar = [], onBack }) {
+function ArchiveScreen({ archive, weekend, calendar = [], initRound = null, onBack }) {
   const now26 = (weekend && Array.isArray(weekend.races) ? weekend.races : []).filter(r => r && r.drivers);
   const [years, setYears] = useState(null);           // null = si carica; [] = niente dal sito
   const [year, setYear] = useState(now26.length ? 2026 : null);
   const [season, setSeason] = useState({ year: null, races: null, status: "idle" });
-  const [pick, setPick] = useState(null), [replay, setReplay] = useState(false);   // false | "laps" | "map"
+  // 22/11: dalla notifica della gara si apre quella gara (se i suoi dati sono già arrivati) e subito il suo replay
+  const initPick = initRound ? now26.find(r => Number(r.round) === Number(initRound)) || null : null;
+  const autoOpen = useRef(!!initPick);
+  const [pick, setPick] = useState(initPick), [replay, setReplay] = useState(false);   // false | "laps" | "map"
   const [rlist, setRlist] = useState(null), [mapFile, setMapFile] = useState({ status: "idle", file: null });
   useEffect(() => { let on = true; archive.index().then(list => { if (on) setYears((list || []).filter(y => y.year < 2026)); }); return () => { on = false; }; }, []);
   useEffect(() => { let on = true; if (archive.replays) archive.replays().then(list => { if (on) setRlist(list || []); }); return () => { on = false; }; }, []);
@@ -8214,6 +8217,11 @@ function ArchiveScreen({ archive, weekend, calendar = [], onBack }) {
     setReplay("map"); setMapFile({ status: "loading", file: null });
     archive.replay(rinfo.key).then(f => setMapFile(f ? { status: "ok", file: f } : { status: "error", file: null }));
   };
+  useEffect(() => {
+    if (!autoOpen.current || !pick || rlist === null) return;
+    autoOpen.current = false;
+    if (rinfo) openMap(); else setReplay("laps");
+  }, [rlist, pick]);   // eslint-disable-line react-hooks/exhaustive-deps
   if (pick && replay === "laps") return <RaceReplay race={pick} title={label(pick)} onBack={() => setReplay(false)} />;
   if (pick && replay === "map") {
     if (mapFile.status === "ok") return <MapReplay file={mapFile.file} title={label(pick)} onBack={() => setReplay(false)} />;
@@ -13384,7 +13392,7 @@ function PsFace({ card, result }) {
 const PS_SWIPE = 90, PS_FAST_PX_MS = 2.6;
 // Easter egg "Radio in chat": il messaggio "box box" (solo quelle due parole) esce come una radio del box.
 const isBoxBox = t => /^\s*box[\s,.!-]*box[\s.!]*$/i.test(String(t || ""));   // soglia del gesto; oltre questa velocità la carta "taglia la pista"
-function PitSwipeScreen({ cards, deck, results, onAct, onUndo, onBack, onOpenArticle, whyOf, onLess, mode, onMode, rain, onEgg, streak, endInfo, onSaved, onShare, onDuel }) {
+function PitSwipeScreen({ cards, deck, results, onAct, onUndo, onBack, onOpenArticle, whyOf, onLess, mode, onMode, rain, onEgg, streak, endInfo, onSaved, onShare, onDuel, onRemind = null }) {
   const i = deck ? deck.i : 0, n = cards.length;
   const card = cards[i] || null, done = !!(deck && deck.done) || (n > 0 && i >= n);
   const marks = cards.map(c => (deck && deck.acts ? deck.acts[c.kind + ":" + c.id] : null));
@@ -13479,7 +13487,7 @@ function PitSwipeScreen({ cards, deck, results, onAct, onUndo, onBack, onOpenArt
         </div>
       )}
       {n === 0 && <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", padding: 24, textAlign: "center", fontFamily: F_BODY, fontSize: 13.5, color: C.muted }}>Nessuna notizia nuova per il giro di oggi: torna più tardi.</div>}
-      {done && endInfo && <PsEnd info={endInfo} onSaved={onSaved} onShare={onShare} onDuel={onDuel} />}
+      {done && endInfo && <PsEnd info={endInfo} onSaved={onSaved} onShare={onShare} onDuel={onDuel} onRemind={onRemind} />}
       {why && card && kind === "news" && (
         <div onClick={() => setWhy(false)} style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,.55)", display: "flex", alignItems: "flex-end", zIndex: 5 }}>
           <div data-ps-why-sheet="" onClick={e => e.stopPropagation()} style={{ width: "100%", borderRadius: "20px 20px 0 0", background: "#16161A", borderTop: "1px solid rgba(255,255,255,.12)", padding: "16px 16px 22px" }}>
@@ -13497,7 +13505,7 @@ function PitSwipeScreen({ cards, deck, results, onAct, onUndo, onBack, onOpenArt
 }
 
 // Bandiera a scacchi: riepilogo del giro, serie, missioni della settimana, livello, stessa strategia.
-function PsEnd({ info, onSaved, onShare, onDuel }) {
+function PsEnd({ info, onSaved, onShare, onDuel, onRemind = null }) {
   const { box, votes, tfOk, tfTot, fast, streak, missions, level, nextText, strategy } = info;
   const cell = (label, v) => <div style={{ borderRadius: 12, background: "#141418", border: `1px solid ${C.border}`, padding: "9px 10px" }}><div style={{ fontFamily: F_BODY, fontWeight: 700, fontSize: 9.5, letterSpacing: .6, color: C.muted }}>{label}</div><div style={{ fontFamily: F_HEAD, fontWeight: 900, fontStyle: "italic", fontSize: 20, color: C.text, marginTop: 2 }}>{v}</div></div>;
   return (
@@ -13535,6 +13543,8 @@ function PsEnd({ info, onSaved, onShare, onDuel }) {
         <button className="press" data-ps-share="" onClick={onShare} style={{ flex: 1, padding: "11px 0", borderRadius: 12, background: C.accent, fontFamily: F_HEAD, fontWeight: 900, fontStyle: "italic", fontSize: 13, color: "#fff" }}>Condividi il giro</button>
       </div>
       <p style={{ margin: "12px 0 0", textAlign: "center", fontFamily: F_BODY, fontSize: 12, color: C.muted }}>Prossimo mazzo: {nextText}</p>
+      {/* 22/11 (Edoardo: "chiedi il consenso alle notifiche solo quando ce n'è bisogno"): il permesso lo chiede questo tasto */}
+      {onRemind && <button className="press" data-ps-remind="" onClick={onRemind} style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8, width: "100%", marginTop: 10, padding: "10px 0", borderRadius: 12, border: `1px solid ${C.border}`, fontFamily: F_BODY, fontWeight: 800, fontSize: 13, color: C.text }}><Icon name="bell" size={15} color={C.text} />Avvisami quando c'è il prossimo mazzo</button>}
     </div>
   );
 }
@@ -13885,6 +13895,27 @@ function App() {
   const isPremium = isPaid || adPro || promoPro;
   // 14/11: archivio storico dei GP (Contenuti Premium): senza Premium si apre la finestra Premium.
   const openArchive = () => { if (!isPremium) { setPremiumOpen(true); return; } setView("archivio"); fx.play("tick"); };
+  const [archiveRound, setArchiveRound] = useState(null);   // 22/11: gara del 2026 da aprire nell'archivio (notifica della gara)
+  // 22/11: tocco su una notifica dei risultati. Qualifica: pagina Race, alla griglia di partenza. Sprint: pagina Race.
+  // Gara: il Replay di quella gara (archivio, Premium; se i dati della gara non ci sono ancora, l'elenco delle gare).
+  const openResult = a => {
+    const [, kind, round] = String(a).split(":");
+    const n = resNotifsRef.current.find(x => x.action === a);
+    if (n) markResRead(n.id);
+    fx.play("tick");
+    if (kind === "race") {
+      if (!isPremium) { setPremiumOpen(true); return; }
+      setArchiveRound(Number(round) || null);
+      setView("archivio");
+      return;
+    }
+    goTab("race");
+    if (kind === "quali") {
+      let tries = 0;
+      const look = () => { const g = document.querySelector("[data-start-grid]"); if (g && g.scrollIntoView) g.scrollIntoView({ behavior: prefersReduced() ? "auto" : "smooth", block: "start" }); else if (++tries < 12) setTimeout(look, 250); };
+      setTimeout(look, 300);
+    }
+  };
   adsTestForAdmin = isAdminNow;
   adsMinor = !!account && under18(account.about, nowMs());   // 14/11: minori → annunci non personalizzati
   const [proAsk, setProAsk] = useState(null);   // foglio "Funzione Pro": { what, then }
@@ -14722,7 +14753,20 @@ function App() {
 
   // Notifiche: quelle dell'admin (shared/bt-notifs) più gli avvisi di questo telefono. Sono da leggere quelle più nuove
   // dell'ultima "Segna tutte come lette" (notifSeenAt, nell'account).
+  // 22/11 (Edoardo: "deve andare nelle notifiche che poi clicchi e ti fa vedere i risultati: per le qualifiche la schermata
+  // race con la griglia, per la gara il replay"): calcolate sul telefono dai risultati veri (src/logic/auto-news.js).
+  // Da leggere se arrivate dopo l'ultima "Segna tutte come lette" e non ancora toccate (bt-res-read, su questo telefono).
+  const resNotifsRef = useRef([]);
+  const [resRead, setResRead] = useState(() => (Array.isArray(local.get("bt-res-read")) ? local.get("bt-res-read") : []));
+  const markResRead = id => setResRead(l => { if (l.includes(id)) return l; const n = [id, ...l].slice(0, 60); local.set("bt-res-read", n); return n; });
+  const RES_LOOK = { quali: ["flag", C.accent], sprint: ["flag", C.accent], race: ["play", C.gold] };
+  const resNotifs = AutoNews.resultNotifs(fantaRounds, races, { name: id => (driverById(id) || {}).full || null, team: id => (driverById(id) || {}).team || null, weekendOf: c => (CIRCUIT_INFO[c] || {}).weekend || null })
+    .filter(n => n.date && Date.parse(n.date) <= nowMs())
+    .map(n => ({ id: n.id, action: `res:${n.kind}:${n.round}`, icon: RES_LOOK[n.kind][0], bg: RES_LOOK[n.kind][1], stroke: "#fff", title: n.title, body: n.body, date: n.date,
+      time: Compat.relTime(n.date, nowMs()), unread: Date.parse(n.date) > (notifSeenAt || 0) && !resRead.includes(n.id) }));
+  resNotifsRef.current = resNotifs;
   const notifs = [
+    ...resNotifs,
     ...(feedbackAsk && !feedbackAsk.done ? [{ id: "feedback-ask", action: "feedback", icon: "chat", bg: C.accent, stroke: "#fff", title: "Dicci cosa ne pensi dell'app",
       body: "Bastano 30 secondi: tocca qui per mandarci un feedback.", time: Compat.relTime(new Date(feedbackAsk.at).toISOString(), Date.now()), unread: !feedbackAsk.read }] : []),
     ...localNotifs,
@@ -15442,10 +15486,8 @@ function App() {
     const iv = setInterval(go, 30 * 60e3);
     return () => { alive = false; clearInterval(iv); };
   }, [ytHL]);
-  // 8/11: notizie scritte dall'app coi risultati veri (src/logic/auto-news.js) accanto a quelle dell'admin.
-  const autoNewsList = AutoNews.autoNews(fantaRounds, races, { name: id => (driverById(id) || {}).full || null, team: id => (driverById(id) || {}).team || null, weekendOf: c => (CIRCUIT_INFO[c] || {}).weekend || null })
-    .map(a => ({ ...a, time: Compat.relTime(a.date, nowMs()) }));
-  const newsAll = autoNewsList.length ? [...articles, ...autoNewsList] : articles;
+  // 8/11 c'erano anche le notizie scritte dall'app coi risultati; 22/11 (Edoardo: "non come news") sono notifiche (resNotifs).
+  const newsAll = articles;
   // 8/11: prezzi FantaF1 che cambiano da soli dopo ogni GP coi punti veri del weekend (src/logic/fanta-prices.js).
   const latestRaceRound = fantaRounds.reduce((m, r) => (r && r.race && Array.isArray(r.race.order) && r.race.order.length ? Math.max(m, r.round) : m), 0) || null;
   const shownFantaStats = Number.isInteger(fantaStats.asOf) ? FantaPrices.autoPrices(fantaStats, fantaRounds, { asOf: fantaStats.asOf, teamOf: FantaSeason.TEAM_OF }) : fantaStats;
@@ -15767,19 +15809,31 @@ function App() {
   // solo dopo un gesto che le rende utili in QUESTO avvio (finire un giro di Pit Swipe adesso, oppure accendere
   // "Promemoria sul telefono"); prima bastava avere giri vecchi nell'account e, reinstallando, la domanda arrivava
   // subito all'accesso. Senza permesso i promemoria si programmano solo se c'è già (checkPermissions non chiede nulla).
-  const remAskRef = useRef(false), deckWasDone = useRef(null);
+  // 22/11 (Edoardo: "chiedi il consenso alle notifiche solo quando c'è n'è bisogno, non appena installata l'app"): finire
+  // un giro non chiede più niente da solo; alla fine del giro c'è "Avvisami quando c'è il prossimo mazzo" (remindAsk).
+  const remAskRef = useRef(false);
+  const [remTick, setRemTick] = useState(0);
+  const [remAsked, setRemAsked] = useState(() => !!local.get("bt-rem-asked"));
+  const remindAsk = () => {
+    if (userDataWait()) return;
+    remAskRef.current = true;
+    if (notifPrefs.reminders === false) setNotifPrefs(x => ({ ...x, reminders: true }));
+    setRemAsked(true);
+    setRemTick(t => t + 1);
+    fx.play("tick");
+    showToast("Ok: ti avvisiamo quando c'è il prossimo mazzo");
+  };
   useEffect(() => {
     const plugin = capPlugin("LocalNotifications");
     if (!plugin || guest || userLoaded !== userEmail) return;
-    if (psDoneDeck && deckWasDone.current === false) remAskRef.current = true;
-    deckWasDone.current = !!psDoneDeck;
     // 8/11: prima del primo giro niente promemoria del giro (decks 0), ma l'avviso di metà gara sì (se il permesso c'è).
     const list = Reminders.plan({ now: nowMs(), race: psRace, sessions: psSessions, deckDone: !!psDoneDeck, streak: psStreak, prefs: { reminders: notifPrefs.reminders, halfway: notifPrefs.halfway, quiet: notifPrefs.quiet }, decks: (swipe.tot || {}).decks || 0, startSeen: !!(psRace && (startSeen[psRace.id] || (local.get("bt-half-done") || {})[psRace.id])), trialEnd: remTrialEnd });
     const askTrial = trialAskRef.current;
     trialAskRef.current = false;
     const ask = askTrial || (remAskRef.current && notifPrefs.reminders !== false && !local.get("bt-rem-asked"));
+    remAskRef.current = false;
     Reminders.apply(plugin, list, { ask }).then(() => { if (ask) local.set("bt-rem-asked", true); });
-  }, [remSig, userLoaded]);
+  }, [remSig, userLoaded, remTick]);
   const psEndInfo = psDoneDeck ? {
     box: Object.values(psDoneDeck.acts || {}).filter(a => a === "box" || a === "fast").length - psCards.filter(c => c.kind !== "news" && (psDoneDeck.acts || {})[c.kind + ":" + c.id] === "box").length,
     votes: psCards.filter(c => c.kind === "take" && (psDoneDeck.acts || {})["take:" + c.id]).length,
@@ -16192,13 +16246,13 @@ function App() {
   else if (view === "admin" && adminUnlocked && Account.isAdmin()) body = <AdminScreen promo={promoDoc} onPromoLoad={() => refreshShared(["promo"])} onPromo={u => commitShared("promo", u)} termCodes={termCodes} onTermCodes={v => commitShared("termCodes", () => v).then(ok => { if (ok) showToast("Codici del terminale salvati"); })} histAuto={histQs.filter(q => q.raceId === (weekendRace(races) || {}).id)} hiddenQs={hiddenQs} onHideQ={(id, hide) => commitShared("flags", latest => { const cur = latest && Array.isArray(latest.hiddenQs) ? latest.hiddenQs : []; return { ...latest, hiddenQs: hide ? [...cur.filter(x => x !== id), id] : cur.filter(x => x !== id) }; }).then(ok => { if (ok) showToast(hide ? "Domanda tolta dal FantaF1 per tutti" : "Domanda rimessa nel FantaF1"); })} flags={flags} onFlags={v => commitShared("flags", () => v).then(ok => { if (ok) showToast(v.pitSwipe ? "Pit Swipe acceso per tutti" : "Pit Swipe spento per tutti"); })} takes={takes} onTakes={v => commitShared("takes", () => v).then(ok => { if (ok) showToast("Opinioni salvate"); })} holidayCfg={holidayCfg} holiday={holiday} onHolidays={v => commitShared("holidays", () => v).then(ok => { if (ok) showToast("Temi delle feste salvati"); })} photos={commonsPhotos} setPhotos={adminSet.commonsPhotos} silly={sillyOfficial} onSilly={officialSeat} highlights={highlights} setHighlights={adminSet.highlights} onBack={viewBack.admin} onPublish={publishArticle} articles={articles} setArticles={adminSet.articles} fantaStats={shownFantaStats} fantaLatestRound={latestRaceRound} setFantaStats={adminSet.fantaStats} standings={standings} setStandings={adminSet.standings} races={races} setRaces={adminSet.races} extraRaces={racesDoc.extra} setExtraRaces={adminSet.extraRaces} ig={ig} setIg={adminSet.ig} sentNotifs={sentNotifs} onSendNotif={sendNotif} onDeleteNotif={deleteNotif} onToast={showToast} tab={adminTab} setTab={setAdminTab} chats={chats} reports={reports} banned={banned} onDeleteMsg={deleteChatMsg} onSuspend={suspendUser} onUnsuspend={unsuspendUser} onIgnoreReport={ignoreReport} liveProps={liveProps} polls={allPolls} votes={votes} onPollAnswer={setPollAnswer} predictions={predictions} setPredictions={adminSet.predictions} predAnswers={predAnswers} />;
   else if (view === "chatThread" && activeChat) body = <ChatThreadScreen since={chatSince(activeChat && activeChat.id)} chat={activeChat} onBack={viewBack.chatThread} onSend={guest ? () => needLogin("Per scrivere in chat serve un account.") : sendMessage} isPremium={isPremium} blocked={blocked} onReport={guest ? () => needLogin("Per segnalare un messaggio serve un account.") : reportMessage} onBlock={blockUser} onReact={guest ? () => needLogin("Per reagire ai messaggi serve un account.") : reactMessage} trophyList={trophyList} myWon={trophies} pendingLink={pendingLink} onPendingUsed={() => setPendingLink(null)} onOpenLink={openLink} liveRace={races.find(r => r.status === "LIVE") || null} />;
   else if (view === "instagram") body = <InstagramView ig={ig} onToast={showToast} onBack={viewBack.instagram} />;
-  else if (view === "archivio") body = <ArchiveScreen archive={Archive} weekend={BtWeekend} calendar={races} onBack={viewBack.archivio} />;
+  else if (view === "archivio") body = <ArchiveScreen archive={Archive} weekend={BtWeekend} calendar={races} initRound={archiveRound} onBack={() => { setArchiveRound(null); viewBack.archivio(); }} />;
   else if (view === "ghost") body = <GhostLap key={ghostInit ? JSON.stringify(ghostInit) : "ghost"} init={ghostInit} onBack={viewBack.ghost} />;
   else if (view === "pitswipe") body = <PitSwipeScreen cards={psCards} deck={psDeck || { i: 0, acts: {}, hist: [] }} results={psRes} onAct={psAct} onUndo={psUndo} onBack={() => setView("tab")}
     onOpenArticle={openArticle} whyOf={c => BtSwipe.whyReasons(c, { fav: { driver: favDriver, team: favTeam }, weights: swipe.w || {}, hot: ((psTally["f:" + c.id] || {}).total || 0) >= 3, labelOf: psLabelOf })}
     onLess={c => { if (!guest && !userDataWait()) setSwipe(s => ({ ...s, w: BtSwipe.applySwipe(BtSwipe.applySwipe(s.w, c.topics, "out"), c.topics, "out") })); showToast("Meno carte così"); }}
     mode={swipe.mode || "taste"} onMode={m => { if (!guest && !userDataWait()) setSwipe(s => ({ ...s, mode: m })); }} rain={psRain} onEgg={psEgg} streak={{ n: (swipe.streak || {}).n || 0 }}
-    endInfo={psEndInfo} onSaved={() => { setSavedOnly(true); setView("tab"); goTab("home"); }} onShare={psShare} onDuel={!guest ? sendDuel : null} />;
+    endInfo={psEndInfo} onRemind={!guest && !remAsked && capPlugin("LocalNotifications") ? remindAsk : null} onSaved={() => { setSavedOnly(true); setView("tab"); goTab("home"); }} onShare={psShare} onDuel={!guest ? sendDuel : null} />;
   else if (view === "chats") body = <ChatsView chats={chats} onOpen={openChat} blocked={blocked} onBack={viewBack.chats} unreadOf={(id, ms) => Chat.unread(id, ms)} />;
   else if (view === "profilo") body = <ProfiloScreen onPcLink={() => { setPcMsg(null); setPcView(pcLink ? "remote" : "intro"); }} pcLinked={!!pcLink} onPromo={() => setPromoOpen(true)}promoUntil={promoMine.until} tv={tvMode} onTv={v => { setTvMode(v); local.set("bt-tv", v); fx.play("tick"); showToast(v ? "Modalità TV: lo schermo resta acceso finché l'app è aperta" : "Modalità TV spenta"); }} onChangelog={changelogGo} onCoffee={Billing.where() ? buyCoffee : null} coffeePrice={playPrices.coffee || null} ig={ig} onOpenIg={() => { setIgFrom("profilo"); setView("instagram"); }} aboutMe={aboutMe} onSaveAboutMe={a => Account.updateAbout(a).catch(e => showToast(e && (e.code === "too-young" || e.code === "not-loaded") ? messageOf(e) : NOT_SAVED))} account={account} onSaveName={n => Account.updateName(n)} isAdmin={Account.isAdmin()} trial={trialActive ? trial : null} trialUsed={!!trial} onBack={viewBack.profilo} onNotifiche={() => setView("notifiche")} onPremium={() => setPremiumOpen(true)} onAdmin={() => guest ? needLogin("Accedi per usare il pannello admin.") : setView(adminUnlocked ? "admin" : "hack")} onHack={() => { setView("hack"); if (account && Account.refreshAdmin) Account.refreshAdmin().catch(() => {}); }} onLogout={logout} isPremium={isPaid} onAbout={() => setInfoModal({ title: "Info su B&T", body: ABOUT_TEXT, credits: true })} onFeedback={() => setFeedbackOpen(true)} onHelp={() => setInfoModal({ title: "Assistenza", body: HELP_TEXT })} favTeam={favTeam} favDriver={favDriver} onPickTeam={() => guest ? needLogin("Per scegliere scuderia e pilota del cuore serve un account.") : setPicker("team")} onPickDriver={() => guest ? needLogin("Per scegliere scuderia e pilota del cuore serve un account.") : setPicker("driver")} guest={guest} onLogin={() => needLogin(null)} onTerms={() => setTermsOpen(true)} blocked={blocked} onUnblock={unblockUser} onDeleteAccount={deleteAccount} savedCount={saved.length} onOpenSaved={openSaved} onTheme={() => setThemeOpen(true)} helmet={helmet} onHelmet={() => setHelmetOpen(true)} pubHide={pubHide} onPubHide={v => { if (!userDataWait()) setPubHide(v); }} onGoNotifiche={() => setView("notifiche")} trophies={trophies} trophyProg={trophyProg} trophyList={trophyList}
     onAdPrivacy={Ads.privacyRequired() ? () => Ads.openPrivacy().catch(() => showToast("Le preferenze sulla privacy degli annunci non sono disponibili in questo momento.")) : null}
@@ -16220,7 +16274,7 @@ function App() {
     }}
     halfway={notifPrefs.halfway !== false} onHalfway={guest ? null : v => { if (userDataWait()) return; if (v) remAskRef.current = true; setNotifPrefs(x => ({ ...x, halfway: v })); fx.play("tick"); }}
     quiet={notifPrefs.quiet || null} onQuiet={guest ? null : v => { if (userDataWait()) return; setNotifPrefs(x => ({ ...x, quiet: v })); fx.play("tick"); }}
-    onBack={viewBack.notifiche} onAction={a => { if (a === "feedback") { if (feedbackAsk && !feedbackAsk.read) saveAsk({ ...feedbackAsk, read: true }); setFeedbackOpen("ask"); } }} notifs={notifs} onReadAll={readAll} isPremium={isPremium} onPremium={() => setPremiumOpen(true)} favTeam={favTeam} favDriver={favDriver} prefs={notifPrefs} onPrefs={v => { if (!userDataWait()) setNotifPrefs(v); }} onGoProfilo={() => setView("profilo")} />;
+    onBack={viewBack.notifiche} onAction={a => { if (a === "feedback") { if (feedbackAsk && !feedbackAsk.read) saveAsk({ ...feedbackAsk, read: true }); setFeedbackOpen("ask"); } else if (String(a).startsWith("res:")) openResult(a); }} notifs={notifs} onReadAll={readAll} isPremium={isPremium} onPremium={() => setPremiumOpen(true)} favTeam={favTeam} favDriver={favDriver} prefs={notifPrefs} onPrefs={v => { if (!userDataWait()) setNotifPrefs(v); }} onGoProfilo={() => setView("profilo")} />;
   else body = tabBodyFor(tab);
   // 7/11: il contenuto di una scheda della barra (anche di quella accanto, che si vede durante lo swipe come su WhatsApp).
   function tabBodyFor(tab) {

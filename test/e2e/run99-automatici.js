@@ -2,7 +2,7 @@
 // da sole, notizie scritte dall'app coi risultati, prezzi FantaF1 che cambiano dopo il GP, highlights ufficiali F1.
 // Risultati finti di Jolpica (GP 20: vince Antonelli) e feed finto della funzione api/highlights.
 // Uso: node test/build-test.js && node test/e2e/run99-automatici.js [filtro]
-const { open, w, goTab, login, assert, run } = require('./helpers');
+const { open, w, goTab, tapSel, login, assert, run } = require('./helpers');
 
 const NOW = '2026-11-17T10:00:00Z';   // settimana di Las Vegas, dopo il Brasile
 const CORS = { 'Access-Control-Allow-Origin': '*' };
@@ -40,29 +40,55 @@ const SEED = { addDocs: { 'users/a@b.it': USER } };
 const body = p => p.evaluate(() => document.body.innerText);
 
 run({
-  async 'notizie dai risultati veri e highlights ufficiali F1 in Home'(b) {
+  // 22/11 (Edoardo: "deve andare nelle notifiche che poi clicchi ... non come news"): i risultati sono notifiche.
+  async 'risultati veri nelle notifiche (non più nelle notizie) e highlights ufficiali F1 in Home'(b) {
     const { ctx, p, errs } = await open(b, { now: NOW, seed: SEED, routes: { ...jolpica, ...HL } }); await login(p); await w(p, 1500);
     const t = await body(p);
     const hl = await p.evaluate(() => { const e = document.querySelector('[data-yt-highlights]'); return e && { n: +e.getAttribute('data-yt-highlights'), text: e.innerText, links: [...e.querySelectorAll('[data-highlight]')].map(x => x.getAttribute('data-highlight')) }; });
     const yt = await p.$('[data-yt-highlights]');
     if (yt) { await yt.scrollIntoViewIfNeeded(); await yt.screenshot({ path: '/tmp/bt/run99-highlights.png' }); }
     await p.screenshot({ path: '/tmp/bt/run99-home.png' });
+    await tapSel(p, '[aria-label="Notifiche"]'); await w(p, 700);
+    const n = await p.evaluate(() => [...document.querySelectorAll('[data-notif-action^="res:"]')].map(e => ({ a: e.getAttribute('data-notif-action'), text: e.innerText.replace(/\s+/g, ' ') })));
+    await p.screenshot({ path: '/tmp/bt/run99-notifiche.png' });
     await ctx.close();
-    assert(/Antonelli vince il GP/.test(t), 'notizia della gara: ' + t.slice(0, 600));
-    assert(/Russell in pole al GP/.test(t), 'notizia della qualifica');
+    assert(!/Antonelli vince il GP/.test(t) && !/Russell in pole al GP/.test(t), 'niente notizie automatiche in Home: ' + t.slice(0, 400));
+    assert(n.length === 2 && n[0].a === 'res:race:20' && /Antonelli vince il GP/.test(n[0].text) && /Replay/.test(n[0].text), 'notifica della gara: ' + JSON.stringify(n));
+    assert(n[1].a === 'res:quali:20' && /Russell in pole al GP/.test(n[1].text) && /griglia di partenza/.test(n[1].text), 'notifica della qualifica: ' + JSON.stringify(n));
     assert(hl && hl.n === 2 && /HIGHLIGHTS UFFICIALI F1/.test(hl.text) && /Gara · 2026 São Paulo Grand Prix/.test(hl.text), 'highlights: ' + JSON.stringify(hl));
     assert(!errs.length, errs.join(' | '));
   },
 
-  async 'notizia automatica aperta: ordine d\'arrivo e ritirati'(b) {
+  async 'tocco sulle notifiche: qualifica → pagina Race; gara senza Premium → Premium'(b) {
     const { ctx, p, errs } = await open(b, { now: NOW, seed: SEED, routes: jolpica }); await login(p); await w(p, 1500);
-    const el = await p.$('[data-news-item="auto-r-20"], [data-featured="auto-r-20"]');
-    assert(el, 'manca la notizia automatica della gara in Home');
-    await el.scrollIntoViewIfNeeded(); await el.click(); await w(p, 700);
-    const t = await body(p);
-    await p.screenshot({ path: '/tmp/bt/run99-articolo.png' });
+    await tapSel(p, '[aria-label="Notifiche"]'); await w(p, 700);
+    await tapSel(p, '[data-notif-action="res:quali:20"]'); await w(p, 900);
+    const race = await p.evaluate(() => { const e = document.querySelector('[data-nav-tab][aria-current="page"]'); return e && e.getAttribute('data-nav-tab'); });
+    await tapSel(p, '[aria-label="Notifiche"]'); await w(p, 700);
+    await tapSel(p, '[data-notif-action="res:race:20"]'); await w(p, 900);
+    const prem = await p.evaluate(() => !!document.querySelector('[data-premium-sheet], [data-premium-cta]'));
     await ctx.close();
-    assert(/1\. Andrea Kimi Antonelli/.test(t) && /Ritirati: Lewis Hamilton/.test(t), 'testo: ' + t.slice(0, 800));
+    assert(race === 'race', 'qualifica: si apre la pagina Race: ' + race);
+    assert(prem, 'gara senza Premium: si apre il Premium (il Replay è Premium)');
+    assert(!errs.length, errs.join(' | '));
+  },
+
+  async 'Premium: dalla notifica della gara si apre subito il Replay di quella gara (Sepang, round 16)'(b) {
+    const page16 = (field, rows) => ({ MRData: { total: '1', RaceTable: { season: '2026', Races: [{ season: '2026', round: '16', [field]: rows }] } } });
+    const j16 = { 'https://api.jolpi.ca/**': r => {
+      const u = r.request().url();
+      const json = x => r.fulfill({ status: 200, contentType: 'application/json', headers: CORS, body: JSON.stringify(x) });
+      if (/\/2026\/results\.json/.test(u)) return json(page16('Results', RES));
+      if (/\/2026\/qualifying\.json/.test(u)) return json(page16('QualifyingResults', QUALI));
+      return r.abort();
+    } };
+    const { ctx, p, errs } = await open(b, { now: '2026-10-06T10:00:00Z', seed: { ...SEED, pro: true }, routes: j16 }); await login(p); await w(p, 1500);
+    await tapSel(p, '[aria-label="Notifiche"]'); await w(p, 700);
+    await tapSel(p, '[data-notif-action="res:race:16"]'); await w(p, 1500);
+    const r = await p.evaluate(() => ({ replay: !!document.querySelector('[data-race-replay], [data-map-replay]'), archive: !!document.querySelector('[data-archive]') }));
+    await p.screenshot({ path: '/tmp/bt/run99-replay.png' });
+    await ctx.close();
+    assert(r.replay, 'il Replay della gara è aperto: ' + JSON.stringify(r));
     assert(!errs.length, errs.join(' | '));
   },
 

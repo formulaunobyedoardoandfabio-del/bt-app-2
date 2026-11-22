@@ -59,4 +59,18 @@ function autoNews(rounds, races, { name = () => null, team = () => null, weekend
     .sort((a, b) => Date.parse(b.date || 0) - Date.parse(a.date || 0));
 }
 
-module.exports = { autoNews };
+// 22/11 (Edoardo: "deve andare nelle notifiche che poi clicchi e ti fa vedere i risultati per le qualifiche andando sulla
+// schermata race la griglia e per la gara far vedere il replay, non come news"): gli stessi risultati come notifiche.
+// kind: quali (tocco: pagina Race, griglia), sprint (tocco: pagina Race), race (tocco: Replay della gara).
+const KIND = { q: "quali", s: "sprint", r: "race" };
+const TAP = { quali: "Tocca per vedere la griglia di partenza.", sprint: "Tocca per vedere i risultati nella pagina Race.", race: "Tocca per rivedere la gara nel Replay." };
+function resultNotifs(rounds, races, opts = {}) {
+  const raceOf = new Map((Array.isArray(races) ? races : []).filter(isObj).map(r => [Number(r.round) || Number(String(r.id || "").slice(1)), r]));
+  return autoNews(rounds, races, opts).map(a => {
+    const [, k, n] = a.id.split("-");
+    const kind = KIND[k], round = Number(n), race = raceOf.get(round) || {};
+    return { id: `res-${k}-${n}`, kind, round, raceId: race.id || null, title: a.title, body: TAP[kind], date: a.date };
+  });
+}
+
+module.exports = { autoNews, resultNotifs };
