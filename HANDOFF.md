@@ -1396,3 +1396,10 @@ Misure prima del lavoro (pagina di prova, CPU rallentata 4x come un telefono med
   mentre si presta il link (niente scelta dell'app), limite sui byte veri del link (accenti ed emoji), MLe del CC nei
   tag veri; nell'app lo stato dell'NFC si rilegge tornando dalle impostazioni. Non fatto: record AAR (manderebbe chi
   non ha l'app al Play Store invece che al sito).
+
+### 22/11 mattina: idee proposte (non ancora decise da Edoardo)
+- Processo alle idee nel documento di progetto `claude/prossime-idee.md` (claude.ai, progetto "B&T App"). In ordine:
+  riepilogo personale "La tua stagione 2026" da condividere su Instagram prima dell'ultimo GP (6/12); misure d'uso con
+  Firebase Analytics (oggi nell'app non ce ne sono); widget Android "Prossimo GP"; modalità fuori stagione. Traduzione:
+  solo inglese e solo se le misure mostrano utenti stranieri.
+- Prossima azione: aspettare la scelta di Edoardo. NFC ancora da provare da lui con due telefoni.
