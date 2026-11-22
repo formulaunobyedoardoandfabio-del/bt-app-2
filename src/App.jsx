@@ -15802,7 +15802,8 @@ function App() {
   // (senza i rialzi automatici); se non c'è niente da segnare la squadra resta la stessa e non si salva niente.
   useEffect(() => { if (guest || !userLoaded || !sharedReady) return; setSquad(q => BtLogic.withPaid(q, fantaStats)); }, [guest, userLoaded, sharedReady, fantaStats, squad]);
   const newsOn = notifPrefs.news !== false;
-  useEffect(() => { Push.sync(capPlugin("FirebaseMessaging"), newsOn); }, [newsOn]);
+  // 22/11: prima i canali col suono (notizie: fruscio F1; inizio e metà gara: avvitatore), poi l'iscrizione alle novità
+  useEffect(() => { Reminders.ensureChannels(capPlugin("LocalNotifications")).then(() => Push.sync(capPlugin("FirebaseMessaging"), newsOn)); }, [newsOn]);
   const remTrialEnd = trial && !trial.converted && !premium.sub ? trial.end : null;   // 8/11: avviso della prova
   const remSig = [psKey, !!(psDoneDeck), psStreak.n, psStreak.danger, notifPrefs.reminders !== false, notifPrefs.halfway !== false, JSON.stringify(notifPrefs.quiet || null), ((swipe.tot || {}).decks || 0) > 0, psRace ? psRace.id : "", psRace && startSeen[psRace.id] ? 1 : 0, remTrialEnd || ""].join("|");
   // 8/11 (Edoardo: "le notifiche chiedile solo prima che servano, non appena installata l'app"): il permesso si chiede

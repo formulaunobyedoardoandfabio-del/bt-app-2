@@ -88,7 +88,21 @@ function plan({ now, race = null, sessions = [], deckDone = false, streak = null
 // gara...). Icona e logo li mette scripts/prepare_android.py; se mancano Android usa quelli di serie.
 const LOOK = { smallIcon: "ic_stat_bt", iconColor: "#FF1801", largeIcon: "bt_logo" };
 const FROM = id => (id === ID.deck || id === ID.streak ? "Pit Swipe" : id === ID.half || id === ID.halfLive ? "Gara in corso" : id === ID.trial ? "B&T Premium" : "Weekend di gara");
-const look = id => ({ ...LOOK, summaryText: FROM(id) });
+// 22/11 (Edoardo: suoni suoi): canali Android col suono (resources/sounds, in res/raw con scripts/prepare_android.py).
+// Il suono di un canale lo decide Android quando il canale nasce: per questo gli id sono nuovi.
+// "bt-news": notizie in generale (push del team, giro di Pit Swipe, prova Premium) col fruscio della F1;
+// "bt-gara": inizio e metà gara (sessioni che partono, metà gara) con l'avvitatore del pit stop.
+const CHANNELS = [
+  { id: "bt-news", name: "Novità da B&T", description: "Notizie e avvisi del team B&T", importance: 4, visibility: 1, sound: "bt_news.ogg", vibration: true },
+  { id: "bt-gara", name: "Gara: inizio e metà", description: "Quando parte una sessione e a metà gara", importance: 4, visibility: 1, sound: "bt_gara.ogg", vibration: true },
+];
+const isGara = id => id === ID.half || id === ID.halfLive || (id >= ID.session && id < ID.session + 10);
+const look = id => ({ ...LOOK, summaryText: FROM(id), channelId: isGara(id) ? "bt-gara" : "bt-news" });
+// Crea i canali (una volta basta; rifarlo non cambia niente). Senza plugin (sito) non fa niente.
+async function ensureChannels(plugin) {
+  if (!plugin || !plugin.createChannel) return false;
+  try { for (const c of CHANNELS) await plugin.createChannel(c); return true; } catch (e) { return false; }
+}
 
 async function apply(plugin, list, { ask = false } = {}) {
   if (!plugin || !plugin.schedule) return false;
@@ -122,4 +136,4 @@ async function notifyNow(plugin, { id, title, body }) {
   } catch (e) { return false; }
 }
 
-module.exports = { plan, apply, cancelHalf, notifyNow, look, ID, romeAt, HALF_MS, quietOf, QUIET_DEF };
+module.exports = { plan, apply, cancelHalf, notifyNow, look, ID, romeAt, HALF_MS, quietOf, QUIET_DEF, CHANNELS, ensureChannels };

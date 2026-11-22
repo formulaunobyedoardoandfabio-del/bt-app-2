@@ -9,7 +9,9 @@
 const API = "https://bt-app-2.vercel.app/api/";
 const TOPIC = "novita";
 // Canale Android: importanza 4 = alta (banner e suono), visibilità 1 = si legge anche a schermo bloccato.
-const CHANNEL = { id: "bt-novita", name: "Novità da B&T", description: "Avvisi scritti dal team B&T", importance: 4, visibility: 1 };
+// 22/11: canale nuovo "bt-news" col suono delle notizie (lo crea src/services/reminders.js ensureChannels, col suono:
+// il suono di un canale si decide solo quando nasce, per questo non lo crea più questo plugin).
+const CHANNEL = { id: "bt-news", name: "Novità da B&T", description: "Notizie e avvisi del team B&T", importance: 4, visibility: 1 };
 const MSG = {
   config: "Salvata nella campanella. Per mandarla ai telefoni manca l'account di servizio su Vercel (FIREBASE_SERVICE_ACCOUNT).",
   fcm: "Salvata nella campanella. Google ha rifiutato l'invio ai telefoni: controlla che Cloud Messaging sia attivo nel progetto Firebase.",
@@ -23,7 +25,6 @@ async function sync(plugin, on) {
   if (!plugin || !plugin.subscribeToTopic) return { ok: false, reason: "no-plugin" };
   try {
     if (on) {
-      if (plugin.createChannel) await plugin.createChannel(CHANNEL).catch(() => {});
       await plugin.subscribeToTopic({ topic: TOPIC });
     } else {
       await plugin.unsubscribeFromTopic({ topic: TOPIC });

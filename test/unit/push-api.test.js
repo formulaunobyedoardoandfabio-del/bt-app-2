@@ -23,7 +23,7 @@ t('message: tema di tutti, titolo e testo, canale, icona e colore di B&T', () =>
   assert.strictEqual(m.message.topic, TOPIC);
   assert.deepStrictEqual(m.message.notification, { title: 'Qualifiche tra un\'ora', body: 'Testo a' });
   assert.strictEqual(m.message.android.priority, 'HIGH');
-  assert.deepStrictEqual(m.message.android.notification, { channel_id: 'bt-novita', icon: 'ic_stat_bt', color: '#FF1801' });
+  assert.deepStrictEqual(m.message.android.notification, { channel_id: 'bt-news', icon: 'ic_stat_bt', color: '#FF1801' });
   assert.strictEqual(m.message.data.id, 'a');
 });
 

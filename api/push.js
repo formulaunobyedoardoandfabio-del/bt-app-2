@@ -26,7 +26,7 @@ function message(n) {
   return { message: {
     topic: TOPIC,
     notification: { title: clip(n.title, 120), body: clip(n.text || n.body, 500) },
-    android: { priority: "HIGH", notification: { channel_id: "bt-novita", icon: "ic_stat_bt", color: "#FF1801" } },
+    android: { priority: "HIGH", notification: { channel_id: "bt-news", icon: "ic_stat_bt", color: "#FF1801" } },
     data: { kind: "admin", id: String(n.id) },
   } };
 }

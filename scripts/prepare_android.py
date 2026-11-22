@@ -309,6 +309,14 @@ if "android.permission.CAMERA" not in manifest:
 open(MANIFEST, "w").write(manifest)
 print("NFC e fotocamera (lettore QR) aggiunti al manifest")
 
+# ── 22/11 SUONI DELLE NOTIFICHE (resources/sounds -> res/raw): bt_news (notizie), bt_gara (inizio e metà gara) ──
+if os.path.isdir("resources/sounds"):
+    raw = os.path.join(RES_DIR, "raw")
+    os.makedirs(raw, exist_ok=True)
+    for fname in os.listdir("resources/sounds"):
+        shutil.copyfile(os.path.join("resources/sounds", fname), os.path.join(raw, fname))
+    print("Suoni delle notifiche copiati in res/raw")
+
 # ── 22/11 ICONA DELL'APP: si sceglie nell'app (Profilo > Personalizza l'app > Colori, icona e avvio) ──
 # Ogni icona è un <activity-alias> di MainActivity con la sua icona: ne è acceso uno solo (di serie "classica", l'icona di
 # resources/icons) e lo cambia il plugin BtIcon (resources/android-icon/BtIconPlugin.java). MainActivity non ha più la

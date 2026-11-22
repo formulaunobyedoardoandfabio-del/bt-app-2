@@ -1535,3 +1535,13 @@ Misure prima del lavoro (pagina di prova, CPU rallentata 4x come un telefono med
   Vegas non è arrivato da solo. Da fare (serve il sì di Edoardo, tocca main): copiare i due file su main, poi
   `gh workflow run replay-f1.yml --ref tappa-3`. Da controllare anche che il dati-f1.yml di main sia uguale a quello di
   tappa-3 (real-weekend.js fermo al round 16).
+
+## 22/11 notte (3): suoni delle notifiche
+- Suoni di Edoardo in resources/sounds (copiati in res/raw da scripts/prepare_android.py): bt_news.ogg (fruscio F1, 3 s)
+  per le notizie in generale, bt_gara.ogg (avvitatore del pit) per inizio e metà gara.
+- Canali Android nuovi col suono (src/services/reminders.js CHANNELS, ensureChannels con LocalNotifications):
+  "bt-news" (push del team, giro di Pit Swipe, prova Premium) e "bt-gara" (sessioni che partono, metà gara). Push:
+  api/push.js manda su "bt-news"; push.js non crea più il canale (senza suono). Il vecchio canale "bt-novita" resta nelle
+  impostazioni del telefono finché non si reinstalla.
+- Da controllare: licenza dei due suoni (nomi da Freesound: se CC-BY serve citare l'autore nei crediti).
+- Prove: unit notif-sounds (4), push-api (6), push-client (3), half-notify, halfway, trial-reminder, quiet-hours.

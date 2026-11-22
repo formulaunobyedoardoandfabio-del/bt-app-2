@@ -18,7 +18,7 @@ const fake = ({ failSub = false } = {}) => {
 t('acceso: crea il canale (importanza alta) e si iscrive al tema; spento: si toglie', async () => {
   const a = fake();
   assert.deepStrictEqual(await P.sync(a.plugin, true), { ok: true, on: true });
-  assert.deepStrictEqual(a.log, [['channel', 'bt-novita', 4], ['sub', 'novita']]);
+  assert.deepStrictEqual(a.log, [['sub', 'novita']]);   // 22/11: il canale col suono lo crea reminders.ensureChannels
   const b = fake();
   assert.deepStrictEqual(await P.sync(b.plugin, false), { ok: true, on: false });
   assert.deepStrictEqual(b.log, [['unsub', 'novita']]);
