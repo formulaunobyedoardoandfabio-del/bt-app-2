@@ -8,7 +8,9 @@ let pass = 0, fail = 0;
 const t = async (name, fn) => { try { await fn(); pass++; console.log('PASS  ' + name); } catch (e) { fail++; console.log('FAIL  ' + name + '\n      → ' + e.message); } };
 
 (async () => {
-  await t('due canali: notizie col fruscio F1, inizio e metà gara con l\'avvitatore; i file ci sono', () => {
+  await t('due canali: notizie con l\'avvitatore, inizio e metà gara col fruscio F1; i file ci sono', () => {
+    const dur = f => require('child_process').execFileSync('ffprobe', ['-v', 'error', '-show_entries', 'format=duration', '-of', 'csv=p=0', path.join(__dirname, '../../resources/sounds', f)]).toString().trim();
+    try { assert(+dur('bt_news.ogg') < 2, 'bt_news deve essere l\'avvitatore (corto)'); assert(+dur('bt_gara.ogg') > 2, 'bt_gara deve essere il fruscio (lungo)'); } catch (e) { if (e.code !== 'ENOENT') throw e; }
     assert.deepStrictEqual(R.CHANNELS.map(c => [c.id, c.sound]), [['bt-news', 'bt_news.ogg'], ['bt-gara', 'bt_gara.ogg']]);
     for (const c of R.CHANNELS) assert(fs.existsSync(path.join(__dirname, '../../resources/sounds', c.sound)), 'manca ' + c.sound);
   });

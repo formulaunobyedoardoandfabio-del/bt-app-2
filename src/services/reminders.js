@@ -90,8 +90,8 @@ const LOOK = { smallIcon: "ic_stat_bt", iconColor: "#FF1801", largeIcon: "bt_log
 const FROM = id => (id === ID.deck || id === ID.streak ? "Pit Swipe" : id === ID.half || id === ID.halfLive ? "Gara in corso" : id === ID.trial ? "B&T Premium" : "Weekend di gara");
 // 22/11 (Edoardo: suoni suoi): canali Android col suono (resources/sounds, in res/raw con scripts/prepare_android.py).
 // Il suono di un canale lo decide Android quando il canale nasce: per questo gli id sono nuovi.
-// "bt-news": notizie in generale (push del team, giro di Pit Swipe, prova Premium) col fruscio della F1;
-// "bt-gara": inizio e metà gara (sessioni che partono, metà gara) con l'avvitatore del pit stop.
+// "bt-news": notizie in generale (push del team, giro di Pit Swipe, prova Premium) con l'avvitatore del pit stop;
+// "bt-gara": inizio e metà gara (sessioni che partono, metà gara) col fruscio della F1.
 const CHANNELS = [
   { id: "bt-news", name: "Novità da B&T", description: "Notizie e avvisi del team B&T", importance: 4, visibility: 1, sound: "bt_news.ogg", vibration: true },
   { id: "bt-gara", name: "Gara: inizio e metà", description: "Quando parte una sessione e a metà gara", importance: 4, visibility: 1, sound: "bt_gara.ogg", vibration: true },

@@ -1545,3 +1545,9 @@ Misure prima del lavoro (pagina di prova, CPU rallentata 4x come un telefono med
   impostazioni del telefono finché non si reinstalla.
 - Da controllare: licenza dei due suoni (nomi da Freesound: se CC-BY serve citare l'autore nei crediti).
 - Prove: unit notif-sounds (4), push-api (6), push-client (3), half-notify, halfway, trial-reminder, quiet-hours.
+
+## 22/11 notte (4): suoni invertiti
+- Edoardo: "dovevi fare il contrario". Ora bt_news.ogg = avvitatore del pit (1,27 s) per le notizie in generale,
+  bt_gara.ogg = fruscio F1 (3 s con sfumata) per inizio e metà gara. Nomi dei file e canali uguali: chi ha già
+  installato l'APK di prima sente subito i suoni giusti (il canale punta al file per nome).
+- Prova unit notif-sounds controlla anche le durate (avvitatore corto, fruscio lungo).
