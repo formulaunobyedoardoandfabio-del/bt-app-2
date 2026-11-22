@@ -47,8 +47,8 @@ run({
     const { ctx, p, errs } = await open(b, { seed: { addDocs: SEED }, capacitor: PHONE });
     await login(p); await w(p, 1500);
     await p.evaluate(u => { window.__nfcNext = u; }, LINK);
-    await tapSel(p, '[aria-label="Profilo"]'); await w(p, 500); await tapText(p, 'NFC: avvicina e fai'); await w(p, 500);
-    await tapSel(p, '[data-nfc-go="leggi"]');
+    await goTab(p, 'FANTA'); await w(p, 500); await tapText(p, 'Entra con un codice', { exact: true }); await w(p, 300);
+    await tapText(p, 'Avvicina i telefoni (NFC)');
     await until(() => p.evaluate(() => /Entra nella lega/.test((document.querySelector('[data-nfc-sheet="invito"]') || {}).innerText || '')));
     await tapSel(p, '[data-nfc-join]'); await w(p, 2500);
     const s = await state(p);

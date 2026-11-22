@@ -88,6 +88,30 @@ run({
     assert(!errs.length, errs.join(' | '));
   },
 
+  // 22/11 sera (Edoardo: "non si vedono le recensioni inviate dove dovrebbero scorrere in 3d"): prima ne servivano 3.
+  async 'Recensioni 3D anche con una sola recensione; la mia, appena mandata, compare subito'(b) {
+    const ONE = { 'shared/bt-feedback-r1': { id: 'r1', stars: 5, category: 'complimento', msg: 'App fantastica per il Fanta', user: 'z@b.it', date: '2026-10-02T10:00:00.000Z', appVersion: '2.0.0', public: true, name: 'Giulia' } };
+    const { ctx, p, errs } = await open(b, { seed: { addDocs: ONE } });
+    await login(p); await tapSel(p, '[aria-label="Profilo"]'); await w(p, 600);
+    await tapText(p, 'Invia feedback'); await w(p, 800);
+    await tapSel(p, '[data-fb-open-reviews]'); await w(p, 700);
+    const one = await p.evaluate(() => ({ wall: !!document.querySelector('[data-fb-wall]'), cards: document.querySelectorAll('[data-fb-card]').length, few: !!document.querySelector('[data-fb-wall-few]') }));
+    await tapSel(p, '[data-fb-write-review]'); await w(p, 300);
+    await tapSel(p, '[data-feedback-face="5"]'); await w(p, 150);
+    await p.fill('[data-feedback-msg]', 'Ok');
+    const hint = await p.evaluate(() => !!document.querySelector('[data-fb-share-hint]'));
+    await p.fill('[data-feedback-msg]', 'La mia recensione vera');
+    await tapSel(p, '[data-fb-send]'); await w(p, 1200);
+    await tapText(p, 'Invia un altro'); await w(p, 300);
+    await tapSel(p, '[data-fb-open-reviews]'); await w(p, 700);
+    const mine = await p.evaluate(() => [...document.querySelectorAll('[data-fb-card]')].some(e => /La mia recensione vera/.test(e.innerText)));
+    await ctx.close();
+    assert(one.wall && one.cards === 24 && !one.few, 'una recensione basta per il muro (4 colonne): ' + JSON.stringify(one));
+    assert(hint, 'con "Mostra nelle recensioni" e testo corto lo dice');
+    assert(mine, 'la mia recensione compare subito nel muro');
+    assert(!errs.length, errs.join(' | '));
+  },
+
   async 'Feedback: un problema col dove e le info del telefono; "Le tue segnalazioni" coi feedback veri e lo stato'(b) {
     const OLD = { 'shared/bt-feedback-old1': { id: 'old1', category: 'idea', msg: 'Una idea di ottobre', user: 'a@b.it', date: '2026-10-01T10:00:00.000Z', appVersion: '2.0.0', status: 'letto' },
       'shared/bt-feedback-alt1': { id: 'alt1', category: 'idea', msg: 'Di un altro', user: 'z@b.it', date: '2026-10-02T10:00:00.000Z', appVersion: '2.0.0' } };

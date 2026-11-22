@@ -49,9 +49,10 @@ run({
     await tapSel(p, '[data-fb-open-reviews]'); await w(p, 500);
     await p.evaluate(() => { document.querySelector('[data-fb-admin]').open = true; });
     await tapSel(p, '[data-fb-hide="1"]'); await w(p, 600);
-    const r = await p.evaluate(() => ({ doc: window.firebase.__fake.doc('shared/bt-feedback-1'), wall: !!document.querySelector('[data-fb-wall]') }));
+    const r = await p.evaluate(() => ({ doc: window.firebase.__fake.doc('shared/bt-feedback-1'), wall: !!document.querySelector('[data-fb-wall]'), one: [...document.querySelectorAll('[data-fb-card]')].some(e => /numero 1/.test(e.innerText)) }));
     await ctx.close();
     assert(r.doc && r.doc.hidden === true && /numero 1/.test(r.doc.msg), 'nascosto ma non cancellato: ' + JSON.stringify(r.doc));
-    assert(!r.wall, 'con due soli feedback da mostrare le schede non ci sono più');
+    // 22/11 sera: il muro resta anche con due recensioni (prima ne servivano 3); quella nascosta non c'è più
+    assert(r.wall && !r.one, 'le altre due restano nel muro, quella nascosta no');
   },
 });

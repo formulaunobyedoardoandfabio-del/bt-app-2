@@ -1455,3 +1455,11 @@ Misure prima del lavoro (pagina di prova, CPU rallentata 4x come un telefono med
   run63, run92, unit fantaleague verdi.
 - NFC "non riesco a leggerlo" (telefono dell'amico che invita, il mio che legge): non visto qui, solo sul telefono.
   Edoardo dice che poi ha funzionato; se torna, leggere il messaggio vero del plugin (nfcError.message).
+
+## 22/11 sera (2): niente NFC nel Profilo, recensioni 3D anche con una sola
+- Tolta la riga "NFC: avvicina e fai" dal Profilo (Edoardo). La lettura NFC resta da FANTA > Entra con un codice >
+  Avvicina i telefoni (NFC); invitare da "Invita amici". La vista "hub" di LegaNfcSheet non ha più un ingresso.
+- Recensioni 3D: prima il muro compariva solo con almeno 3 recensioni mostrabili (per questo "non si vedevano"); ora
+  basta una (si ripete). La propria, appena mandata con "Mostra nelle recensioni", compare subito. Con testo sotto 8
+  caratteri non si mostra (MSG_MIN in feedback.js): ora lo dice sotto l'interruttore.
+- Prove: run137 (5), run135 (8, aprono la lettura da FANTA), run138 (3), run125 (3, admin aggiornata) verdi.

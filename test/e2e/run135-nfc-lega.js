@@ -57,7 +57,8 @@ const sheet = p => p.evaluate(() => {
 });
 const until = async (fn, ms = 9000) => { const t0 = Date.now(); for (;;) { const v = await fn(); if (v || Date.now() - t0 > ms) return v; await new Promise(r => setTimeout(r, 250)); } };
 const sheetIs = (p, view, re) => until(async () => { const s = await sheet(p); return s && s.view === view && (!re || re.test(s.text)) ? s : null; });
-const openHub = async p => { await tapSel(p, '[aria-label="Profilo"]'); await w(p, 500); await tapText(p, 'NFC: avvicina e fai'); await w(p, 500); };
+// 22/11 sera (Edoardo: togliere "NFC: avvicina e fai" dal Profilo): la lettura si apre da FANTA > Entra con un codice.
+const openRead = async p => { await goTab(p, 'FANTA'); await w(p, 500); await tapText(p, 'Entra con un codice', { exact: true }); await w(p, 300); await tapText(p, 'Avvicina i telefoni (NFC)'); await w(p, 500); };
 const members = (p, code) => p.evaluate(c => { const d = window.firebase.__fake.doc('fanta/lega-' + c); return d ? Object.keys(d.members || {}).filter(k => !d.members[k].gone) : []; }, code);
 
 run({
@@ -87,10 +88,10 @@ run({
     const { ctx, p, errs } = await open(b, { seed: { addDocs: leagueSeed(UFF) }, capacitor: PHONE });
     await login(p); await w(p, 600);
     await p.evaluate(u => { window.__nfcNext = u; }, UFF_LINK);
-    await openHub(p);
-    const hub = await sheet(p);
-    await p.screenshot({ path: path.join(SHOTS, 'hub-390.png') });
-    await tapSel(p, '[data-nfc-go="leggi"]'); await w(p, 200);
+    await tapSel(p, '[aria-label="Profilo"]'); await w(p, 500);
+    const row = await p.evaluate(() => /NFC: avvicina e fai/.test(document.body.innerText));
+    await tapSel(p, '[aria-label="Indietro"]'); await w(p, 400);
+    await openRead(p);
     const reading = await p.evaluate(() => !!document.querySelector('[data-nfc-reading]'));
     await p.screenshot({ path: path.join(SHOTS, 'leggi-390.png') });
     const inv = await sheetIs(p, 'invito', /Entra nella lega/);
@@ -103,7 +104,7 @@ run({
     await tapSel(p, '[data-nfc-fanta]'); await w(p, 600);
     const fanta = await p.evaluate(() => ({ open: !!document.querySelector('[data-nfc-sheet]'), card: !!document.querySelector('[data-league-card="BT-UFF1"]') }));
     await ctx.close();
-    assert(hub && hub.view === 'hub' && /Entra in una lega/.test(hub.text) && /Invita nella tua lega/.test(hub.text), 'NFC: ' + JSON.stringify(hub));
+    assert(!row, 'nel Profilo non c\'è più "NFC: avvicina e fai"');
     assert(reading, 'lettura NFC accesa');
     assert(inv && /INVITO DA A\. FERRI/.test(inv.text) && /Lega Ufficio/.test(inv.text) && /1 tifoso/.test(inv.text), 'invito: ' + JSON.stringify(inv));
     assert(inside && /Sei nella lega/.test(inside.text), 'dentro: ' + JSON.stringify(inside));
@@ -156,7 +157,7 @@ run({
     const { ctx, p, errs } = await open(b, { seed: { addDocs: leagueSeed(UFF) }, capacitor: PHONE });
     await login(p); await w(p, 600);
     await p.evaluate(() => { window.__camReq = 'denied'; });
-    await openHub(p);
+    await openRead(p);
     await tapSel(p, '[data-nfc-go="scan"]'); await w(p, 400);
     await tapSel(p, '[data-cam-allow]');
     const no = await until(() => p.evaluate(() => { const e = document.querySelector('[data-cam-step="negato"]'); return e ? e.innerText.replace(/\s+/g, ' ') : null; }));
@@ -173,14 +174,11 @@ run({
     const { ctx, p, errs } = await open(b, { seed: { addDocs: leagueSeed({ members: [{ name: 'Marco' }] }) }, capacitor: PHONE });
     await login(p); await w(p, 600);
     await p.evaluate(() => { window.__nfcStatus = { supported: false, enabled: false, hce: false }; });
-    await openHub(p); await w(p, 300);
+    await openRead(p); await w(p, 300);
     const hub = await sheet(p);
-    await tapSel(p, '[data-nfc-go="leggi"]'); await w(p, 400);
     const leggi = await p.evaluate(() => ({ reading: !!document.querySelector('[data-nfc-reading]'), reads: window.__nfc.reads, qr: !!document.querySelector('[data-nfc-go="scan"]') }));
     await tapSel(p, '[data-nfc-sheet] [aria-label="Chiudi"]'); await w(p, 300);
     await p.evaluate(() => { window.__nfcStatus = { supported: true, enabled: false, hce: true }; });
-    await tapSel(p, '[aria-label="Indietro"]'); await w(p, 400);
-    await goTab(p, 'FANTA'); await w(p, 500);
     await tapText(p, 'Invita amici', { exact: true });
     const inv = await sheetIs(p, 'invita', /Amici del Bar/);
     await w(p, 300);
