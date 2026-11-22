@@ -1444,3 +1444,14 @@ Misure prima del lavoro (pagina di prova, CPU rallentata 4x come un telefono med
   fanta/profilo-<aid>.elo, solo se ha almeno un GP).
 - Prove: run137 (nuova, 4), run33/run52/run125 aggiornate alla nuova schermata (nessuna tolta), unit feedback 10,
   profiles 6. run33 "dopo 5 accessi" è a tratti rossa anche su HEAD prima di queste modifiche (da guardare).
+
+## 22/11 sera: entrando in una lega si vede subito (niente uscire e rientrare)
+- Causa (riprodotta in run138): entrando nel FANTA le leghe si rileggono; se quella risposta arrivava dopo l'ingresso in
+  una lega, rimetteva l'elenco vecchio e la lega nuova spariva fino al riavvio. Ora vale solo l'ultima rilettura
+  (leaguesSeq in App.jsx; entrare o uscire da una lega fa scadere quelle in corso).
+- "Vai alla classifica della lega" dopo l'invito (NFC, QR, link) apre quella lega (FantaScreen focusLeague), non la prima.
+- Prove: test/e2e/run138-nfc-lega-dati.js (3: lettura NFC, codice con risposta lenta, app aperta da Android col link);
+  test/fake/fake-firebase.js: fake.slowOnce rallenta la prima lettura di un documento. Leghe: run135, run14, run15,
+  run63, run92, unit fantaleague verdi.
+- NFC "non riesco a leggerlo" (telefono dell'amico che invita, il mio che legge): non visto qui, solo sul telefono.
+  Edoardo dice che poi ha funzionato; se torna, leggere il messaggio vero del plugin (nfcError.message).

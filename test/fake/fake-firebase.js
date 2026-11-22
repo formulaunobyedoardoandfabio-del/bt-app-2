@@ -166,7 +166,8 @@
   function docRef(path) {
     return {
       id: path.split('/').pop(), path,
-      async get() { fake.reads.push(path); await whenReadable(); net(); return snap(path, allDocs()[path]); },
+      // 22/11: fake.slowOnce = { <percorso>: ms } rallenta solo la prima lettura di quel documento (risposte che arrivano tardi)
+      async get() { fake.reads.push(path); const ms = fake.slowOnce && fake.slowOnce[path]; if (ms) { delete fake.slowOnce[path]; await new Promise(r => setTimeout(r, ms)); } await whenReadable(); net(); return snap(path, allDocs()[path]); },
       async set(data, opts) { const all0 = allDocs(); applySet(all0, path, data, opts); await canWrite(); const all = allDocs(); applySet(all, path, data, opts); save(FS_KEY, all); },
       async update(data) { validate(data, path); await canWrite(); const all = allDocs(); applyUpdate(all, path, data); save(FS_KEY, all); },
       async delete() { await canWrite(); const all = allDocs(); delete all[path]; save(FS_KEY, all); },

@@ -10111,7 +10111,7 @@ const LEAGUE_ZONES = {
   q1: { label: "ZONA Q1", bg: "rgba(255,24,1,.13)", line: "rgba(255,90,95,.45)", ink: "#FF5A5F" },
   q2: { label: "ZONA Q2", bg: "rgba(255,210,31,.11)", line: "rgba(255,210,31,.45)", ink: "#FFD23F" },
 };
-function FantaScreen({ onInvite = null, onJoinTap = null, elo = null,squad, setSquad, base, freeTransfers, budget, stats, listing = null, race, lock, weekends = [], isPremium, onPremium, onToast, bonus = [], leagues = [], seasonPts = 0, realWeek = null, meAid = null, onCreateLeague, onJoinLeague, onLeaveLeague, onRenameLeague, needAccount, predictions = [], predAnswers = {}, predLockOf, onAnswerPrediction, standings, raceNameOf = null }) {
+function FantaScreen({ focusLeague = null, onInvite = null, onJoinTap = null, elo = null,squad, setSquad, base, freeTransfers, budget, stats, listing = null, race, lock, weekends = [], isPremium, onPremium, onToast, bonus = [], leagues = [], seasonPts = 0, realWeek = null, meAid = null, onCreateLeague, onJoinLeague, onLeaveLeague, onRenameLeague, needAccount, predictions = [], predAnswers = {}, predLockOf, onAnswerPrediction, standings, raceNameOf = null }) {
   const [, setTick] = useState(0);
   useEffect(() => { const iv = setInterval(() => setTick(n => n + 1), 30000); return () => clearInterval(iv); }, []);
   const bonusPts = bonus.reduce((a, b) => a + b.pts, 0);
@@ -10119,7 +10119,9 @@ function FantaScreen({ onInvite = null, onJoinTap = null, elo = null,squad, setS
   // 31/10: punti veri dei GP già corsi (risultati di Jolpica, regole di sempre, squadra al via di ogni weekend) + quelli
   // della sessione in corso non ancora nei risultati + i bonus dei pronostici.
   const total = seasonPts + weekendPts + bonusPts;
-  const [activeLeague, setActiveLeague] = useState(null);
+  const [activeLeague, setActiveLeague] = useState(focusLeague ? focusLeague.code : null);
+  // 22/11 sera: dall'invito (NFC, QR, link) "Vai alla classifica della lega" apre quella lega, non la prima dell'elenco
+  useEffect(() => { if (focusLeague && focusLeague.code) setActiveLeague(focusLeague.code); }, [focusLeague && focusLeague.at]);   // eslint-disable-line react-hooks/exhaustive-deps
   const [mode, setMode] = useState(null);   // "create" | "join" | "rename"
   const [draft, setDraft] = useState("");
   const [leaveArmed, setLeaveArmed] = useState(false);
@@ -14107,9 +14109,14 @@ function App() {
     setSquadLog(next);
     FantaL.pushLog(leagueCodes, { aid: account.aid, name: account.name, team: squad.name, bonus: fantaBonusRef.current }, next);
   }, [fantaUserReady, JSON.stringify([squad.drivers, squad.teams, squad.boost, squad.name])]);
+  // 22/11 sera (Edoardo: "quando ti unisci alla lega devi uscire e rientrare dall'app"): una rilettura partita prima di
+  // entrare in una lega e arrivata dopo rimetteva l'elenco vecchio. Vale solo l'ultima (leaguesSeq; entrare o uscire la
+  // fa scadere).
+  const leaguesSeq = useRef(0);
   useEffect(() => {
     if (!fantaUserReady) return;
-    Promise.all(leagueCodes.map(c => FantaL.loadLeague(c).catch(() => null))).then(ls => setLeagues(ls.filter(Boolean)));
+    const n = ++leaguesSeq.current;
+    Promise.all(leagueCodes.map(c => FantaL.loadLeague(c).catch(() => null))).then(ls => { if (n === leaguesSeq.current) setLeagues(ls.filter(Boolean)); });
   }, [fantaUserReady, leagueCodes.join(","), tab === "fanta"]);
   // 14/11 (Edoardo): tutti nella lega B&T, da soli. Una volta per account (autoLeagues): chi poi esce non ci torna a forza.
   // Lega che non si trova o rete assente: non si segna, si riprova al prossimo avvio.
@@ -14909,7 +14916,7 @@ function App() {
   };
   // Leghe FantaF1 vere (31/10).
   const leagueMe = () => (account ? { aid: account.aid, name: account.name, team: squad.name, bonus: fantaBonusRef.current } : null);
-  const addLeague = l => { setLeagueCodes(cs => [...cs.filter(c => c !== l.code), l.code]); setLeagues(ls => [...ls.filter(x => x.code !== l.code), l]); };
+  const addLeague = l => { leaguesSeq.current++; setLeagueCodes(cs => [...cs.filter(c => c !== l.code), l.code]); setLeagues(ls => [...ls.filter(x => x.code !== l.code), l]); };
   const createLeague = name => {
     const me = leagueMe();
     if (!me) { needLogin("Per creare una lega serve un account."); return null; }
@@ -14921,7 +14928,7 @@ function App() {
     if (!me) { needLogin("Per entrare in una lega serve un account."); return null; }
     return FantaL.joinLeague(code, me, squadLog).then(l => { addLeague(l); fx.play("done"); if (!quiet) showToast(`Sei entrato nella lega "${l.name}"`); return l.code; }, e => { showToast(e && e.code === "not-found" ? "Nessuna lega con questo codice" : NOT_SAVED); return null; });
   };
-  const leaveLeague = code => { const me = leagueMe(); if (!me) return; FantaL.leaveLeague(code, me.aid).then(() => { setLeagueCodes(cs => cs.filter(c => c !== code)); setLeagues(ls => ls.filter(l => l.code !== code)); showToast("Sei uscito dalla lega"); }, () => showToast(NOT_SAVED)); };
+  const leaveLeague = code => { const me = leagueMe(); if (!me) return; FantaL.leaveLeague(code, me.aid).then(() => { leaguesSeq.current++; setLeagueCodes(cs => cs.filter(c => c !== code)); setLeagues(ls => ls.filter(l => l.code !== code)); showToast("Sei uscito dalla lega"); }, () => showToast(NOT_SAVED)); };
   const renameLeague = (code, name) => FantaL.renameLeague(code, name).then(() => { setLeagues(ls => ls.map(l => (l.code === code ? { ...l, name: name.trim() } : l))); showToast("Nome della lega aggiornato"); return true; }, () => { showToast(NOT_SAVED); return null; });
   const fantaLockOf = round => {
     const r = races.find(x => x.round === round), w = r && CIRCUIT_INFO[r.circuitId] ? CIRCUIT_INFO[r.circuitId].weekend || [] : [];
@@ -15741,6 +15748,7 @@ function App() {
   const [nfcInv, setNfcInv] = useState(null);         // invito ricevuto: { code, name, from, league, loading }
   const [nfcBusy, setNfcBusy] = useState(false);
   const [nfcMsg, setNfcMsg] = useState(null);
+  const [fantaFocus, setFantaFocus] = useState(null);   // { code, at }: la lega da aprire nel FANTA dopo l'invito
   useBack(!!nfcView, () => { if (!nfcBusy) setNfcView(null); });
   const nfcOpen = view => { setNfcMsg(null); setNfcView(view); nfcStatus().then(setNfc); };
   // tornando dalle impostazioni ("accendi l'NFC") lo stato si rilegge, così lettura e condivisione partono da sole
@@ -16012,7 +16020,7 @@ function App() {
     else if (tab === "garage") body = <GarageScreen openGame={garageGame} onGameOpened={() => setGarageGame(null)} races={races} pitBest={pitBest} onPitResult={t => {
       if (activeDuel && myAid) { const id = activeDuel; setActiveDuel(null); Duels.reply({ id, aid: myAid, time: t }).then(item => { setDuelsArr(a => [...a, item]); showToast("Sfida giocata: risultato in Home"); }, () => showToast("Risposta alla sfida non inviata")); }
       if (!userDataWait()) { setPitBest(b => b == null || t < b ? t : b); psBump("pit"); } }} sillyPreds={sillyPreds} onPredict={predictSeat} sillyOfficial={sillyOfficial} live={live} stratPreds={stratPreds} onStrat={(id, st) => { if (!userDataWait()) setStratPreds(x => ({ ...x, [id]: { stints: st, at: nowMs() } })); }} bluffTags={bluffNow} onBluffRefresh={loadBluffTags} />;
-    else if (tab === "fanta") body = <FantaScreen onInvite={l => nfcInviteFrom(leagues.find(x => x.code === l.code) || l)} onJoinTap={v => nfcOpen(v)} standings={shownStandings} squad={squad} setSquad={setSquad} base={squadBase} freeTransfers={freeTransfers} budget={FANTA_BUDGET} listing={fantaStats} stats={shownFantaStats} race={fantaRace} lock={teamLockInfo} weekends={fantaLive} isPremium={isPremium} onPremium={() => setPremiumOpen(true)} onToast={showToast} bonus={bonus} leagues={leagueRows} elo={fantaElo} seasonPts={fantaSeason.total} realWeek={fantaRace ? fantaSeason.rounds.find(r => r.round === fantaRace.round) || null : null} meAid={account ? account.aid : null} onCreateLeague={createLeague} onJoinLeague={joinLeague} onLeaveLeague={leaveLeague} onRenameLeague={renameLeague} needAccount={needAccount} predictions={predictionsOpen} predAnswers={predAnswers} predLockOf={predLockOf} onAnswerPrediction={answerPrediction} raceNameOf={round => { const r = races.find(x => x.round === round); return r ? r.name : ""; }} />;
+    else if (tab === "fanta") body = <FantaScreen focusLeague={fantaFocus} onInvite={l => nfcInviteFrom(leagues.find(x => x.code === l.code) || l)} onJoinTap={v => nfcOpen(v)} standings={shownStandings} squad={squad} setSquad={setSquad} base={squadBase} freeTransfers={freeTransfers} budget={FANTA_BUDGET} listing={fantaStats} stats={shownFantaStats} race={fantaRace} lock={teamLockInfo} weekends={fantaLive} isPremium={isPremium} onPremium={() => setPremiumOpen(true)} onToast={showToast} bonus={bonus} leagues={leagueRows} elo={fantaElo} seasonPts={fantaSeason.total} realWeek={fantaRace ? fantaSeason.rounds.find(r => r.round === fantaRace.round) || null : null} meAid={account ? account.aid : null} onCreateLeague={createLeague} onJoinLeague={joinLeague} onLeaveLeague={leaveLeague} onRenameLeague={renameLeague} needAccount={needAccount} predictions={predictionsOpen} predAnswers={predAnswers} predLockOf={predLockOf} onAnswerPrediction={answerPrediction} raceNameOf={round => { const r = races.find(x => x.round === round); return r ? r.name : ""; }} />;
     return body;
   }
 
@@ -16096,7 +16104,7 @@ function App() {
         {payFail && <PayFailCard onDone={() => setPayFail(false)} />}
         {champShow && <ChampionTakeover champ={champion} onClose={() => { local.set(champKey, true); setChampSeen(true); }} />}
         {pcView && <PcLinkSheet view={pcView} scanAvail={pcScanAvail} digits={pcDigits} busy={pcBusy} msg={pcMsg} onScanned={pcScanned} onGo={pcGo} onKey={pcKey} onClose={() => { pcTry.current++; setPcBusy(false); setPcView(null); }} link={{ fresh: !!pcRemote && nowMs() - pcRemote.seenAt < PairLogic.ACK_MS, ua: pcRemote && pcRemote.ua }} st={liveSt} panels={pcPanels} prefs={ssPrefs} onFocus={id => setSsPrefs(p => ({ ...p, tel: id }))} onPanel={id => pcPanelsSet(l => PairLogic.togglePanel(l, id))} onMove={(id, dir) => pcPanelsSet(l => PairLogic.movePanel(l, id, dir))} onUnlink={pcUnlink} />}
-        {nfcView && <LegaNfcSheet view={nfcView} nfc={nfc} leagues={leagues} inviteLeague={nfcLeague} invite={nfcInv} meAid={account ? account.aid : null} busy={nfcBusy} msg={nfcMsg} onGo={nfcGo} onClose={() => { if (nfcBusy) return; setNfcView(null); local.del("bt-inv"); }} onPickLeague={nfcInviteFrom} onShare={nfcShare} onJoin={nfcJoin} onOpenFanta={() => { setNfcView(null); goTab("fanta"); }} onRead={nfcGot} onReadError={() => setNfcMsg("Non ho letto bene: riavvicina i telefoni e tienili fermi.")} onScanned={nfcGot} />}
+        {nfcView && <LegaNfcSheet view={nfcView} nfc={nfc} leagues={leagues} inviteLeague={nfcLeague} invite={nfcInv} meAid={account ? account.aid : null} busy={nfcBusy} msg={nfcMsg} onGo={nfcGo} onClose={() => { if (nfcBusy) return; setNfcView(null); local.del("bt-inv"); }} onPickLeague={nfcInviteFrom} onShare={nfcShare} onJoin={nfcJoin} onOpenFanta={() => { if (nfcInv && nfcInv.code) setFantaFocus({ code: nfcInv.code, at: Date.now() }); setNfcView(null); goTab("fanta"); }} onRead={nfcGot} onReadError={() => setNfcMsg("Non ho letto bene: riavvicina i telefoni e tienili fermi.")} onScanned={nfcGot} />}
         {proAsk && <ProGateSheet what={proAsk.what} hint={proHintOf(proAsk.what)} busy={adBusy} onAd={Ads.canReward() ? () => watchAdPro(proAsk.then) : null} onPremium={() => { setProAsk(null); setPremiumOpen(true); }} onClose={() => setProAsk(null)} />}
         {lapList && live && liveSt && <LapTimesModal live={live} st={liveSt} carId={lapList} onOpenLap={n => setTelemetry({ carId: lapList, lapNo: n, sector: 0 })} onClose={() => setLapList(null)} />}
         {telemetry && live && liveSt && <TelemetryModal live={live} st={liveSt} carId={telemetry.carId} lapNo={telemetry.lapNo} sector={telemetry.sector} onClose={() => setTelemetry(null)} />}
