@@ -15080,6 +15080,13 @@ function App() {
   const [nfcMsg, setNfcMsg] = useState(null);
   useBack(!!nfcView, () => { if (!nfcBusy) setNfcView(null); });
   const nfcOpen = view => { setNfcMsg(null); setNfcView(view); nfcStatus().then(setNfc); };
+  // tornando dalle impostazioni ("accendi l'NFC") lo stato si rilegge, così lettura e condivisione partono da sole
+  useEffect(() => {
+    if (!nfcView) return undefined;
+    const back = () => { if (document.visibilityState === "visible") nfcStatus().then(s => setNfc(x => (sameJson(x, s) ? x : s))); };
+    document.addEventListener("visibilitychange", back);
+    return () => document.removeEventListener("visibilitychange", back);
+  }, [nfcView]);
   const openInvite = inv => {
     if (!inv || !Invite.LEAGUE_RE.test(inv.code)) return;
     setNfcMsg(null); setNfcView("invito"); fx.buzz("select");

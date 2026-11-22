@@ -1,12 +1,14 @@
 package __PKG__;
 
 import android.app.Activity;
+import android.content.ComponentName;
 import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.nfc.NdefMessage;
 import android.nfc.NdefRecord;
 import android.nfc.NfcAdapter;
 import android.nfc.Tag;
+import android.nfc.cardemulation.CardEmulation;
 import android.nfc.tech.IsoDep;
 import android.nfc.tech.Ndef;
 import android.os.Bundle;
@@ -78,13 +80,17 @@ public class BtNfcPlugin extends Plugin {
         // all'NFC non resta leggibile col telefono in tasca
         disableReader();
         BtHceService.payload = null;
+        prefer(false);
     }
 
     @Override
     protected void handleOnResume() {
         super.handleOnResume();
         if (reading) enableReader();
-        if (sharing != null) BtHceService.payload = sharing;
+        if (sharing != null) {
+            BtHceService.payload = sharing;
+            prefer(true);
+        }
     }
 
     @PluginMethod
@@ -137,13 +143,19 @@ public class BtNfcPlugin extends Plugin {
     public void share(PluginCall call) {
         try {
             String url = call.getString("url");
-            if (url == null || url.length() == 0 || url.length() > 400) {
-                call.reject("Link mancante o troppo lungo");
+            if (url == null || url.length() == 0) {
+                call.reject("Link mancante");
                 return;
             }
             NdefMessage msg = new NdefMessage(new NdefRecord[] { NdefRecord.createUri(url) });
-            sharing = msg.toByteArray();
+            byte[] bytes = msg.toByteArray();
+            if (bytes.length > 498) {
+                call.reject("Link troppo lungo");
+                return;
+            }
+            sharing = bytes;
             BtHceService.payload = sharing;
+            prefer(true);
             JSObject o = new JSObject();
             o.put("ok", true);
             call.resolve(o);
@@ -156,6 +168,7 @@ public class BtNfcPlugin extends Plugin {
     public void stopShare(PluginCall call) {
         sharing = null;
         BtHceService.payload = null;
+        prefer(false);
         call.resolve();
     }
 
@@ -196,6 +209,25 @@ public class BtNfcPlugin extends Plugin {
         }
     }
 
+    // Il nostro servizio NFC passa davanti ad altre app che usano lo stesso AID (niente scelta dell'app al tocco)
+    private void prefer(final boolean on) {
+        final Activity a = getActivity();
+        if (a == null) return;
+        a.runOnUiThread(new Runnable() {
+            @Override
+            public void run() {
+                try {
+                    NfcAdapter adapter = NfcAdapter.getDefaultAdapter(a);
+                    if (adapter == null) return;
+                    CardEmulation ce = CardEmulation.getInstance(adapter);
+                    if (on) ce.setPreferredService(a, new ComponentName(a, BtHceService.class));
+                    else ce.unsetPreferredService(a);
+                } catch (Throwable ignored) {
+                }
+            }
+        });
+    }
+
     private void notifyError(String message) {
         try {
             JSObject o = new JSObject();
@@ -208,13 +240,14 @@ public class BtNfcPlugin extends Plugin {
     private void handleIntent(Intent intent) {
         if (intent == null) return;
         if (!NfcAdapter.ACTION_NDEF_DISCOVERED.equals(intent.getAction())) return;
+        if ((intent.getFlags() & Intent.FLAG_ACTIVITY_LAUNCHED_FROM_HISTORY) != 0) return;
         Parcelable[] raw = intent.getParcelableArrayExtra(NfcAdapter.EXTRA_NDEF_MESSAGES);
         if (raw == null) return;
         for (Parcelable p : raw) {
             if (!(p instanceof NdefMessage)) continue;
             String url = urlFromMessage((NdefMessage) p);
             if (url != null) {
-                pending = url;
+                if (!hasListeners("nfcUrl")) pending = url;
                 JSObject o = new JSObject();
                 o.put("url", url);
                 notifyListeners("nfcUrl", o, true);
@@ -258,10 +291,10 @@ public class BtNfcPlugin extends Plugin {
         Ndef ndef = Ndef.get(tag);
         if (ndef != null) {
             try {
+                NdefMessage cached = ndef.getCachedNdefMessage();
+                if (cached != null) return cached;
                 ndef.connect();
-                NdefMessage m = ndef.getNdefMessage();
-                if (m == null) m = ndef.getCachedNdefMessage();
-                return m;
+                return ndef.getNdefMessage();
             } finally {
                 try {
                     ndef.close();
@@ -301,10 +334,12 @@ public class BtNfcPlugin extends Plugin {
             if (nl.length < 2) throw new Exception("NLEN non valido");
             int nlen = ((nl[0] & 0xFF) << 8) | (nl[1] & 0xFF);
             if (nlen <= 0 || nlen > 8192) throw new Exception("Messaggio NDEF vuoto o troppo grande");
+            int mle = ((cc[3] & 0xFF) << 8) | (cc[4] & 0xFF);
+            int chunk = Math.min(0xF0, mle > 0 ? mle : 0xF0);
             ByteArrayOutputStream out = new ByteArrayOutputStream();
             int done = 0;
             while (done < nlen) {
-                int n = Math.min(0xF0, nlen - done);
+                int n = Math.min(chunk, nlen - done);
                 int off = 2 + done;
                 byte[] part = check(iso.transceive(new byte[] {
                     0x00, (byte) 0xB0, (byte) ((off >> 8) & 0x7F), (byte) (off & 0xFF), (byte) n

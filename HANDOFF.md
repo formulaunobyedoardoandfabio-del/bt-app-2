@@ -1387,3 +1387,12 @@ Misure prima del lavoro (pagina di prova, CPU rallentata 4x come un telefono med
 - DA PROVARE A MANO (Edoardo, due telefoni Android con l'APK nuovo): NFC acceso su tutti e due; uno apre FANTA →
   Invita amici, l'altro Profilo → NFC → Entra in una lega, schiena contro schiena. L'NFC qui non si prova: solo la
   compilazione su GitHub.
+- Verificato 22/11 mattina: unit pair 11, qr 5, invite 3; e2e run135 8/8, run134 7/7, run14 31/31, run17 18/18,
+  run101-tv 2/2, run118 4/4, run127 5/5, run133 2/2. APK di prova d066316 costruito senza errori. run134 "scrive le
+  6 cifre" è fallito 2 volte su 5 (il telefono va su "Codice scaduto"), da solo passa: in caso di errore ora stampa
+  il documento `pair/` e gli errori delle pagine.
+- Revisione del plugin NFC (a occhi nuovi): nessun errore di compilazione; corretti: NDEF già letto da Android preso
+  subito (telefoni che si staccano in fretta), vecchio invito non riaperto dalle app Recenti, servizio NFC preferito
+  mentre si presta il link (niente scelta dell'app), limite sui byte veri del link (accenti ed emoji), MLe del CC nei
+  tag veri; nell'app lo stato dell'NFC si rilegge tornando dalle impostazioni. Non fatto: record AAR (manderebbe chi
+  non ha l'app al Play Store invece che al sito).
