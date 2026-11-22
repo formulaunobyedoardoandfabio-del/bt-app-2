@@ -9,6 +9,9 @@ name: Replay F1
 on:
   schedule:
     - cron: '17 6 * * 1,2'
+    # 22/11 (Edoardo: replay anche delle gare appena corse, da solo per tutte): anche la domenica sera (21:17 UTC),
+    # così una gara della domenica (o del sabato notte, come Las Vegas) è nel replay la sera stessa, non il lunedì.
+    - cron: '17 21 * * 0'
   workflow_dispatch:
     inputs:
       anni:

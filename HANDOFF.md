@@ -1516,3 +1516,17 @@ Misure prima del lavoro (pagina di prova, CPU rallentata 4x come un telefono med
    round 1-16: capire perché dati-f1.yml non aggiunge 17-21 e farlo andare da solo dopo ogni gara.
 3. Ordine personalizzabile degli elementi di ogni pagina (Home, Race, Fanta, Profilo...): da progettare (elenco
    sezioni per pagina, "Modifica ordine" con trascinamento, salvato in account/telefono).
+
+## 22/11 notte (2): replay anche la domenica sera; da fare (95% dell'uso settimanale)
+- Replay delle gare: è già automatico per tutte le gare dell'anno finite (tools/openf1_replay.py prende da OpenF1 ogni
+  gara con date_end passata). Las Vegas mancava solo perché il workflow girava lunedì e martedì alle 6:17 UTC: aggiunta
+  la corsa della domenica alle 21:17 UTC (.github/workflows/replay-f1.yml) e lanciato a mano il 22/11.
+- Da fare (Edoardo, 22/11 notte, non iniziati per l'uso settimanale al 95%):
+  1. Box durante la gara live con le auto che girano come nel replay: la vista "Box" in diretta c'è già (LivePitDial, canDial =
+     gara + tracciato con lunghezza); da capire sul telefono cosa manca (tracciato assente in diretta? auto che saltano tra un
+     aggiornamento e l'altro invece di girare lisce come in MapReplay).
+  2. "Tutte le funzioni delle altre gare" anche per le gare appena corse: src/data/real-weekend.js (ghost lap, telemetria)
+     è fermo al round 16 (ultimo aggiornamento 04/10): controllare il workflow dati-f1.yml (TracingInsights) e farlo
+     arrivare da solo alle gare nuove.
+  3. Ordine di tutti gli elementi di ogni pagina scelto dall'utente: grande (ogni pagina); idea: elenco di sezioni per
+     pagina con id fissi, ordine salvato in look/account, modalità "Modifica ordine" con trascina o frecce su/giù.
