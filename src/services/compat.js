@@ -381,6 +381,8 @@ function profOf(p) {
   const out = {};
   const t = idOk(p.t, 24), d = idOk(p.d, 30), f = idOk(p.f, 20);
   if (t) out.t = t; if (d) out.d = d; if (f) out.f = f;
+  // 22/11: da quanti anni segue la F1 (indice di FOLLOW_STEPS, "0".."4"), solo se l'utente lo lascia visibile
+  if (typeof p.y === "string" && /^[0-4]$/.test(p.y)) out.y = p.y;
   if (isObj(p.h)) out.h = cleanHelmet(p.h);
   if (Array.isArray(p.w)) { const w = p.w.filter(x => idOk(x, 24)).slice(0, 30); if (w.length) out.w = w; }
   return Object.keys(out).length ? out : null;

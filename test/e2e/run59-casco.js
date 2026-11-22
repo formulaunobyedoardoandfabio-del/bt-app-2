@@ -1,6 +1,8 @@
 // Tappa 3, Task 10 (G15): il casco al posto delle iniziali nel Profilo e nel tasto del profilo in alto, con l'editor
 // completo (colori, disegno, numero, visiera, finitura). Entrando nell'editor la visiera si alza; salvando si abbassa con
 // il clack; il casco si salva nell'account (helmet).
+// 22/11 (Edoardo: "metti questo design per la modifica del casco"): pagina "Il tuo casco" con le schede Colori,
+// Disegno, Visiera; "Salva il casco" e poi la pagina "Casco salvato" (Fatto, Modifica ancora).
 // Uso: node test/build-test.js && node test/e2e/run59-casco.js [filtro]
 const { open, w, tapText, tapSel, login, assert, run } = require('./helpers');
 
@@ -8,7 +10,11 @@ const spyFx = p => p.evaluate(() => { const fx = window.__btFx; window.__played 
 const helmetIn = (p, sel) => p.evaluate(s => { const e = document.querySelector(s + ' [data-helmet]'); return e ? { pattern: e.getAttribute('data-pattern'), visor: e.getAttribute('data-visor'), finish: e.getAttribute('data-finish'), text: e.textContent.trim() } : null; }, sel);
 const openProfile = async p => { await tapSel(p, '[aria-label="Profilo"]'); await w(p, 400); };
 const openEditor = async p => { await tapSel(p, '[aria-label="Modifica il casco"]'); await w(p, 500); };
-const choose = (p, group, label) => p.evaluate(({ group, label }) => {
+const TAB = { base: 'colori', c1: 'colori', c2: 'colori', pattern: 'disegno', number: 'disegno', visor: 'visiera', finish: 'visiera' };
+const tab = (p, k) => p.evaluate(k => { const b = document.querySelector('[data-helmet-editor] [data-helmet-tab="' + k + '"]'); if (b) b.click(); return !!b; }, k);
+const target = (p, k) => p.evaluate(k => { const b = document.querySelector('[data-helmet-editor] [data-helmet-target="' + k + '"]'); if (b) b.click(); return !!b; }, k);
+const choose = async (p, group, label) => { await tab(p, TAB[group]); if (TAB[group] === 'colori') await target(p, group); await w(p, 80); return chooseNow(p, group, label); };
+const chooseNow = (p, group, label) => p.evaluate(({ group, label }) => {
   const b = [...document.querySelectorAll(`[data-helmet-editor] [data-helmet-opt="${group}"] button`)].find(x => (x.getAttribute('aria-label') || x.textContent).trim() === label);
   if (!b) return false; b.click(); return true;
 }, { group, label });
@@ -29,12 +35,20 @@ run({
     const { ctx, p, errs } = await open(b); await login(p);
     await openProfile(p); await openEditor(p);
     const h = await helmetIn(p, '[data-helmet-editor]');
-    const groups = await p.evaluate(() => [...document.querySelectorAll('[data-helmet-editor] [data-helmet-opt]')].map(e => e.getAttribute('data-helmet-opt')));
-    const t = await p.evaluate(() => document.querySelector('[data-helmet-editor]').innerText);
+    const groups = [], texts = [];
+    for (const [k, sub] of [['colori', ['base', 'c1', 'c2']], ['disegno', [null]], ['visiera', [null]]]) {
+      await tab(p, k); await w(p, 80);
+      for (const t of sub) {
+        if (t) { await target(p, t); await w(p, 60); }
+        groups.push(...await p.evaluate(() => [...document.querySelectorAll('[data-helmet-editor] [data-helmet-opt]')].map(e => e.getAttribute('data-helmet-opt'))));
+        texts.push(await p.evaluate(() => document.querySelector('[data-helmet-editor]').innerText));
+      }
+    }
+    const t = texts.join(' ');
     await ctx.close();
     assert(h && h.visor === 'open', 'nell\'editor la visiera non si alza: ' + JSON.stringify(h));
     for (const g of ['base', 'c1', 'c2', 'pattern', 'visor', 'finish']) assert(groups.includes(g), 'manca la scelta ' + g + ': ' + groups.join(','));
-    for (const s of ['Strisce', 'Fiamme', 'Scacchi', 'Stelle', 'Fulmine', 'Righe sottili', 'Pois', 'Nessuno', 'Chiara', 'Fumé', 'Iridio blu', 'Iridio oro', 'Specchio rosso', 'Lucida', 'Opaca', 'Aerografo', 'NUMERO', 'COLORE DI BASE']) assert(t.includes(s), 'nell\'editor manca "' + s + '"');
+    for (const s of ['Strisce', 'Fiamme', 'Scacchi', 'Stelle', 'Fulmine', 'Righe sottili', 'Pois', 'Nessuno', 'Chiara', 'Fumé', 'Iridio blu', 'Iridio oro', 'Specchio rosso', 'Lucida', 'Opaca', 'Aerografo', 'Numero', 'Colore di base', 'Il tuo casco', 'Disegno 1', 'Disegno 2']) assert(t.includes(s), 'nell\'editor manca "' + s + '"');
     assert(!errs.length, errs.join(' | '));
   },
 
@@ -42,11 +56,14 @@ run({
     const { ctx, p, errs } = await open(b); await login(p);
     await openProfile(p); await openEditor(p); await spyFx(p);
     const picks = [await choose(p, 'base', 'Turchese'), await choose(p, 'pattern', 'Fiamme'), await choose(p, 'visor', 'Iridio oro'), await choose(p, 'finish', 'Opaca')];
+    await tab(p, 'disegno'); await w(p, 80);
     await p.fill('[data-helmet-editor] input[data-helmet-number]', '44'); await w(p, 200);
-    await tapText(p, 'SALVA IL CASCO', { exact: true }); await w(p, 150);
+    await tapSel(p, '[data-helmet-save]'); await w(p, 150);
     const closing = await helmetIn(p, '[data-helmet-editor]');
     const played = await p.evaluate(() => window.__played.slice());
-    await w(p, 1600);
+    await w(p, 900);
+    const done = await p.evaluate(() => { const e = document.querySelector('[data-hx-saved]'); return e ? e.innerText.replace(/\s+/g, ' ') : null; });
+    await tapSel(p, '[data-helmet-done]'); await w(p, 700);
     const user = await p.evaluate(() => window.firebase.__fake.doc('users/a@b.it'));
     await p.reload(); await w(p, 600);
     await p.waitForFunction(() => !document.querySelector('[data-splash]'), null, { timeout: 8000 }).catch(() => {});
@@ -57,6 +74,7 @@ run({
     assert(picks.every(Boolean), 'scelte non trovate nell\'editor: ' + JSON.stringify(picks));
     assert(closing && closing.visor === 'closed', 'salvando la visiera non si abbassa: ' + JSON.stringify(closing));
     assert(played.includes('clack'), 'niente clack: ' + JSON.stringify(played));
+    assert(done && /Casco salvato/.test(done) && /Modifica ancora/.test(done), 'pagina "Casco salvato": ' + done);
     const hm = user && user.app2 && user.app2.helmet;
     assert(hm && hm.base === '#27F4D2' && hm.pattern === 'flames' && hm.number === 44 && hm.visor === 'iridium-gold' && hm.finish === 'matte', 'nell\'account: ' + JSON.stringify(hm));
     assert(after && after.pattern === 'flames' && after.finish === 'matte' && after.text.includes('44'), 'dopo il riavvio: ' + JSON.stringify(after));
@@ -68,7 +86,8 @@ run({
     const top0 = await helmetIn(p, '[aria-label="Profilo"]');
     await openProfile(p); await openEditor(p);
     await choose(p, 'pattern', 'Scacchi');
-    await tapText(p, 'SALVA IL CASCO', { exact: true }); await w(p, 900);
+    await tapSel(p, '[data-helmet-save]'); await w(p, 900);
+    await tapSel(p, '[data-helmet-done]'); await w(p, 400);
     await tapSel(p, '[aria-label="Indietro"]'); await w(p, 400);
     const top1 = await helmetIn(p, '[aria-label="Profilo"]');
     await ctx.close();

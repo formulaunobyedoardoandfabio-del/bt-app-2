@@ -143,14 +143,14 @@ run({
     const reps = await doc(p, 'shared/bt-chat-reports');
     await ctx.close();
     assert(s, 'toccando il nome non si apre il profilo');
-    assert(/Tifa Ferrari/.test(s.text) && /Pilota del cuore: Charles Leclerc/.test(s.text) && /Vivo e respiro F1!/.test(s.text), 'tifo nel profilo: ' + s.text);
+    assert(/#Ferrari/.test(s.text) && /Pilota del cuore: Charles Leclerc/.test(s.text) && /Vivo e respiro F1!/.test(s.text), 'tifo nel profilo: ' + s.text);
     assert(s.helmet === 'flames', 'casco nel profilo: ' + s.helmet);
     assert(new RegExp('2 di ' + Trophies.TROPHIES.length).test(s.text) && s.trophies.includes('pitcrew') && /Pit crew/.test(s.text), 'trofei nel profilo: ' + s.text);
     assert(/Trofeo segreto/.test(s.text) && !/Sgasata/.test(s.text), 'il trofeo segreto di un altro non deve dire il suo nome: ' + s.text);
     assert(/Segnalazione inviata/.test(msg) && gone, 'Segnala dal profilo: ' + msg);
     assert(reps && reps.__arr.length === 1 && reps.__arr[0].msgId === 'mm2' && reps.__arr[0].aid === MARCO.aid, 'segnalazione salvata: ' + JSON.stringify(reps));
     // 31/10 sera: niente più "si vedono dal suo prossimo messaggio": scheda completa coi numeri della stanza.
-    assert(g && /non ha ancora condiviso casco e trofei/.test(g.text) && /MESSAGGI QUI 1/.test(g.text) && !g.helmet && g.none && !/Tifa/.test(g.text), 'profilo di chi non l\'ha ancora mandato: ' + JSON.stringify(g));
+    assert(g && /non ha ancora condiviso casco e trofei/.test(g.text) && /Messaggi qui 1/i.test(g.text) && !g.helmet && g.none && !/#[A-Z]/.test(g.text), 'profilo di chi non l\'ha ancora mandato: ' + JSON.stringify(g));
     assert(!errs.length, errs.join(' | '));
   },
 

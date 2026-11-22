@@ -48,17 +48,23 @@ run({
     assert(!errs.length, errs.join(' | '));
   },
 
-  async 'Second Screen: lo schermo resta acceso finché è aperto, niente di diverso sullo schermo (solo 1-3 px contro il burn-in)'(b) {
+  // 22/11 (Edoardo: "mettere davvero la funzione Schermo sempre attivo come bottoncino senza scritta solo icona"): non
+  // più acceso da solo; si accende con l'icona del sole (la prima volta dopo la pagina che lo spiega).
+  async 'Second Screen: schermo sempre attivo con l\'icona, finché è aperto, niente di diverso sullo schermo (solo 1-3 px contro il burn-in)'(b) {
     const { ctx, p, errs } = await open(b, { seed: { addDocs: BAKU_LIVE, pro: true }, routes, init: capKeep }); await login(p);
     await goTab(p, 'RACE');
     await p.waitForFunction(() => window.__btLive && window.__btLive.state().cars.length > 0, null, { timeout: 15000 }).catch(() => {});
     await p.evaluate(() => window.__btLive.jumpTo(2950)); await w(p, 400);
     await tapText(p, 'Modalità Second Screen'); await w(p, 700);
+    const before = await ss(p);
+    await tapSel(p, '[aria-label="Schermo sempre attivo"]'); await w(p, 300);
+    await tapSel(p, '[data-awake-ok]'); await w(p, 400);
     const a = await ss(p);
     await p.screenshot({ path: '/tmp/bt/run101-ss-acceso.png' });
     await tapSel(p, '[aria-label="Chiudi Second Screen"]'); await w(p, 500);
     const c = await ss(p);
     await ctx.close();
+    assert(before.open && !before.keep.length, 'aperto il Second Screen lo schermo non resta acceso da solo: ' + JSON.stringify(before.keep));
     assert(a.open && a.map, 'Second Screen aperto come sempre: ' + JSON.stringify(a));
     assert(!a.tvBtn && !a.tvView, 'niente tasto TV né pannelli nuovi');
     assert(a.keep.includes('on'), 'schermo tenuto acceso: ' + JSON.stringify(a.keep));

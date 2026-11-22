@@ -21,8 +21,9 @@ run({
   async 'telefono: si iscrive da solo al tema delle novità (canale ad alta importanza); dal Profilo si spegne e si riaccende'(b) {
     const { ctx, p, errs } = await open(b, { init: capPush }); await login(p); await w(p, 600);
     const start = await p.evaluate(() => window.__push.slice());
-    await tapSel(p, '[aria-label="Profilo"]'); await w(p, 400);
-    await tapSel(p, '[data-settings-group][aria-expanded="false"]').catch(() => {}); await w(p, 300);
+    // 22/11: l'interruttore è passato dal Profilo alle impostazioni delle notifiche
+    await tapSel(p, '[aria-label="Notifiche"]'); await w(p, 400);
+    await tapSel(p, '[data-notif-open-settings]'); await w(p, 300);
     const SW = '[role="switch"][aria-label^="Novità da B&T sul telefono"]';
     await tapSel(p, SW); await w(p, 400);
     const off = await p.evaluate(() => window.__push.slice());

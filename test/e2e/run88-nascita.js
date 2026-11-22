@@ -102,7 +102,8 @@ run({
     assert(rule && /scacchi/.test(rule) && /400/.test(rule) && /K vale 48/.test(rule) && /lega B&T/.test(rule), 'regola dell\'ELO (14/11: ELO B&T): ' + rule);
     // 8/11: nel mio profilo niente "Livello del tifoso" (lo vedono gli altri) né "Funzioni Pro coi trofei"; sei impostazioni in una voce
     assert(!unl.pro && !unl.level && unl.subs === 0 && /Personalizza l'app/.test(unl.group || ''), 'profilo: ' + JSON.stringify(unl));
-    assert(['Colori dell\'app', 'Suoni', 'Vibrazioni', 'Temi delle feste', 'Pit Board in tutta l\'app', 'Promemoria sul telefono'].every(x => open8.some(t => t.startsWith(x))), 'dentro "Personalizza l\'app": ' + JSON.stringify(open8));
+    // 22/11: "Promemoria sul telefono" è passato nelle impostazioni delle notifiche (run136)
+    assert(['Colori dell\'app', 'Suoni', 'Vibrazioni', 'Temi delle feste', 'Pit Board in tutta l\'app'].every(x => open8.some(t => t.startsWith(x))) && !open8.some(t => t.startsWith('Promemoria sul telefono')), 'dentro "Personalizza l\'app": ' + JSON.stringify(open8));
     // 8/11 (nuovo design 2): titolo nuovo, telemetria d'esempio, quattro cose che sblocchi
     assert(prem.title === 'Vedi la gara come un ingegnere di pista' && prem.tele && prem.perks === 4, 'Premium: ' + JSON.stringify(prem));
     assert(prem.sel.join(',') === 'annual:true,month:false' && /Risparmi il \d+%/.test(prem.saving || '') && prem.after, 'piani: ' + JSON.stringify(prem));

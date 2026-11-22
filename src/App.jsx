@@ -255,6 +255,8 @@ function Icon({ name, size = 18, color = C.text, sw = 2 }) {
     case "back": return <svg {...s}><polyline points="15,18 9,12 15,6" /></svg>;
     case "tv": return <svg {...s}><rect x="3" y="5" width="18" height="12" rx="2" /><line x1="8" y1="21" x2="16" y2="21" /><line x1="12" y1="17" x2="12" y2="21" /></svg>;
     case "close": return <svg {...s}><line x1="6" y1="6" x2="18" y2="18" /><line x1="18" y1="6" x2="6" y2="18" /></svg>;
+    case "moon": return <svg {...s}><path d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5z" /></svg>;
+    case "sun": return <svg {...s}><circle cx="12" cy="12" r="4" /><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41" /></svg>;
     case "ticket": return <svg {...s}><path d="M15 5v2M15 11v2M15 17v2" /><path d="M5 5h14a2 2 0 0 1 2 2v3a2 2 0 0 0 0 4v3a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-3a2 2 0 0 0 0-4V7a2 2 0 0 1 2-2" /></svg>;
     case "chevron": return <svg {...s}><polyline points="9,6 15,12 9,18" /></svg>;
     case "garage": return <svg {...s}><path d="M3 21V9l9-6 9 6v12" /><path d="M7 21v-9h10v9" /><line x1="7" y1="15" x2="17" y2="15" /><line x1="7" y1="18" x2="17" y2="18" /></svg>;
@@ -1318,75 +1320,141 @@ function HelmetArt({ spec, size = 40, visorOpen = false }) {
   );
 }
 
-// Editor del casco (G15): colore di base (o quello dei tasti), i due colori del disegno, il disegno, il numero (0-99),
-// la visiera e la finitura. Entrando la visiera si alza; salvando si abbassa con il clack (suono e vibrazione), poi
-// l'editor si chiude e il casco va nei dati dell'account.
+// Editor del casco (G15). 22/11 (Edoardo: "metti questo design per la modifica del casco: B&T: Modifica casco"): pagina
+// intera "Il tuo casco" col casco grande, tre schede (Colori: Base, Disegno 1, Disegno 2 e i colori; Disegno: le
+// piastrelle coi caschi piccoli e il numero; Visiera e finitura), "Salva il casco" e poi la pagina "Casco salvato".
+// Entrando la visiera si alza; salvando si abbassa con il clack (suono e vibrazione) e il casco va nei dati
+// dell'account. Animazioni solo opacity e transform.
 const HELMET_EXTRA = [{ name: "Bianco", color: "#FFFFFF" }, { name: "Nero", color: "#111111" }];
+const HX = { bg: "#000000", card: "#111113", line: "#1E1E22", key: "#1C1C1F", text: "#F4F4F5", muted: "#A1A1AA", green: "#34D399" };
+const HX_CSS = `
+@keyframes hxin{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+@keyframes hxpop{0%{opacity:0;transform:scale(.6)}70%{opacity:1;transform:scale(1.08)}100%{opacity:1;transform:scale(1)}}
+[data-hx-tab]{animation:hxin .25s ease-out both}
+[data-hx-ok]{animation:hxpop .4s ease-out both}
+@media (prefers-reduced-motion: reduce){[data-hx-tab],[data-hx-ok],[data-hx-saved]{animation:none!important}}`;
 function HelmetEditor({ helmet, onSave, onClose }) {
   const [d, setD] = useState(() => cleanHelmet(helmet));
+  const [tab, setTab] = useState("colori");
+  const [target, setTarget] = useState("base");
   const [closing, setClosing] = useState(false);
+  const [saved, setSaved] = useState(false);
   const timer = useRef(null);
   useEffect(() => () => clearTimeout(timer.current), []);
   const set = (k, v) => setD(x => cleanHelmet({ ...x, [k]: v }));
+  const pick =(k, v) => { set(k, v); fx.play("tick"); fx.buzz("select"); };
   const save = () => {
     if (closing) return;
     setClosing(true); fx.play("clack"); fx.buzz("medium");
-    timer.current = setTimeout(() => { onSave && onSave(cleanHelmet(d)); onClose(); }, 520);
+    timer.current = setTimeout(() => { if (onSave) onSave(cleanHelmet(d)); setSaved(true); }, 520);
   };
-  const head = { fontFamily: F_BODY, fontWeight: 700, fontSize: 11, color: C.dim, letterSpacing: 1, margin: "16px 0 8px" };
-  const sw = (on, color) => ({ width: 30, height: 30, borderRadius: "50%", background: color, boxShadow: on ? `0 0 0 2px ${C.card}, 0 0 0 4px ${C.text}` : "inset 0 0 0 1px rgba(255,255,255,.2)", flexShrink: 0 });
-  const swatches = (key, list, extra = null) => (
-    <div data-helmet-opt={key} style={{ display: "flex", flexWrap: "wrap", gap: 9 }}>
-      {extra}
-      {list.map(c => <button key={c.color} className="press" aria-label={c.name} aria-pressed={d[key] === c.color ? "true" : "false"} onClick={() => set(key, c.color)} style={sw(d[key] === c.color, c.color)} />)}
+  const again = () => { setSaved(false); setClosing(false); };
+  const head = (title, value) => (
+    <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", margin: "18px 0 10px" }}>
+      <span style={{ fontFamily: F_BODY, fontSize: 15, fontWeight: 800, color: HX.text }}>{title}</span>
+      {value && <span style={{ fontFamily: F_BODY, fontSize: 12, fontWeight: 700, color: HX.muted }}>{value}</span>}
     </div>
   );
-  const chips = (key, list) => (
-    <div data-helmet-opt={key} style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-      {list.map(o => <button key={o.id} className="press" aria-pressed={d[key] === o.id ? "true" : "false"} onClick={() => { set(key, o.id); fx.play("tick"); fx.buzz("select"); }} style={aChip(d[key] === o.id)}>{o.name}</button>)}
+  const tile = (on, onClick, label, art, extra = {}) => (
+    <button className="press" aria-pressed={on ? "true" : "false"} aria-label={label} onClick={onClick} {...extra} style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 6, minHeight: 72, padding: "8px 4px", borderRadius: 14, background: HX.card, border: `${on ? 2 : 1}px solid ${on ? HX.text : HX.line}`, boxSizing: "border-box" }}>
+      {art}
+      <span style={{ fontFamily: F_BODY, fontSize: 11, fontWeight: 700, color: HX.text, textAlign: "center", lineHeight: "13px" }}>{label}</span>
+    </button>
+  );
+  const nameOf = (list, id) => (list.find(x => x.id === id) || {}).name || "";
+  const ring = on => ({ width: 36, height: 36, borderRadius: "50%", flexShrink: 0, boxShadow: on ? `0 0 0 2px ${HX.bg}, 0 0 0 4px ${HX.text}` : "inset 0 0 0 1px rgba(255,255,255,.18)" });
+  const colors = target === "base" ? Colors.PALETTE : [...HELMET_EXTRA, ...Colors.PALETTE];
+  const cur = d[target];
+  if (saved) return (
+    <div data-helmet-editor="" data-hx-saved="" role="dialog" aria-modal="true" aria-label="Casco salvato" style={{ position: "absolute", inset: 0, zIndex: 640, background: HX.bg, color: HX.text, display: "flex", flexDirection: "column", alignItems: "center", padding: "calc(env(safe-area-inset-top, 0px) + 40px) 20px calc(env(safe-area-inset-bottom, 0px) + 24px)", boxSizing: "border-box", animation: "hxin .3s ease-out both" }}>
+      <style>{HX_CSS}</style>
+      <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", width: "100%" }}>
+        <div aria-hidden="true" style={{ position: "relative", width: 220, height: 220, display: "flex", alignItems: "center", justifyContent: "center" }}>
+          <span style={{ position: "absolute", inset: 0, borderRadius: "50%", border: `1px solid ${HX.line}` }} />
+          <span style={{ position: "absolute", inset: 22, borderRadius: "50%", border: "1px solid rgba(52,211,153,.35)", background: "radial-gradient(circle, rgba(52,211,153,.10), rgba(52,211,153,0) 70%)" }} />
+          <HelmetArt spec={d} size={150} />
+        </div>
+        <span data-hx-ok="" style={{ display: "flex", alignItems: "center", justifyContent: "center", width: 40, height: 40, marginTop: 14, borderRadius: "50%", background: HX.green }}><Icon name="check" size={22} color="#000" sw={3} /></span>
+        <h2 style={{ margin: "16px 0 0", fontFamily: F_HEAD, fontSize: 24, fontWeight: 800 }}>Casco salvato</h2>
+        <p style={{ margin: "6px 0 0", fontFamily: F_BODY, fontSize: 13, fontWeight: 600, color: HX.muted }}>Puoi cambiarlo quando vuoi.</p>
+      </div>
+      <button className="press" data-helmet-done="" onClick={onClose} style={{ width: "100%", height: 52, borderRadius: 16, background: HX.text, fontFamily: F_HEAD, fontSize: 16, fontWeight: 800, color: "#000" }}>Fatto</button>
+      <button className="press" onClick={again} style={{ marginTop: 6, width: "100%", height: 44, fontFamily: F_BODY, fontSize: 14, fontWeight: 700, color: HX.muted }}>Modifica ancora</button>
     </div>
   );
-  const num = d.number == null ? "" : String(d.number);
-  const step = k => set("number", Math.max(0, Math.min(99, (d.number == null ? (k > 0 ? -1 : 1) : d.number) + k)));
   return (
-    <div style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,.8)", zIndex: 640, display: "flex", alignItems: "flex-end" }} onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
-      <div className="scrollcol" data-helmet-editor="" style={{ background: C.card, borderRadius: "24px 24px 0 0", width: "100%", maxHeight: "92%", padding: "18px 20px 22px" }}>
-        <div style={{ display: "flex", alignItems: "center", marginBottom: 4 }}>
-          <h2 style={{ flex: 1, fontFamily: F_HEAD, fontWeight: 900, fontStyle: "italic", fontSize: 17, color: C.text, margin: 0 }}>IL TUO CASCO</h2>
-          <button className="press" aria-label="Chiudi" onClick={onClose} style={{ width: 32, height: 32, borderRadius: "50%", background: "rgba(255,255,255,.08)", display: "flex", alignItems: "center", justifyContent: "center" }}><Icon name="close" size={13} sw={2.2} /></button>
-        </div>
-        <div style={{ display: "flex", justifyContent: "center", padding: "10px 0 4px", background: "radial-gradient(60% 70% at 50% 55%, rgba(255,255,255,.07), rgba(255,255,255,0))" }}>
-          <HelmetArt spec={d} size={150} visorOpen={!closing} />
-        </div>
-        <div style={head}>COLORE DI BASE</div>
-        {swatches("base", Colors.PALETTE, (
-          <>
-            <button className="press" aria-label="Colore dei tasti" aria-pressed={d.base == null ? "true" : "false"} onClick={() => set("base", null)} style={{ ...sw(d.base == null, C.accent), display: "flex", alignItems: "center", justifyContent: "center" }}><Icon name="palette" size={14} color={C.onAccent} /></button>
-            <label style={{ position: "relative", ...sw(false, "conic-gradient(#FF1801, #FFD100, #4AE54A, #27F4D2, #3671C6, #A142F4, #FF87BC, #FF1801)"), overflow: "hidden", cursor: "pointer" }}>
-              <input type="color" aria-label="Scegli tu il colore di base" value={(d.base || C.accent).toLowerCase()} onChange={e => set("base", e.target.value)} style={{ position: "absolute", inset: 0, opacity: 0, width: "100%", height: "100%", border: "none", padding: 0 }} />
-            </label>
-          </>
+    <div data-helmet-editor="" role="dialog" aria-modal="true" aria-label="Il tuo casco" style={{ position: "absolute", inset: 0, zIndex: 640, background: HX.bg, color: HX.text, display: "flex", flexDirection: "column", boxSizing: "border-box", paddingTop: "calc(env(safe-area-inset-top, 0px) + 8px)" }}>
+      <style>{HX_CSS}</style>
+      <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "0 20px", minHeight: 52, flexShrink: 0 }}>
+        <button className="press" aria-label="Indietro" onClick={() => { if (!closing) onClose(); }} style={{ display: "flex", alignItems: "center", justifyContent: "center", width: 40, height: 40, borderRadius: 20, background: HX.key, flexShrink: 0 }}><Icon name="back" size={20} color={HX.text} sw={2.2} /></button>
+        <h2 style={{ margin: 0, fontFamily: F_HEAD, fontSize: 20, fontWeight: 800 }}>Il tuo casco</h2>
+      </div>
+      <div style={{ display: "flex", flexDirection: "column", alignItems: "center", padding: "6px 0 2px", flexShrink: 0 }}>
+        <HelmetArt spec={d} size={136} visorOpen={!closing} />
+        <span aria-hidden="true" style={{ width: 130, height: 12, marginTop: -2, borderRadius: "50%", background: "radial-gradient(closest-side, rgba(52,211,153,.28), rgba(52,211,153,0))" }} />
+      </div>
+      <div role="tablist" aria-label="Parti del casco" style={{ display: "flex", gap: 4, margin: "10px 20px 0", padding: 4, borderRadius: 22, background: HX.card, border: `1px solid ${HX.line}`, flexShrink: 0 }}>
+        {[["colori", "Colori"], ["disegno", "Disegno"], ["visiera", "Visiera"]].map(([k, l]) => (
+          <button key={k} role="tab" aria-selected={tab === k} data-helmet-tab={k} className="press" onClick={() => setTab(k)} style={{ flex: 1, height: 36, borderRadius: 18, background: tab === k ? HX.text : "transparent", fontFamily: F_BODY, fontSize: 14, fontWeight: 800, color: tab === k ? "#000" : HX.text }}>{l}</button>
         ))}
-        <div style={head}>PRIMO COLORE DEL DISEGNO</div>
-        {swatches("c1", [...HELMET_EXTRA, ...Colors.PALETTE])}
-        <div style={head}>SECONDO COLORE DEL DISEGNO</div>
-        {swatches("c2", [...HELMET_EXTRA, ...Colors.PALETTE])}
-        <div style={head}>DISEGNO</div>
-        {chips("pattern", HELMET_PATTERNS)}
-        <div style={head}>NUMERO</div>
-        <div data-helmet-opt="number" style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          <button className="press" aria-label="Numero più basso" onClick={() => step(-1)} style={{ ...aChip(false), width: 38, justifyContent: "center", fontSize: 16 }}>−</button>
-          <input data-helmet-number="" type="number" inputMode="numeric" min="0" max="99" aria-label="Numero (0-99)" placeholder="–" value={num} onChange={e => set("number", e.target.value === "" ? null : e.target.value)}
-            style={{ width: 92, padding: "9px 12px", borderRadius: 11, background: C.bg, border: `1px solid ${C.border}`, fontFamily: F_HEAD, fontWeight: 900, fontStyle: "italic", fontSize: 18, color: C.text, textAlign: "center" }} />
-          <button className="press" aria-label="Numero più alto" onClick={() => step(1)} style={{ ...aChip(false), width: 38, justifyContent: "center", fontSize: 16 }}>+</button>
-          <span style={{ fontFamily: F_BODY, fontSize: 11.5, color: C.dim }}>da 0 a 99, vuoto = senza</span>
-        </div>
-        <div style={head}>VISIERA</div>
-        {chips("visor", HELMET_VISORS)}
-        <div style={head}>FINITURA</div>
-        {chips("finish", HELMET_FINISHES)}
-        <button className="press" onClick={save} style={{ display: "block", width: "100%", marginTop: 20, padding: "14px 0", borderRadius: 14, background: C.accent, fontFamily: F_HEAD, fontWeight: 900, fontStyle: "italic", fontSize: 14, color: C.onAccent }}>SALVA IL CASCO</button>
-        <button className="press" onClick={onClose} style={{ display: "block", width: "100%", padding: "12px 0", fontFamily: F_BODY, fontWeight: 600, fontSize: 13, color: C.muted }}>Annulla</button>
+      </div>
+      <div className="scrollcol" style={{ flex: 1, minHeight: 0, overflowY: "auto", padding: "0 20px 12px" }}>
+        {tab === "colori" && (
+          <div data-hx-tab="" key="colori">
+            <div style={{ display: "flex", gap: 8, marginTop: 16 }}>
+              {[["base", "Base"], ["c1", "Disegno 1"], ["c2", "Disegno 2"]].map(([k, l]) => (
+                <button key={k} className="press" aria-pressed={target === k ? "true" : "false"} data-helmet-target={k} onClick={() => setTarget(k)} style={{ display: "flex", alignItems: "center", gap: 8, height: 40, padding: "0 12px", borderRadius: 12, background: target === k ? HX.key : "transparent", border: `1px solid ${target === k ? HX.text : HX.line}`, fontFamily: F_BODY, fontSize: 13, fontWeight: 800, color: HX.text }}>
+                  <span style={{ width: 14, height: 14, borderRadius: "50%", background: (k === "base" ? d.base || C.accent : d[k]), boxShadow: "inset 0 0 0 1px rgba(255,255,255,.3)" }} />{l}
+                </button>
+              ))}
+            </div>
+            {head(target === "base" ? "Colore di base" : target === "c1" ? "Primo colore del disegno" : "Secondo colore del disegno")}
+            <div data-helmet-opt={target} style={{ display: "flex", flexWrap: "wrap", gap: 12 }}>
+              {target === "base" && <button className="press" aria-label="Colore dei tasti" aria-pressed={d.base == null ? "true" : "false"} onClick={() => pick("base", null)} style={{ ...ring(d.base == null), background: C.accent, display: "flex", alignItems: "center", justifyContent: "center" }}><Icon name="palette" size={15} color={C.onAccent} /></button>}
+              <label style={{ position: "relative", ...ring(false), background: "conic-gradient(#FF1801, #FFD100, #4AE54A, #27F4D2, #3671C6, #A142F4, #FF87BC, #FF1801)", overflow: "hidden", cursor: "pointer" }}>
+                <input type="color" aria-label={"Scegli tu il colore: " + (target === "base" ? "base" : target === "c1" ? "disegno 1" : "disegno 2")} value={String(cur || C.accent).toLowerCase()} onChange={e => set(target, e.target.value)} style={{ position: "absolute", inset: 0, opacity: 0, width: "100%", height: "100%", border: "none", padding: 0 }} />
+              </label>
+              {colors.map(c => <button key={c.color} className="press" aria-label={c.name} aria-pressed={cur === c.color ? "true" : "false"} onClick={() => pick(target, c.color)} style={{ ...ring(cur === c.color), background: c.color }} />)}
+            </div>
+          </div>
+        )}
+        {tab === "disegno" && (
+          <div data-hx-tab="" key="disegno">
+            {head("Disegno", nameOf(HELMET_PATTERNS, d.pattern))}
+            <div data-helmet-opt="pattern" style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(0, 1fr))", gap: 8 }}>
+              {HELMET_PATTERNS.map(o => tile(d.pattern === o.id, () => pick("pattern", o.id), o.name, <HelmetArt spec={{ ...d, pattern: o.id, number: null }} size={40} />))}
+            </div>
+            {head("Numero")}
+            <div data-helmet-opt="number" style={{ display: "flex", alignItems: "center", gap: 10 }}>
+              <button className="press" aria-label="Numero più basso" onClick={() => set("number", Math.max(0, Math.min(99, (d.number == null ? 1 : d.number) - 1)))} style={{ width: 44, height: 44, borderRadius: 22, background: HX.key, fontFamily: F_HEAD, fontSize: 22, fontWeight: 800, color: HX.text }}>−</button>
+              <input data-helmet-number="" type="number" inputMode="numeric" min="0" max="99" aria-label="Numero (0-99)" placeholder="–" value={d.number == null ? "" : String(d.number)} onChange={e => set("number", e.target.value === "" ? null : e.target.value)}
+                style={{ width: 72, height: 52, borderRadius: 14, background: HX.card, border: `1px solid ${HX.line}`, fontFamily: F_HEAD, fontWeight: 900, fontStyle: "italic", fontSize: 24, color: HX.text, textAlign: "center" }} />
+              <button className="press" aria-label="Numero più alto" onClick={() => set("number", Math.max(0, Math.min(99, (d.number == null ? -1 : d.number) + 1)))} style={{ width: 44, height: 44, borderRadius: 22, background: HX.key, fontFamily: F_HEAD, fontSize: 22, fontWeight: 800, color: HX.text }}>+</button>
+              <span style={{ flex: 1, fontFamily: F_BODY, fontSize: 12, fontWeight: 600, lineHeight: "16px", color: HX.muted }}>Da 0 a 99. Vuoto vuol dire senza numero.</span>
+            </div>
+          </div>
+        )}
+        {tab === "visiera" && (
+          <div data-hx-tab="" key="visiera">
+            {head("Visiera", nameOf(HELMET_VISORS, d.visor))}
+            <div data-helmet-opt="visor" style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 8 }}>
+              {HELMET_VISORS.map(o => {
+                const [v0, v1] = VISOR_STOPS[o.id] || VISOR_STOPS.smoke;
+                return tile(d.visor === o.id, () => pick("visor", o.id), o.name, (
+                  <svg viewBox="46 24 52 26" width="58" height="26" aria-hidden="true"><defs><linearGradient id={"hxv" + o.id} x1="0" y1="0" x2="1" y2="1"><stop offset="0" stopColor={v0} /><stop offset="1" stopColor={v1} /></linearGradient></defs><path d={HELMET_VISOR} fill={`url(#hxv${o.id})`} stroke="#07080A" strokeWidth="1.2" /></svg>
+                ));
+              })}
+            </div>
+            {head("Finitura", nameOf(HELMET_FINISHES, d.finish))}
+            <div data-helmet-opt="finish" style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 8 }}>
+              {HELMET_FINISHES.map(o => tile(d.finish === o.id, () => pick("finish", o.id), o.name, <HelmetArt spec={{ ...d, finish: o.id, number: null }} size={44} />))}
+            </div>
+          </div>
+        )}
+      </div>
+      <div style={{ padding: "10px 20px calc(env(safe-area-inset-bottom, 0px) + 14px)", flexShrink: 0, background: HX.bg }}>
+        <button className="press" data-helmet-save="" onClick={save} style={{ display: "block", width: "100%", height: 52, borderRadius: 16, background: HX.text, fontFamily: F_HEAD, fontSize: 16, fontWeight: 800, color: "#000" }}>Salva il casco</button>
+        <button className="press" onClick={() => { if (!closing) onClose(); }} style={{ display: "block", width: "100%", height: 42, marginTop: 4, fontFamily: F_BODY, fontSize: 14, fontWeight: 700, color: HX.muted }}>Annulla</button>
       </div>
     </div>
   );
@@ -1781,11 +1849,12 @@ function BirthDateField({ id, value, onChange, minYear, maxYear }) {
 }
 
 // Scheda "Su di te" del profilo: anno di nascita (manettino), da quanti anni segui la F1 (contachilometri), tipo di tifoso.
-function AboutCard({ about, onSave }) {
+function AboutCard({ about, onSave, startEdit = false, onDone = null }) {
   const a = about || ABOUT_INIT;
-  const [edit, setEdit] = useState(false);
+  const [edit, setEditRaw] = useState(startEdit);
+  const setEdit = v => { setEditRaw(v); if (!v && onDone) onDone(); };
   useBack(edit, () => setEdit(false));
-  const [draft, setDraft] = useState(a);
+  const [draft, setDraft] = useState(() => (startEdit ? { ...a, years: yearsOf(a) } : a));
   const row = (key, label, value, first) => (
     <div key={key} data-about-row={key} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, padding: "14px 16px", borderTop: first ? "none" : `1px solid ${C.divider}` }}>
       <span style={{ fontFamily: F_BODY, fontSize: 13.5, color: C.dim, whiteSpace: "nowrap" }}>{label}</span>
@@ -4862,8 +4931,36 @@ function usePixelShift(on) {
   return Oled.pixelShift(now);
 }
 
+// 22/11: la pagina che spiega "Schermo sempre attivo" prima di accenderlo (stile della finestra di HeroUI mandata da
+// Edoardo: icona in un cerchio, titolo, testo, tasto largo, X in alto). Sta dentro lo stage del Second Screen, quindi è
+// in orizzontale come il telefono: icona a sinistra, testo a destra. Entrata solo con opacity e transform.
+function AwakeInfo({ onOk, onClose }) {
+  return (
+    <div data-awake-info="" role="dialog" aria-modal="true" aria-labelledby="awakeTitle" onClick={e => { if (e.target === e.currentTarget) onClose(); }} style={{ position: "absolute", inset: 0, zIndex: 40, display: "flex", alignItems: "center", justifyContent: "center", padding: 16, background: "rgba(0,0,0,.66)" }}>
+      <style>{`@keyframes awkin{from{opacity:0;transform:translateY(8px) scale(.98)}to{opacity:1;transform:none}}@media (prefers-reduced-motion: reduce){[data-awake-box]{animation:none!important}}`}</style>
+      <div data-awake-box="" style={{ position: "relative", display: "flex", alignItems: "flex-start", gap: 18, width: "100%", maxWidth: 560, maxHeight: "100%", overflowY: "auto", boxSizing: "border-box", padding: "22px 22px 20px", borderRadius: 22, background: "#18181B", border: "1px solid #27272A", boxShadow: "0 20px 60px rgba(0,0,0,.5)", animation: "awkin .22s ease-out both" }}>
+        <button className="press" aria-label="Chiudi" onClick={onClose} style={{ position: "absolute", top: 8, right: 8, width: 36, height: 36, borderRadius: 18, display: "flex", alignItems: "center", justifyContent: "center", background: "transparent" }}><Icon name="close" size={18} color="#A1A1AA" sw={2.2} /></button>
+        <span style={{ display: "flex", alignItems: "center", justifyContent: "center", width: 52, height: 52, borderRadius: 26, background: "#27272A", flexShrink: 0 }}><Icon name="sun" size={24} color="#F4F4F5" /></span>
+        <div style={{ flex: 1, minWidth: 0, paddingRight: 24 }}>
+          <h2 id="awakeTitle" style={{ margin: "4px 0 0", fontFamily: F_HEAD, fontSize: 18, fontWeight: 800, color: "#F4F4F5" }}>Schermo sempre attivo</h2>
+          <p style={{ margin: "8px 0 0", fontFamily: F_BODY, fontSize: 13.5, lineHeight: "19px", color: "#D4D4D8" }}>Finché il Second Screen è aperto il telefono non si spegne da solo: mappa, tempi e chat restano accesi accanto alla TV per tutta la gara.</p>
+          <p style={{ margin: "8px 0 0", fontFamily: F_BODY, fontSize: 11.5, lineHeight: "16px", color: "#A1A1AA" }}>Nessun rischio per il telefono: chiudendo il Second Screen o toccando di nuovo l'icona torna tutto come prima. Consuma solo un po' più di batteria.</p>
+          <button className="press" data-awake-ok="" onClick={onOk} style={{ marginTop: 16, width: "100%", height: 44, borderRadius: 14, background: "#F4F4F5", fontFamily: F_HEAD, fontSize: 14.5, fontWeight: 800, color: "#000" }}>Attiva</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function SecondScreen({ race, live, st, standings, layout, setLayout, prefs, setPrefs, vote, onVote, notice, onCloseNotice, onClose, chat, blocked = [], onChatSend }) {
-  useKeepAwake(true);   // 8/11: schermo sempre acceso finché il Second Screen è aperto
+  // 22/11 (Edoardo: "mettere davvero la funzione Schermo sempre attivo come bottoncino senza scritta solo icona"):
+  // prima era sempre acceso; ora si accende con l'icona del sole. La prima volta una pagina spiega cos'è (AwakeInfo).
+  const [awake, setAwake] = useState(() => local.get("bt-ss-awake") === true);
+  const [awakeInfo, setAwakeInfo] = useState(false);
+  useKeepAwake(awake);
+  useBack(awakeInfo, () => setAwakeInfo(false));
+  const awakeSet = v => { setAwake(v); local.set("bt-ss-awake", v); fx.buzz(v ? "select" : "light"); };
+  const awakeTap = () => { if (awake) awakeSet(false); else if (local.get("bt-ss-awake-seen")) awakeSet(true); else setAwakeInfo(true); };
   const shift = usePixelShift(true);
   const [edit, setEdit] = useState(false);
   const [flip, setFlip] = useState(false);
@@ -5055,6 +5152,7 @@ function SecondScreen({ race, live, st, standings, layout, setLayout, prefs, set
   return (
     <div className="ss-root" data-ss="" role="dialog" aria-label="Second Screen" style={{ background: bg }}>
       <div className={"ss-stage ss-shift" + (flip ? " ss-flip" : "")} data-ss-stage="" data-ss-shift={shift.x + "," + shift.y} style={{ background: bg, padding: "8px 10px 10px", gap: 8, translate: `${shift.x}px ${shift.y}px` }}>
+        {awakeInfo && <AwakeInfo onOk={() => { local.set("bt-ss-awake-seen", true); setAwakeInfo(false); awakeSet(true); }} onClose={() => setAwakeInfo(false)} />}
         <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
           <span style={{ width: 7, height: 7, borderRadius: "50%", background: st ? C.accentInk : C.dim }} />
           <span style={{ fontFamily: F_HEAD, fontWeight: 900, fontStyle: "italic", fontSize: 13, color: C.text, whiteSpace: "nowrap" }}>SECOND SCREEN</span>
@@ -5062,6 +5160,7 @@ function SecondScreen({ race, live, st, standings, layout, setLayout, prefs, set
           {st && FLAG_UI[st.flag] && <span style={{ padding: "3px 8px", borderRadius: 7, background: FLAG_UI[st.flag].color, fontFamily: F_HEAD, fontWeight: 900, fontSize: 10, color: FLAG_UI[st.flag].ink, whiteSpace: "nowrap" }}>{st.flag === "yellow" ? "GIALLA" : st.flag === "red" ? "ROSSA" : st.flag.toUpperCase()}</span>}
           <div style={{ flex: 1 }} />
           {wx && <button className="press" aria-label="Radar meteo sulla mappa" aria-pressed={prefs.radar ? "true" : "false"} onClick={() => setPrefs(p => ({ ...p, radar: !p.radar }))} style={{ height: 28, padding: "0 10px", borderRadius: 9, background: prefs.radar ? "rgba(76,141,255,.22)" : "rgba(255,255,255,.08)", border: `1px solid ${prefs.radar ? "#4C8DFF" : C.border}`, display: "flex", alignItems: "center", gap: 5, fontFamily: F_HEAD, fontWeight: 800, fontSize: 11, color: "#fff" }}><SkyIcon kind="rain" size={14} bg="transparent" />Radar</button>}
+          <button className="press" aria-label="Schermo sempre attivo" aria-pressed={awake ? "true" : "false"} data-ss-awake={awake ? "on" : "off"} onClick={awakeTap} style={{ width: 32, height: 28, borderRadius: 9, background: awake ? C.accent : "rgba(255,255,255,.08)", border: `1px solid ${awake ? C.accent : C.border}`, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}><Icon name="sun" size={14} color="#fff" /></button>
           {iconBtn("Modifica grafiche", <Icon name="grid" size={12} color="#fff" />, () => { setEdit(e => !e); setPick(null); setMsg(null); setSheet(null); }, edit)}
           {iconBtn("Ruota lo schermo", <Icon name="rotate" size={12} color="#fff" />, () => setFlip(f => !f))}
           {iconBtn("Chiudi Second Screen", <Icon name="close" size={12} color="#fff" sw={2.4} />, onClose)}
@@ -9023,63 +9122,95 @@ function ChatProfileSheet({ msg, messages, trophyList = TROPHIES, myWon = {}, lo
   const team = prof && prof.t ? teamById(prof.t) : null, drv = prof && prof.d ? driverById(prof.d) : null;
   const won = prof && prof.w ? trophyList.filter(t => prof.w.includes(t.id)) : [];
   const medal = (pubNewer && pub.medal) || (withProf && withProf.medal) || msg.medal;
+  // 22/11 (Edoardo: "anche quella visibile agli altri": grafica "B&T: Profilo pubblico", schede 3 e 4): casco nel cerchio
+  // coi colori della scuderia, nome, #scuderia #pilota, "Trofei ottenuti" a piastrelle e "Tutti i trofei" che apre la
+  // pagina dei trofei di quella persona. Solo dati veri: casco, tifo e trofei arrivano col suo profilo (prof).
+  const [allTrophies, setAllTrophies] = useState(false);
+  const PX = { card: "#18181B", line: "#27272A", key: "#1C1C1F", text: "#F4F4F5", muted: "#A1A1AA", red: "#FF1801" };
+  const ring = team ? team.color : PX.red;
+  const TROPHY_TINTS = ["#64C4FF", "#FACC15", "#34D399", "#A78BFA", "#FB923C", "#F472B6"];
+  const tname = t => (t.secret && !myWon[t.id] ? SECRET_NAME : t.name);
+  const trophyTile = (t, i) => {
+    const c = TROPHY_TINTS[i % TROPHY_TINTS.length];
+    return (
+      <div key={t.id} data-chat-profile-trophy={t.id} style={{ display: "flex", alignItems: "center", gap: 10, minHeight: 72, padding: "10px 10px", borderRadius: 16, background: "#0F0F11", border: `1px solid ${PX.line}` }}>
+        <span style={{ display: "flex", alignItems: "center", justifyContent: "center", width: 40, height: 40, borderRadius: "50%", background: alpha(c, .16), border: `2px solid ${alpha(c, .6)}`, flexShrink: 0 }}><Icon name="trophy" size={17} color={c} /></span>
+        <span style={{ minWidth: 0 }}>
+          <span style={{ display: "block", fontFamily: F_BODY, fontSize: 13.5, fontWeight: 800, color: PX.text, lineHeight: "17px" }}>{tname(t)}</span>
+          {!(t.secret && !myWon[t.id]) && t.how && <span style={{ display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden", marginTop: 2, fontFamily: F_BODY, fontSize: 11, fontWeight: 600, lineHeight: "14px", color: PX.muted }}>{t.how}</span>}
+        </span>
+      </div>
+    );
+  };
+  const tags = (
+    <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+      {team && <span data-chat-profile-team={team.id} style={{ padding: "3px 9px", borderRadius: 9, background: alpha(team.color, .16), border: `1px solid ${alpha(team.color, .45)}`, fontFamily: F_BODY, fontSize: 12, fontWeight: 800, color: Colors.contrast(team.color, "#000000") >= 3 ? team.color : PX.text }}>#{team.name.replace(/\s+/g, "")}</span>}
+      {drv && <span style={{ padding: "3px 9px", borderRadius: 9, background: alpha(drv.color || PX.red, .16), border: `1px solid ${alpha(drv.color || PX.red, .45)}`, fontFamily: F_BODY, fontSize: 12, fontWeight: 800, color: drv.color && Colors.contrast(drv.color, "#000000") >= 3 ? drv.color : PX.text }}>#{String(drv.name || drv.full).replace(/\s+/g, "")}</span>}
+    </div>
+  );
   return (
     <div data-chat-profile={msg.id} role="dialog" aria-modal="true" aria-label={"Profilo di " + msg.from} onClick={e => { if (e.target === e.currentTarget) onClose(); }}
       style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,.62)", zIndex: 560, display: "flex", alignItems: "flex-end" }}>
-      <div style={{ width: "100%", maxHeight: "86%", overflowY: "auto", boxSizing: "border-box", background: "#111114", borderTop: "1px solid rgba(255,255,255,.12)", borderRadius: "24px 24px 0 0", padding: "10px 18px 22px", display: "flex", flexDirection: "column", gap: 14 }}>
+      <div style={{ width: "100%", maxHeight: "88%", overflowY: "auto", boxSizing: "border-box", background: PX.card, borderTop: `1px solid ${PX.line}`, borderRadius: "24px 24px 0 0", padding: "10px 18px 22px", display: "flex", flexDirection: "column", gap: 14 }}>
         <div aria-hidden="true" style={{ alignSelf: "center", width: 40, height: 5, borderRadius: 3, background: "rgba(255,255,255,.22)" }} />
-        <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
-          <div style={{ width: 74, height: 74, borderRadius: 18, background: C.card, border: `1px solid ${C.border}`, position: "relative", overflow: "hidden", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-            {team && <div aria-hidden="true" style={{ position: "absolute", top: 0, left: 0, right: 0, height: 6, background: team.color }} />}
-            {prof && prof.h ? <HelmetArt spec={prof.h} size={56} />
-              : <span data-helmet-placeholder="" style={{ display: "flex", opacity: .32 }}><HelmetArt spec={{ base: "#6A6A73", c1: "#6A6A73", c2: "#6A6A73", pattern: "none", finish: "matte" }} size={56} /></span>}
-          </div>
-          <div style={{ minWidth: 0, display: "flex", flexDirection: "column", gap: 5 }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
-              <h2 style={{ margin: 0, fontFamily: F_HEAD, fontWeight: 900, fontStyle: "italic", fontSize: 23, lineHeight: 1.05, color: C.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{msg.from}</h2>
-              {medal && <Medal medal={medal} size={18} />}
+        {allTrophies ? (
+          <>
+            <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+              <button className="press" aria-label="Indietro" onClick={() => setAllTrophies(false)} style={{ display: "flex", alignItems: "center", justifyContent: "center", width: 40, height: 40, borderRadius: 20, background: PX.key, flexShrink: 0 }}><Icon name="back" size={20} color={PX.text} sw={2.2} /></button>
+              <h2 style={{ margin: 0, fontFamily: F_HEAD, fontSize: 19, fontWeight: 800, color: PX.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>Trofei di {msg.from}</h2>
             </div>
-            {team && <span data-chat-profile-team={team.id} style={{ display: "flex", alignItems: "center", gap: 6, fontFamily: F_BODY, fontSize: 13, color: C.muted }}><span style={{ width: 8, height: 8, borderRadius: "50%", background: team.color, flexShrink: 0 }} />Tifa <b style={{ color: C.text, fontWeight: 600 }}>{team.name}</b></span>}
-            {drv && <span style={{ fontFamily: F_BODY, fontSize: 13, color: C.muted }}>Pilota del cuore: <b style={{ color: C.text, fontWeight: 600 }}>{drv.full || drv.name}</b></span>}
-            {prof && prof.f && <span style={{ fontFamily: F_BODY, fontSize: 12, color: C.dim }}>{fanLabel(prof.f)}</span>}
-            {pub && pub.lv && <span data-chat-profile-level={pub.lv} style={{ fontFamily: F_BODY, fontSize: 12.5, color: C.muted }}>Livello del tifoso: <b style={{ color: C.text, fontWeight: 700 }}>{pub.lv}</b>{pub.xp != null ? ` · ${pub.xp} punti` : ""}</span>}
-            {!team && !drv && pub !== undefined && <span data-chat-profile-nofav="" style={{ fontFamily: F_BODY, fontSize: 13, color: C.dim }}>Squadra e pilota del cuore non ancora scelti</span>}
-          </div>
-        </div>
-        <div data-chat-profile-stats="" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
-          {[["MESSAGGI QUI", String(theirs.length)], ["IN CHAT DAL", firstAt && isFinite(firstAt) ? fmtDMY(firstAt) : "Oggi"]].map(([k, v]) => (
-            <div key={k} style={{ padding: "10px 12px", borderRadius: 14, background: C.card, border: `1px solid ${C.border}` }}>
-              <div style={{ fontFamily: F_HEAD, fontWeight: 900, fontStyle: "italic", fontSize: 10, letterSpacing: .6, color: C.dim }}>{k}</div>
-              <div style={{ fontFamily: F_HEAD, fontWeight: 900, fontSize: 19, color: C.text, fontVariantNumeric: "tabular-nums", marginTop: 2 }}>{v}</div>
-            </div>
-          ))}
-        </div>
-        {prof ? (
-          <section aria-label={"Trofei di " + msg.from} data-chat-profile-trophies={won.length} style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 16, padding: "12px 12px 10px" }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 10 }}>
-              <span style={{ fontFamily: F_HEAD, fontWeight: 900, fontStyle: "italic", fontSize: 15, color: C.text }}>TROFEI</span>
-              <span style={{ fontFamily: F_BODY, fontSize: 12, color: C.muted }}><b style={{ color: C.text }}>{won.length}</b> di {trophyList.length}</span>
-            </div>
-            {won.length ? (
-              <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-                {won.map(t => (
-                  <span key={t.id} data-chat-profile-trophy={t.id} style={{ display: "flex", alignItems: "center", gap: 5, padding: "5px 9px 5px 6px", borderRadius: 999, background: "rgba(231,179,76,.1)", border: "1px solid rgba(231,179,76,.4)", fontFamily: F_BODY, fontWeight: 600, fontSize: 11.5, color: C.text }}>
-                    <Icon name="trophy" size={12} color={C.gold} sw={2} />{t.secret && !myWon[t.id] ? SECRET_NAME : t.name}
-                  </span>
-                ))}
-              </div>
-            ) : <p style={{ margin: 0, fontFamily: F_BODY, fontSize: 12.5, color: C.dim }}>Nessun trofeo per ora.</p>}
-          </section>
+            <div data-chat-profile-alltrophies={won.length} style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 8 }}>{won.map(trophyTile)}</div>
+          </>
         ) : (
-          <section data-chat-profile-empty="" aria-label={"Trofei di " + msg.from} style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 16, padding: "12px 12px 12px" }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 6 }}>
-              <span style={{ fontFamily: F_HEAD, fontWeight: 900, fontStyle: "italic", fontSize: 15, color: C.text }}>TROFEI</span>
-              <span style={{ fontFamily: F_BODY, fontSize: 12, color: C.muted }}>{pub === undefined ? "…" : "–"} di {trophyList.length}</span>
+          <>
+            <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+              <div style={{ width: 76, height: 76, borderRadius: "50%", border: `3px solid ${ring}`, background: "#101013", boxShadow: `0 0 20px ${alpha(ring, .3)}`, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                {prof && prof.h ? <HelmetArt spec={prof.h} size={50} />
+                  : <span data-helmet-placeholder="" style={{ display: "flex", opacity: .32 }}><HelmetArt spec={{ base: "#6A6A73", c1: "#6A6A73", c2: "#6A6A73", pattern: "none", finish: "matte" }} size={50} /></span>}
+              </div>
+              <div style={{ minWidth: 0, display: "flex", flexDirection: "column", gap: 6 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
+                  <h2 style={{ margin: 0, fontFamily: F_HEAD, fontWeight: 800, fontSize: 22, lineHeight: 1.1, color: PX.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{msg.from}</h2>
+                  {medal && <Medal medal={medal} size={18} />}
+                </div>
+                {tags}
+                {drv && <span style={{ fontFamily: F_BODY, fontSize: 12.5, color: PX.muted }}>Pilota del cuore: <b style={{ color: PX.text, fontWeight: 700 }}>{drv.full || drv.name}</b></span>}
+                {prof && (prof.f || prof.y) && <span data-chat-profile-about="" style={{ fontFamily: F_BODY, fontSize: 12, color: PX.muted }}>{[prof.y != null && FOLLOW_STEPS[+prof.y] ? "Segue F1: " + FOLLOW_STEPS[+prof.y] : null, prof.f ? fanLabel(prof.f) : null].filter(Boolean).join(" · ")}</span>}
+                {pub && pub.lv && <span data-chat-profile-level={pub.lv} style={{ fontFamily: F_BODY, fontSize: 12.5, color: PX.muted }}>Livello del tifoso: <b style={{ color: PX.text, fontWeight: 700 }}>{pub.lv}</b>{pub.xp != null ? ` · ${pub.xp} punti` : ""}</span>}
+                {!team && !drv && pub !== undefined && <span data-chat-profile-nofav="" style={{ fontFamily: F_BODY, fontSize: 13, color: PX.muted }}>Squadra e pilota del cuore non ancora scelti</span>}
+              </div>
             </div>
-            <p style={{ margin: 0, fontFamily: F_BODY, fontSize: 12.5, lineHeight: 1.45, color: C.dim }}>{pub === undefined ? "Carico il profilo…" : `${msg.from} non ha ancora condiviso casco e trofei: arrivano appena apre l'app aggiornata.`}</p>
-          </section>
+            <div data-chat-profile-stats="" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+              {[["Messaggi qui", String(theirs.length)], ["In chat dal", firstAt && isFinite(firstAt) ? fmtDMY(firstAt) : "Oggi"]].map(([k, v]) => (
+                <div key={k} style={{ padding: "10px 12px", borderRadius: 14, background: "#0F0F11", border: `1px solid ${PX.line}` }}>
+                  <div style={{ fontFamily: F_BODY, fontWeight: 700, fontSize: 11.5, color: PX.muted }}>{k}</div>
+                  <div style={{ fontFamily: F_HEAD, fontWeight: 900, fontSize: 19, color: PX.text, fontVariantNumeric: "tabular-nums", marginTop: 2 }}>{v}</div>
+                </div>
+              ))}
+            </div>
+            {prof ? (
+              <section aria-label={"Trofei di " + msg.from} data-chat-profile-trophies={won.length}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 10 }}>
+                  <span style={{ fontFamily: F_BODY, fontWeight: 800, fontSize: 15, color: PX.text }}>Trofei ottenuti</span>
+                  <span style={{ fontFamily: F_BODY, fontSize: 12, color: PX.muted }}><b style={{ color: PX.text }}>{won.length}</b> di {trophyList.length}</span>
+                </div>
+                {won.length ? (
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 8 }}>{won.slice(0, 4).map(trophyTile)}</div>
+                ) : <p style={{ margin: 0, fontFamily: F_BODY, fontSize: 12.5, color: PX.muted }}>Nessun trofeo per ora.</p>}
+                {won.length > 4 && <button className="press" data-chat-profile-more="" onClick={() => setAllTrophies(true)} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", width: "100%", marginTop: 8, height: 48, padding: "0 14px", borderRadius: 14, background: "#0F0F11", border: `1px solid ${PX.line}`, fontFamily: F_BODY, fontSize: 14, fontWeight: 800, color: PX.text }}>Tutti i {won.length} trofei<Icon name="chevron" size={15} color={PX.muted} /></button>}
+              </section>
+            ) : (
+              <section data-chat-profile-empty="" aria-label={"Trofei di " + msg.from} style={{ background: "#0F0F11", border: `1px solid ${PX.line}`, borderRadius: 16, padding: 12 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 6 }}>
+                  <span style={{ fontFamily: F_BODY, fontWeight: 800, fontSize: 15, color: PX.text }}>Trofei ottenuti</span>
+                  <span style={{ fontFamily: F_BODY, fontSize: 12, color: PX.muted }}>{pub === undefined ? "…" : "–"} di {trophyList.length}</span>
+                </div>
+                <p style={{ margin: 0, fontFamily: F_BODY, fontSize: 12.5, lineHeight: 1.45, color: PX.muted }}>{pub === undefined ? "Carico il profilo…" : `${msg.from} non ha ancora condiviso casco e trofei: arrivano appena apre l'app aggiornata.`}</p>
+              </section>
+            )}
+            <button className="press" data-chat-profile-report="" onClick={() => { onReport && onReport(msg); onClose(); }} style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8, height: 48, borderRadius: 14, border: "1.5px solid rgba(255,90,95,.45)", fontFamily: F_HEAD, fontWeight: 800, fontSize: 14, color: "#FF7A7E" }}><Icon name="flag" size={15} color="#FF7A7E" /> Segnala {msg.from}</button>
+          </>
         )}
-        <button className="press" data-chat-profile-report="" onClick={() => { onReport && onReport(msg); onClose(); }} style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8, height: 48, borderRadius: 14, border: "1.5px solid rgba(255,90,95,.45)", fontFamily: F_HEAD, fontWeight: 800, fontSize: 14, color: "#FF7A7E" }}><Icon name="flag" size={15} color="#FF7A7E" /> Segnala {msg.from}</button>
       </div>
     </div>
   );
@@ -10276,7 +10407,47 @@ function TrophyCase({ trophies = {}, helmet = null, defs = TROPHIES, onOpen }) {
   );
 }
 
-function ProfiloScreen({ onPcLink = null, pcLinked = false, onNfc = null,onPromo = null, promoUntil = 0,tv = false, onTv = null, onChangelog = null, onHack = null, onCoffee = null, coffeePrice = null, fanLevel = null, reminders = true, onReminders = null, halfway = true, onHalfway = null, news = true, onNews = null, trophiesOn = true, onTrophiesOn = null, holidays = true, onHolidays = null, miniPit = true, onMiniPit = null, ig, onOpenIg, trial = null, trialUsed = false, onBack, onNotifiche, onPremium, onAdmin, onLogout, isPremium, onAbout, onHelp, onFeedback, aboutMe, onSaveAboutMe, favTeam, favDriver, onPickTeam, onPickDriver, guest, onLogin, onTerms, blocked = [], onUnblock, onDeleteAccount, savedCount = 0, onOpenSaved, account = null, onSaveName, isAdmin = false, onTheme, sounds = true, haptics = true, onSounds, onHaptics, helmet = null, onHelmet, trophies = {}, trophyProg = {}, trophyList = TROPHIES, onAdPrivacy = null }) {
+// 22/11 (Edoardo: "scroll fade" di animate-ui nel Profilo): i bordi sopra e sotto sfumano solo quando da quella parte
+// c'è altro da vedere, e le righe [data-sf] vicino al bordo si rimpiccioliscono un poco e sbiadiscono. Solo transform e
+// opacity (il blur della versione originale no: regola delle animazioni); con "Rimuovi animazioni" resta la sfumatura.
+function ScrollFadeCol({ size = 40, shrink = 0.03, children, style = null, ...rest }) {
+  const ref = useRef(null);
+  const kick = useRef(null);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return undefined;
+    const still = !!(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches);
+    let raf = 0;
+    const run = () => {
+      raf = 0;
+      const top = el.scrollTop, max = Math.max(0, el.scrollHeight - el.clientHeight);
+      const a = Math.min(1, top / size), b = Math.min(1, (max - top) / size);
+      const m = `linear-gradient(to bottom, rgba(0,0,0,${(1 - a).toFixed(3)}) 0px, #000 ${size}px, #000 calc(100% - ${size}px), rgba(0,0,0,${(1 - b).toFixed(3)}) 100%)`;
+      el.style.webkitMaskImage = m;
+      el.style.maskImage = m;
+      if (still) return;
+      const r = el.getBoundingClientRect();
+      el.querySelectorAll("[data-sf]").forEach(it => {
+        const q = it.getBoundingClientRect();
+        const up = q.top - r.top < size ? Math.min(1, 1 - (q.top - r.top) / size) * a : 0;
+        const down = r.bottom - q.bottom < size ? Math.min(1, 1 - (r.bottom - q.bottom) / size) * b : 0;
+        const t = Math.max(0, Math.min(1, Math.max(up, down)));
+        it.style.transform = t > 0.01 ? `scale(${(1 - shrink * t).toFixed(4)})` : "";
+        it.style.opacity = t > 0.01 ? (1 - 0.45 * t).toFixed(3) : "";
+      });
+    };
+    const on = () => { if (!raf) raf = requestAnimationFrame(run); };
+    kick.current = on;
+    run();
+    el.addEventListener("scroll", on, { passive: true });
+    window.addEventListener("resize", on);
+    return () => { kick.current = null; el.removeEventListener("scroll", on); window.removeEventListener("resize", on); if (raf) cancelAnimationFrame(raf); };
+  }, [size, shrink]);
+  useEffect(() => { if (kick.current) kick.current(); });   // righe che si aprono o cambiano: si ricalcola
+  return <div ref={ref} className="scrollcol" data-scroll-fade="" style={{ height: "100%", ...(style || {}) }} {...rest}>{children}</div>;
+}
+
+function ProfiloScreen({ pubHide = {}, onPubHide = null, onGoNotifiche = null, onPcLink = null, pcLinked = false, onNfc = null,onPromo = null, promoUntil = 0,tv = false, onTv = null, onChangelog = null, onHack = null, onCoffee = null, coffeePrice = null, fanLevel = null, reminders = true, onReminders = null, halfway = true, onHalfway = null, news = true, onNews = null, trophiesOn = true, onTrophiesOn = null, holidays = true, onHolidays = null, miniPit = true, onMiniPit = null, ig, onOpenIg, trial = null, trialUsed = false, onBack, onNotifiche, onPremium, onAdmin, onLogout, isPremium, onAbout, onHelp, onFeedback, aboutMe, onSaveAboutMe, favTeam, favDriver, onPickTeam, onPickDriver, guest, onLogin, onTerms, blocked = [], onUnblock, onDeleteAccount, savedCount = 0, onOpenSaved, account = null, onSaveName, isAdmin = false, onTheme, sounds = true, haptics = true, onSounds, onHaptics, helmet = null, onHelmet, trophies = {}, trophyProg = {}, trophyList = TROPHIES, onAdPrivacy = null }) {
   const ft = favTeam ? teamById(favTeam) : null;
   const fd = favDriver ? driverById(favDriver) : null;
   const favRows = [
@@ -10317,12 +10488,14 @@ function ProfiloScreen({ onPcLink = null, pcLinked = false, onNfc = null,onPromo
   // 8/11 (Edoardo): nel tuo profilo niente "Su di te" e "I miei preferiti" (li vedono gli altri quando aprono il tuo
   // profilo); si cambiano dalla pagina "Profilo pubblico".
   const [pubPage, setPubPage] = useState(false);
-  useBack(pubPage, () => setPubPage(false));
+  const [pubEdit, setPubEdit] = useState(false);
+  const [pubDraft, setPubDraft] = useState(null);
+  const [aboutOpen, setAboutOpen] = useState(false);
+  useBack(pubPage && !pubEdit, () => setPubPage(false));
+  useBack(pubEdit && !aboutOpen, () => setPubEdit(false));
   const rows = [
     { icon: "person", label: "Profilo pubblico", value: guest ? "Preferiti" : "Su di te e preferiti", onClick: () => setPubPage(true), chevron: true },
     { icon: "bell", label: "Notifiche", onClick: onNotifiche, chevron: true },
-    // 21/11 (Edoardo): il Second Screen grande sul PC, collegato col QR; il telefono fa da telecomando.
-    ...(onPcLink ? [{ icon: "tv", label: "Collega PC", value: pcLinked ? "Collegato" : null, onClick: onPcLink, chevron: true }] : []),
     // 22/11 (Edoardo): NFC, un tocco tra due telefoni per entrare nella lega dell'amico (e il QR per chi non l'ha).
     ...(onNfc ? [{ icon: "share", label: "NFC: avvicina e fai", onClick: onNfc, chevron: true }] : []),
     // 8/11 (Edoardo): colori, suoni, vibrazioni, temi delle feste, Pit Board e promemoria in una sola voce che si apre.
@@ -10335,9 +10508,7 @@ function ProfiloScreen({ onPcLink = null, pcLinked = false, onNfc = null,onPromo
       ...(onTv ? [{ icon: "tv", label: "Modalità TV: schermo sempre acceso", toggle: { on: !!tv, onChange: onTv }, sub: true }] : []),
       ...(onHolidays ? [{ icon: "sparkle", label: "Temi delle feste", toggle: { on: holidays !== false, onChange: onHolidays }, sub: true }] : []),
       ...(onMiniPit ? [{ icon: "stopwatch", label: "Pit Board in tutta l'app", toggle: { on: miniPit !== false, onChange: onMiniPit }, sub: true }] : []),
-      ...(onReminders ? [{ icon: "bell", label: "Promemoria sul telefono", toggle: { on: reminders !== false, onChange: onReminders }, sub: true }] : []),
-      ...(onNews ? [{ icon: "bell", label: "Novità da B&T sul telefono (anche a schermo bloccato)", toggle: { on: news !== false, onChange: onNews }, sub: true }] : []),
-      ...(onHalfway ? [{ icon: "flag", label: "Avviso a metà gara (se perdi la partenza)", toggle: { on: halfway !== false, onChange: onHalfway }, sub: true }] : []),
+      // 22/11 (Edoardo): promemoria, novità da B&T e avviso a metà gara sono passati nella pagina Notifiche
       ...(onTrophiesOn ? [{ icon: "trophy", label: "B&T Trophies dopo la sessione", toggle: { on: trophiesOn !== false, onChange: onTrophiesOn }, sub: true }] : []),
     ] : []),
     // 14/11 (Edoardo: "ci sono 2 bottoni admin"): niente più riga per gli admin, si entra solo dal bottone ADMIN qui sotto.
@@ -10347,6 +10518,9 @@ function ProfiloScreen({ onPcLink = null, pcLinked = false, onNfc = null,onPromo
     { icon: "star", label: "Offrici un caffè", onClick: onCoffee || undefined, ...(onCoffee ? { chevron: true, value: coffeePrice || undefined } : { badge: "IN ARRIVO" }) },
     // 21/11 (Edoardo): codici promo da 6 cifre (PromoSheet), subito sotto "Offrici un caffè"; con i giorni attivi dice
     // fino a quando.
+    // 21/11 (Edoardo): il Second Screen grande sul PC, collegato col QR; il telefono fa da telecomando. 22/11: subito
+    // sopra "Codice promo".
+    ...(onPcLink ? [{ icon: "tv", label: "Collega PC", value: pcLinked ? "Collegato" : null, onClick: onPcLink, chevron: true }] : []),
     ...(onPromo ? [{ icon: "ticket", label: "Codice promo", value: promoUntil > nowMs() ? "Pro fino al " + new Date(promoUntil).toLocaleDateString("it-IT", { day: "numeric", month: "short" }) : null, onClick: onPromo, chevron: true }] : []),
     { icon: "info", label: "Info su B&T", onClick: onAbout, chevron: true },
     { icon: "lock", label: "Privacy Policy", onClick: () => openUrl(PRIVACY_URL), chevron: true },
@@ -10355,34 +10529,149 @@ function ProfiloScreen({ onPcLink = null, pcLinked = false, onNfc = null,onPromo
     { icon: "doc", label: "Termini e Condizioni", onClick: onTerms, chevron: true },
   ];
   if (trophyPage && !guest) return <TrofeiPage items={trophyItems(trophyList, trophies, trophyProg)} onBack={() => setTrophyPage(false)} now={nowMs()} />;
-  if (pubPage) return (
-    <div className="scrollcol" data-profile-public="" style={{ height: "100%" }}>
-      <SubHeader title="PROFILO PUBBLICO" onBack={() => setPubPage(false)} />
-      {!guest && <p style={{ margin: "0 24px 16px", fontFamily: F_BODY, fontSize: 12.5, color: C.muted, lineHeight: 1.45 }}>Gli altri lo vedono quando aprono il tuo profilo dalla chat.</p>}
-      {!guest && waiting && <p data-profile-waiting="" role="status" style={{ margin: "0 20px 14px", padding: "10px 14px", borderRadius: 12, background: "rgba(255,255,255,.04)", border: `1px solid ${C.border}`, fontFamily: F_BODY, fontSize: 12.5, color: C.muted, lineHeight: 1.45 }}>{ACCOUNT_MSG["not-loaded"]}</p>}
-      {!guest && !waiting && <AboutCard about={aboutMe} onSave={onSaveAboutMe} />}
-      <div style={{ padding: "0 24px 10px" }}><span style={{ fontFamily: F_BODY, fontWeight: 700, fontSize: 11, color: C.dim, letterSpacing: 1 }}>I MIEI PREFERITI</span></div>
-      <div style={{ margin: "0 20px 8px", borderRadius: 18, background: C.card, border: `1px solid ${C.border}`, overflow: "hidden" }}>
-        {favRows.map((r, i) => (
-          <div key={r.key}>
-            <button className="press" onClick={r.onClick} style={{ display: "flex", alignItems: "center", gap: 12, width: "100%", padding: 14, textAlign: "left" }}>
-              {r.key === "driver" && fd ? <Headshot driver={fd} size={36} /> : <div style={{ width: 36, height: 36, borderRadius: 10, background: r.color ? r.color + "26" : "rgba(255,255,255,.06)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}><Icon name={r.icon} size={16} color={r.color || C.text} /></div>}
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontFamily: F_BODY, fontSize: 11, color: C.dim }}>{r.label}</div>
-                <div style={{ fontFamily: F_BODY, fontWeight: 600, fontSize: 14, color: r.color ? C.text : C.muted }}>{r.value}</div>
-              </div>
-              {r.tag && <span style={{ fontFamily: F_BODY, fontWeight: 700, fontSize: 11, color: r.color }}>{r.tag}</span>}
-              <Icon name="chevron" size={16} color={C.dim} />
-            </button>
-            {i < favRows.length - 1 && <div style={{ height: 1, background: C.divider, margin: "0 14px" }} />}
-          </div>
-        ))}
+  // 22/11 (Edoardo: "fai diventare questa la sezione profilo (anche quella visibile agli altri): B&T: Profilo pubblico").
+  // Pagina 1: come ti vedono gli altri (casco nel cerchio coi colori della scuderia, nome, #scuderia #pilota, Segue F1 e
+  // Tipo fan, i preferiti grandi, salvati e anno di nascita che restano tuoi). Pagina 2 "Modifica profilo": cosa possono
+  // vedere gli altri (pubHide, nei dati dell'account; i campi nascosti non partono col profilo della chat).
+  if (pubPage) {
+    const PX = { bg: "#000000", card: "#111113", line: "#1E1E22", key: "#1C1C1F", text: "#F4F4F5", muted: "#A1A1AA", red: "#FF1801" };
+    const ring = ft ? ft.color : PX.red;
+    const followTxt = aboutMe && Number.isInteger(aboutMe.years) ? yearsLabel(aboutMe.years) : aboutMe && FOLLOW_STEPS[aboutMe.follow] ? FOLLOW_STEPS[aboutMe.follow] : "Non indicato";
+    const fanTxt = aboutMe && aboutMe.fan ? fanLabel(aboutMe.fan) : "Non indicato";
+    const tag = (txt, color) => <span style={{ padding: "4px 10px", borderRadius: 10, background: alpha(color, .16), border: `1px solid ${alpha(color, .45)}`, fontFamily: F_BODY, fontSize: 13, fontWeight: 800, color: Colors.contrast(color, "#000000") >= 3 ? color : PX.text }}>{txt}</span>;
+    const hidden = k => !!(pubHide && pubHide[k]);
+    const backBtn = (onClick, label = "Indietro") => <button className="press" aria-label={label} onClick={onClick} style={{ display: "flex", alignItems: "center", justifyContent: "center", width: 40, height: 40, borderRadius: 20, background: PX.key, flexShrink: 0 }}><Icon name="back" size={20} color={PX.text} sw={2.2} /></button>;
+    const page = { height: "100%", background: PX.bg, color: PX.text, padding: "8px 20px 28px", boxSizing: "border-box" };
+    // "Su di te" (anni di F1, tipo di tifoso, nascita) si cambia toccando le schede o le righe: si apre già in modifica
+    const aboutSheet = aboutOpen && !guest ? (
+      <div role="dialog" aria-modal="true" aria-label="Su di te" onClick={e => { if (e.target === e.currentTarget) setAboutOpen(false); }} style={{ position: "absolute", inset: 0, zIndex: 650, background: "rgba(0,0,0,.72)", display: "flex", alignItems: "flex-end" }}>
+        <div className="scrollcol" style={{ width: "100%", maxHeight: "88%", overflowY: "auto", padding: "16px 0 10px", borderRadius: "24px 24px 0 0", background: C.bg }}>
+          <AboutCard about={aboutMe} onSave={onSaveAboutMe} startEdit onDone={() => setAboutOpen(false)} />
+        </div>
       </div>
-      <p style={{ margin: "0 24px 22px", fontFamily: F_BODY, fontSize: 11, color: C.dim, lineHeight: 1.45 }}>Riceverai una notifica quando pubblichiamo notizie sulla tua scuderia e sul tuo pilota del cuore. Puoi disattivarle dalla sezione Notifiche.</p>
-    </div>
-  );
+    ) : null;
+    if (pubEdit && !guest) {
+      const draft = pubDraft || {};
+      const rowsE = [
+        { k: "follow", label: "Segue F1", value: followTxt, onClick: () => setAboutOpen(true) },
+        { k: "fan", label: "Tipo fan", value: fanTxt, onClick: () => setAboutOpen(true) },
+        { k: "team", label: "Scuderia del cuore", value: ft ? ft.name : "Scegli", onClick: onPickTeam },
+        { k: "driver", label: "Pilota del cuore", value: fd ? fd.full : "Scegli", onClick: onPickDriver },
+      ];
+      return (
+        <div className="scrollcol" data-profile-public-edit="" style={{ ...page, display: "flex", flexDirection: "column" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 12, minHeight: 52 }}>
+            {backBtn(() => setPubEdit(false))}
+            <h1 style={{ margin: 0, fontFamily: F_HEAD, fontSize: 20, fontWeight: 800 }}>Modifica profilo</h1>
+          </div>
+          <p style={{ margin: "4px 0 14px", fontFamily: F_BODY, fontSize: 13, fontWeight: 600, color: PX.muted }}>Scegli cosa possono vedere gli altri tifosi.</p>
+          <div style={{ borderRadius: 18, background: PX.card, border: `1px solid ${PX.line}`, padding: "0 14px" }}>
+            {rowsE.map((r, i) => {
+              const vis = !draft[r.k];
+              return (
+                <div key={r.k} data-pub-row={r.k} style={{ display: "flex", alignItems: "center", gap: 10, minHeight: 64, padding: "8px 0", borderTop: i ? `1px solid ${PX.line}` : "none" }}>
+                  <button className="press" onClick={r.onClick} style={{ flex: 1, minWidth: 0, textAlign: "left", padding: "4px 0" }}>
+                    <span style={{ display: "block", fontFamily: F_BODY, fontSize: 12, fontWeight: 700, color: PX.muted }}>{r.label}</span>
+                    <span style={{ display: "flex", alignItems: "center", gap: 4, marginTop: 2, fontFamily: F_BODY, fontSize: 15, fontWeight: 800, color: PX.text }}><span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{r.value}</span><Icon name="chevron" size={14} color={PX.muted} /></span>
+                  </button>
+                  <span style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 4 }}>
+                    <span style={{ fontFamily: F_BODY, fontSize: 11, fontWeight: 700, color: PX.muted }}>{vis ? "Visibile" : "Nascosto"}</span>
+                    <Toggle on={vis} onChange={v => setPubDraft(d => ({ ...(d || {}), [r.k]: !v }))} label={r.label + ": visibile agli altri"} />
+                  </span>
+                </div>
+              );
+            })}
+            <div data-pub-row="birth" style={{ display: "flex", alignItems: "center", gap: 10, minHeight: 64, padding: "8px 0", borderTop: `1px solid ${PX.line}` }}>
+              <span style={{ flex: 1, minWidth: 0 }}>
+                <span style={{ display: "block", fontFamily: F_BODY, fontSize: 12, fontWeight: 700, color: PX.muted }}>Anno di nascita</span>
+                <span style={{ display: "block", marginTop: 2, fontFamily: F_BODY, fontSize: 15, fontWeight: 800 }}>{aboutMe && aboutMe.birth ? aboutMe.birth : "Non indicato"}</span>
+              </span>
+              <span style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 4 }}>
+                <span style={{ fontFamily: F_BODY, fontSize: 11, fontWeight: 700, color: PX.muted }}>Nascosto</span>
+                <Toggle on={false} disabled onChange={() => {}} label="Anno di nascita: sempre nascosto" />
+              </span>
+            </div>
+          </div>
+          <div style={{ display: "flex", gap: 10, alignItems: "flex-start", marginTop: 12, padding: "12px 14px", borderRadius: 16, background: PX.card, border: `1px solid ${PX.line}` }}>
+            <Icon name="lock" size={15} color={PX.muted} />
+            <span style={{ fontFamily: F_BODY, fontSize: 12.5, fontWeight: 600, lineHeight: "17px", color: PX.muted }}>L'anno di nascita non è mai pubblico: serve solo all'app.</span>
+          </div>
+          <div style={{ flex: 1, minHeight: 20 }} />
+          <button className="press" data-pub-save="" onClick={() => { onPubHide && onPubHide({ ...draft }); fx.play("tick"); setPubEdit(false); }} style={{ width: "100%", height: 52, borderRadius: 16, background: PX.text, fontFamily: F_HEAD, fontSize: 16, fontWeight: 800, color: "#000" }}>Salva</button>
+          {aboutSheet}
+        </div>
+      );
+    }
+    return (
+      <div className="scrollcol" data-profile-public="" style={page}>
+        <div style={{ display: "flex", alignItems: "center", gap: 12, minHeight: 52 }}>
+          {backBtn(() => setPubPage(false))}
+          <h1 style={{ flex: 1, margin: 0, fontFamily: F_HEAD, fontSize: 20, fontWeight: 800 }}>Profilo pubblico</h1>
+          {!guest && !waiting && <button className="press" data-pub-edit="" onClick={() => { setPubDraft({ ...(pubHide || {}) }); setPubEdit(true); }} style={{ display: "flex", alignItems: "center", gap: 6, height: 38, padding: "0 14px", borderRadius: 19, background: PX.key, fontFamily: F_BODY, fontSize: 14, fontWeight: 800, color: "#FACC15" }}><Icon name="edit" size={14} color="#FACC15" sw={2.2} />Modifica</button>}
+        </div>
+        {!guest && <p style={{ margin: "2px 0 0", fontFamily: F_BODY, fontSize: 13, fontWeight: 600, lineHeight: "18px", color: PX.muted }}>Così ti vedono gli altri quando aprono il tuo profilo dalla chat.</p>}
+        {!guest && waiting && <p data-profile-waiting="" role="status" style={{ margin: "14px 0", padding: "10px 14px", borderRadius: 12, background: PX.card, border: `1px solid ${PX.line}`, fontFamily: F_BODY, fontSize: 12.5, color: PX.muted, lineHeight: 1.45 }}>{ACCOUNT_MSG["not-loaded"]}</p>}
+        {!guest && !waiting && (
+          <div style={{ display: "flex", flexDirection: "column", alignItems: "center", marginTop: 18 }}>
+            <button className="press" aria-label="Modifica il casco" onClick={onHelmet} style={{ width: 96, height: 96, borderRadius: "50%", border: `3px solid ${ring}`, background: "#151518", display: "flex", alignItems: "center", justifyContent: "center", boxShadow: `0 0 24px ${alpha(ring, .35)}` }}>
+              <HelmetArt spec={helmet} size={66} />
+            </button>
+            <h2 data-pub-name="" style={{ margin: "14px 0 0", fontFamily: F_HEAD, fontSize: 26, fontWeight: 800 }}>{account ? account.name : ""}</h2>
+            {(ft || fd) && <div style={{ display: "flex", gap: 8, marginTop: 10, flexWrap: "wrap", justifyContent: "center" }}>
+              {ft && !hidden("team") && tag("#" + ft.name.replace(/\s+/g, ""), ft.color)}
+              {fd && !hidden("driver") && tag("#" + String(fd.name || fd.full).replace(/\s+/g, ""), fd.color)}
+            </div>}
+          </div>
+        )}
+        {!guest && !waiting && (
+          <button className="press" aria-label="Modifica Su di te" data-pub-about="" onClick={() => setAboutOpen(true)} style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, width: "100%", marginTop: 18, textAlign: "left" }}>
+            {[["follow", "Segue F1", followTxt], ["fan", "Tipo fan", fanTxt]].map(([k, l, v]) => (
+              <span key={k} data-pub-info={k} data-about-row={k} style={{ display: "block", padding: "12px 12px", borderRadius: 16, background: PX.card, border: `1px solid ${PX.line}` }}>
+                <span style={{ display: "flex", justifyContent: "space-between", gap: 6, fontFamily: F_BODY, fontSize: 12, fontWeight: 700, color: PX.muted }}><span>{l}</span>{hidden(k) && <span>Nascosto</span>}</span>
+                <span style={{ display: "block", marginTop: 4, fontFamily: F_BODY, fontSize: 15, fontWeight: 800, lineHeight: "19px", color: PX.text, opacity: hidden(k) ? .5 : 1 }}>{v}</span>
+              </span>
+            ))}
+          </button>
+        )}
+        <div style={{ margin: "20px 0 10px", fontFamily: F_BODY, fontSize: 15, fontWeight: 800 }}>I miei preferiti</div>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+          <button className="press" data-pub-fav="team" onClick={onPickTeam} style={{ display: "flex", flexDirection: "column", justifyContent: "flex-end", minHeight: 150, padding: 12, borderRadius: 18, textAlign: "left", background: ft ? alpha(ft.color, .12) : PX.card, border: `1px solid ${ft ? alpha(ft.color, .55) : PX.line}`, opacity: hidden("team") ? .55 : 1 }}>
+            <span aria-hidden="true" style={{ flex: 1, minHeight: 40, marginBottom: 12, borderRadius: 12, background: ft ? `linear-gradient(135deg, ${alpha(ft.color, .55)}, ${alpha(ft.color, .2)})` : PX.key }} />
+            <span style={{ fontFamily: F_BODY, fontSize: 12, fontWeight: 700, color: PX.muted }}>Scuderia del cuore</span>
+            <span style={{ marginTop: 2, fontFamily: F_BODY, fontSize: 17, fontWeight: 800, color: ft ? PX.text : PX.muted }}>{ft ? ft.name : "Scegli"}</span>
+          </button>
+          <button className="press" data-pub-fav="driver" onClick={onPickDriver} style={{ display: "flex", flexDirection: "column", justifyContent: "flex-end", minHeight: 150, padding: 12, borderRadius: 18, textAlign: "left", background: fd ? alpha(fd.color, .12) : PX.card, border: `1px solid ${fd ? alpha(fd.color, .55) : PX.line}`, opacity: hidden("driver") ? .55 : 1 }}>
+            <span style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", fontFamily: F_HEAD, fontSize: 26, fontWeight: 900, letterSpacing: 1, color: fd ? (Colors.contrast(fd.color, "#000000") >= 3 ? fd.color : PX.text) : PX.muted }}>{fd ? fd.tag : "?"}</span>
+            <span style={{ fontFamily: F_BODY, fontSize: 12, fontWeight: 700, color: PX.muted }}>Pilota del cuore</span>
+            <span style={{ marginTop: 2, fontFamily: F_BODY, fontSize: 17, fontWeight: 800, color: fd ? PX.text : PX.muted }}>{fd ? fd.full : "Scegli"}</span>
+          </button>
+        </div>
+        <div style={{ marginTop: 10, borderRadius: 18, background: PX.card, border: `1px solid ${PX.line}`, padding: "0 12px" }}>
+          <button className="press" data-pub-saved="" onClick={onOpenSaved} style={{ display: "flex", alignItems: "center", gap: 12, width: "100%", minHeight: 58, textAlign: "left" }}>
+            <span style={{ display: "flex", alignItems: "center", justifyContent: "center", width: 34, height: 34, borderRadius: 10, background: alpha("#FACC15", .14) }}><Icon name="bookmark" size={16} color="#FACC15" /></span>
+            <span style={{ flex: 1, minWidth: 0 }}>
+              <span style={{ display: "block", fontFamily: F_BODY, fontSize: 14.5, fontWeight: 800 }}>Articoli salvati</span>
+              <span style={{ display: "block", fontFamily: F_BODY, fontSize: 12, fontWeight: 600, color: PX.muted }}>{savedCount ? `${savedCount} ${savedCount === 1 ? "articolo" : "articoli"}` : "Nessuno"}</span>
+            </span>
+            <span style={{ display: "flex", alignItems: "center", gap: 4, padding: "4px 8px", borderRadius: 9, background: PX.key, fontFamily: F_BODY, fontSize: 11, fontWeight: 700, color: PX.muted }}><Icon name="lock" size={11} color={PX.muted} />Solo tu</span>
+            <Icon name="chevron" size={15} color={PX.muted} />
+          </button>
+          {!guest && <div style={{ display: "flex", alignItems: "center", gap: 12, minHeight: 58, borderTop: `1px solid ${PX.line}` }}>
+            <span style={{ display: "flex", alignItems: "center", justifyContent: "center", width: 34, height: 34, borderRadius: 10, background: PX.key }}><Icon name="lock" size={15} color={PX.muted} /></span>
+            <span style={{ flex: 1, minWidth: 0 }}>
+              <span style={{ display: "block", fontFamily: F_BODY, fontSize: 14.5, fontWeight: 800 }}>{aboutMe && aboutMe.birthDate ? "Data di nascita" : "Anno di nascita"}</span>
+              <span data-about-row="birth" style={{ display: "block", fontFamily: F_BODY, fontSize: 12, fontWeight: 600, color: PX.muted }}>{aboutMe && aboutMe.birthDate ? fmtBirth(aboutMe.birthDate) + " · " : aboutMe && aboutMe.birth ? aboutMe.birth + " · " : ""}Non lo vede nessuno</span>
+            </span>
+          </div>}
+        </div>
+        {aboutSheet}
+        {onGoNotifiche && <button className="press" onClick={onGoNotifiche} style={{ display: "flex", alignItems: "flex-start", gap: 8, marginTop: 14, textAlign: "left", fontFamily: F_BODY, fontSize: 12.5, fontWeight: 600, lineHeight: "17px", color: PX.muted }}><Icon name="bell" size={14} color={PX.muted} />Gli avvisi su scuderia e pilota si gestiscono in Notifiche.</button>}
+      </div>
+    );
+  }
   return (
-    <div className="scrollcol" style={{ height: "100%" }}>
+    <>
+    <ScrollFadeCol>
       <SubHeader title="PROFILO" onBack={onBack} />
       {guest ? (
         <div style={{ margin: "6px 20px 22px", padding: "22px 18px", borderRadius: 18, background: C.card, border: `1px solid ${C.border}`, textAlign: "center" }}>
@@ -10459,7 +10748,7 @@ function ProfiloScreen({ onPcLink = null, pcLinked = false, onNfc = null,onPromo
       <div style={{ padding: "0 24px 10px" }}><span style={{ fontFamily: F_BODY, fontWeight: 700, fontSize: 11, color: C.dim, letterSpacing: 1 }}>IMPOSTAZIONI</span></div>
       <div style={{ margin: "0 20px 18px", borderRadius: 18, background: C.card, border: `1px solid ${C.border}`, overflow: "hidden" }}>
         {rows.map((r, i) => (
-          <div key={r.label} data-profile-row={r.label}>
+          <div key={r.label} data-profile-row={r.label} data-sf="">
             {r.toggle ? (
               <div data-settings-sub={r.sub ? "" : undefined} style={{ display: "flex", alignItems: "center", gap: 12, width: "100%", padding: r.sub ? "11px 14px 11px min(30px, 5vw)" : 14, background: r.sub ? "rgba(255,255,255,.02)" : undefined }}>
                 <div style={{ width: r.sub ? 30 : 36, height: r.sub ? 30 : 36, borderRadius: 10, background: "rgba(255,255,255,.06)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}><Icon name={r.icon} size={r.sub ? 14 : 16} /></div>
@@ -10504,6 +10793,7 @@ function ProfiloScreen({ onPcLink = null, pcLinked = false, onNfc = null,onPromo
         </button>
       )}
       <p style={{ textAlign: "center", fontFamily: F_BODY, fontSize: 10, color: C.dim, lineHeight: 1.55, padding: "18px 28px 22px", margin: 0 }}>{F1_DISCLAIMER}{madeTag()}</p>
+    </ScrollFadeCol>
       {confirmDel && (
         <div style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,.85)", zIndex: 650, display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}>
           <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 20, padding: "26px 22px 18px", maxWidth: 330, width: "100%", textAlign: "center" }}>
@@ -10518,76 +10808,162 @@ function ProfiloScreen({ onPcLink = null, pcLinked = false, onNfc = null,onPromo
           </div>
         </div>
       )}
-    </div>
+    </>
   );
 }
 
-// Centro Notifiche (G18): la riga dello stato dice se il Pit Wall (Firebase) si raggiunge: senza la rete del telefono,
-// o se all'avvio i dati non sono arrivati (offline), "Pit Wall non raggiungibile".
-function NotificheScreen({ onBack, notifs, onReadAll, isPremium, onPremium, favTeam, favDriver, prefs, onPrefs, onGoProfilo, onAction, offline = false }) {
+// 22/11 (Edoardo: "usa questo per le notifiche: B&T: Notifiche"). Grafica della tela "B&T: Notifiche": titolo grande,
+// filtri a capsula, righe da 68 px con l'icona colorata, l'ora e il pallino rosso se non letta, gruppi Oggi / Ieri /
+// Prima; vuoto "Tutto tranquillo"; Impostazioni coi tipi di avviso VERI dell'app (notizie su scuderia e pilota,
+// promemoria, novità da B&T, metà gara): niente tipi che l'app non manda (lega, amici). I tre avvisi del telefono
+// prima stavano nel Profilo (Personalizza l'app). Senza rete la pagina mostra solo SENZA RETE (lo decide App).
+const NX = { bg: "#000000", card: "#111113", line: "#1E1E22", chip: "#2A2A2E", text: "#F4F4F5", muted: "#A1A1AA", red: "#FF1801", yellow: "#FACC15", green: "#34D399", blue: "#64C4FF", key: "#1C1C1F" };
+const NX_CSS = `
+@keyframes nxin{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+@keyframes nxdot{0%,100%{opacity:1}50%{opacity:.45}}
+@keyframes nxring{0%{transform:scale(.85);opacity:.5}100%{transform:scale(1.25);opacity:0}}
+[data-nx-row]{animation:nxin .35s ease-out both}
+[data-nx-unread]{animation:nxdot 2s ease-in-out infinite}
+@media (prefers-reduced-motion: reduce){[data-nx-row],[data-nx-unread],[data-nx-ring]{animation:none!important}}`;
+// tipo di una notifica: B&T (scritte dall'admin), Preferiti (notizia sulla tua scuderia o sul tuo pilota), Feedback
+const NX_KINDS = [["bt", "B&T", "bell", NX.red], ["pref", "Preferiti", "heart", NX.yellow], ["app", "Feedback", "chat", NX.blue]];
+const nxKind = n => (n.action === "feedback" ? "app" : String(n.id || "").startsWith("l-") ? "pref" : "bt");
+const nxDay = (iso, now) => {
+  const t = Date.parse(iso || "");
+  if (!isFinite(t)) return 0;   // senza data (avvisi di questo telefono): adesso
+  const d0 = new Date(now); d0.setHours(0, 0, 0, 0);
+  return t >= d0.getTime() ? 0 : t >= d0.getTime() - 86400000 ? 1 : 2;
+};
+const nxTime = (n, now) => {
+  const t = Date.parse(n.date || "");
+  if (!isFinite(t)) return n.time || "";
+  const d = new Date(t);
+  return nxDay(n.date, now) < 2 ? d.toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit" }) : d.toLocaleDateString("it-IT", { day: "numeric", month: "short" });
+};
+function NxBack({ onClick, close = false, label }) {
+  return (
+    <button className="press" aria-label={label || (close ? "Chiudi" : "Indietro")} onClick={onClick} style={{ display: "flex", alignItems: "center", justifyContent: "center", width: 44, height: 44, borderRadius: 22, background: close ? "transparent" : NX.key, marginLeft: close ? -10 : 0, flexShrink: 0 }}>
+      <Icon name={close ? "close" : "back"} size={close ? 22 : 20} color={NX.text} sw={2.2} />
+    </button>
+  );
+}
+function NotificheScreen({ onBack, notifs, onReadAll, favTeam, favDriver, prefs, onPrefs, onGoProfilo, onAction, guest = false, reminders = true, onReminders = null, news = true, onNews = null, halfway = true, onHalfway = null, startPage = "list" }) {
   const ft = favTeam ? teamById(favTeam) : null;
   const fd = favDriver ? driverById(favDriver) : null;
-  const net = useNetOnline();
-  const reach = net && !offline;
-  const prefRows = [
-    { key: "team", icon: "garage", title: ft ? `News su ${ft.name}` : "News sulla scuderia del cuore", sub: ft ? ft.tag : "Nessuna scuderia scelta", color: ft && ft.color, enabled: !!ft },
-    { key: "driver", icon: "helmet", title: fd ? `News su ${fd.full}` : "News sul pilota del cuore", sub: fd ? fd.tag : "Nessun pilota scelto", color: fd && fd.color, enabled: !!fd },
-  ];
-  return (
-    <div className="scrollcol" style={{ height: "100%" }}>
-      <SubHeader title="Centro Notifiche" onBack={onBack} />
-      <div role="status" data-pitwall={reach ? "on" : "off"} style={{ display: "flex", alignItems: "center", gap: 9, margin: "-4px 20px 14px", padding: "10px 14px", borderRadius: 12, background: C.card, border: `1px solid ${reach ? alpha(C.green, .35) : "rgba(231,179,76,.4)"}` }}>
-        <span className={reach ? "pitwall-led" : undefined} style={{ width: 9, height: 9, borderRadius: "50%", background: reach ? C.green : C.gold, boxShadow: `0 0 8px ${reach ? C.green : C.gold}`, flexShrink: 0 }} />
-        <span style={{ fontFamily: F_BODY, fontWeight: 600, fontSize: 12.5, color: C.text }}>{reach ? "Stato: Connesso al Pit Wall" : "Stato: Pit Wall non raggiungibile"}</span>
-      </div>
-      <div style={{ padding: "0 24px 8px" }}><span style={{ fontFamily: F_BODY, fontWeight: 700, fontSize: 11, color: C.dim, letterSpacing: 1 }}>NOTIZIE DEDICATE</span></div>
-      <div style={{ margin: "0 20px 8px", borderRadius: 16, background: C.card, border: `1px solid ${C.border}`, overflow: "hidden" }}>
-        {prefRows.map((r, i) => (
-          <div key={r.key}>
-            <div data-pref-row={r.key} style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 14px" }}>
-              <span data-pref-icon="" style={{ width: 34, height: 34, borderRadius: 10, background: r.color ? alpha(r.color, .16) : "rgba(255,255,255,.06)", border: `1px solid ${r.color ? alpha(r.color, .4) : C.border}`, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}><Icon name={r.icon} size={17} color={r.color ? (Colors.contrast(r.color, "#000000") >= 3 ? r.color : C.text) : C.dim} /></span>
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontFamily: F_BODY, fontWeight: 600, fontSize: 13, color: C.text }}>{r.title}</div>
-                <div style={{ fontFamily: F_BODY, fontSize: 11, color: r.color || C.dim }}>{r.sub}</div>
-              </div>
-              <Toggle on={r.enabled && prefs[r.key]} disabled={!r.enabled} onChange={v => onPrefs({ ...prefs, [r.key]: v })} label={r.title} />
+  const [page, setPage] = useState(startPage);
+  const [kind, setKind] = useState("all");
+  useBack(page === "settings" && startPage !== "settings", () => setPage("list"));
+  const now = nowMs();
+  const kinds = NX_KINDS.filter(([k]) => notifs.some(n => nxKind(n) === k));
+  const shown = kind === "all" ? notifs : notifs.filter(n => nxKind(n) === kind);
+  const unread = notifs.some(n => n.unread);
+  const head = (title, close, onClose, right) => (
+    <div style={{ display: "flex", alignItems: "center", gap: 10, minHeight: 52, flexShrink: 0 }}>
+      <NxBack onClick={onClose} close={close} />
+      <h1 style={{ flex: 1, minWidth: 0, margin: 0, fontFamily: F_HEAD, fontSize: close ? 17 : 28, fontWeight: 800, letterSpacing: close ? 0 : -.4, color: NX.text }}>{title}</h1>
+      {right}
+    </div>
+  );
+  if (page === "settings") {
+    const rows = [
+      { key: "team", icon: "garage", color: ft ? ft.color : NX.yellow, title: ft ? `Notizie su ${ft.name}` : "Notizie sulla tua scuderia", sub: ft ? "Quando pubblichiamo una notizia su di lei" : "Prima scegli la scuderia del cuore", on: !!ft && prefs.team !== false, off: !ft, set: v => onPrefs({ ...prefs, team: v }) },
+      { key: "driver", icon: "helmet", color: fd ? fd.color : NX.yellow, title: fd ? `Notizie su ${fd.full}` : "Notizie sul tuo pilota", sub: fd ? "Quando pubblichiamo una notizia su di lui" : "Prima scegli il pilota del cuore", on: !!fd && prefs.driver !== false, off: !fd, set: v => onPrefs({ ...prefs, driver: v }) },
+      ...(onReminders ? [{ key: "reminders", icon: "stopwatch", color: NX.yellow, title: "Promemoria sul telefono", sub: "Qualifiche, Sprint e gara un'ora prima; il giro di Pit Swipe e la serie", on: reminders !== false, set: onReminders }] : []),
+      ...(onNews ? [{ key: "news", icon: "bell", color: NX.red, title: "Novità da B&T sul telefono", sub: "Anche a schermo bloccato", on: news !== false, set: onNews }] : []),
+      ...(onHalfway ? [{ key: "halfway", icon: "flag", color: NX.green, title: "Avviso a metà gara", sub: "Se perdi la partenza", on: halfway !== false, set: onHalfway }] : []),
+    ];
+    return (
+      <div className="scrollcol" data-notif-settings="" style={{ height: "100%", background: NX.bg, color: NX.text, padding: "8px 20px 28px", boxSizing: "border-box" }}>
+        <style>{NX_CSS}</style>
+        {head("Notifiche", true, startPage === "settings" ? onBack : () => setPage("list"))}
+        <div style={{ marginTop: 6 }}>
+          {rows.map((r, i) => (
+            <div key={r.key} data-pref-row={r.key} style={{ display: "flex", alignItems: "center", gap: 12, minHeight: 64, padding: "8px 0", borderTop: i ? `1px solid ${NX.line}` : "none" }}>
+              <span data-pref-icon="" style={{ display: "flex", alignItems: "center", justifyContent: "center", width: 36, height: 36, borderRadius: 10, background: alpha(r.color, .14), flexShrink: 0 }}><Icon name={r.icon} size={18} color={Colors.contrast(r.color, "#000000") >= 3 ? r.color : NX.text} /></span>
+              <span style={{ flex: 1, minWidth: 0 }}>
+                <span style={{ display: "block", fontFamily: F_BODY, fontSize: 14.5, fontWeight: 800, color: r.off ? NX.muted : NX.text }}>{r.title}</span>
+                <span style={{ display: "block", marginTop: 2, fontFamily: F_BODY, fontSize: 12, fontWeight: 600, lineHeight: "16px", color: NX.muted }}>{r.sub}</span>
+              </span>
+              <Toggle on={!!r.on} disabled={!!r.off} onChange={v => r.set && r.set(v)} label={r.title} />
             </div>
-            {i < prefRows.length - 1 && <div style={{ height: 1, background: C.divider, margin: "0 14px" }} />}
-          </div>
-        ))}
-      </div>
-      {(!ft || !fd) && (
-        <button className="press" onClick={onGoProfilo} style={{ display: "block", margin: "0 24px 12px", fontFamily: F_BODY, fontWeight: 600, fontSize: 12, color: C.accentInk }}>Scegli scuderia e pilota del cuore nel profilo →</button>
-      )}
-      <div style={{ display: "flex", justifyContent: "flex-end", padding: "8px 20px 10px" }}>
-        <button className="press" onClick={onReadAll} style={{ fontFamily: F_BODY, fontWeight: 600, fontSize: 12, color: C.accentInk }}>Segna tutte come lette</button>
-      </div>
-      <div style={{ padding: "0 20px 16px" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 10, padding: 12, borderRadius: 12, background: C.card, border: `1px solid ${C.border}` }}>
-            <Icon name="bell" size={15} color={C.gold} />
-            <span style={{ flex: 1, fontFamily: F_BODY, fontWeight: 600, fontSize: 12.5, color: C.text }}>Avvisi in gara sul tuo pilota attivi</span>
-            <Icon name="check" size={14} color={C.green} sw={2.4} />
-          </div>
-      </div>
-      {notifs.map((n, i) => {
-        const Row = n.action ? "button" : "div";   // le notifiche con un'azione (es. il feedback) si toccano
-        return (
-        <div key={n.id || i}>
-          <Row {...(n.action ? { className: "press", "data-notif-action": n.action, onClick: () => onAction && onAction(n.action) } : {})} style={{ display: "flex", alignItems: "flex-start", gap: 12, width: "100%", textAlign: "left", padding: "14px 20px", background: n.unread ? alpha(C.accentInk, .06) : "transparent" }}>
-            {n.bg === "gold-soft"
-              ? <div style={{ width: 40, height: 40, borderRadius: "50%", background: "rgba(231,179,76,.16)", border: "1px solid rgba(231,179,76,.35)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}><Icon name="star" size={16} color={C.gold} /></div>
-              : <IconCircle name={n.icon} bg={n.bg} stroke={n.stroke} size={40} filled />}
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <span style={{ fontFamily: F_HEAD, fontWeight: 700, fontSize: 13, color: C.text }}>{n.title}</span>
-              <p style={{ margin: "3px 0 0", fontFamily: F_BODY, fontSize: 12, color: C.muted, lineHeight: 1.4 }}>{n.body}</p>
-              <span style={{ display: "block", marginTop: 6, fontFamily: F_BODY, fontSize: 10, color: C.dim }}>{n.time}</span>
-            </div>
-          </Row>
-          {i < notifs.length - 1 && <div style={{ height: 1, background: C.divider }} />}
+          ))}
         </div>
-        );
-      })}
-      <p style={{ textAlign: "center", fontFamily: F_BODY, fontSize: 11, color: C.dim, padding: "18px 32px 24px", margin: 0 }}>Nessun'altra notifica</p>
+        {(!ft || !fd) && <button className="press" onClick={onGoProfilo} style={{ display: "block", margin: "6px 0 0", padding: "10px 0", fontFamily: F_BODY, fontWeight: 700, fontSize: 13, color: NX.text, textDecoration: "underline" }}>Scegli scuderia e pilota del cuore</button>}
+        <div style={{ display: "flex", alignItems: "center", gap: 12, marginTop: 14, padding: "12px 14px", borderRadius: 18, background: NX.card, border: `1px solid ${NX.line}` }}>
+          <span style={{ display: "flex", alignItems: "center", justifyContent: "center", width: 36, height: 36, borderRadius: 18, background: NX.key, flexShrink: 0 }}><Icon name="moon" size={17} color={NX.text} /></span>
+          <span style={{ flex: 1, minWidth: 0 }}>
+            <span style={{ display: "block", fontFamily: F_BODY, fontSize: 14, fontWeight: 800 }}>Ore di silenzio</span>
+            <span style={{ display: "block", marginTop: 2, fontFamily: F_BODY, fontSize: 12, fontWeight: 600, color: NX.muted }}>Nessun promemoria in questo orario</span>
+          </span>
+          <span style={{ padding: "8px 12px", borderRadius: 12, background: NX.key, fontFamily: F_BODY, fontSize: 13, fontWeight: 800, fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap" }}>22:00 - 08:00</span>
+        </div>
+        <div style={{ display: "flex", alignItems: "center", gap: 12, marginTop: 10, padding: "12px 14px", borderRadius: 18, background: NX.card, border: `1px solid ${NX.line}` }}>
+          <Icon name="bell" size={16} color={NX.yellow} />
+          <span style={{ flex: 1, fontFamily: F_BODY, fontWeight: 700, fontSize: 13 }}>Avvisi in gara sul tuo pilota attivi</span>
+          <Icon name="check" size={15} color={NX.green} sw={2.4} />
+        </div>
+        <p style={{ margin: "18px 0 0", fontFamily: F_BODY, fontSize: 12, fontWeight: 600, lineHeight: "17px", color: NX.muted }}>Il permesso del telefono si cambia dalle impostazioni di Android.{guest ? " Con un account scegli anche promemoria e avvisi del telefono." : ""}</p>
+      </div>
+    );
+  }
+  const groups = [[0, "Oggi"], [1, "Ieri"], [2, "Prima"]].map(([d, label]) => [label, shown.filter(n => nxDay(n.date, now) === d)]).filter(([, l]) => l.length);
+  let idx = 0;
+  return (
+    <div className="scrollcol" data-notif-page="" style={{ height: "100%", background: NX.bg, color: NX.text, padding: "8px 20px 28px", boxSizing: "border-box", display: "flex", flexDirection: "column" }}>
+      <style>{NX_CSS}</style>
+      {head("Notifiche", false, onBack, (
+        <button className="press" aria-label="Impostazioni notifiche" data-notif-open-settings="" onClick={() => setPage("settings")} style={{ display: "flex", alignItems: "center", justifyContent: "center", width: 44, height: 44, borderRadius: 22, background: NX.key, marginRight: -4, flexShrink: 0 }}>
+          <svg width="22" height="22" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke={NX.text} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 8h9 M17 8h3 M15 6v4 M4 16h3 M11 16h9 M9 14v4" /></svg>
+        </button>
+      ))}
+      {kinds.length > 1 && (
+        <div role="tablist" aria-label="Tipo di notifica" style={{ display: "flex", gap: 6, marginTop: 6, flexShrink: 0, overflowX: "auto" }}>
+          {[["all", "Tutte"], ...kinds.map(([k, l]) => [k, l])].map(([k, l]) => (
+            <button key={k} role="tab" aria-selected={kind === k} data-notif-kind={k} className="press" onClick={() => setKind(k)} style={{ display: "flex", alignItems: "center", height: 36, padding: "0 12px", borderRadius: 18, fontFamily: F_BODY, fontSize: 14, fontWeight: 800, whiteSpace: "nowrap", background: kind === k ? NX.text : "transparent", color: kind === k ? "#000" : NX.text, border: `1px solid ${kind === k ? NX.text : NX.chip}` }}>{l}</button>
+          ))}
+        </div>
+      )}
+      {notifs.length === 0 ? (
+        <div data-notif-empty="" style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", textAlign: "center", padding: "20px 8px" }}>
+          <div aria-hidden="true" style={{ position: "relative", width: 168, height: 168, display: "flex", alignItems: "center", justifyContent: "center" }}>
+            <span style={{ position: "absolute", inset: 0, borderRadius: "50%", border: `1px solid ${NX.line}` }} />
+            <span data-nx-ring="" style={{ position: "absolute", inset: 24, borderRadius: "50%", border: `1px dashed ${NX.chip}`, animation: "nxring 2.6s ease-out infinite" }} />
+            <span style={{ display: "flex", alignItems: "center", justifyContent: "center", width: 78, height: 78, borderRadius: "50%", background: NX.key }}><Icon name="bell" size={30} color={NX.text} /></span>
+          </div>
+          <h2 style={{ margin: "18px 0 0", fontFamily: F_HEAD, fontSize: 22, fontWeight: 800 }}>Tutto tranquillo</h2>
+          <p style={{ margin: "8px 0 0", maxWidth: 300, fontFamily: F_BODY, fontSize: 13, fontWeight: 600, lineHeight: "19px", color: NX.muted }}>Ti avvisiamo solo quando serve: notizie sulla tua scuderia e sul tuo pilota, qualifiche in arrivo, novità da B&amp;T.</p>
+          <button className="press" data-notif-choose="" onClick={() => setPage("settings")} style={{ marginTop: 28, width: "100%", height: 52, borderRadius: 16, background: NX.text, fontFamily: F_HEAD, fontSize: 16, fontWeight: 800, color: "#000" }}>Scegli cosa ricevere</button>
+        </div>
+      ) : (
+        <>
+          {unread && <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 8 }}><button className="press" onClick={onReadAll} style={{ padding: "6px 0", fontFamily: F_BODY, fontWeight: 700, fontSize: 13, color: NX.muted }}>Segna tutte come lette</button></div>}
+          {groups.map(([label, list]) => (
+            <div key={label}>
+              <div style={{ margin: "14px 0 8px", fontFamily: F_BODY, fontSize: 15, fontWeight: 800 }}>{label}</div>
+              {list.map(n => {
+                const k = NX_KINDS.find(x => x[0] === nxKind(n));
+                const color = n.bg && n.bg !== C.accent && /^#/.test(n.bg) ? n.bg : k[3];
+                const Row = n.action ? "button" : "div";
+                const delay = Math.min(idx++, 8) * 0.05;
+                return (
+                  <Row key={n.id} data-nx-row="" data-notif-id={n.id} {...(n.action ? { className: "press", "data-notif-action": n.action, onClick: () => onAction && onAction(n.action) } : {})} style={{ display: "flex", alignItems: "center", gap: 12, width: "100%", minHeight: 68, padding: "10px 0", boxSizing: "border-box", textAlign: "left", borderTop: `1px solid ${NX.line}`, animationDelay: delay + "s", opacity: n.unread ? 1 : .62 }}>
+                    <span style={{ display: "flex", alignItems: "center", justifyContent: "center", width: 40, height: 40, borderRadius: 12, background: alpha(color, .14), flexShrink: 0 }}><Icon name={k[2]} size={20} color={Colors.contrast(color, "#000000") >= 3 ? color : NX.text} /></span>
+                    <span style={{ flex: 1, minWidth: 0 }}>
+                      <span style={{ display: "block", fontFamily: F_BODY, fontSize: 15, fontWeight: 800, color: NX.text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{n.title}</span>
+                      <span style={{ marginTop: 2, fontFamily: F_BODY, fontSize: 13, fontWeight: 600, color: NX.muted, overflow: "hidden", textOverflow: "ellipsis", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical" }}>{n.body}</span>
+                    </span>
+                    <span style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 8, flexShrink: 0 }}>
+                      <span style={{ fontFamily: F_BODY, fontSize: 12, fontWeight: 700, color: NX.muted, fontVariantNumeric: "tabular-nums" }}>{nxTime(n, now)}</span>
+                      {n.unread ? <span data-nx-unread="" aria-label="Da leggere" style={{ width: 8, height: 8, borderRadius: "50%", background: NX.red }} /> : <span style={{ height: 8 }} />}
+                    </span>
+                  </Row>
+                );
+              })}
+            </div>
+          ))}
+          {shown.length === 0 && <p style={{ margin: "28px 0 0", textAlign: "center", fontFamily: F_BODY, fontSize: 13, fontWeight: 600, color: NX.muted }}>Nessuna notifica di questo tipo</p>}
+        </>
+      )}
     </div>
   );
 }
@@ -12386,6 +12762,7 @@ const USER_INIT = {
   theme: { mode: "team", color: null }, sounds: true, haptics: true, helmet: null, hidden: [], trophies: {},
   premium: { sub: false, trial: null }, squadLog: [], leagues: [], holidays: true, swipe: {},
   promo: { until: 0, used: [] },   // 21/11: codici promo usati e Funzioni Pro fino a (src/logic/promo.js)
+  pubHide: {},   // 22/11: campi del profilo pubblico nascosti agli altri (follow, fan, team, driver: true = nascosto)
   autoLeagues: [],   // 14/11: leghe in cui l'app ti ha già messo da sola (una volta per account: la lega B&T)
 };
 // 14/11 (Edoardo): "tutti gli utenti in automatico nella lega B&T". Codice della lega che esiste già.
@@ -13062,6 +13439,7 @@ function App() {
   const [sounds, setSounds] = useState(() => fx.sounds());     // suoni e vibrazioni: la scelta del telefono (fx)
   const [haptics, setHaptics] = useState(() => fx.haptics());
   const [helmet, setHelmet] = useState(USER_INIT.helmet);
+  const [pubHide, setPubHide] = useState(USER_INIT.pubHide);
   // 31/10: Halloween: zucche trovate oggi (sul telefono), dove sta quella da trovare, la finestra e lo scherzetto.
   const [pumpkins, setPumpkins] = useState(() => { const v = local.get("bt-pumpkins"); return v && typeof v === "object" && typeof v.day === "string" ? v : { day: "", n: 0, visits: 0 }; });
   const [pumpkinAt, setPumpkinAt] = useState(null), [pumpkinStep, setPumpkinStep] = useState(null), [trickOn, setTrickOn] = useState(false);
@@ -13381,10 +13759,10 @@ function App() {
   const userReady = useRef(false);   // dati dell'account letti: da qui in poi le modifiche si salvano
   const userSnap = useRef({});       // ultimo valore letto o salvato di ogni dato (JSON): si manda solo quello che cambia
   const userVals = { saved, favTeam, favDriver, notifPrefs, votes, squad, squadBase, freeTransfers, predAnswers, sillyPreds, stratPreds, pitBest, wxGuess, ratings, dotd, notifSeenAt,
-    theme, sounds, haptics, helmet, hidden, trophies, premium, squadLog, leagues: leagueCodes, holidays: holidaysOn, swipe, autoLeagues, promo: promoMine };
+    theme, sounds, haptics, helmet, hidden, trophies, premium, squadLog, leagues: leagueCodes, holidays: holidaysOn, swipe, autoLeagues, promo: promoMine, pubHide };
   const userValsRef = useRef(userVals);
   userValsRef.current = userVals;
-  const userSet = { saved: setSaved, favTeam: setFavTeam, favDriver: setFavDriver, notifPrefs: setNotifPrefs, votes: setVotes, squad: setSquad, squadBase: setSquadBase,
+  const userSet = { pubHide: v => setPubHide(v && typeof v === "object" && !Array.isArray(v) ? v : {}), saved: setSaved, favTeam: setFavTeam, favDriver: setFavDriver, notifPrefs: setNotifPrefs, votes: setVotes, squad: setSquad, squadBase: setSquadBase,
     freeTransfers: setFreeTransfers, predAnswers: setPredAnswers, sillyPreds: setSillyPreds, stratPreds: setStratPreds, pitBest: setPitBest, wxGuess: setWxGuess,
     ratings: setRatings, dotd: setDotd, notifSeenAt: setNotifSeenAt,
     theme: v => setTheme(cleanTheme(v) || USER_INIT.theme), sounds: v => setSounds(v !== false), haptics: v => setHaptics(v !== false),
@@ -14204,8 +14582,10 @@ function App() {
   };
   // Profilo veloce (25/10): tifo, casco (col colore dei tasti se non ne ha uno suo) e trofei vinti viaggiano col
   // messaggio; Chat.send li manda solo quando cambiano.
+  // 22/11: i campi che l'utente nasconde nel Profilo pubblico (pubHide) non partono; "Segue F1" (y) viaggia se visibile.
   const myProf = () => ({
-    t: favTeam || undefined, d: favDriver || undefined, f: (aboutMe && aboutMe.fan) || undefined,
+    t: (!pubHide.team && favTeam) || undefined, d: (!pubHide.driver && favDriver) || undefined, f: (!pubHide.fan && aboutMe && aboutMe.fan) || undefined,
+    y: !pubHide.follow && aboutMe && Number.isInteger(aboutMe.follow) ? String(aboutMe.follow) : undefined,
     h: helmet ? { ...helmet, base: helmet.base || C.accent } : undefined,
     w: trophyList.filter(t => trophies[t.id]).map(t => t.id),
   });
@@ -14214,7 +14594,7 @@ function App() {
   useEffect(() => {
     if (view !== "chatThread" || !chatId || !account || account.loaded === false) return;
     Chat.announce(chatId, { name: account.name, aid: account.aid, p: myProf() }).then(sent => { if (sent) loadRoomMsgs(chatId); }, () => {});
-  }, [view, chatId, account && account.aid, account && account.loaded, favTeam, favDriver, JSON.stringify(helmet || null), Object.keys(trophies || {}).length]);
+  }, [view, chatId, account && account.aid, account && account.loaded, favTeam, favDriver, JSON.stringify(helmet || null), Object.keys(trophies || {}).length, JSON.stringify(pubHide)]);
   const postChat = (id, text, link = null) => {
     const u = Account.current(), who = u ? { name: u.name, aid: u.aid } : chatMe();
     const me = { ...(myMedal ? { ...who, medal: myMedal } : who), p: myProf() };   // la medaglia dei trofei viaggia con il messaggio (G31)
@@ -15307,22 +15687,26 @@ function App() {
     mode={swipe.mode || "taste"} onMode={m => { if (!guest && !userDataWait()) setSwipe(s => ({ ...s, mode: m })); }} rain={psRain} onEgg={psEgg} streak={{ n: (swipe.streak || {}).n || 0 }}
     endInfo={psEndInfo} onSaved={() => { setSavedOnly(true); setView("tab"); goTab("home"); }} onShare={psShare} onDuel={!guest ? sendDuel : null} />;
   else if (view === "chats") body = <ChatsView chats={chats} onOpen={openChat} blocked={blocked} onBack={viewBack.chats} unreadOf={(id, ms) => Chat.unread(id, ms)} />;
-  else if (view === "profilo") body = <ProfiloScreen onPcLink={() => { setPcMsg(null); setPcView(pcLink ? "remote" : "intro"); }} pcLinked={!!pcLink} onNfc={nfcPlug() ? () => nfcOpen("hub") : null} onPromo={() => setPromoOpen(true)}promoUntil={promoMine.until} tv={tvMode} onTv={v => { setTvMode(v); local.set("bt-tv", v); fx.play("tick"); showToast(v ? "Modalità TV: lo schermo resta acceso finché l'app è aperta" : "Modalità TV spenta"); }} onChangelog={changelogGo} onCoffee={Billing.where() ? buyCoffee : null} coffeePrice={playPrices.coffee || null} ig={ig} onOpenIg={() => { setIgFrom("profilo"); setView("instagram"); }} aboutMe={aboutMe} onSaveAboutMe={a => Account.updateAbout(a).catch(e => showToast(e && (e.code === "too-young" || e.code === "not-loaded") ? messageOf(e) : NOT_SAVED))} account={account} onSaveName={n => Account.updateName(n)} isAdmin={Account.isAdmin()} trial={trialActive ? trial : null} trialUsed={!!trial} onBack={viewBack.profilo} onNotifiche={() => setView("notifiche")} onPremium={() => setPremiumOpen(true)} onAdmin={() => guest ? needLogin("Accedi per usare il pannello admin.") : setView(adminUnlocked ? "admin" : "hack")} onHack={() => { setView("hack"); if (account && Account.refreshAdmin) Account.refreshAdmin().catch(() => {}); }} onLogout={logout} isPremium={isPaid} onAbout={() => setInfoModal({ title: "Info su B&T", body: ABOUT_TEXT, credits: true })} onFeedback={() => setFeedbackOpen(true)} onHelp={() => setInfoModal({ title: "Assistenza", body: HELP_TEXT })} favTeam={favTeam} favDriver={favDriver} onPickTeam={() => guest ? needLogin("Per scegliere scuderia e pilota del cuore serve un account.") : setPicker("team")} onPickDriver={() => guest ? needLogin("Per scegliere scuderia e pilota del cuore serve un account.") : setPicker("driver")} guest={guest} onLogin={() => needLogin(null)} onTerms={() => setTermsOpen(true)} blocked={blocked} onUnblock={unblockUser} onDeleteAccount={deleteAccount} savedCount={saved.length} onOpenSaved={openSaved} onTheme={() => setThemeOpen(true)} helmet={helmet} onHelmet={() => setHelmetOpen(true)} trophies={trophies} trophyProg={trophyProg} trophyList={trophyList}
+  else if (view === "profilo") body = <ProfiloScreen onPcLink={() => { setPcMsg(null); setPcView(pcLink ? "remote" : "intro"); }} pcLinked={!!pcLink} onNfc={nfcPlug() ? () => nfcOpen("hub") : null} onPromo={() => setPromoOpen(true)}promoUntil={promoMine.until} tv={tvMode} onTv={v => { setTvMode(v); local.set("bt-tv", v); fx.play("tick"); showToast(v ? "Modalità TV: lo schermo resta acceso finché l'app è aperta" : "Modalità TV spenta"); }} onChangelog={changelogGo} onCoffee={Billing.where() ? buyCoffee : null} coffeePrice={playPrices.coffee || null} ig={ig} onOpenIg={() => { setIgFrom("profilo"); setView("instagram"); }} aboutMe={aboutMe} onSaveAboutMe={a => Account.updateAbout(a).catch(e => showToast(e && (e.code === "too-young" || e.code === "not-loaded") ? messageOf(e) : NOT_SAVED))} account={account} onSaveName={n => Account.updateName(n)} isAdmin={Account.isAdmin()} trial={trialActive ? trial : null} trialUsed={!!trial} onBack={viewBack.profilo} onNotifiche={() => setView("notifiche")} onPremium={() => setPremiumOpen(true)} onAdmin={() => guest ? needLogin("Accedi per usare il pannello admin.") : setView(adminUnlocked ? "admin" : "hack")} onHack={() => { setView("hack"); if (account && Account.refreshAdmin) Account.refreshAdmin().catch(() => {}); }} onLogout={logout} isPremium={isPaid} onAbout={() => setInfoModal({ title: "Info su B&T", body: ABOUT_TEXT, credits: true })} onFeedback={() => setFeedbackOpen(true)} onHelp={() => setInfoModal({ title: "Assistenza", body: HELP_TEXT })} favTeam={favTeam} favDriver={favDriver} onPickTeam={() => guest ? needLogin("Per scegliere scuderia e pilota del cuore serve un account.") : setPicker("team")} onPickDriver={() => guest ? needLogin("Per scegliere scuderia e pilota del cuore serve un account.") : setPicker("driver")} guest={guest} onLogin={() => needLogin(null)} onTerms={() => setTermsOpen(true)} blocked={blocked} onUnblock={unblockUser} onDeleteAccount={deleteAccount} savedCount={saved.length} onOpenSaved={openSaved} onTheme={() => setThemeOpen(true)} helmet={helmet} onHelmet={() => setHelmetOpen(true)} pubHide={pubHide} onPubHide={v => { if (!userDataWait()) setPubHide(v); }} onGoNotifiche={() => setView("notifiche")} trophies={trophies} trophyProg={trophyProg} trophyList={trophyList}
     onAdPrivacy={Ads.privacyRequired() ? () => Ads.openPrivacy().catch(() => showToast("Le preferenze sulla privacy degli annunci non sono disponibili in questo momento.")) : null}
     sounds={sounds} haptics={haptics} onSounds={v => { if (userDataWait()) return; setSounds(v); fx.setSounds(v); if (v) fx.play("tick"); }} onHaptics={v => { if (userDataWait()) return; setHaptics(v); fx.setHaptics(v); if (v) fx.buzz("light"); }}
     holidays={holidaysOn} onHolidays={v => { if (userDataWait()) return; setHolidaysOn(v); local.set("bt-holidays-on", v); fx.play("tick"); }}
     miniPit={miniPitOn} onMiniPit={v => { setMiniPitOn(v); local.set("bt-minipit-on", v); fx.play("tick"); }}
     fanLevel={guest ? null : { level: psLevel, xp: BtSwipe.xpOf(swipe.tot || {}, psTrophies), missions: psMissions }}
-    reminders={notifPrefs.reminders !== false} onReminders={guest ? null : v => { if (userDataWait()) return; if (v) remAskRef.current = true; setNotifPrefs(x => ({ ...x, reminders: v })); fx.play("tick"); }}
     trophiesOn={!trophiesOff} onTrophiesOn={v => { setTrophiesOn(v); fx.play("tick"); }}
+    />;
+  else if (view === "notifiche") body = !netOn
+    // 22/11 (Edoardo): senza rete nella pagina Notifiche solo la schermata SENZA RETE
+    ? <OfflineScreen news={newsAll} saved={saved} standings={standings} races={races} pitBest={pitBest} onPitResult={t => { if (!userDataWait()) { setPitBest(b => b == null || t < b ? t : b); psBump("pit"); } }} onOpenArticle={openArticle} onRetry={() => retryNet()} tryState={offTry} onClose={viewBack.notifiche} />
+    : <NotificheScreen guest={guest} reminders={notifPrefs.reminders !== false} onReminders={guest ? null : v => { if (userDataWait()) return; if (v) remAskRef.current = true; setNotifPrefs(x => ({ ...x, reminders: v })); fx.play("tick"); }}
     news={newsOn} onNews={guest ? null : v => {
       if (userDataWait()) return;
       setNotifPrefs(x => ({ ...x, news: v })); fx.play("tick");
       const LN = capPlugin("LocalNotifications");   // accesa adesso: il permesso si chiede adesso
       if (v && LN && LN.requestPermissions) LN.requestPermissions().catch(() => {});
     }}
-    halfway={notifPrefs.halfway !== false} onHalfway={guest ? null : v => { if (userDataWait()) return; if (v) remAskRef.current = true; setNotifPrefs(x => ({ ...x, halfway: v })); fx.play("tick"); }} />;
-  else if (view === "notifiche") body = <NotificheScreen offline={offline} onBack={viewBack.notifiche} onAction={a => { if (a === "feedback") { if (feedbackAsk && !feedbackAsk.read) saveAsk({ ...feedbackAsk, read: true }); setFeedbackOpen(true); } }} notifs={notifs} onReadAll={readAll} isPremium={isPremium} onPremium={() => setPremiumOpen(true)} favTeam={favTeam} favDriver={favDriver} prefs={notifPrefs} onPrefs={v => { if (!userDataWait()) setNotifPrefs(v); }} onGoProfilo={() => setView("profilo")} />;
+    halfway={notifPrefs.halfway !== false} onHalfway={guest ? null : v => { if (userDataWait()) return; if (v) remAskRef.current = true; setNotifPrefs(x => ({ ...x, halfway: v })); fx.play("tick"); }}
+    onBack={viewBack.notifiche} onAction={a => { if (a === "feedback") { if (feedbackAsk && !feedbackAsk.read) saveAsk({ ...feedbackAsk, read: true }); setFeedbackOpen(true); } }} notifs={notifs} onReadAll={readAll} isPremium={isPremium} onPremium={() => setPremiumOpen(true)} favTeam={favTeam} favDriver={favDriver} prefs={notifPrefs} onPrefs={v => { if (!userDataWait()) setNotifPrefs(v); }} onGoProfilo={() => setView("profilo")} />;
   else body = tabBodyFor(tab);
   // 7/11: il contenuto di una scheda della barra (anche di quella accanto, che si vede durante lo swipe come su WhatsApp).
   function tabBodyFor(tab) {

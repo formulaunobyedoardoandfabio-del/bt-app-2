@@ -167,7 +167,7 @@ run({
     assert(mine && mine.name && mine.aid === authorId('a@b.it') && !('email' in mine), 'il mio profilo pubblico non è stato salvato (o porta l\'email): ' + JSON.stringify(mine));
     assert(sheet, 'il profilo veloce non si apre');
     assert(sheet.team === 'mercedes' && sheet.trophy && !sheet.empty, 'deve vedersi il profilo pubblico di FT22: ' + JSON.stringify(sheet));
-    assert(sheet.stats && /MESSAGGI QUI 1/.test(sheet.text) && /25\/10\/2026/.test(sheet.text), 'mancano i numeri della stanza: ' + sheet.text);
+    assert(sheet.stats && /Messaggi qui 1/i.test(sheet.text) && /25\/10\/2026/.test(sheet.text), 'mancano i numeri della stanza: ' + sheet.text);
     assert(!/prossimo messaggio/.test(sheet.text), 'c\'è ancora la scritta vecchia: ' + sheet.text);
     assert(!errs.length, errs.join(' | '));
   },

@@ -1403,3 +1403,26 @@ Misure prima del lavoro (pagina di prova, CPU rallentata 4x come un telefono med
   Firebase Analytics (oggi nell'app non ce ne sono); widget Android "Prossimo GP"; modalità fuori stagione. Traduzione:
   solo inglese e solo se le misure mostrano utenti stranieri.
 - Prossima azione: aspettare la scelta di Edoardo. NFC ancora da provare da lui con due telefoni.
+
+### 22/11 pomeriggio: schermo sempre attivo, Notifiche, Profilo pubblico e casco coi design nuovi
+- Second Screen: icona del sole (senza scritta) per "Schermo sempre attivo"; la prima volta si apre `AwakeInfo`
+  (cos'è, cosa fa, "Nessun rischio..." in piccolo), in orizzontale come lo stage del Second Screen. Prima lo schermo
+  restava acceso da solo: ora solo con l'icona (`local` `bt-ss-awake`, `bt-ss-awake-seen`).
+- Profilo: "Collega PC" subito sopra "Codice promo"; `ScrollFadeCol` (sfumatura sopra e sotto solo quando c'è altro,
+  righe `[data-sf]` che al bordo si rimpiccioliscono e sbiadiscono; niente blur per la regola delle animazioni).
+- Notifiche col design "B&T: Notifiche": titolo grande, filtri per i tipi veri (B&T, Preferiti, Feedback), Oggi /
+  Ieri / Prima, pallino rosso, vuoto "Tutto tranquillo", impostazioni con notizie su scuderia e pilota + Promemoria,
+  Novità da B&T e Avviso a metà gara (spostati dal Profilo), ore di silenzio 22-08 (vere, dei promemoria). Senza
+  rete la pagina Notifiche mostra solo SENZA RETE. Non fatti: scorri per silenziare, ore di silenzio modificabili,
+  "al massimo una al giorno", tipi Lega e Amici (l'app non li manda).
+- Profilo pubblico col design: casco nel cerchio coi colori della scuderia, #scuderia #pilota, Segue F1 e Tipo fan
+  (toccandoli si apre "Su di te"), preferiti grandi, salvati "Solo tu", nascita "Non lo vede nessuno". "Modifica
+  profilo": visibile o nascosto per Segue F1, Tipo fan, Scuderia, Pilota (`pubHide` nei dati dell'account, nuova
+  chiave in `USER_KEYS`); i campi nascosti non partono col profilo della chat, "Segue F1" sì (`p.y`, compat.profOf).
+  Scheda di chi apri dalla chat: stessa grafica, "Trofei ottenuti" a piastrelle, "Tutti i N trofei".
+- Casco col design "B&T: Modifica casco": schede Colori (Base, Disegno 1, Disegno 2), Disegno (piastrelle e numero),
+  Visiera e finitura; poi la pagina "Casco salvato" (Fatto, Modifica ancora).
+- Prove aggiornate (non tolte): run59, run61, run69, run85, run88, run101-tv, run103, run127, run72, run76;
+  nuova run136 (6). Verificato: unit appdata 35; run136 6/6, run59 4/4, run61 3/3, run69 6+1 saltata, run85, run88
+  7/7, run101 2/2, run103 3/3, run127 5/5, run72 9/9, run76 8/8, run16 12/12, run31 12/12, run60 3/3, run10 8/8,
+  run50 6/6, run30 5/5, run112 3/3, run134 7/7 (una volta "lettore di Google" fallito, da solo passa).

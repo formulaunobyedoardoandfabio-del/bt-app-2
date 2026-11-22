@@ -81,7 +81,9 @@ run({
   async 'avvisi in gara nel Centro Notifiche senza Premium; "Offrici un caffè" e giochi "In arrivo"'(b) {
     const { ctx, p, errs } = await open(b); await login(p);
     await tapSel(p, '[aria-label="Notifiche"]').catch(() => {}); await w(p, 500);
+    await tapSel(p, '[data-notif-open-settings]').catch(() => {}); await w(p, 300);   // 22/11: sta nelle impostazioni delle notifiche
     const notif = await text(p);
+    await tapSel(p, '[aria-label="Chiudi"]').catch(() => {}); await w(p, 300);
     await tapSel(p, '[aria-label="Indietro"]').catch(() => {}); await w(p, 300);
     await tapSel(p, '[aria-label="Profilo"]'); await w(p, 400);
     const prof = await text(p);

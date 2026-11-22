@@ -1,6 +1,9 @@
 // Tappa 3, Task 12 (G18): "Centro Notifiche" con la riga dello stato ("Stato: Connesso al Pit Wall", senza rete "Pit
 // Wall non raggiungibile"), le preferenze come righe con icona e gli interruttori "Fluid Minimal Pill": capsula grigia
 // da spento, colorata da acceso, pallino bianco con l'ombra che scatta come una molla (con il tic della selezione).
+// 22/11 (Edoardo: "usa questo per le notifiche: B&T: Notifiche ... se l'utente è offline non mostrare niente se non la
+// schermata SENZA RETE"): titolo "Notifiche", niente riga del Pit Wall; le preferenze stanno nelle impostazioni (icona
+// in alto a destra); senza rete solo SENZA RETE.
 // Uso: node test/build-test.js && node test/e2e/run61-notifiche.js [filtro]
 const { open, w, text, tapText, tapSel, login, assert, run } = require('./helpers');
 
@@ -18,37 +21,38 @@ const pill = (p, sel) => p.evaluate(s => {
 }, sel);
 
 run({
-  async 'titolo "Centro Notifiche", "Stato: Connesso al Pit Wall"'(b) {
+  async 'titolo "Notifiche", preferenze nelle impostazioni con icona e interruttore'(b) {
     const { ctx, p, errs } = await open(b); await login(p);
     await openNotif(p);
     const h1 = await p.evaluate(() => [...document.querySelectorAll('h1')].map(e => e.textContent.trim()));
     const st = await status(p);
-    const rows = await p.evaluate(() => [...document.querySelectorAll('[data-pref-row]')].map(r => ({ icon: !!r.querySelector('[data-pref-icon] svg'), pill: !!r.querySelector('[data-pill]') })));
+    await tapSel(p, '[data-notif-open-settings]'); await w(p, 300);
+    const rows = await p.evaluate(() => [...document.querySelectorAll('[data-pref-row]')].map(r => ({ key: r.getAttribute('data-pref-row'), icon: !!r.querySelector('[data-pref-icon] svg'), pill: !!r.querySelector('[data-pill]') })));
     await ctx.close();
-    assert(h1.includes('Centro Notifiche'), 'titolo: ' + JSON.stringify(h1));
-    assert(st && st.text === 'Stato: Connesso al Pit Wall' && st.state === 'on', 'stato: ' + JSON.stringify(st));
-    assert(rows.length === 2 && rows.every(r => r.icon && r.pill), 'righe delle preferenze con icona e interruttore: ' + JSON.stringify(rows));
+    assert(h1.includes('Notifiche'), 'titolo: ' + JSON.stringify(h1));
+    assert(!st, 'niente più riga del Pit Wall: ' + JSON.stringify(st));
+    assert(rows.length >= 2 && rows.filter(r => r.key === 'team' || r.key === 'driver').length === 2 && rows.every(r => r.icon && r.pill), 'righe delle preferenze con icona e interruttore: ' + JSON.stringify(rows));
     assert(!errs.length, errs.join(' | '));
   },
 
-  async 'senza rete "Pit Wall non raggiungibile"'(b) {
+  async 'senza rete solo SENZA RETE; Firebase che non risponde non rompe la pagina'(b) {
     const { ctx, p, errs } = await open(b); await login(p);
     await openNotif(p);
-    await ctx.setOffline(true); await w(p, 300);
-    const off = await status(p);
-    await ctx.setOffline(false); await w(p, 300);
-    const back = await status(p);
+    await ctx.setOffline(true); await p.evaluate(() => window.dispatchEvent(new Event('offline'))); await w(p, 500);
+    const off = await p.evaluate(() => ({ off: !!document.querySelector('[data-offline-mode]'), page: !!document.querySelector('[data-notif-page]') }));
+    await ctx.setOffline(false); await p.evaluate(() => window.dispatchEvent(new Event('online'))); await w(p, 800);
+    const back = await p.evaluate(() => !!document.querySelector('[data-notif-page]'));
     await ctx.close();
-    // App aperta senza rete (Firebase non si carica): da ospite, la riga dice subito che il Pit Wall non risponde.
+    // App aperta con Firebase che non risponde (telefono in rete): da ospite la pagina si apre lo stesso, vuota.
     const c = await open(b, { query: '?nofake', routes: { 'https://www.gstatic.com/**': r => r.abort() } });
     await tapText(c.p, 'ENTRA COME OSPITE'); await w(c.p, 600);
     await openNotif(c.p);
-    const guest = await status(c.p);
+    const guest = await c.p.evaluate(() => !!document.querySelector('[data-notif-page]') || !!document.querySelector('[data-offline-mode]'));
     await c.ctx.close();
-    assert(off && off.text === 'Stato: Pit Wall non raggiungibile' && off.state === 'off', 'senza rete: ' + JSON.stringify(off));
-    assert(back && back.text === 'Stato: Connesso al Pit Wall', 'tornata la rete: ' + JSON.stringify(back));
-    assert(guest && guest.state === 'off' && /Pit Wall non raggiungibile/.test(guest.text), 'aperta senza rete: ' + JSON.stringify(guest));
-    assert(!errs.length && !c.errs.length, [...errs, ...c.errs].join(' | '));
+    assert(off.off && !off.page, 'senza rete solo SENZA RETE: ' + JSON.stringify(off));
+    assert(back, 'tornata la rete tornano le notifiche');
+    assert(guest, 'aperta senza Firebase: pagina delle notifiche o SENZA RETE');
+    assert(!errs.filter(e => !/net::|Failed to fetch/i.test(e)).length && !c.errs.length, [...errs, ...c.errs].join(' | '));
   },
 
   async 'interruttori a capsula (data-pill) con pallino che scatta'(b) {

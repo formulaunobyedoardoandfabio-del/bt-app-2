@@ -76,7 +76,9 @@ run({
     await playDeck(p); await w(p, 600);
     const after = await p.evaluate(() => window.__notif.slice());
     await tapSel(p, '[aria-label="Indietro"]'); await w(p, 300);
-    await tapSel(p, '[aria-label="Profilo"]'); await w(p, 500);
+    // 22/11: l'interruttore è passato da Profilo alle impostazioni delle notifiche
+    await tapSel(p, '[aria-label="Notifiche"]'); await w(p, 500);
+    await tapSel(p, '[data-notif-open-settings]'); await w(p, 300);
     await tapSel(p, '[role="switch"][aria-label="Promemoria sul telefono"]'); await w(p, 600);
     const off = await p.evaluate(() => window.__notif.slice(-2));
     await ctx.close();
