@@ -25,14 +25,17 @@ run({
     const { ctx, p } = await open(b, { seed: SEED });
     await login(p); await w(p, 800);
     await openFeedback(p);
+    await tapSel(p, '[data-fb-open-reviews]'); await w(p, 500);
     const wall = await p.evaluate(() => { const e = document.querySelector('[data-fb-wall]'); return e && { n: Number(e.getAttribute('data-fb-wall')), text: e.innerText, cards: e.querySelectorAll('[data-fb-card]').length }; });
+    await tapSel(p, '[data-fb-write-review]'); await w(p, 300);   // complimento con "Mostra nelle recensioni" già acceso
+    const shareOn = await p.evaluate(() => { const e = document.querySelector('[data-feedback-share] [role="switch"]'); return e && e.getAttribute('aria-checked'); });
     await tapSel(p, '[data-feedback-face="5"]'); await w(p, 200);
     await p.fill('[data-feedback-msg]', 'Mi piace tanto la scelta dei piloti');
-    await p.check('[data-feedback-share] input');
-    await tapText(p, 'INVIA FEEDBACK'); await w(p, 1200);
+    await tapSel(p, '[data-fb-send]'); await w(p, 1200);
     const mine = await p.evaluate(() => Object.entries(window.firebase.__fake.docs()).filter(([k, d]) => k.startsWith('shared/bt-feedback-') && /scelta dei piloti/.test(d.msg)).map(([, d]) => d)[0]);
     await ctx.close();
-    assert(wall && wall.n === 3 && wall.cards === 18, 'tre feedback da mostrare (in ognuna delle 3 colonne, due volte per il giro): ' + JSON.stringify(wall));
+    assert(shareOn === 'true', 'da "Scrivi la tua recensione" il permesso è già acceso: ' + shareOn);
+    assert(wall && wall.n === 3 && wall.cards === 24, 'tre feedback da mostrare (in ognuna delle 4 colonne, due volte per il giro): ' + JSON.stringify(wall));
     assert(/Tifoso1/.test(wall.text) && /Feedback vero numero 2/.test(wall.text), 'nickname e testo veri: ' + wall.text.slice(0, 160));
     assert(!/@/.test(wall.text) && !/non deve vedersi/.test(wall.text) && !/Nascosto/.test(wall.text), 'niente email, niente feedback senza permesso o nascosti');
     assert(mine && mine.public === true && mine.name === 'Tester', 'il mio feedback col permesso e il mio nickname: ' + JSON.stringify(mine));
@@ -43,6 +46,7 @@ run({
     await login(p); await w(p, 600);
     await p.evaluate(() => window.firebase.__fake.setDoc('admins/a@b.it', { ruolo: 'admin' }));
     await openFeedback(p);
+    await tapSel(p, '[data-fb-open-reviews]'); await w(p, 500);
     await p.evaluate(() => { document.querySelector('[data-fb-admin]').open = true; });
     await tapSel(p, '[data-fb-hide="1"]'); await w(p, 600);
     const r = await p.evaluate(() => ({ doc: window.firebase.__fake.doc('shared/bt-feedback-1'), wall: !!document.querySelector('[data-fb-wall]') }));

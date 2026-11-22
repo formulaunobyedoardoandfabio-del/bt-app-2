@@ -61,6 +61,19 @@ const tests = {
     const bad = createProfiles({ dbGet: async () => { throw new Error('offline'); }, dbSet: async () => {}, store: fakeStore() });
     assert.strictEqual(await bad.load(AID), null);
   },
+  // 22/11 (Edoardo: "per i trofei metti quelli veri dell'utente idem per ELO"): l'ELO del FantaF1 va nel profilo pubblico.
+  async 'publish e load: ELO vero del FantaF1 (punteggio e GP); valori strani: niente ELO'() {
+    const db = fakeDb();
+    const pr = createProfiles({ ...db, store: fakeStore(), now: () => 7 });
+    await pr.publish({ name: 'FT22', aid: AID, p: P, elo: { rating: 1532.4, games: 6 } });
+    assert.deepStrictEqual(db.docs['fanta/profilo-' + AID].elo, { rating: 1532, games: 6 });
+    assert.deepStrictEqual((await pr.load(AID)).elo, { rating: 1532, games: 6 });
+    const db2 = fakeDb();
+    const pr2 = createProfiles({ ...db2, store: fakeStore(), now: () => 7 });
+    await pr2.publish({ name: 'FT22', aid: AID, p: P, elo: { rating: 'tanto', games: -1 } });
+    assert.strictEqual(db2.docs['fanta/profilo-' + AID].elo, null);
+    assert.ok(!(await pr2.load(AID)).elo, 'senza ELO valido il profilo non ne mostra');
+  },
   async 'cleanupFor: eliminando l\'account il profilo pubblico si svuota'() {
     const db = fakeDb();
     db.docs['fanta/profilo-' + AID] = { name: 'FT22', aid: AID, p: P, t: 9 };

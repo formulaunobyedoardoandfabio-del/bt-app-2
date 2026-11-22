@@ -51,7 +51,7 @@ import AppData from "./services/appdata";
 import Compat from "./services/compat";
 import { createAccount, MESSAGES as ACCOUNT_MSG, messageOf, MIN_AGE, pwStrength } from "./services/account";
 import { createChat, CHAT_MSG, ROOM_IDS, nextPollDelay } from "./services/chat";
-import { createFeedback, FEEDBACK_CATS, FEEDBACK_MSG, APP_VERSION } from "./services/feedback";
+import { createFeedback, FEEDBACK_CATS, FEEDBACK_WHERE, FEEDBACK_MSG, APP_VERSION } from "./services/feedback";
 import { local, IMG_REF, uploadImage, loadImage as loadStoredImage, dropImage, errLog, dbGet, dbSet, dbDelete } from "./services/firebase";
 import ErrLogMod from "./services/errlog";
 // 15/11 (codice 06): console, errori non presi e rete finiscono nel registro degli errori del telefono
@@ -290,6 +290,8 @@ function Icon({ name, size = 18, color = C.text, sw = 2 }) {
     case "tire": return <svg {...s}><circle cx="12" cy="12" r="8" /><circle cx="12" cy="12" r="3" /></svg>;
     case "radio": return <svg {...s}><path d="M7 12a5 5 0 0 1 10 0" /><path d="M4 12a8 8 0 0 1 16 0" /><circle cx="12" cy="12" r="1.5" fill={color} /></svg>;
     case "group": return <svg {...s}><circle cx="9" cy="8" r="3" /><path d="M2.5 20c0-3.5 3-6 6.5-6s6.5 2.5 6.5 6" /><circle cx="17.5" cy="9" r="2.3" /><path d="M15 20c.3-2.7 2-4.6 5.5-4.6" /></svg>;
+    case "bug": return <svg {...s}><path d="M9 7.5a3 3 0 0 1 6 0" /><rect x="7" y="8" width="10" height="12" rx="5" /><path d="M12 12v8" /><path d="M3 13h4M17 13h4M4 8.5l3 2M20 8.5l-3 2M4 19l3-2M20 19l-3-2" /></svg>;
+    case "phone": return <svg {...s}><rect x="6.5" y="2.5" width="11" height="19" rx="2.5" /><path d="M11 18.5h2" /></svg>;
     case "bulb": return <svg {...s}><path d="M9 18h6" /><path d="M10 22h4" /><path d="M12 2a6.5 6.5 0 0 0-3.8 11.8c.5.4.8 1 .8 1.7v.5h6v-.5c0-.7.3-1.3.8-1.7A6.5 6.5 0 0 0 12 2Z" /></svg>;
     case "doc": return <svg {...s}><path d="M4 4h12l4 4v12H4z" /><line x1="8" y1="10" x2="16" y2="10" /><line x1="8" y1="14" x2="16" y2="14" /><line x1="8" y1="18" x2="12" y2="18" /></svg>;
     case "history": return <svg {...s}><circle cx="12" cy="12" r="9" /><polyline points="12,7 12,12 16,14" /></svg>;
@@ -9137,6 +9139,7 @@ function ChatProfileSheet({ msg, messages, trophyList = TROPHIES, myWon = {}, lo
         <span style={{ display: "flex", alignItems: "center", justifyContent: "center", width: 40, height: 40, borderRadius: "50%", background: alpha(c, .16), border: `2px solid ${alpha(c, .6)}`, flexShrink: 0 }}><Icon name="trophy" size={17} color={c} /></span>
         <span style={{ minWidth: 0 }}>
           <span style={{ display: "block", fontFamily: F_BODY, fontSize: 13.5, fontWeight: 800, color: PX.text, lineHeight: "17px" }}>{tname(t)}</span>
+          {prof && prof.wa && prof.wa[t.id] && <span data-trophy-day={prof.wa[t.id]} style={{ display: "block", marginTop: 2, fontFamily: F_BODY, fontSize: 11, fontWeight: 700, color: PX.muted }}>{new Date(prof.wa[t.id] + "T12:00:00").toLocaleDateString("it-IT", { day: "numeric", month: "short", year: "numeric" })}</span>}
           {!(t.secret && !myWon[t.id]) && t.how && <span style={{ display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden", marginTop: 2, fontFamily: F_BODY, fontSize: 11, fontWeight: 600, lineHeight: "14px", color: PX.muted }}>{t.how}</span>}
         </span>
       </div>
@@ -9180,11 +9183,12 @@ function ChatProfileSheet({ msg, messages, trophyList = TROPHIES, myWon = {}, lo
                 {!team && !drv && pub !== undefined && <span data-chat-profile-nofav="" style={{ fontFamily: F_BODY, fontSize: 13, color: PX.muted }}>Squadra e pilota del cuore non ancora scelti</span>}
               </div>
             </div>
-            <div data-chat-profile-stats="" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
-              {[["Messaggi qui", String(theirs.length)], ["In chat dal", firstAt && isFinite(firstAt) ? fmtDMY(firstAt) : "Oggi"]].map(([k, v]) => (
+            <div data-chat-profile-stats="" style={{ display: "grid", gridTemplateColumns: pub && pub.elo ? "1fr 1fr 1fr" : "1fr 1fr", gap: 8 }}>
+              {[["Messaggi qui", String(theirs.length)], ["In chat dal", firstAt && isFinite(firstAt) ? fmtDMY(firstAt) : "Oggi"], ...(pub && pub.elo ? [["ELO FantaF1", String(pub.elo.rating), `${pub.elo.games} GP`]] : [])].map(([k, v, sub]) => (
                 <div key={k} style={{ padding: "10px 12px", borderRadius: 14, background: "#0F0F11", border: `1px solid ${PX.line}` }}>
                   <div style={{ fontFamily: F_BODY, fontWeight: 700, fontSize: 11.5, color: PX.muted }}>{k}</div>
-                  <div style={{ fontFamily: F_HEAD, fontWeight: 900, fontSize: 19, color: PX.text, fontVariantNumeric: "tabular-nums", marginTop: 2 }}>{v}</div>
+                  <div {...(k === "ELO FantaF1" ? { "data-chat-profile-elo": v } : {})} style={{ fontFamily: F_HEAD, fontWeight: 900, fontSize: 19, color: PX.text, fontVariantNumeric: "tabular-nums", marginTop: 2 }}>{v}</div>
+                  {sub && <div style={{ fontFamily: F_BODY, fontSize: 11, fontWeight: 700, color: PX.muted }}>{sub}</div>}
                 </div>
               ))}
             </div>
@@ -10617,10 +10621,7 @@ function ProfiloScreen({ pubHide = {}, onPubHide = null, onGoNotifiche = null, o
               <HelmetArt spec={helmet} size={66} />
             </button>
             <h2 data-pub-name="" style={{ margin: "14px 0 0", fontFamily: F_HEAD, fontSize: 26, fontWeight: 800 }}>{account ? account.name : ""}</h2>
-            {(ft || fd) && <div style={{ display: "flex", gap: 8, marginTop: 10, flexWrap: "wrap", justifyContent: "center" }}>
-              {ft && !hidden("team") && tag("#" + ft.name.replace(/\s+/g, ""), ft.color)}
-              {fd && !hidden("driver") && tag("#" + String(fd.name || fd.full).replace(/\s+/g, ""), fd.color)}
-            </div>}
+            {/* 22/11 (Edoardo): nel proprio profilo niente #scuderia #pilota scritti: ci sono gli avatar qui sotto */}
           </div>
         )}
         {!guest && !waiting && (
@@ -10636,12 +10637,12 @@ function ProfiloScreen({ pubHide = {}, onPubHide = null, onGoNotifiche = null, o
         <div style={{ margin: "20px 0 10px", fontFamily: F_BODY, fontSize: 15, fontWeight: 800 }}>I miei preferiti</div>
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
           <button className="press" data-pub-fav="team" onClick={onPickTeam} style={{ display: "flex", flexDirection: "column", justifyContent: "flex-end", minHeight: 150, padding: 12, borderRadius: 18, textAlign: "left", background: ft ? alpha(ft.color, .12) : PX.card, border: `1px solid ${ft ? alpha(ft.color, .55) : PX.line}`, opacity: hidden("team") ? .55 : 1 }}>
-            <span aria-hidden="true" style={{ flex: 1, minHeight: 40, marginBottom: 12, borderRadius: 12, background: ft ? `linear-gradient(135deg, ${alpha(ft.color, .55)}, ${alpha(ft.color, .2)})` : PX.key }} />
+            <span data-pub-avatar="team" data-pub-avatar-on={ft ? ft.id : ""} style={{ flex: 1, minHeight: 72, marginBottom: 10, borderRadius: 12, display: "flex", alignItems: "center", justifyContent: "center", background: ft ? `radial-gradient(circle at 50% 40%, ${alpha(ft.color, .35)}, ${alpha(ft.color, .08)} 70%)` : PX.key }}>{ft ? <TeamBadge team={ft} size={64} /> : <Icon name="garage" size={26} color={PX.muted} />}</span>
             <span style={{ fontFamily: F_BODY, fontSize: 12, fontWeight: 700, color: PX.muted }}>Scuderia del cuore</span>
             <span style={{ marginTop: 2, fontFamily: F_BODY, fontSize: 17, fontWeight: 800, color: ft ? PX.text : PX.muted }}>{ft ? ft.name : "Scegli"}</span>
           </button>
           <button className="press" data-pub-fav="driver" onClick={onPickDriver} style={{ display: "flex", flexDirection: "column", justifyContent: "flex-end", minHeight: 150, padding: 12, borderRadius: 18, textAlign: "left", background: fd ? alpha(fd.color, .12) : PX.card, border: `1px solid ${fd ? alpha(fd.color, .55) : PX.line}`, opacity: hidden("driver") ? .55 : 1 }}>
-            <span style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", fontFamily: F_HEAD, fontSize: 26, fontWeight: 900, letterSpacing: 1, color: fd ? (Colors.contrast(fd.color, "#000000") >= 3 ? fd.color : PX.text) : PX.muted }}>{fd ? fd.tag : "?"}</span>
+            <span data-pub-avatar="driver" data-pub-avatar-on={fd ? fd.id : ""} style={{ flex: 1, minHeight: 72, marginBottom: 10, display: "flex", alignItems: "center", justifyContent: "center" }}>{fd ? <Headshot driver={fd} size={76} /> : <Icon name="helmet" size={26} color={PX.muted} />}</span>
             <span style={{ fontFamily: F_BODY, fontSize: 12, fontWeight: 700, color: PX.muted }}>Pilota del cuore</span>
             <span style={{ marginTop: 2, fontFamily: F_BODY, fontSize: 17, fontWeight: 800, color: fd ? PX.text : PX.muted }}>{fd ? fd.full : "Scegli"}</span>
           </button>
@@ -10847,7 +10848,131 @@ function NxBack({ onClick, close = false, label }) {
     </button>
   );
 }
-function NotificheScreen({ onBack, notifs, onReadAll, favTeam, favDriver, prefs, onPrefs, onGoProfilo, onAction, guest = false, reminders = true, onReminders = null, news = true, onNews = null, halfway = true, onHalfway = null, startPage = "list" }) {
+// 22/11 (Edoardo: "fai che l'orario di silenzio si possa modificare cliccandoci sopra con questa grafica prima l'inizio
+// e poi la fine", Range Slider Ruler di BeUI, MIT): la scala scorre sotto un ago fisso; trascinando si sposta, lasciando
+// prosegue un poco e si ferma sulla tacca più vicina. Tastiera: frecce, Pagina su/giù, Home, Fine. Solo transform; con
+// "Rimuovi animazioni" niente slancio. Riscritto per l'app senza librerie (niente motion/react).
+function RulerSlider({ value, onChange, min = 0, max = 100, step = 1, gap = 14, majorEvery = 5, format = v => String(v), tickLabel = v => String(v), ariaLabel = "", unit = null }) {
+  const span = Math.max(1, Math.round((max - min) / step));
+  const maxOff = span * gap;
+  const strip = useRef(null);
+  const st = useRef({ x: 0, drag: null, raf: 0, last: value });
+  const snapV = v => Math.min(max, Math.max(min, Math.round((v - min) / step) * step + min));
+  const offOf = v => -((snapV(v) - min) / step) * gap;
+  const paint = x => { st.current.x = x; if (strip.current) strip.current.style.transform = `translateX(${x}px)`; };
+  const emit = x => {
+    const v = snapV(min + (-x / gap) * step);
+    if (v !== st.current.last) { st.current.last = v; onChange(v); fx.buzz("select"); }
+  };
+  const stop = () => { if (st.current.raf) cancelAnimationFrame(st.current.raf); st.current.raf = 0; };
+  // silent: con la tastiera il valore è già quello nuovo, la scala solo scorre (niente valori di passaggio).
+  const glide = (to, silent = false) => {
+    stop();
+    const from = st.current.x, t0 = performance.now();
+    const still = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const dur = still ? 0 : Math.min(520, 160 + Math.abs(to - from) * 1.2);
+    const tick = t => {
+      const k = dur ? Math.min(1, (t - t0) / dur) : 1;
+      const x = from + (to - from) * (1 - Math.pow(1 - k, 3));
+      paint(x); if (!silent) emit(x);
+      if (k < 1) st.current.raf = requestAnimationFrame(tick); else st.current.raf = 0;
+    };
+    st.current.raf = requestAnimationFrame(tick);
+  };
+  useEffect(() => { if (!st.current.drag && !st.current.raf) { st.current.last = value; paint(offOf(value)); } }, [value, min, max, step, gap]);   // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => () => stop(), []);   // eslint-disable-line react-hooks/exhaustive-deps
+  const clampX = x => (x > 0 ? x * .25 : x < -maxOff ? -maxOff + (x + maxOff) * .25 : x);   // un filo di elastico ai bordi
+  const down = e => {
+    stop();
+    try { e.currentTarget.setPointerCapture(e.pointerId); } catch (err) { /* niente */ }
+    st.current.drag = { x0: e.clientX, off0: st.current.x, samples: [[performance.now(), e.clientX]] };
+  };
+  const move = e => {
+    const d = st.current.drag;
+    if (!d) return;
+    const x = clampX(d.off0 + (e.clientX - d.x0));
+    d.samples.push([performance.now(), e.clientX]);
+    if (d.samples.length > 6) d.samples.shift();
+    paint(x); emit(Math.min(0, Math.max(-maxOff, x)));
+  };
+  const up = () => {
+    const d = st.current.drag;
+    if (!d) return;
+    st.current.drag = null;
+    const still = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const [a, b] = [d.samples[0], d.samples[d.samples.length - 1]];
+    const vel = b && a && b[0] > a[0] ? (b[1] - a[1]) / (b[0] - a[0]) : 0;   // px al millisecondo
+    const target = Math.min(0, Math.max(-maxOff, st.current.x + (still ? 0 : vel * 220)));
+    glide(offOf(min + (-target / gap) * step));
+  };
+  const key = e => {
+    const big = step * majorEvery;
+    const map = { ArrowRight: value + step, ArrowUp: value + step, ArrowLeft: value - step, ArrowDown: value - step, PageUp: value + big, PageDown: value - big, Home: min, End: max };
+    if (!(e.key in map)) return;
+    e.preventDefault();
+    const v = snapV(map[e.key]);
+    st.current.last = v; onChange(v); fx.buzz("select"); glide(offOf(v), true);
+  };
+  const ticks = [];
+  for (let i = 0; i <= span; i++) ticks.push({ i, v: Number((min + i * step).toFixed(6)), major: i % majorEvery === 0 });
+  return (
+    <div role="slider" tabIndex={0} aria-label={ariaLabel} aria-valuemin={min} aria-valuemax={max} aria-valuenow={value} aria-valuetext={format(value) + (unit ? " " + unit : "")} onKeyDown={key} data-ruler=""
+      style={{ position: "relative", width: "100%", borderRadius: 16, outline: "none", userSelect: "none", WebkitUserSelect: "none", WebkitTouchCallout: "none" }}>
+      <div style={{ display: "flex", alignItems: "baseline", justifyContent: "center", gap: 4, padding: "4px 0 12px", pointerEvents: "none" }}>
+        <span data-ruler-value="" style={{ fontFamily: F_HEAD, fontSize: 34, fontWeight: 800, color: "#F4F4F5", fontVariantNumeric: "tabular-nums" }}>{format(value)}</span>
+        {unit && <span style={{ fontFamily: F_BODY, fontSize: 13, color: "#A1A1AA" }}>{unit}</span>}
+      </div>
+      <div onPointerDown={down} onPointerMove={move} onPointerUp={up} onPointerCancel={up} onLostPointerCapture={up}
+        style={{ position: "relative", height: 52, overflow: "hidden", touchAction: "none", cursor: "grab", WebkitMaskImage: "linear-gradient(to right, transparent, #000 18%, #000 82%, transparent)", maskImage: "linear-gradient(to right, transparent, #000 18%, #000 82%, transparent)" }}>
+        <div ref={strip} style={{ position: "absolute", top: 0, bottom: 0, left: "50%", marginLeft: -gap / 2, width: maxOff + gap, transform: `translateX(${offOf(value)}px)`, willChange: "transform" }}>
+          {ticks.map(t => (
+            <span key={t.i} style={{ position: "absolute", bottom: 0, left: t.i * gap + gap / 2, transform: "translateX(-50%)", display: "flex", flexDirection: "column", alignItems: "center", paddingBottom: 18 }}>
+              <span style={{ width: 1, height: t.major ? 28 : 14, borderRadius: 1, background: t.major ? "rgba(244,244,245,.7)" : "rgba(244,244,245,.45)" }} />
+              {t.major && <span style={{ position: "absolute", bottom: 0, fontFamily: F_BODY, fontSize: 10, color: "#A1A1AA", fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap" }}>{tickLabel(t.v)}</span>}
+            </span>
+          ))}
+        </div>
+        <span aria-hidden="true" style={{ position: "absolute", bottom: 20, left: "50%", width: 3, height: 36, marginLeft: -1.5, borderRadius: 2, background: "#F4F4F5", pointerEvents: "none" }} />
+      </div>
+    </div>
+  );
+}
+const hhmm = m => `${String(Math.floor(m / 60) % 24).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`;
+// Le ore di silenzio: prima l'inizio, poi la fine, ognuna col righello (passi di 15 minuti).
+function QuietSheet({ quiet, onSave, onClose }) {
+  const q0 = Reminders.quietOf(quiet) || { from: 22 * 60, to: 8 * 60 };
+  const [from, setFrom] = useState(quiet && quiet.from === quiet.to && Number.isInteger(quiet.from) ? quiet.from : q0.from);
+  const [to, setTo] = useState(quiet && quiet.from === quiet.to && Number.isInteger(quiet.to) ? quiet.to : q0.to);
+  const [stepN, setStepN] = useState(0);
+  useBack(true, () => (stepN ? setStepN(0) : onClose()));
+  const same = from === to;
+  return (
+    <div data-quiet-sheet={stepN ? "fine" : "inizio"} role="dialog" aria-modal="true" aria-label="Ore di silenzio" onClick={e => { if (e.target === e.currentTarget) onClose(); }} style={{ position: "absolute", inset: 0, zIndex: 660, background: "rgba(0,0,0,.7)", display: "flex", alignItems: "flex-end" }}>
+      <div style={{ width: "100%", boxSizing: "border-box", padding: "16px 20px calc(env(safe-area-inset-bottom, 0px) + 20px)", borderRadius: "24px 24px 0 0", background: "#111113", borderTop: "1px solid #1E1E22", color: "#F4F4F5" }}>
+        <div aria-hidden="true" style={{ width: 40, height: 5, margin: "0 auto 14px", borderRadius: 3, background: "rgba(255,255,255,.2)" }} />
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <span style={{ fontFamily: F_BODY, fontSize: 12, fontWeight: 800, color: "#A1A1AA" }}>{stepN ? "2 di 2" : "1 di 2"}</span>
+          <button className="press" aria-label="Chiudi" onClick={onClose} style={{ marginLeft: "auto", width: 40, height: 40, marginRight: -8, display: "flex", alignItems: "center", justifyContent: "center" }}><Icon name="close" size={20} color="#F4F4F5" /></button>
+        </div>
+        <h2 style={{ margin: "2px 0 0", fontFamily: F_HEAD, fontSize: 22, fontWeight: 800 }}>{stepN ? "Quando finisce il silenzio?" : "Quando inizia il silenzio?"}</h2>
+        <p style={{ margin: "4px 0 14px", fontFamily: F_BODY, fontSize: 13, fontWeight: 600, color: "#A1A1AA" }}>In queste ore niente promemoria sul telefono. Trascina la scala.</p>
+        {stepN === 0
+          ? <RulerSlider key="from" value={from} onChange={setFrom} min={0} max={1425} step={15} gap={14} majorEvery={4} format={hhmm} tickLabel={v => String(Math.floor(v / 60))} ariaLabel="Inizio del silenzio" />
+          : <RulerSlider key="to" value={to} onChange={setTo} min={0} max={1425} step={15} gap={14} majorEvery={4} format={hhmm} tickLabel={v => String(Math.floor(v / 60))} ariaLabel="Fine del silenzio" />}
+        <p data-quiet-sum="" style={{ margin: "12px 0 16px", textAlign: "center", fontFamily: F_BODY, fontSize: 13, fontWeight: 700, color: same ? "#FACC15" : "#A1A1AA" }}>{same ? "Inizio e fine uguali: nessun silenzio" : `Dalle ${hhmm(from)} alle ${hhmm(to)}`}</p>
+        {stepN === 0
+          ? <button className="press" data-quiet-next="" onClick={() => setStepN(1)} style={{ width: "100%", height: 52, borderRadius: 16, background: "#F4F4F5", fontFamily: F_HEAD, fontSize: 16, fontWeight: 800, color: "#000" }}>Avanti</button>
+          : <div style={{ display: "flex", gap: 10 }}>
+            <button className="press" onClick={() => setStepN(0)} style={{ flex: 1, height: 52, borderRadius: 16, border: "1px solid #2A2A2E", fontFamily: F_HEAD, fontSize: 15, fontWeight: 800, color: "#F4F4F5" }}>Indietro</button>
+            <button className="press" data-quiet-save="" onClick={() => { onSave({ from, to }); onClose(); }} style={{ flex: 2, height: 52, borderRadius: 16, background: "#F4F4F5", fontFamily: F_HEAD, fontSize: 16, fontWeight: 800, color: "#000" }}>Salva</button>
+          </div>}
+      </div>
+    </div>
+  );
+}
+
+function NotificheScreen({ onBack, notifs, onReadAll, favTeam, favDriver, prefs, onPrefs, onGoProfilo, onAction, guest = false, reminders = true, onReminders = null, news = true, onNews = null, halfway = true, onHalfway = null, quiet = null, onQuiet = null, startPage = "list" }) {
+  const [quietOpen, setQuietOpen] = useState(false);
   const ft = favTeam ? teamById(favTeam) : null;
   const fd = favDriver ? driverById(favDriver) : null;
   const [page, setPage] = useState(startPage);
@@ -10889,14 +11014,22 @@ function NotificheScreen({ onBack, notifs, onReadAll, favTeam, favDriver, prefs,
           ))}
         </div>
         {(!ft || !fd) && <button className="press" onClick={onGoProfilo} style={{ display: "block", margin: "6px 0 0", padding: "10px 0", fontFamily: F_BODY, fontWeight: 700, fontSize: 13, color: NX.text, textDecoration: "underline" }}>Scegli scuderia e pilota del cuore</button>}
-        <div style={{ display: "flex", alignItems: "center", gap: 12, marginTop: 14, padding: "12px 14px", borderRadius: 18, background: NX.card, border: `1px solid ${NX.line}` }}>
-          <span style={{ display: "flex", alignItems: "center", justifyContent: "center", width: 36, height: 36, borderRadius: 18, background: NX.key, flexShrink: 0 }}><Icon name="moon" size={17} color={NX.text} /></span>
-          <span style={{ flex: 1, minWidth: 0 }}>
-            <span style={{ display: "block", fontFamily: F_BODY, fontSize: 14, fontWeight: 800 }}>Ore di silenzio</span>
-            <span style={{ display: "block", marginTop: 2, fontFamily: F_BODY, fontSize: 12, fontWeight: 600, color: NX.muted }}>Nessun promemoria in questo orario</span>
-          </span>
-          <span style={{ padding: "8px 12px", borderRadius: 12, background: NX.key, fontFamily: F_BODY, fontSize: 13, fontWeight: 800, fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap" }}>22:00 - 08:00</span>
-        </div>
+        {(() => {
+          const qq = Reminders.quietOf(quiet);
+          const txt = qq ? `${hhmm(qq.from)} - ${hhmm(qq.to)}` : "Spente";
+          const Tag = onQuiet ? "button" : "div";
+          return (
+            <Tag {...(onQuiet ? { className: "press", "data-quiet-open": "", "aria-label": "Ore di silenzio: " + txt + ". Tocca per cambiarle", onClick: () => setQuietOpen(true) } : {})} style={{ display: "flex", alignItems: "center", gap: 12, width: "100%", boxSizing: "border-box", marginTop: 14, padding: "12px 14px", borderRadius: 18, background: NX.card, border: `1px solid ${NX.line}`, textAlign: "left", color: NX.text }}>
+              <span style={{ display: "flex", alignItems: "center", justifyContent: "center", width: 36, height: 36, borderRadius: 18, background: NX.key, flexShrink: 0 }}><Icon name="moon" size={17} color={NX.text} /></span>
+              <span style={{ flex: 1, minWidth: 0 }}>
+                <span style={{ display: "block", fontFamily: F_BODY, fontSize: 14, fontWeight: 800 }}>Ore di silenzio</span>
+                <span style={{ display: "block", marginTop: 2, fontFamily: F_BODY, fontSize: 12, fontWeight: 600, color: NX.muted }}>{qq ? "Nessun promemoria in questo orario" : "Promemoria a qualsiasi ora"}</span>
+              </span>
+              <span data-quiet-value="" style={{ padding: "8px 12px", borderRadius: 12, background: NX.key, fontFamily: F_BODY, fontSize: 13, fontWeight: 800, fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap" }}>{txt}</span>
+            </Tag>
+          );
+        })()}
+        {quietOpen && onQuiet && <QuietSheet quiet={quiet} onSave={onQuiet} onClose={() => setQuietOpen(false)} />}
         <div style={{ display: "flex", alignItems: "center", gap: 12, marginTop: 10, padding: "12px 14px", borderRadius: 18, background: NX.card, border: `1px solid ${NX.line}` }}>
           <Icon name="bell" size={16} color={NX.yellow} />
           <span style={{ flex: 1, fontFamily: F_BODY, fontWeight: 700, fontSize: 13 }}>Avvisi in gara sul tuo pilota attivi</span>
@@ -12455,112 +12588,259 @@ function LoadingScreen({ ready, onDone, holiday = null }) {
 // in cima alla scheda Feedback scorrono i feedback veri dei tifosi che hanno detto sì a mostrarli (Feedback.listPublic:
 // nickname, faccina, categoria, quando, testo; mai l'email). Tre colonne inclinate che scorrono in su e in giù (solo
 // transform), ferme col dito sopra o con "Rimuovi animazioni". Con meno di 3 feedback da mostrare non c'è.
+// 22/11 (Edoardo: "usa questo per la schermata dei feedback coi veri dati dei feedback", grafica "B&T: Schermata
+// Feedback"; codice delle recensioni che si muovono in 3D): pagina intera. Scrivi (Idea, Problema, Complimento, Altro;
+// per i problemi dove è successo; info del telefono e screenshot se li aggiungi; per i complimenti le faccine e "Mostra
+// nelle recensioni"), Ricevuto (stato vero: inviato, arrivato; letto quando lo segna il team), Le tue segnalazioni (i
+// tuoi feedback veri con lo stato) e Recensioni (solo chi ha detto sì, col nickname, mai l'email).
 const FB_WALL_CSS = "@keyframes fbUp{from{transform:translateY(0)}to{transform:translateY(-50%)}}@keyframes fbDown{from{transform:translateY(-50%)}to{transform:translateY(0)}}"
-  + ".fb-col{animation:fbUp var(--fb-dur,40s) linear infinite}.fb-col.rev{animation-name:fbDown}.fb-wall:active .fb-col{animation-play-state:paused}"
-  + "@media (prefers-reduced-motion: reduce){.fb-col,.fb-col.rev{animation:none}}";
-const FB_FACE = ["", "Molto male", "Migliorabile", "Nella media", "Bene", "Ottimo"];
+  + ".fb-col{animation:fbUp var(--fb-dur,40s) linear infinite}.fb-col.rev{animation-name:fbDown}.fb-wall:hover .fb-col,.fb-wall:active .fb-col{animation-play-state:paused}"
+  + "@media (prefers-reduced-motion: reduce){.fb-col{animation:none!important}}";
+const FB_FACE = ["", "Male", "Così così", "Nella media", "Bene", "Benissimo"];
+const FBX = { bg: "#000000", card: "#111113", line: "#1E1E22", key: "#1C1C1F", text: "#F4F4F5", muted: "#A1A1AA", yellow: "#FACC15", red: "#FF1801", green: "#34D399", blue: "#64C4FF" };
+const FB_KIND = { idea: ["Idea", "bulb", FBX.yellow], problema: ["Problema", "bug", FBX.red], complimento: ["Complimento", "heart", FBX.green], altro: ["Altro", "chat", FBX.blue] };
+const FB_KIND_OF = c => FB_KIND[c] || (c === "bug" ? FB_KIND.problema : c === "idea" ? FB_KIND.idea : ["Feedback", "chat", FBX.blue]);
 function FeedbackWallCard({ f }) {
   const hue = Array.from(f.name).reduce((h, c) => (h * 31 + c.charCodeAt(0)) % 360, 7);
-  const cat = (FEEDBACK_CATS.find(c => c.id === f.category) || FEEDBACK_CATS[0]).label;
   return (
-    <figure data-fb-card={f.id} style={{ margin: 0, width: 150, boxSizing: "border-box", padding: "10px 11px", borderRadius: 14, background: "#16161A", border: `1px solid ${C.border}` }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-        <span aria-hidden="true" style={{ width: 28, height: 28, borderRadius: "50%", flexShrink: 0, background: `hsl(${hue} 55% 42%)`, display: "flex", alignItems: "center", justifyContent: "center", fontFamily: F_HEAD, fontWeight: 900, fontSize: 13, color: "#fff" }}>{f.name.charAt(0).toUpperCase()}</span>
+    <figure data-fb-card={f.id} style={{ margin: 0, width: 168, boxSizing: "border-box", padding: "12px 12px", borderRadius: 14, background: "#16161A", border: "1px solid #26262B" }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 9 }}>
+        <span aria-hidden="true" style={{ width: 34, height: 34, borderRadius: "50%", flexShrink: 0, background: `hsl(${hue} 55% 40%)`, display: "flex", alignItems: "center", justifyContent: "center", fontFamily: F_HEAD, fontWeight: 900, fontSize: 14, color: "#fff" }}>{f.name.charAt(0).toUpperCase()}</span>
         <figcaption style={{ minWidth: 0 }}>
-          <div style={{ fontFamily: F_BODY, fontWeight: 700, fontSize: 11.5, color: C.text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{f.name}</div>
-          <div style={{ fontFamily: F_BODY, fontSize: 10, color: C.dim, whiteSpace: "nowrap" }}>{FB_FACE[f.stars]} · {cat}</div>
+          <div style={{ fontFamily: F_BODY, fontWeight: 800, fontSize: 12.5, color: FBX.text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{f.name}</div>
+          <div style={{ fontFamily: F_BODY, fontSize: 10.5, fontWeight: 600, color: FBX.muted, whiteSpace: "nowrap" }}>{FB_FACE[f.stars] || ""}{f.date ? " · " + new Date(f.date).toLocaleDateString("it-IT", { day: "numeric", month: "short" }) : ""}</div>
         </figcaption>
       </div>
-      <blockquote style={{ margin: "7px 0 0", fontFamily: F_BODY, fontSize: 11.5, lineHeight: 1.4, color: C.muted, display: "-webkit-box", WebkitLineClamp: 4, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{f.msg}</blockquote>
-      {f.date && <div style={{ marginTop: 5, fontFamily: F_BODY, fontSize: 9.5, color: C.dim }}>{new Date(f.date).toLocaleDateString("it-IT", { day: "numeric", month: "short" })}</div>}
+      <blockquote style={{ margin: "9px 0 0", fontFamily: F_BODY, fontSize: 12, lineHeight: 1.4, color: "#D4D4D8", display: "-webkit-box", WebkitLineClamp: 4, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{f.msg}</blockquote>
     </figure>
   );
 }
-function FeedbackWall({ items = [] }) {
+// Quattro colonne che scorrono su e giù, inclinate in 3D come nel codice mandato da Edoardo; si fermano tenendo il dito.
+function FeedbackWall({ items = [], height = 190 }) {
   if (items.length < 3) return null;
-  const cols = [0, 1, 2].map(k => items.slice(k).concat(items.slice(0, k)));   // ogni colonna tutti, in ordine diverso (niente buchi)
+  const cols = [0, 1, 2, 3].map(k => items.slice(k % items.length).concat(items.slice(0, k % items.length)));
   return (
-    <div data-fb-wall={items.length} className="fb-wall" aria-label="Cosa dicono i tifosi" role="region" style={{ position: "relative", height: 190, margin: "-4px -20px 14px", overflow: "hidden", perspective: 300, WebkitMaskImage: "linear-gradient(to bottom, transparent, #000 22%, #000 78%, transparent), linear-gradient(to right, transparent, #000 18%, #000 82%, transparent)", WebkitMaskComposite: "source-in", maskImage: "linear-gradient(to bottom, transparent, #000 22%, #000 78%, transparent)" }}>
+    <div data-fb-wall={items.length} className="fb-wall" aria-label="Cosa dicono i tifosi" role="region" style={{ position: "relative", height, overflow: "hidden", perspective: 300, borderRadius: 18, WebkitMaskImage: "linear-gradient(to bottom, transparent, #000 20%, #000 80%, transparent)", maskImage: "linear-gradient(to bottom, transparent, #000 20%, #000 80%, transparent)" }}>
       <style>{FB_WALL_CSS}</style>
-      <div style={{ position: "absolute", left: "50%", top: "50%", display: "flex", gap: 10, transform: "translate(-50%, -50%) translateZ(-60px) rotateX(20deg) rotateY(-10deg) rotateZ(20deg)" }}>
+      <div style={{ position: "absolute", left: "50%", top: "50%", display: "flex", gap: 14, transform: "translate(-50%, -50%) translateX(-60px) translateZ(-100px) rotateX(20deg) rotateY(-10deg) rotateZ(20deg)" }}>
         {cols.map((l, k) => (
-          <div key={k} className={"fb-col" + (k % 2 ? " rev" : "")} style={{ display: "flex", flexDirection: "column", gap: 10, "--fb-dur": 34 + k * 6 + "s" }}>
+          <div key={k} className={"fb-col" + (k % 2 ? " rev" : "")} style={{ display: "flex", flexDirection: "column", gap: 12, "--fb-dur": 40 + k * 5 + "s" }}>
             {[...l, ...l].map((f, i) => <FeedbackWallCard key={f.id + ":" + i} f={f} />)}
           </div>
         ))}
       </div>
+      {/* sfumature ai lati (sopra e sotto le fa la maschera), come nel codice delle recensioni 3D */}
+      <span aria-hidden="true" style={{ position: "absolute", top: 0, bottom: 0, left: 0, width: "22%", background: "linear-gradient(to right, #000, rgba(0,0,0,0))", pointerEvents: "none" }} />
+      <span aria-hidden="true" style={{ position: "absolute", top: 0, bottom: 0, right: 0, width: "22%", background: "linear-gradient(to left, #000, rgba(0,0,0,0))", pointerEvents: "none" }} />
     </div>
   );
 }
-
-function FeedbackModal({ onClose, onSend, isAdmin = false }) {
+// Screenshot rimpicciolito sul telefono (lato lungo 900 px, JPEG): resta dentro il documento del feedback.
+const shrinkShot = file => new Promise((res, rej) => {
+  const fr = new FileReader();
+  fr.onerror = rej;
+  fr.onload = () => {
+    const im = new Image();
+    im.onerror = rej;
+    im.onload = () => {
+      const k = Math.min(1, 900 / Math.max(im.width, im.height));
+      const cv = document.createElement("canvas");
+      cv.width = Math.round(im.width * k); cv.height = Math.round(im.height * k);
+      cv.getContext("2d").drawImage(im, 0, 0, cv.width, cv.height);
+      let q = .72, out = cv.toDataURL("image/jpeg", q);
+      while (out.length > 340000 && q > .3) { q -= .12; out = cv.toDataURL("image/jpeg", q); }
+      out.length > 340000 ? rej(new Error("grande")) : res(out);
+    };
+    im.src = fr.result;
+  };
+  fr.readAsDataURL(file);
+});
+const fbAgo = iso => {
+  const t = Date.parse(iso), now = nowMs();
+  if (!isFinite(t)) return "";
+  const d0 = new Date(now); d0.setHours(0, 0, 0, 0);
+  if (t >= d0.getTime()) return "oggi";
+  if (t >= d0.getTime() - 86400000) return "ieri";
+  const n = Math.floor((d0.getTime() - t) / 86400000) + 1;
+  return n < 7 ? `${n} giorni fa` : new Date(t).toLocaleDateString("it-IT", { day: "numeric", month: "short" });
+};
+function FeedbackModal({ onClose, onSend, isAdmin = false, email = "", kind0 = "idea" }) {
+  const [page, setPage] = useState("compose");   // compose | sent | history | reviews
+  const [kind, setKind] = useState(FB_KIND[kind0] ? kind0 : "idea");   // dalla notifica "Dicci cosa ne pensi": Complimento, col voto
   const [stars, setStars] = useState(0);
+  const [where, setWhere] = useState(null);
   const [msg, setMsg] = useState("");
-  const [category, setCategory] = useState("generale");
-  const [sent, setSent] = useState(false);
+  const [share, setShare] = useState(false);
+  const [device, setDevice] = useState(false);
+  const [shot, setShot] = useState(null);
   const [sending, setSending] = useState(false);
   const [err, setErr] = useState("");
-  const [share, setShare] = useState(false);   // 16/11: "si può mostrare" nelle schede che scorrono
   const [wall, setWall] = useState([]);
+  const [mine, setMine] = useState(null);
+  const fileRef = useRef(null);
   useEffect(() => { let on = true; Feedback.listPublic().then(l => { if (on) setWall(l); }, () => {}); return () => { on = false; }; }, []);
+  useEffect(() => {
+    if (page !== "history") return undefined;
+    let on = true;
+    setMine(null);
+    Feedback.listMine({ email, ids: local.get("bt-fb-mine") || [] }).then(l => { if (on) setMine(l); }, () => { if (on) setMine([]); });
+    return () => { on = false; };
+  }, [page]);   // eslint-disable-line react-hooks/exhaustive-deps
+  useBack(page !== "compose", () => setPage("compose"));
   const hideOne = id => Feedback.hide(id).then(() => setWall(l => l.filter(x => x.id !== id)), () => {});
   const buzz = () => { fx.buzz("select"); fx.play("tick"); };
-  useEffect(() => { if (!sent) return undefined; const t = setTimeout(onClose, 2000); return () => clearTimeout(t); }, [sent]);
+  const needStars = kind === "complimento";
+  const ready = needStars ? stars > 0 : msg.trim().length >= 3;
+  const reset = () => { setKind("idea"); setStars(0); setWhere(null); setMsg(""); setShare(false); setShot(null); setErr(""); setPage("compose"); };
   const send = async () => {
-    if (!stars || sending) return;
+    if (!ready || sending) return;
     setSending(true); setErr("");
-    try { await onSend({ stars, category, msg, share }); setSent(true); }
-    catch (e) { setErr(FEEDBACK_MSG.offline); }
+    const dev = device ? { app: APP_VERSION, ua: navigator.userAgent, platform: (window.Capacitor && window.Capacitor.getPlatform && window.Capacitor.getPlatform()) || "web" } : null;
+    try {
+      const r = await onSend({ category: kind, msg, ...(needStars ? { stars, share } : {}), ...(kind === "problema" ? { where } : {}), device: dev, shot });
+      if (r && r.id && !email) local.set("bt-fb-mine", [r.id, ...(local.get("bt-fb-mine") || [])].slice(0, 40));
+      setPage("sent"); fx.play("done");
+    } catch (e) { setErr(e && e.code === "msg" ? FEEDBACK_MSG.msg : FEEDBACK_MSG.offline); }
     setSending(false);
   };
-  const LABELS = ["", "Molto male", "Migliorabile", "Nella media", "Bene", "Ottimo"];
-  return (
-    <div data-feedback="" role="dialog" aria-modal="true" aria-label="Invia feedback" style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,.8)", zIndex: 760, display: "flex", alignItems: "flex-end" }} onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
-      <div style={{ background: C.card, borderRadius: "24px 24px 0 0", width: "100%", padding: "20px 20px 26px" }}>
-        <div style={{ width: 36, height: 4, borderRadius: 2, background: "rgba(255,255,255,.14)", margin: "0 auto 16px" }} />
-        {sent ? (
-          <div style={{ textAlign: "center", padding: "18px 0" }}>
-            <svg viewBox="0 0 48 48" width="52" height="52" aria-hidden="true" style={{ display: "block", margin: "0 auto 10px" }}><path d="M10 6v38" stroke={C.text} strokeWidth="3" strokeLinecap="round" />{[0, 1, 2].map(r => [0, 1, 2, 3].map(c => <rect key={r + "-" + c} x={12 + c * 7.5} y={8 + r * 7} width="7.5" height="7" fill={(r + c) % 2 ? C.text : "#000"} />))}<rect x="12" y="8" width="30" height="21" fill="none" stroke={C.text} strokeWidth="1.2" /></svg>
-            <div style={{ fontFamily: F_HEAD, fontWeight: 900, fontStyle: "italic", fontSize: 18, color: C.text }}>Grazie per il feedback!</div>
-            <p style={{ fontFamily: F_BODY, color: C.muted, fontSize: 13, margin: "8px 0 0" }}>Lo leggiamo tutti: ci aiuta a scegliere cosa sistemare.</p>
-          </div>
-        ) : (
-          <>
-            <FeedbackWall items={wall} />
-            <h2 style={{ fontFamily: F_HEAD, fontWeight: 900, fontStyle: "italic", fontSize: 17, color: C.text, margin: "0 0 4px" }}>Invia feedback</h2>
-            <p style={{ fontFamily: F_BODY, color: C.muted, fontSize: 12, margin: "0 0 16px" }}>Bastano 30 secondi: scegli una faccina e, se vuoi, scrivici cosa cambiare.</p>
-            <FaceRating value={stars} onChange={n => { setStars(n); buzz(40); }} />
-            <p data-feedback-label="" style={{ textAlign: "center", fontFamily: F_HEAD, fontWeight: 800, fontSize: 14, color: stars ? C.text : C.muted, margin: "8px 0 14px", minHeight: 18 }}>{stars ? LABELS[stars] : "Tocca una faccina"}</p>
-            <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 14 }}>
-              {FEEDBACK_CATS.map(c => {
-                const on = category === c.id;
-                return <button key={c.id} className="press" data-feedback-cat={c.id} aria-pressed={on ? "true" : "false"} onClick={() => { setCategory(c.id); buzz(30); }} style={{ padding: "6px 12px", borderRadius: 20, background: on ? alpha(C.accentInk, .14) : "rgba(255,255,255,.05)", border: `1px solid ${on ? C.accentInk : C.border}`, fontFamily: F_BODY, fontWeight: 600, fontSize: 11.5, color: on ? C.accentInk : C.muted }}>{c.label}</button>;
-              })}
-            </div>
-            <textarea data-feedback-msg="" aria-label="Il tuo feedback" placeholder="Scrivi qui (opzionale)… cosa ti piace? Cosa manca?" value={msg} onChange={e => setMsg(e.target.value)} rows={3}
-              style={{ width: "100%", background: C.bg, border: `1px solid ${C.border}`, borderRadius: 12, padding: "11px 13px", color: C.text, fontFamily: F_BODY, fontSize: 13, outline: "none", resize: "none", marginBottom: 12 }} />
-            <label data-feedback-share="" style={{ display: "flex", alignItems: "center", gap: 10, minHeight: 44, margin: "-4px 0 10px", fontFamily: F_BODY, fontSize: 12, color: C.muted, cursor: "pointer" }}>
-              <input type="checkbox" checked={share} onChange={e => { setShare(e.target.checked); buzz(); }} style={{ width: 20, height: 20, accentColor: C.accent, flexShrink: 0 }} />
-              Si può mostrare agli altri tifosi qui in alto, col mio nickname (mai l'email)
-            </label>
-            {err && <p role="alert" style={{ background: "#E1060018", border: `1px solid ${C.red}`, borderRadius: 10, padding: "9px 14px", margin: "0 0 12px", color: "#ff6b6b", fontFamily: F_BODY, fontSize: 12, lineHeight: 1.5 }}>{err}</p>}
-            {isAdmin && wall.length > 0 && (
-              <details data-fb-admin="" style={{ margin: "0 0 12px", fontFamily: F_BODY, fontSize: 12, color: C.muted }}>
-                <summary style={{ minHeight: 32, cursor: "pointer" }}>Feedback mostrati ({wall.length}): solo admin</summary>
-                {wall.map(f => (
-                  <div key={f.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 0", borderBottom: `1px solid ${C.divider}` }}>
-                    <span style={{ flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}><b style={{ color: C.text }}>{f.name}</b>: {f.msg}</span>
-                    <button type="button" className="press" data-fb-hide={f.id} onClick={() => hideOne(f.id)} style={{ minHeight: 36, padding: "0 10px", borderRadius: 10, background: "rgba(255,255,255,.06)", fontFamily: F_BODY, fontWeight: 700, fontSize: 11.5, color: C.text }}>Nascondi</button>
-                  </div>
-                ))}
-              </details>
-            )}
-            <button className="press" onClick={send} disabled={!stars || sending} style={{ display: "block", width: "100%", padding: "15px 0", borderRadius: 14, background: stars && !sending ? C.accent : "rgba(255,255,255,.1)", fontFamily: F_HEAD, fontWeight: 900, fontStyle: "italic", fontSize: 14, color: stars ? "#fff" : C.dim }}>{sending ? <ShiftLight label="Invio in corso" /> : "INVIA FEEDBACK"}</button>
-          </>
-        )}
-      </div>
+  const pickShot = e => { const f = e.target.files && e.target.files[0]; e.target.value = ""; if (!f) return; shrinkShot(f).then(setShot, () => setErr("Screenshot troppo grande: prova con un altro.")); };
+  const shell = (children, extra = {}) => (
+    <div data-feedback={page} role="dialog" aria-modal="true" aria-label="Feedback" className="scrollcol" {...extra} style={{ position: "absolute", inset: 0, zIndex: 760, background: FBX.bg, color: FBX.text, display: "flex", flexDirection: "column", boxSizing: "border-box", padding: "calc(env(safe-area-inset-top, 0px) + 10px) 20px calc(env(safe-area-inset-bottom, 0px) + 20px)", overflowY: "auto" }}>{children}</div>
+  );
+  const top = (label, back) => (
+    <div style={{ display: "flex", alignItems: "center", gap: 6, minHeight: 44 }}>
+      <button className="press" aria-label={back ? "Indietro" : "Chiudi"} onClick={back || onClose} style={{ display: "flex", alignItems: "center", justifyContent: "center", width: 40, height: 40, marginLeft: -10 }}><Icon name={back ? "back" : "close"} size={20} color={FBX.text} sw={2.2} /></button>
+      <span style={{ fontFamily: F_BODY, fontSize: 15, fontWeight: 800 }}>{label}</span>
     </div>
   );
+  const bigBtn = (label, onClick, primary = true, data = {}, icon = null, disabled = false) => (
+    <button className="press" onClick={onClick} disabled={disabled} {...data} style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8, width: "100%", height: 52, borderRadius: 16, background: primary ? (disabled ? "rgba(255,255,255,.12)" : FBX.text) : "transparent", border: primary ? "none" : `1px solid ${FBX.line}`, fontFamily: F_HEAD, fontSize: 16, fontWeight: 800, color: primary ? (disabled ? FBX.muted : "#000") : FBX.text }}>{icon}{label}</button>
+  );
+  const row = (icon, title, sub, right, onClick) => (
+    <div onClick={onClick} style={{ display: "flex", alignItems: "center", gap: 12, minHeight: 60, padding: "8px 14px", borderRadius: 16, background: FBX.card, border: `1px solid ${FBX.line}`, cursor: onClick ? "pointer" : "default" }}>
+      <span style={{ display: "flex", alignItems: "center", justifyContent: "center", width: 34, height: 34, borderRadius: 10, background: FBX.key, flexShrink: 0 }}><Icon name={icon} size={16} color={FBX.text} /></span>
+      <span style={{ flex: 1, minWidth: 0 }}>
+        <span style={{ display: "block", fontFamily: F_BODY, fontSize: 14, fontWeight: 800 }}>{title}</span>
+        {sub && <span style={{ display: "block", marginTop: 2, fontFamily: F_BODY, fontSize: 12, fontWeight: 600, color: FBX.muted, lineHeight: "16px" }}>{sub}</span>}
+      </span>
+      {right}
+    </div>
+  );
+  if (page === "sent") {
+    const leds = ["#34D399", "#34D399", "#34D399", "#34D399", "#34D399", FBX.red, FBX.red, FBX.red, FBX.red, FBX.red, FBX.blue, FBX.blue, FBX.blue, FBX.blue, FBX.blue];
+    return shell(<>
+      <style>{"@keyframes fbled{from{opacity:.25}to{opacity:1}}@keyframes fbbar{0%,100%{transform:scaleY(.35)}50%{transform:scaleY(1)}}@media (prefers-reduced-motion: reduce){[data-fb-led],[data-fb-bar]{animation:none!important}}"}</style>
+      {top("")}
+      <div aria-hidden="true" style={{ display: "flex", justifyContent: "center", gap: 6, margin: "4px 0 12px" }}>{leds.map((c, i) => <span key={i} data-fb-led="" style={{ width: 12, height: 12, borderRadius: "50%", background: c, animation: `fbled .4s ${i * .06}s ease-out both` }} />)}</div>
+      <div data-fb-sent="" style={{ borderRadius: 20, border: `2px solid ${FBX.text}`, padding: "14px 14px 0", overflow: "hidden" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <span style={{ padding: "3px 8px", borderRadius: 8, border: `1px solid ${FBX.red}`, fontFamily: F_HEAD, fontSize: 10, fontWeight: 900, color: FBX.red, letterSpacing: .5 }}>TEAM RADIO</span>
+          <span style={{ fontFamily: F_HEAD, fontSize: 10, fontWeight: 900, color: FBX.green, letterSpacing: .5 }}>RADIO CHECK OK</span>
+        </div>
+        <div style={{ margin: "12px 0 10px", fontFamily: F_HEAD, fontSize: 34, lineHeight: "34px", fontWeight: 900, letterSpacing: -.5 }}>FEEDBACK<br />RICEVUTO</div>
+        <div aria-hidden="true" style={{ display: "flex", alignItems: "center", gap: 4, height: 30 }}>{Array.from({ length: 26 }, (_, i) => <span key={i} data-fb-bar="" style={{ flex: 1, height: 6 + ((i * 37) % 22), borderRadius: 2, background: FBX.green, transformOrigin: "center", animation: `fbbar ${0.8 + (i % 5) * .15}s ${i * .04}s ease-in-out infinite` }} />)}</div>
+        <div aria-hidden="true" style={{ height: 14, marginTop: 12, marginLeft: -14, marginRight: -14, backgroundImage: "repeating-conic-gradient(#F4F4F5 0 25%, #000 0 50%)", backgroundSize: "14px 14px" }} />
+      </div>
+      {[["P1", "Inviato", "Fatto", FBX.green], ["P2", "Arrivato al team", "Fatto", FBX.green], ["P3", "Letto dal team", "In attesa", FBX.yellow]].map(([p, l, st, c]) => (
+        <div key={p} data-fb-step={p} style={{ display: "flex", alignItems: "center", gap: 10, minHeight: 44, borderBottom: `1px solid ${FBX.line}`, borderLeft: `3px solid ${c}`, paddingLeft: 10, marginTop: 6 }}>
+          <span style={{ fontFamily: F_HEAD, fontSize: 12, fontWeight: 900, color: FBX.muted }}>{p}</span>
+          <span style={{ flex: 1, fontFamily: F_HEAD, fontSize: 13, fontWeight: 900, letterSpacing: .3 }}>{l.toUpperCase()}</span>
+          <span style={{ fontFamily: F_HEAD, fontSize: 11, fontWeight: 900, color: c }}>{st.toUpperCase()}</span>
+        </div>
+      ))}
+      <p style={{ margin: "12px 0 0", fontFamily: F_BODY, fontSize: 12.5, fontWeight: 600, color: FBX.muted }}>Lo stato si aggiorna nello storico.</p>
+      <div style={{ flex: 1, minHeight: 20 }} />
+      {bigBtn("Vedi le tue segnalazioni", () => setPage("history"), true, { "data-fb-history": "" })}
+      <div style={{ height: 10 }} />
+      {bigBtn("Invia un altro", reset, false)}
+    </>);
+  }
+  if (page === "history") return shell(<>
+    <div style={{ display: "flex", alignItems: "center", gap: 10, minHeight: 52 }}>
+      <button className="press" aria-label="Indietro" onClick={() => setPage("compose")} style={{ display: "flex", alignItems: "center", justifyContent: "center", width: 40, height: 40, marginLeft: -10 }}><Icon name="back" size={20} color={FBX.text} sw={2.2} /></button>
+      <h1 style={{ flex: 1, margin: 0, fontFamily: F_HEAD, fontSize: 24, fontWeight: 800 }}>Le tue segnalazioni</h1>
+      <button className="press" aria-label="Scrivi un nuovo feedback" onClick={reset} style={{ width: 40, height: 40, borderRadius: 20, background: FBX.text, display: "flex", alignItems: "center", justifyContent: "center" }}><Icon name="plus" size={20} color="#000" sw={2.4} /></button>
+    </div>
+    {mine === null && <p role="status" style={{ fontFamily: F_BODY, fontSize: 13, color: FBX.muted }}>Carico i tuoi feedback…</p>}
+    {mine && !mine.length && <p data-fb-mine-empty="" style={{ fontFamily: F_BODY, fontSize: 13, color: FBX.muted, lineHeight: 1.5 }}>Non hai ancora mandato feedback{email ? "" : " da questo telefono"}.</p>}
+    {mine && mine.map(f => {
+      const [lab, ic, c] = FB_KIND_OF(f.category);
+      const st = { ricevuto: ["RICEVUTO", FBX.muted], lavoro: ["IN LAVORAZIONE", FBX.yellow], letto: ["LETTO", FBX.green] }[f.status] || ["RICEVUTO", FBX.muted];
+      return (
+        <div key={f.id} data-fb-mine={f.id} data-fb-status={f.status} style={{ display: "flex", gap: 12, padding: "14px 0", borderTop: `1px solid ${FBX.line}` }}>
+          <span style={{ display: "flex", alignItems: "center", justifyContent: "center", width: 36, height: 36, borderRadius: 10, background: alpha(c, .14), flexShrink: 0 }}><Icon name={ic} size={17} color={c} /></span>
+          <span style={{ flex: 1, minWidth: 0 }}>
+            <span style={{ display: "flex", justifyContent: "space-between", gap: 8 }}><b style={{ fontFamily: F_BODY, fontSize: 14, fontWeight: 800 }}>{lab}</b><span style={{ fontFamily: F_BODY, fontSize: 11.5, color: FBX.muted }}>{fbAgo(f.date)}</span></span>
+            {f.msg && <span style={{ display: "block", marginTop: 3, fontFamily: F_BODY, fontSize: 12.5, lineHeight: "17px", color: "#D4D4D8" }}>{f.msg}</span>}
+            <span style={{ display: "inline-block", marginTop: 8, padding: "3px 8px", borderRadius: 7, border: `1px solid ${st[1]}`, fontFamily: F_HEAD, fontSize: 9.5, fontWeight: 900, letterSpacing: .4, color: st[1] }}>{st[0]}</span>
+          </span>
+        </div>
+      );
+    })}
+    <div style={{ flex: 1, minHeight: 20 }} />
+    {bigBtn("Scrivi un nuovo feedback", reset, false, {}, <Icon name="plus" size={16} color={FBX.text} sw={2.4} />)}
+  </>);
+  if (page === "reviews") return shell(<>
+    {top("Recensioni", () => setPage("compose"))}
+    <h1 style={{ margin: "4px 0 0", fontFamily: F_HEAD, fontSize: 26, fontWeight: 800 }}>Cosa dicono i tifosi</h1>
+    <p style={{ margin: "4px 0 14px", fontFamily: F_BODY, fontSize: 13, fontWeight: 600, color: FBX.muted }}>Solo recensioni vere, di chi ha scelto di mostrarle.</p>
+    {wall.length >= 3 ? <FeedbackWall items={wall} height={460} /> : <p data-fb-wall-few="" style={{ padding: "24px 14px", borderRadius: 16, background: FBX.card, border: `1px solid ${FBX.line}`, fontFamily: F_BODY, fontSize: 13, color: FBX.muted, textAlign: "center" }}>Ancora poche recensioni: scrivi la prima!</p>}
+    {isAdmin && wall.length > 0 && (
+      <details data-fb-admin="" style={{ margin: "12px 0 0", fontFamily: F_BODY, fontSize: 12, color: FBX.muted }}>
+        <summary style={{ minHeight: 32, cursor: "pointer" }}>Recensioni mostrate ({wall.length}): solo admin</summary>
+        {wall.map(f => (
+          <div key={f.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 0", borderBottom: `1px solid ${FBX.line}` }}>
+            <span style={{ flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}><b style={{ color: FBX.text }}>{f.name}</b>: {f.msg}</span>
+            <button type="button" className="press" data-fb-hide={f.id} onClick={() => hideOne(f.id)} style={{ minHeight: 36, padding: "0 10px", borderRadius: 10, background: "rgba(255,255,255,.06)", fontFamily: F_BODY, fontWeight: 700, fontSize: 11.5, color: FBX.text }}>Nascondi</button>
+          </div>
+        ))}
+      </details>
+    )}
+    <div style={{ flex: 1, minHeight: 20 }} />
+    {bigBtn("Scrivi la tua recensione", () => { reset(); setKind("complimento"); setShare(true); }, true, { "data-fb-write-review": "" }, <Icon name="heart" size={16} color="#000" />)}
+  </>);
+  const titles = { idea: ["Cosa cambieresti?", "Idee, problemi o complimenti: li leggiamo tutti."], problema: ["Cosa non va?", "Più ci dici, prima lo sistemiamo."], complimento: ["Com'è andata?", "Dai un voto e, se vuoi, scrivici due righe."], altro: ["Dicci pure", "Qualsiasi cosa: la leggiamo."] };
+  return shell(<>
+    {top("Feedback")}
+    <h1 style={{ margin: "4px 0 0", fontFamily: F_HEAD, fontSize: 26, fontWeight: 800 }}>{titles[kind][0]}</h1>
+    <p style={{ margin: "4px 0 12px", fontFamily: F_BODY, fontSize: 13, fontWeight: 600, color: FBX.muted }}>{titles[kind][1]}</p>
+    <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
+      <button className="press" data-fb-open-history="" onClick={() => setPage("history")} style={{ height: 32, padding: "0 12px", borderRadius: 16, border: `1px solid ${FBX.line}`, fontFamily: F_BODY, fontSize: 12, fontWeight: 700, color: FBX.text }}>Le tue segnalazioni</button>
+      <button className="press" data-fb-open-reviews="" onClick={() => setPage("reviews")} style={{ height: 32, padding: "0 12px", borderRadius: 16, border: `1px solid ${FBX.line}`, fontFamily: F_BODY, fontSize: 12, fontWeight: 700, color: FBX.text }}>Recensioni{wall.length ? ` (${wall.length})` : ""}</button>
+    </div>
+    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+      {Object.entries(FB_KIND).map(([k, [lab, ic, c]]) => {
+        const on = kind === k;
+        return <button key={k} className="press" data-feedback-cat={k} aria-pressed={on ? "true" : "false"} onClick={() => { setKind(k); buzz(); }} style={{ display: "flex", alignItems: "center", gap: 10, height: 46, padding: "0 14px", borderRadius: 14, background: on ? alpha(c, .14) : FBX.card, border: `1px solid ${on ? c : FBX.line}`, fontFamily: F_BODY, fontSize: 14, fontWeight: 800, color: FBX.text }}><Icon name={ic} size={17} color={on ? c : FBX.text} />{lab}</button>;
+      })}
+    </div>
+    {kind === "complimento" && <>
+      <div style={{ margin: "16px 0 8px", fontFamily: F_BODY, fontSize: 13, fontWeight: 800 }}>Come ti trovi con Sector 4?</div>
+      <FaceRating value={stars} onChange={n => { setStars(n); buzz(); }} />
+      <p data-feedback-label="" style={{ textAlign: "center", fontFamily: F_BODY, fontWeight: 800, fontSize: 13, color: stars ? FBX.yellow : FBX.muted, margin: "6px 0 0", minHeight: 18 }}>{stars ? FB_FACE[stars] : "Tocca una faccina"}</p>
+    </>}
+    {kind === "problema" && <>
+      <div style={{ margin: "16px 0 8px", fontFamily: F_BODY, fontSize: 13, fontWeight: 800 }}>Dove è successo?</div>
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+        {FEEDBACK_WHERE.map(w2 => <button key={w2.id} className="press" data-fb-where={w2.id} aria-pressed={where === w2.id ? "true" : "false"} onClick={() => { setWhere(x => (x === w2.id ? null : w2.id)); buzz(); }} style={{ height: 38, padding: "0 14px", borderRadius: 19, background: where === w2.id ? FBX.text : "transparent", border: `1px solid ${where === w2.id ? FBX.text : FBX.line}`, fontFamily: F_BODY, fontSize: 13, fontWeight: 800, color: where === w2.id ? "#000" : FBX.text }}>{w2.label}</button>)}
+      </div>
+    </>}
+    <div style={{ margin: "16px 0 8px", fontFamily: F_BODY, fontSize: 13, fontWeight: 800 }}>Raccontaci</div>
+    <textarea data-feedback-msg="" aria-label="Il tuo feedback" maxLength={500} placeholder={kind === "problema" ? "Cosa è successo e cosa stavi facendo?" : "Scrivi qui…"} value={msg} onChange={e => setMsg(e.target.value.slice(0, 500))} rows={4}
+      style={{ width: "100%", boxSizing: "border-box", background: FBX.card, border: `1px solid ${FBX.line}`, borderRadius: 16, padding: "12px 14px", color: FBX.text, fontFamily: F_BODY, fontSize: 14, lineHeight: "20px", outline: "none", resize: "none" }} />
+    <div style={{ textAlign: "right", margin: "4px 0 10px", fontFamily: F_BODY, fontSize: 11, color: FBX.muted, fontVariantNumeric: "tabular-nums" }}>{msg.length} / 500</div>
+    <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+      {kind === "complimento" && <div data-feedback-share="">{row("group", "Mostra nelle recensioni", "Col tuo nickname, mai l'email. La togli quando vuoi.", <Toggle on={share} onChange={setShare} label="Mostra nelle recensioni" />)}</div>}
+      {kind !== "complimento" && (shot
+        ? row("image", "Screenshot allegato", "Tocca per cambiarlo", <button className="press" aria-label="Togli lo screenshot" onClick={e => { e.stopPropagation(); setShot(null); }} style={{ width: 36, height: 36, display: "flex", alignItems: "center", justifyContent: "center" }}><Icon name="close" size={16} color={FBX.text} /></button>, () => fileRef.current && fileRef.current.click())
+        : row("image", "Allega uno screenshot", null, <span style={{ fontFamily: F_BODY, fontSize: 12, color: FBX.muted }}>Facoltativo</span>, () => fileRef.current && fileRef.current.click()))}
+      <input ref={fileRef} type="file" accept="image/*" onChange={pickShot} style={{ display: "none" }} data-fb-shot-input="" />
+      {kind !== "complimento" && row("phone", "Aggiungi info del telefono", "Versione dell'app e modello, per capire meglio.", <Toggle on={device} onChange={setDevice} label="Aggiungi info del telefono" />)}
+    </div>
+    {err && <p role="alert" style={{ margin: "12px 0 0", padding: "9px 14px", borderRadius: 12, border: `1px solid ${FBX.red}`, color: "#ff6b6b", fontFamily: F_BODY, fontSize: 12.5, lineHeight: 1.5 }}>{err}</p>}
+    <div style={{ flex: 1, minHeight: 18 }} />
+    {bigBtn(sending ? "Invio in corso" : "Invia feedback", send, true, { "data-fb-send": "" }, <Icon name="send" size={16} color={ready && !sending ? "#000" : FBX.muted} />, !ready || sending)}
+  </>);
 }
 
 function InfoModal({ title, body, extra = null, onClose }) {
@@ -14588,6 +14868,8 @@ function App() {
     y: !pubHide.follow && aboutMe && Number.isInteger(aboutMe.follow) ? String(aboutMe.follow) : undefined,
     h: helmet ? { ...helmet, base: helmet.base || C.accent } : undefined,
     w: trophyList.filter(t => trophies[t.id]).map(t => t.id),
+    // 22/11: quando li ha vinti (giorno), per la scheda dei trofei che vedono gli altri
+    wa: Object.fromEntries(trophyList.filter(t => trophies[t.id]).map(t => { const d = new Date(trophies[t.id]); return [t.id, isFinite(d.getTime()) ? d.toISOString().slice(0, 10) : null]; }).filter(x => x[1])),
   });
   // 29/10: entrando in una stanza ci va il proprio profilo (voce nascosta, solo quando cambia): così chi tocca il nome
   // vede tifo, casco e trofei anche se non si è ancora scritto niente.
@@ -14993,10 +15275,11 @@ function App() {
     setTrophies(t => { const x = { ...t }; adminMissing.split(",").forEach(id => { if (!x[id]) x[id] = at; }); return x; });
   }, [adminMissing]);
   // Profilo pubblico (31/10 sera): coi dati dell'account arrivati si salva (solo se cambia, o una volta al giorno).
-  const pubProfJ = account && account.aid && userLoaded ? JSON.stringify([account.name, myProf(), myMedal]) : "";
+  const eloPubRef = useRef(null);   // 22/11: il mio ELO del FantaF1 (lo scrive il calcolo di fantaElo più giù)
+  const pubProfJ = account && account.aid && userLoaded ? JSON.stringify([account.name, myProf(), myMedal, eloPubRef.current]) : "";
   useEffect(() => {
     if (!pubProfJ || guest) return;
-    Profiles.publish({ name: account.name, aid: account.aid, p: myProf(), medal: myMedal, level: { name: psLevel.name, xp: BtSwipe.xpOf(swipe.tot || {}, psTrophies) } }).catch(() => {});
+    Profiles.publish({ name: account.name, aid: account.aid, p: myProf(), medal: myMedal, elo: eloPubRef.current, level: { name: psLevel.name, xp: BtSwipe.xpOf(swipe.tot || {}, psTrophies) } }).catch(() => {});
   }, [pubProfJ]);
   // 25/10: con l'app di un admin il documento dei trofei su Firebase (shared/bt-trophies) si crea coi valori di serie se
   // manca: nella console ci sono già tutti, pronti da cambiare (nome, how, goal, off).
@@ -15251,7 +15534,7 @@ function App() {
   const newsOn = notifPrefs.news !== false;
   useEffect(() => { Push.sync(capPlugin("FirebaseMessaging"), newsOn); }, [newsOn]);
   const remTrialEnd = trial && !trial.converted && !premium.sub ? trial.end : null;   // 8/11: avviso della prova
-  const remSig = [psKey, !!(psDoneDeck), psStreak.n, psStreak.danger, notifPrefs.reminders !== false, notifPrefs.halfway !== false, ((swipe.tot || {}).decks || 0) > 0, psRace ? psRace.id : "", psRace && startSeen[psRace.id] ? 1 : 0, remTrialEnd || ""].join("|");
+  const remSig = [psKey, !!(psDoneDeck), psStreak.n, psStreak.danger, notifPrefs.reminders !== false, notifPrefs.halfway !== false, JSON.stringify(notifPrefs.quiet || null), ((swipe.tot || {}).decks || 0) > 0, psRace ? psRace.id : "", psRace && startSeen[psRace.id] ? 1 : 0, remTrialEnd || ""].join("|");
   // 8/11 (Edoardo: "le notifiche chiedile solo prima che servano, non appena installata l'app"): il permesso si chiede
   // solo dopo un gesto che le rende utili in QUESTO avvio (finire un giro di Pit Swipe adesso, oppure accendere
   // "Promemoria sul telefono"); prima bastava avere giri vecchi nell'account e, reinstallando, la domanda arrivava
@@ -15263,7 +15546,7 @@ function App() {
     if (psDoneDeck && deckWasDone.current === false) remAskRef.current = true;
     deckWasDone.current = !!psDoneDeck;
     // 8/11: prima del primo giro niente promemoria del giro (decks 0), ma l'avviso di metà gara sì (se il permesso c'è).
-    const list = Reminders.plan({ now: nowMs(), race: psRace, sessions: psSessions, deckDone: !!psDoneDeck, streak: psStreak, prefs: { reminders: notifPrefs.reminders, halfway: notifPrefs.halfway }, decks: (swipe.tot || {}).decks || 0, startSeen: !!(psRace && (startSeen[psRace.id] || (local.get("bt-half-done") || {})[psRace.id])), trialEnd: remTrialEnd });
+    const list = Reminders.plan({ now: nowMs(), race: psRace, sessions: psSessions, deckDone: !!psDoneDeck, streak: psStreak, prefs: { reminders: notifPrefs.reminders, halfway: notifPrefs.halfway, quiet: notifPrefs.quiet }, decks: (swipe.tot || {}).decks || 0, startSeen: !!(psRace && (startSeen[psRace.id] || (local.get("bt-half-done") || {})[psRace.id])), trialEnd: remTrialEnd });
     const askTrial = trialAskRef.current;
     trialAskRef.current = false;
     const ask = askTrial || (remAskRef.current && notifPrefs.reminders !== false && !local.get("bt-rem-asked"));
@@ -15640,6 +15923,7 @@ function App() {
     (btLeagueNow ? [btLeagueNow] : leagues).forEach(l => (l.members || []).forEach(m => { if (!seen.has(m.aid)) seen.set(m.aid, { id: m.aid, rounds: FantaSeason.seasonPoints({ log: m.log, rounds: fantaRounds, lockOf: fantaLockOf }).rounds }); }));
     return { ...BtElo.btElo([...seen.values()]), bt: !!btLeagueNow };
   })();
+  { const r = account && fantaElo.ratings ? fantaElo.ratings[account.aid] : null; eloPubRef.current = r && r.games > 0 ? { rating: Math.round(r.rating), games: r.games } : null; }
   const fantaSessions = fantaRace && CIRCUIT_INFO[fantaRace.circuitId] ? CIRCUIT_INFO[fantaRace.circuitId].weekend || [] : [];
   const teamLockInfo = BtLogic.teamLock({ sessions: fantaSessions, now: nowMs() });   // solo l'ora vera: la prova DEMO non blocca (D23)
   // Previsioni sul weekend: si chiudono all'inizio della sessione a cui si riferiscono (o quando l'admin segna la risposta).
@@ -15706,7 +15990,8 @@ function App() {
       if (v && LN && LN.requestPermissions) LN.requestPermissions().catch(() => {});
     }}
     halfway={notifPrefs.halfway !== false} onHalfway={guest ? null : v => { if (userDataWait()) return; if (v) remAskRef.current = true; setNotifPrefs(x => ({ ...x, halfway: v })); fx.play("tick"); }}
-    onBack={viewBack.notifiche} onAction={a => { if (a === "feedback") { if (feedbackAsk && !feedbackAsk.read) saveAsk({ ...feedbackAsk, read: true }); setFeedbackOpen(true); } }} notifs={notifs} onReadAll={readAll} isPremium={isPremium} onPremium={() => setPremiumOpen(true)} favTeam={favTeam} favDriver={favDriver} prefs={notifPrefs} onPrefs={v => { if (!userDataWait()) setNotifPrefs(v); }} onGoProfilo={() => setView("profilo")} />;
+    quiet={notifPrefs.quiet || null} onQuiet={guest ? null : v => { if (userDataWait()) return; setNotifPrefs(x => ({ ...x, quiet: v })); fx.play("tick"); }}
+    onBack={viewBack.notifiche} onAction={a => { if (a === "feedback") { if (feedbackAsk && !feedbackAsk.read) saveAsk({ ...feedbackAsk, read: true }); setFeedbackOpen("ask"); } }} notifs={notifs} onReadAll={readAll} isPremium={isPremium} onPremium={() => setPremiumOpen(true)} favTeam={favTeam} favDriver={favDriver} prefs={notifPrefs} onPrefs={v => { if (!userDataWait()) setNotifPrefs(v); }} onGoProfilo={() => setView("profilo")} />;
   else body = tabBodyFor(tab);
   // 7/11: il contenuto di una scheda della barra (anche di quella accanto, che si vede durante lo swipe come su WhatsApp).
   function tabBodyFor(tab) {
@@ -15834,7 +16119,7 @@ function App() {
         {duoOn && <DuoGuide steps={NOVITA_DUO} accent={C.accent} useBack={useBack} onGo={tourGo} onDone={duoDone} />}
         {tourOn && (guest || !!account) && <AppGuide steps={APP_TOUR} where={view + ":" + tab} useBack={useBack} onGo={tourGo} onDone={tourDone} onRegister={guest ? () => { tourDone(); setLoginReason(null); setLoginMode("register"); setLoginOpen(true); } : null} />}
         {termsAccepted && termsOpen && <TermsSheet review onClose={() => setTermsOpen(false)} />}
-        {feedbackOpen && <FeedbackModal isAdmin={!!account && Account.isAdmin()} onClose={() => setFeedbackOpen(false)} onSend={sendFeedback} />}
+        {feedbackOpen && <FeedbackModal isAdmin={!!account && Account.isAdmin()} email={account ? account.email : ""} kind0={feedbackOpen === "ask" ? "complimento" : "idea"} onClose={() => setFeedbackOpen(false)} onSend={sendFeedback} />}
         {toast && <div className="toast" style={showBottomNav && adH > 0 ? { bottom: 104 + adH + AD_GAP } : undefined}>{toast}</div>}
         {notice && !ssOpen && <LiveNotice n={notice} onClose={nextNotice} />}
         {trophyNotice && <TrophyNotice n={trophyNotice} />}

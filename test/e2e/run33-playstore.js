@@ -123,20 +123,21 @@ run({
     assert(!errs.length, errs.join(' | '));
   },
 
-  async 'feedback dal Profilo: 4 stelle e testo salvati in bt-feedback-<id> con l\'email'(b) {
+  // 22/11 (grafica "B&T: Schermata Feedback"): Idea, Problema, Complimento, Altro; il voto c'è solo nei complimenti.
+  async 'feedback dal Profilo: un complimento da 4 con testo salvato in bt-feedback-<id> con l\'email'(b) {
     const { ctx, p, errs } = await open(b); await login(p);
     await openFeedback(p);
+    await tapSel(p, '[data-feedback-cat="complimento"]'); await w(p, 150);
     await tapSel(p, '[data-feedback-star="4"]'); await w(p, 100);
-    await tapSel(p, '[data-feedback-cat="bug"]'); await w(p, 100);
     await p.fill('[data-feedback-msg]', 'La classifica si vede bene');
-    await tapText(p, 'INVIA FEEDBACK'); await w(p, 600);
+    await tapSel(p, '[data-fb-send]'); await w(p, 600);
     const t = await text(p), all = await docs(p); await ctx.close();
     const fb = Object.entries(all).filter(([k]) => /^shared\/bt-feedback-/.test(k));
     assert(fb.length === 1, 'documenti di feedback: ' + fb.length);
     const [path, d] = fb[0];
     assert(path === 'shared/bt-feedback-' + d.id, 'nome del documento: ' + path);
-    assert(d.stars === 4 && d.category === 'bug' && d.msg === 'La classifica si vede bene' && d.user === 'a@b.it' && d.appVersion === '2.0.0' && !isNaN(Date.parse(d.date)), 'feedback: ' + JSON.stringify(d));
-    assert(/Grazie per il feedback!/.test(t), 'manca il grazie');
+    assert(d.stars === 4 && d.category === 'complimento' && d.msg === 'La classifica si vede bene' && d.user === 'a@b.it' && d.appVersion === '2.0.0' && !isNaN(Date.parse(d.date)), 'feedback: ' + JSON.stringify(d));
+    assert(/FEEDBACK\s*RICEVUTO/.test(t), 'manca la pagina Feedback ricevuto');
     assert(!errs.length, errs.join(' | '));
   },
 
@@ -159,10 +160,12 @@ run({
     await reloadApp(p);                                        // 5° accesso
     const dot5 = await p.evaluate(() => !!document.querySelector('[data-unread-dot]'));
     await tapSel(p, '[aria-label="Notifiche"]'); await w(p, 300);
+    // 22/11: a volte la richiesta arriva un attimo dopo la pagina (prova a tratti rossa): la si aspetta fino a 4 secondi.
+    await p.waitForSelector('[data-notif-action="feedback"]', { timeout: 4000 }).catch(() => {});
     const item = await p.evaluate(() => { const e = document.querySelector('[data-notif-action="feedback"]'); return e ? e.innerText : null; });
     await tapSel(p, '[data-notif-action="feedback"]'); await w(p, 300);
     const modal = await p.evaluate(() => !!document.querySelector('[data-feedback]'));
-    await tapSel(p, '[data-feedback-star="5"]'); await tapText(p, 'INVIA FEEDBACK'); await w(p, 2600);
+    await tapSel(p, '[data-feedback-star="5"]'); await tapSel(p, '[data-fb-send]'); await w(p, 2600);
     const gone = await p.evaluate(() => !document.querySelector('[data-notif-action="feedback"]'));
     await reloadApp(p);                                        // 6° accesso: non torna
     await tapSel(p, '[aria-label="Notifiche"]'); await w(p, 300);
@@ -196,7 +199,8 @@ run({
     await p.fill('#regName', 'Fabio'); await p.fill('#authEmail', 'fabio@b.it'); await p.fill('#authPw', 'abcdef12'); await p.fill('#regPw2', 'abcdef12');
     await tapSel(p, '[data-fan-option="vivo"]'); await p.fill('#regBirth', '15/06/2000'); await tapText(p, 'CREA ACCOUNT', { exact: true }); await w(p, 1500); await require('./helpers').skipTour(p);   // 15/11: dopo la registrazione parte il giro guidato
     await openFeedback(p);
-    await tapSel(p, '[data-feedback-star="5"]'); await tapText(p, 'INVIA FEEDBACK'); await w(p, 2500);
+    await tapSel(p, '[data-feedback-cat="complimento"]'); await w(p, 150);
+    await tapSel(p, '[data-feedback-star="5"]'); await tapSel(p, '[data-fb-send]'); await w(p, 2500);
     const before = Object.values(await docs(p)).filter(d => d && d.user === 'fabio@b.it' && d.stars).length;
     await tapText(p, 'Elimina account'); await w(p, 300);
     const warn = await text(p);

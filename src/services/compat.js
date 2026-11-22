@@ -385,6 +385,8 @@ function profOf(p) {
   if (typeof p.y === "string" && /^[0-4]$/.test(p.y)) out.y = p.y;
   if (isObj(p.h)) out.h = cleanHelmet(p.h);
   if (Array.isArray(p.w)) { const w = p.w.filter(x => idOk(x, 24)).slice(0, 30); if (w.length) out.w = w; }
+  // 22/11: il giorno in cui ha vinto ogni trofeo (YYYY-MM-DD), solo per i trofei in w
+  if (out.w && isObj(p.wa)) { const wa = {}; out.w.forEach(id => { const v = p.wa[id]; if (typeof v === "string" && /^\d{4}-\d{2}-\d{2}$/.test(v)) wa[id] = v; }); if (Object.keys(wa).length) out.wa = wa; }
   return Object.keys(out).length ? out : null;
 }
 // 25/10: link a una cosa dell'app nel messaggio (k): { t, id, ti, su, ln, s/a/b/n (Ghost Lap), u (team radio) }.

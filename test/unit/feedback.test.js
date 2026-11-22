@@ -58,13 +58,53 @@ t('senza account il feedback è "anonimo"; categoria sconosciuta → generale; t
   await c.fb.send({ stars: 2, category: 'boh', msg: 'x', email: '' });
   const ds = c.feedbacks().map(([, d]) => d).sort((a, b) => a.stars - b.stars);
   assert.deepStrictEqual(ds.map(d => [d.stars, d.category, d.msg, d.user]), [[2, 'generale', 'x', 'anonimo'], [5, 'generale', '', 'anonimo']]);
-  assert.deepStrictEqual(FEEDBACK_CATS.map(x => x.id), ['generale', 'bug', 'live', 'design', 'idea']);
+  // 22/11: le quattro della grafica nuova prima, poi quelle di prima (si leggono ancora)
+  assert.deepStrictEqual(FEEDBACK_CATS.map(x => x.id), ['idea', 'problema', 'complimento', 'altro', 'generale', 'bug', 'live', 'design']);
 });
 
-t('stelle obbligatorie (da 1 a 5): senza non si scrive niente', async () => {
+// 22/11: le stelle restano obbligatorie per i complimenti e per le categorie di prima (idea, problema, altro: no)
+t('stelle obbligatorie (da 1 a 5) per le categorie che le hanno: senza non si scrive niente', async () => {
   const c = ctx();
   for (const stars of [0, 6, 2.5, undefined, '4']) await assert.rejects(c.fb.send({ stars, msg: 'ciao' }), e => e.code === 'stars');
   assert.strictEqual(c.feedbacks().length, 0);
+});
+
+// 22/11 (Edoardo: "usa questo per la schermata dei feedback coi veri dati dei feedback", grafica "B&T: Schermata
+// Feedback"): Idea, Problema, Complimento, Altro; per i problemi "dove è successo"; info del telefono e screenshot se
+// l'utente li aggiunge; "Le tue segnalazioni" coi suoi feedback veri e il loro stato.
+t('22/11 idea, problema, altro senza stelle ma con un testo; complimento con le stelle', async () => {
+  const c = ctx();
+  await c.fb.send({ category: 'idea', msg: 'Tempi dei settori in chat', email: 'a@b.it' });
+  await assert.rejects(c.fb.send({ category: 'problema', msg: '  ' }), e => e.code === 'msg');
+  await assert.rejects(c.fb.send({ category: 'complimento', msg: 'Bellissima' }), e => e.code === 'stars');
+  await c.fb.send({ category: 'complimento', stars: 5, msg: '' });
+  const ds = c.feedbacks().map(([, d]) => d).sort((a, b) => a.category.localeCompare(b.category));
+  assert.deepStrictEqual(ds.map(d => [d.category, d.stars === undefined ? '-' : d.stars]), [['complimento', 5], ['idea', '-']]);
+});
+
+t('22/11 problema: dove (solo i posti dell\'elenco), info del telefono e screenshot piccolo se aggiunti', async () => {
+  const c = ctx();
+  const shot = 'data:image/jpeg;base64,' + 'A'.repeat(2000);
+  await c.fb.send({ category: 'problema', msg: 'Il punteggio non si aggiorna', where: 'fanta', device: { app: '2.0.0', ua: 'Mozilla/5.0 Android 14', platform: 'android' }, shot });
+  await c.fb.send({ category: 'problema', msg: 'Altro problema serio', where: 'luna', device: 'x', shot: 'http://foto.it/a.jpg' });
+  await c.fb.send({ category: 'problema', msg: 'Screenshot troppo grande', shot: 'data:image/jpeg;base64,' + 'A'.repeat(400000) });
+  const ds = c.feedbacks().map(([, d]) => d);
+  const a = ds.find(d => /aggiorna/.test(d.msg)), b = ds.find(d => /serio/.test(d.msg)), g = ds.find(d => /grande/.test(d.msg));
+  assert.strictEqual(a.where, 'fanta');
+  assert.deepStrictEqual(a.device, { app: '2.0.0', ua: 'Mozilla/5.0 Android 14', platform: 'android' });
+  assert.strictEqual(a.shot, shot);
+  assert.ok(!('where' in b) && !('device' in b) && !('shot' in b), JSON.stringify(b));
+  assert.ok(!('shot' in g), 'screenshot oltre il limite: non si salva');
+});
+
+t('22/11 le tue segnalazioni: per email (o per gli id di questo telefono), le più nuove prima, stato vero', async () => {
+  const d = (id, o) => ({ ['shared/bt-feedback-' + id]: { id, category: 'idea', msg: 'Feedback ' + id, user: 'a@b.it', date: '2026-11-0' + id + 'T10:00:00.000Z', appVersion: '2.0.0', ...o } });
+  const c = ctx({ ...d(1), ...d(2, { status: 'letto' }), ...d(3, { user: 'altro@b.it' }), ...d(4, { user: 'anonimo', status: 'lavoro' }) });
+  const mine = await c.fb.listMine({ email: 'a@b.it' });
+  assert.deepStrictEqual(mine.map(x => [x.id, x.status]), [['2', 'letto'], ['1', 'ricevuto']]);
+  assert.deepStrictEqual(Object.keys(mine[0]).sort(), ['category', 'date', 'id', 'msg', 'status', 'where']);
+  const guest = await c.fb.listMine({ ids: ['4', '3', 'nope'] });
+  assert.deepStrictEqual(guest.map(x => [x.id, x.status]), [['4', 'lavoro']], 'senza account solo i suoi di questo telefono e anonimi');
 });
 
 t('senza rete rifiuta con "offline" e il messaggio da mostrare', async () => {

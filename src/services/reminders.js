@@ -27,7 +27,19 @@ function romeAt(day, h, m = 0) {
   }
   return NaN;
 }
-const quiet = ms => { const h = romeHM(ms).h; return h < 8 || h >= 22; };
+// Ore di silenzio (22/11, Edoardo: modificabili toccandole): { from, to } in minuti del giorno, ora di Roma; se from è
+// dopo to il silenzio passa la mezzanotte. Inizio uguale alla fine = nessun silenzio; valori non validi = le 22-8.
+const QUIET_DEF = { from: 22 * 60, to: 8 * 60 };
+const okMin = v => Number.isInteger(v) && v >= 0 && v < 24 * 60;
+function quietOf(q) {
+  if (!q || !okMin(q.from) || !okMin(q.to)) return { ...QUIET_DEF };
+  return q.from === q.to ? null : { from: q.from, to: q.to };
+}
+const quiet = (ms, q = QUIET_DEF) => {
+  if (!q) return false;
+  const r = romeHM(ms), m = r.h * 60 + r.m;
+  return q.from > q.to ? m >= q.from || m < q.to : m >= q.from && m < q.to;
+};
 
 // decks: giri di Pit Swipe fatti (0 = niente promemoria del giro e della serie; non indicato = come prima).
 function trialWarn(now, trialEnd) {
@@ -41,6 +53,7 @@ function trialWarn(now, trialEnd) {
 function plan({ now, race = null, sessions = [], deckDone = false, streak = null, prefs = {}, decks = undefined, startSeen = false, trialEnd = null } = {}) {
   const tw = trialWarn(now, trialEnd);
   if (prefs && prefs.reminders === false) return tw ? [tw] : [];
+  const q = quietOf(prefs && prefs.quiet);
   const out = tw ? [tw] : [];
   // Giro del giorno: le 8:30 di Roma successive (oggi se non sono ancora passate e il giro non è fatto).
   const today = romeHM(now).day;
@@ -50,7 +63,7 @@ function plan({ now, race = null, sessions = [], deckDone = false, streak = null
   // Sessioni che contano, nei prossimi 7 giorni.
   (sessions || []).filter(s => s && LABEL[s.key]).forEach((s, i) => {
     const start = Date.parse(s.utc), at = start - HOUR;
-    if (!isFinite(at) || at <= now || at > now + 7 * DAY || quiet(at)) return;
+    if (!isFinite(at) || at <= now || at > now + 7 * DAY || quiet(at, q)) return;
     const what = race && race.name ? race.name : "il GP";
     const body = s.key === "RACE" ? `${what}: vota il pilota del giorno a fine gara.` : `${what}: hai fatto il pronostico?`;
     out.push({ id: ID.session + i, at, title: `${LABEL[s.key]} tra un'ora`, body });
@@ -66,7 +79,7 @@ function plan({ now, race = null, sessions = [], deckDone = false, streak = null
     const at = Date.parse(rs.utc) + HALF_MS;
     if (isFinite(at) && at > now && at <= now + 7 * DAY) out.push({ id: ID.half, at, title: `Metà gara: ${race && race.name ? race.name : "il GP"}`, body: "Ti sei perso la partenza? Apri B&T: chi è in testa, distacchi e chi ha già fermato." });
   }
-  return out.filter(x => isFinite(x.at) && !quiet(x.at)).sort((a, b) => a.at - b.at);
+  return out.filter(x => isFinite(x.at) && !quiet(x.at, q)).sort((a, b) => a.at - b.at);
 }
 
 // Programma i promemoria col plugin (null nel browser: niente). ask: chiedere il permesso se manca.
@@ -109,4 +122,4 @@ async function notifyNow(plugin, { id, title, body }) {
   } catch (e) { return false; }
 }
 
-module.exports = { plan, apply, cancelHalf, notifyNow, look, ID, romeAt, HALF_MS };
+module.exports = { plan, apply, cancelHalf, notifyNow, look, ID, romeAt, HALF_MS, quietOf, QUIET_DEF };

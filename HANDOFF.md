@@ -1426,3 +1426,21 @@ Misure prima del lavoro (pagina di prova, CPU rallentata 4x come un telefono med
   nuova run136 (6). Verificato: unit appdata 35; run136 6/6, run59 4/4, run61 3/3, run69 6+1 saltata, run85, run88
   7/7, run101 2/2, run103 3/3, run127 5/5, run72 9/9, run76 8/8, run16 12/12, run31 12/12, run60 3/3, run10 8/8,
   run50 6/6, run30 5/5, run112 3/3, run134 7/7 (una volta "lettore di Google" fallito, da solo passa).
+
+## 22/11 pomeriggio: ore di silenzio col righello, Schermata Feedback, ELO e trofei veri, avatar nel profilo
+- Ore di silenzio: la riga in Notifiche > impostazioni si tocca (data-quiet-open) e apre QuietSheet: prima l'inizio,
+  poi la fine, col righello RulerSlider (passi di 15 minuti, trascina con slancio, tastiera). Si salva in
+  notifPrefs.quiet {from, to} (minuti, ora di Roma); src/services/reminders.js usa quietOf (inizio = fine: nessun
+  silenzio; valori strani: 22-8). Prove: test/unit/quiet-hours.test.js, run137.
+- Feedback (grafica "B&T: Schermata Feedback"): pagina intera FeedbackModal con Scrivi (Idea, Problema col "dove",
+  Complimento con le faccine e "Mostra nelle recensioni", Altro; screenshot rimpicciolito nel documento, max 350 KB;
+  info del telefono facoltative), Ricevuto (Inviato, Arrivato: fatto; Letto dal team: in attesa), Le tue segnalazioni
+  (Feedback.listMine: con l'account per email, da ospite gli id salvati in bt-fb-mine; stato ricevuto/lavoro/letto
+  solo se l'admin scrive status nel documento: non c'è ancora una schermata admin per farlo) e Recensioni con 4 colonne
+  che scorrono in 3D (codice di Edoardo). Dalla notifica "Dicci cosa ne pensi" si apre su Complimento.
+  Categorie vecchie (generale, bug, live, design) restano per leggere i feedback di prima.
+- Profilo pubblico mio: tolti #scuderia #pilota; avatar TeamBadge e Headshot del Fanta (data-pub-avatar).
+- Profilo veloce della chat: data di ogni trofeo (p.wa) e card "ELO FantaF1" (fantaElo dell'utente, in
+  fanta/profilo-<aid>.elo, solo se ha almeno un GP).
+- Prove: run137 (nuova, 4), run33/run52/run125 aggiornate alla nuova schermata (nessuna tolta), unit feedback 10,
+  profiles 6. run33 "dopo 5 accessi" è a tratti rossa anche su HEAD prima di queste modifiche (da guardare).

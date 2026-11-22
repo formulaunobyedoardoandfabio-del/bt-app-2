@@ -34,13 +34,14 @@ run({
     await tapSel(p, '[aria-label="Profilo"]'); await w(p, 400);
     await tapText(p, 'Invia feedback'); await w(p, 400);
     const fb = await titles(p), fbText = await p.evaluate(() => { const e = document.querySelector('[data-feedback]'); return e ? e.innerText : ''; });
+    await tapSel(p, '[data-feedback-cat="complimento"]'); await w(p, 150);
     await tapSel(p, '[data-feedback-star="5"]'); await w(p, 200);
     const fb5 = await p.evaluate(() => { const e = document.querySelector('[data-feedback]'); return e ? e.innerText : ''; });
     await ctx.close();
     const bad = [...all.map(([n, , ts]) => [n, ts]), ['FEEDBACK', fb]].flatMap(([n, ts]) => ts.filter(t => EMOJI.test(t)).map(t => n + ': ' + t));
-    assert(fb.some(t => /Invia feedback/i.test(t)), 'titolo del feedback: ' + JSON.stringify(fb));
+    assert(fb.some(t => /Cosa cambieresti/i.test(t)), 'titolo del feedback: ' + JSON.stringify(fb));
     assert(!bad.length, 'emoji nei titoli: ' + bad.join(' | '));
-    assert(!EMOJI.test(fbText) && !EMOJI.test(fb5) && /Ottimo/.test(fb5), 'emoji nel feedback: ' + fb5.slice(0, 200));
+    assert(!EMOJI.test(fbText) && !EMOJI.test(fb5) && /Benissimo/.test(fb5), 'emoji nel feedback: ' + fb5.slice(0, 200));
     assert(!errs.length, errs.join(' | '));
   },
 
