@@ -1530,3 +1530,8 @@ Misure prima del lavoro (pagina di prova, CPU rallentata 4x come un telefono med
      arrivare da solo alle gare nuove.
   3. Ordine di tutti gli elementi di ogni pagina scelto dall'utente: grande (ogni pagina); idea: elenco di sezioni per
      pagina con id fissi, ordine salvato in look/account, modalità "Modifica ordine" con trascina o frecce su/giù.
+- 22/11 notte, TROVATO: GitHub fa partire da soli (cron e "Run workflow") solo i workflow che sono sul ramo principale
+  (main). Su main ci sono apk-prova, dati-f1 e social; replay-f1.yml e archivio-f1.yml no: per questo il replay di Las
+  Vegas non è arrivato da solo. Da fare (serve il sì di Edoardo, tocca main): copiare i due file su main, poi
+  `gh workflow run replay-f1.yml --ref tappa-3`. Da controllare anche che il dati-f1.yml di main sia uguale a quello di
+  tappa-3 (real-weekend.js fermo al round 16).
