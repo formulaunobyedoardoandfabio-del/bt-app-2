@@ -33,7 +33,7 @@ run({
     await ctx.close();
     assert(!before, 'senza modifiche niente anteprima');
     assert(after, 'dopo un colore nuovo l\'anteprima c\'è');
-    assert(rows.length === 2 && /Icona Classica/.test(rows[0]) && /Animazione d'avvio Pit Exit Launch/.test(rows[1]), 'righe Icona e Animazione: ' + JSON.stringify(rows));
+    assert(rows.length === 2 && /Icona Classica/.test(rows[0]) && /Animazione d'avvio Attuale/.test(rows[1]), 'righe Icona e Animazione: ' + JSON.stringify(rows));
     assert(!errs.length, errs.join(' | '));
   },
 
@@ -105,7 +105,7 @@ run({
     await tapSel(p, '[data-boot-done]'); await w(p, 1500);
     const saved = await p.evaluate(() => ({ local: JSON.parse(localStorage.getItem('bt_bt-look') || 'null'), row: document.querySelector('[data-look-open="avvio"]').innerText }));
     await ctx.close();
-    assert(JSON.stringify(list.ids) === JSON.stringify(['pit', 'mercurio', 'trasparente', 'liquid', 'sunshine']) && !list.prev, 'avvii e niente anteprima all\'inizio: ' + JSON.stringify(list));
+    assert(JSON.stringify(list.ids) === JSON.stringify(['pit', 'mercurio', 'trasparente', 'liquid', 'sunshine', 'motore']) && !list.prev, 'avvii e niente anteprima all\'inizio: ' + JSON.stringify(list));
     assert(prev, 'dopo la scelta "Vedi anteprima"');
     assert(ant && ant.video && /Dura circa 3 secondi/.test(ant.text), 'anteprima col video: ' + JSON.stringify(ant));
     assert(saved.local && saved.local.boot === 'sunshine' && /Sunshine/.test(saved.row), 'salvato: ' + JSON.stringify(saved));

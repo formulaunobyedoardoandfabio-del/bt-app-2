@@ -1483,3 +1483,13 @@ Misure prima del lavoro (pagina di prova, CPU rallentata 4x come un telefono med
 - Da provare sul telefono: cambio icona (alcuni launcher chiudono l'app; con l'aggiornamento l'icona sulla home può
   sparire e va rimessa dal cassetto delle app, perché MainActivity non è più l'attività del launcher).
 - Prove: run139 (7), run50 aggiornata (6), unit appdata (35), prepare-android-icons (5).
+
+## 22/11 sera (4): avvio "Motore", "Attuale" al posto di Pit Exit Launch, muro recensioni a tutta pagina
+- BOOT_ANIMS: "pit" ora si chiama "Attuale" (le 6 luci, il caricamento di sempre); nuova "motore" (public/splash/anim-motore.webm, video di Edoardo).
+- Recensioni: il muro 3D riempie lo spazio fino a "Scrivi la tua recensione" (height "fill").
+- Audit 6 trappole (prompt di Edoardo): font esterni nessuno; analytics nessuno; marketing: le "novità da B&T" vanno
+  verificate come scelta esplicita; età: c'è la data di nascita (minori: annunci non personalizzati) ma manca il
+  consenso del genitore sotto i 14 anni; recesso: c'è "Gestisci abbonamento" (Google Play) nel Premium; foto: solo admin
+  e screenshot dei feedback (non pubblici). Da far vedere a un avvocato.
+- Prova completa (test/all.sh) fermata a metà per i token: da rifare. Verdi: run139 (7), run137 (5), run125 (3), run50 (6).
+- Da fare: immagine dell'icona 17 (8 agosto) e avvio "N" collegato all'icona 3 (li manda Edoardo).

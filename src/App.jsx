@@ -1521,8 +1521,8 @@ function PromoSheet({ guest, onRedeem, onLogin, onClose }) {
 // ── COLORI, ICONA E AVVIO (22/11 sera, grafica "B&T: Colori, icona e avvio") ──
 // Edoardo: icone "quella attuale e allegato 1 e il secondo è la stessa versione light ... 3 auto dettagliata, 4 3D,
 // 5 on track; dalla 6 in poi in base al team preferito (l'utente sceglie solo se mettere l'icona dei colori della scuderia
-// del cuore)"; "icona 17 in automatico per tutti l'8 agosto"; avvii: l'attuale, mercurio, trasparente, liquid glass
-// (sfondo bianco con l'icona Light), sunshine. "La parte anteprima solo se l'utente ha cambiato la sua selezione".
+// del cuore)"; "icona 17 in automatico per tutti l'8 agosto"; avvii: l'attuale (le 6 luci), mercurio, trasparente, liquid
+// glass (sfondo bianco con l'icona Light), sunshine, motore. "La parte anteprima solo se l'utente ha cambiato la sua selezione".
 // look = { icon, boot } sta sul telefono (bt-look: l'avvio si decide prima che l'account arrivi) e nell'account.
 const APP_ICONS = [
   { id: "classica", name: "Classica" }, { id: "logo", name: "Logo" }, { id: "light", name: "Light" },
@@ -1531,11 +1531,12 @@ const APP_ICONS = [
 const TEAM_ICON_IDS = ["racingbulls", "haas", "astonmartin", "williams", "alpine", "cadillac", "audi", "mclaren", "mercedes", "redbull", "ferrari"];
 const AUG8_ICON = "agosto";   // icona 17: c'è quando la sua immagine è nelle risorse dell'APK (tools/icon/alt/agosto.*)
 const BOOT_ANIMS = [
-  { id: "pit", name: "Pit Exit Launch", sub: "LED, zoom, poi l'app. Circa 1,5 secondi.", secs: "1,5" },
+  { id: "pit", name: "Attuale", sub: "L'avvio di sempre: le 6 luci, poi l'app.", secs: "1,5" },   // 22/11 sera: niente più "Pit Exit Launch"
   { id: "mercurio", name: "Mercurio", sub: "Metallo liquido intorno al logo. Circa 8 secondi.", secs: "8" },
   { id: "trasparente", name: "Trasparente", sub: "La monoposto che diventa trasparente. Circa 2 secondi.", secs: "2" },
   { id: "liquid", name: "Liquid glass", sub: "Il logo dentro il vetro. Con l'icona Light, su bianco.", secs: "3" },
   { id: "sunshine", name: "Sunshine", sub: "Il sole che attraversa il logo. Circa 3 secondi.", secs: "3" },
+  { id: "motore", name: "Motore", sub: "Il motore ai raggi X che gira. Circa 3 secondi.", secs: "3" },
 ];
 const LOOK_KEY = "bt-look";
 const cleanLook = v => {
@@ -1673,7 +1674,7 @@ function LookScreen({ theme, favTeam, look, iconInfo, onPickTheme, onLook, onApp
         {BOOT_ANIMS.map(b => {
           const on = bootPick === b.id;
           const thumb = b.id === "pit"
-            ? <span style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 3, width: 66, height: 44, borderRadius: 10, background: "#000", flexShrink: 0 }}>{["#34D399", "#34D399", "#FF1801", "#FF1801", "#64C4FF", "#64C4FF"].map((c, i) => <span key={i} style={{ width: 5, height: 5, borderRadius: 3, background: c }} />)}</span>
+            ? <span style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 3, width: 66, height: 44, borderRadius: 10, background: "#000", flexShrink: 0 }}>{Array.from({ length: 6 }, (_, i) => <span key={i} style={{ width: 6, height: 6, borderRadius: 3, background: "#FF1801", boxShadow: "0 0 4px rgba(255,24,1,.7)" }} />)}</span>
             : <img src={animPoster(b.id)} alt="" width={66} height={44} style={{ width: 66, height: 44, borderRadius: 10, objectFit: "cover", flexShrink: 0, filter: b.id === "liquid" && look.icon === "light" ? "invert(1) hue-rotate(180deg)" : undefined }} />;
           return (
             <button key={b.id} className="lk-press" data-boot-pick={b.id} aria-pressed={on ? "true" : "false"} onClick={() => { setBootPick(b.id); fx.buzz("select"); }}
@@ -12551,7 +12552,7 @@ const prefersReduced = () => { try { return !!(window.matchMedia && window.match
 function SplashScreen({ ready, onDone, holiday = null }) {
   const look0 = useRef(null);
   if (!look0.current) look0.current = cleanLook(local.get(LOOK_KEY));
-  // 22/11 sera: dal secondo avvio l'animazione scelta in Colori, icona e avvio (Pit Exit Launch = il caricamento di sempre)
+  // 22/11 sera: dal secondo avvio l'animazione scelta in Colori, icona e avvio ("Attuale" = il caricamento di sempre con le 6 luci)
   const [mode, setMode] = useState(() => (prefersReduced() ? "loading" : !local.get(INTRO_KEY) ? "video" : look0.current.boot !== "pit" ? "anim" : "loading"));
   if (mode === "anim") return <AnimSplash id={look0.current.boot} light={look0.current.boot === "liquid" && look0.current.icon === "light"} ready={ready} onDone={onDone} onFail={() => setMode("loading")} />;
   if (mode === "video") return <VideoSplash ready={ready} onFail={() => setMode("loading")} onDone={() => { local.set(INTRO_KEY, true); onDone(); }} />;
@@ -12815,7 +12816,7 @@ function FeedbackWall({ items = [], height = 190 }) {
   while (base.length < 3) base.push(...items);
   const cols = [0, 1, 2, 3].map(k => base.slice(k % base.length).concat(base.slice(0, k % base.length)));
   return (
-    <div data-fb-wall={items.length} className="fb-wall" aria-label="Cosa dicono i tifosi" role="region" style={{ position: "relative", height, overflow: "hidden", perspective: 300, borderRadius: 18, WebkitMaskImage: "linear-gradient(to bottom, transparent, #000 20%, #000 80%, transparent)", maskImage: "linear-gradient(to bottom, transparent, #000 20%, #000 80%, transparent)" }}>
+    <div data-fb-wall={items.length} className="fb-wall" aria-label="Cosa dicono i tifosi" role="region" style={{ position: "relative", ...(height === "fill" ? { flex: "1 1 auto", minHeight: 380 } : { height }), overflow: "hidden", perspective: 300, borderRadius: 18, WebkitMaskImage: "linear-gradient(to bottom, transparent, #000 20%, #000 80%, transparent)", maskImage: "linear-gradient(to bottom, transparent, #000 20%, #000 80%, transparent)" }}>
       <style>{FB_WALL_CSS}</style>
       <div style={{ position: "absolute", left: "50%", top: "50%", display: "flex", gap: 14, transform: "translate(-50%, -50%) translateX(-60px) translateZ(-100px) rotateX(20deg) rotateY(-10deg) rotateZ(20deg)" }}>
         {cols.map((l, k) => (
@@ -12981,7 +12982,7 @@ function FeedbackModal({ onClose, onSend, isAdmin = false, email = "", kind0 = "
     {top("Recensioni", () => setPage("compose"))}
     <h1 style={{ margin: "4px 0 0", fontFamily: F_HEAD, fontSize: 26, fontWeight: 800 }}>Cosa dicono i tifosi</h1>
     <p style={{ margin: "4px 0 14px", fontFamily: F_BODY, fontSize: 13, fontWeight: 600, color: FBX.muted }}>Solo recensioni vere, di chi ha scelto di mostrarle.</p>
-    {wall.length ? <FeedbackWall items={wall} height={460} /> : <p data-fb-wall-few="" style={{ padding: "24px 14px", borderRadius: 16, background: FBX.card, border: `1px solid ${FBX.line}`, fontFamily: F_BODY, fontSize: 13, color: FBX.muted, textAlign: "center" }}>Ancora nessuna recensione: scrivi la prima!</p>}
+    {wall.length ? <FeedbackWall items={wall} height="fill" /> : <p data-fb-wall-few="" style={{ padding: "24px 14px", borderRadius: 16, background: FBX.card, border: `1px solid ${FBX.line}`, fontFamily: F_BODY, fontSize: 13, color: FBX.muted, textAlign: "center" }}>Ancora nessuna recensione: scrivi la prima!</p>}
     {isAdmin && wall.length > 0 && (
       <details data-fb-admin="" style={{ margin: "12px 0 0", fontFamily: F_BODY, fontSize: 12, color: FBX.muted }}>
         <summary style={{ minHeight: 32, cursor: "pointer" }}>Recensioni mostrate ({wall.length}): solo admin</summary>
@@ -12993,7 +12994,7 @@ function FeedbackModal({ onClose, onSend, isAdmin = false, email = "", kind0 = "
         ))}
       </details>
     )}
-    <div style={{ flex: 1, minHeight: 20 }} />
+    <div style={{ flex: wall.length ? "0 0 16px" : 1, minHeight: 16 }} />
     {bigBtn("Scrivi la tua recensione", () => { reset(); setKind("complimento"); setShare(true); }, true, { "data-fb-write-review": "" }, <Icon name="heart" size={16} color="#000" />)}
   </>);
   const titles = { idea: ["Cosa cambieresti?", "Idee, problemi o complimenti: li leggiamo tutti."], problema: ["Cosa non va?", "Più ci dici, prima lo sistemiamo."], complimento: ["Com'è andata?", "Dai un voto e, se vuoi, scrivici due righe."], altro: ["Dicci pure", "Qualsiasi cosa: la leggiamo."] };
