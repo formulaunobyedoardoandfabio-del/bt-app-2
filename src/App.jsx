@@ -28,6 +28,7 @@ import BtContagiri from "./logic/contagiri";   // 21/11: contagiri circolare nel
 import RaceTrace from "./logic/race-trace";   // 21/11: Race Trace nel Replay sulla mappa
 import PairLogic from "./logic/pair";   // 21/11: Collega PC (pair/<codice>)
 import QR from "./logic/qr";   // 21/11: QR del PC, senza librerie
+import Invite from "./logic/invite";   // 22/11: inviti in lega (QR, link, NFC)
 import { LiveOrb, TypeText, ChangelogCard, VanishCanvas, RollingText } from "./ui/effetti";
 import { AppGuide, EnzoChat, DuoGuide, FlashSpot } from "./ui/guida";
 import { createArchive, findReplay } from "./services/archive";
@@ -5115,6 +5116,7 @@ const PC_ICO = {
   phone: "M7 4a1 1 0 0 1 1 -1h8a1 1 0 0 1 1 1v16a1 1 0 0 1 -1 1h-8a1 1 0 0 1 -1 -1z M11 18h2",
   grid: "M4 4h6v6h-6z M14 4h6v6h-6z M4 14h6v6h-6z M14 14h6v6h-6z",
   qr: "M4 4h6v6h-6z M14 4h6v6h-6z M4 14h6v6h-6z M14 14h2v2h-2z M18 14h2v2h-2z M14 18h2v2h-2z M18 18h2v2h-2z",
+  check: "M5 12l5 5l9 -10",
   keys: "M3 7a2 2 0 0 1 2 -2h14a2 2 0 0 1 2 2v10a2 2 0 0 1 -2 2h-14a2 2 0 0 1 -2 -2z M7 10v.01 M11 10v.01 M15 10v.01 M7 14h10",
   bolt: "M13 3v7h6l-8 11v-7h-6z",
   tv: "M3 5a1 1 0 0 1 1 -1h16a1 1 0 0 1 1 1v10a1 1 0 0 1 -1 1h-16a1 1 0 0 1 -1 -1z M7 20h10 M9 16l-1 4 M15 16l1 4",
@@ -5159,10 +5161,10 @@ function PcIco({ d, size = 22, color = "currentColor", sw = 2 }) {
   return <svg width={size} height={size} viewBox="0 0 24 24" aria-hidden="true" style={{ display: "block", flex: "none" }} fill="none" stroke={color} strokeWidth={sw} strokeLinecap="round" strokeLinejoin="round"><path d={PC_ICO[d] || d} /></svg>;
 }
 // QR del PC: un solo <path> coi moduli neri (src/logic/qr.js), su bianco con il margine di 4 moduli.
-function PcQr({ text, size = 250 }) {
+function PcQr({ text, size = 250, label = "QR per collegare il telefono" }) {
   const q = React.useMemo(() => QR.svgPath(QR.encode(text)), [text]);
   return (
-    <svg data-pc-qr="" viewBox={`0 0 ${q.size} ${q.size}`} width={size} height={size} shapeRendering="crispEdges" role="img" aria-label="QR per collegare il telefono">
+    <svg data-pc-qr="" viewBox={`0 0 ${q.size} ${q.size}`} width={size} height={size} shapeRendering="crispEdges" role="img" aria-label={label}>
       <rect width={q.size} height={q.size} fill="#fff" /><path d={q.d} fill="#000" />
     </svg>
   );
@@ -5178,7 +5180,7 @@ const PcLogo = () => (
 const pcPill = (text, color = PCX.muted) => <span style={{ display: "inline-flex", alignItems: "center", height: 22, padding: "0 10px", borderRadius: 11, border: `1px solid ${color}`, fontFamily: F_HEAD, fontSize: 11, fontWeight: 800, letterSpacing: .4, color, whiteSpace: "nowrap" }}>{text}</span>;
 
 // PC: in attesa del telefono (schermata "6 PC: attesa QR"). Il conto alla rovescia va per conto suo, ogni secondo.
-function PcWaitScreen({ code, since }) {
+function PcWaitScreen({ code, since, resuming = false }) {
   const [, tick] = useState(0);
   useEffect(() => { const iv = setInterval(() => tick(n => n + 1), 1000); return () => clearInterval(iv); }, []);
   const left = code ? Math.max(0, PairLogic.CODE_MS - (nowMs() - since)) : PairLogic.CODE_MS;
@@ -5187,7 +5189,7 @@ function PcWaitScreen({ code, since }) {
     <div data-pc-ui="" data-pc-wait="" style={{ position: "fixed", inset: 0, overflow: "auto", background: PCX.bg, color: PCX.text, fontFamily: F_BODY, display: "flex", flexDirection: "column" }}>
       <style>{PC_CSS}</style>
       <div data-pc-head="" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16, minHeight: 72, padding: "0 40px", borderBottom: `1px solid ${PCX.line}`, flex: "none" }}>
-        <PcLogo />{pcPill("IN ATTESA DEL TELEFONO")}
+        <PcLogo />{pcPill(resuming ? "RICOLLEGO IL TELEFONO…" : "IN ATTESA DEL TELEFONO", resuming ? PCX.yellow : PCX.muted)}
       </div>
       <div style={{ flex: 1, display: "flex", flexWrap: "wrap", alignItems: "center", justifyContent: "center", gap: "40px clamp(40px, 7vw, 90px)", padding: "32px clamp(20px, 5vw, 60px)" }}>
         <div style={{ width: "min(440px, 100%)" }}>
@@ -5258,6 +5260,223 @@ function PcSsHead({ race, live, st, name, edit = false, onEdit = null }) {
           <span aria-hidden="true" style={{ position: "absolute", right: -3, top: -3, width: 10, height: 10, borderRadius: "50%", background: PCX.green, border: "2px solid #000" }} />
         </span>Telefono collegato{name ? ` (${name})` : ""}
       </div>
+    </div>
+  );
+}
+
+/* ── NFC E INVITI IN LEGA (22/11, Edoardo: "collegamento anche tramite NFC, lo stesso per far unire le persone alla
+// propria lega", grafiche N1-N6 di "B&T: Collega PC") ─────────────────────────────────────────────────────────────
+// L'invito è un link (src/logic/invite.js). Chi invita lo mostra come QR, lo condivide o lo "presta" all'NFC: il suo
+// telefono fa da adesivo NFC col link (plugin BtNfc dell'APK, resources/android-nfc, messo da prepare_android.py). Chi
+// entra avvicina il telefono (lettura NFC dentro l'app, o Android che apre l'app dal link), inquadra il QR o scrive il
+// codice. Il PC dal browser non ha l'NFC (Web NFC solo su Chrome Android): per il PC restano QR e codice. */
+const NFC_NONE = { supported: false, enabled: false, hce: false };
+const nfcPlug = () => capPlugin("BtNfc");
+async function nfcStatus() {
+  const p = nfcPlug();
+  if (!p || !p.status) return NFC_NONE;
+  try { const s = await p.status(); return { supported: !!(s && s.supported), enabled: !!(s && s.enabled), hce: !!(s && s.hce) }; } catch (e) { return NFC_NONE; }
+}
+const nfcInitial = n => String(n || "?").trim().charAt(0).toUpperCase() || "?";
+// Anelli che si allargano attorno al telefono (solo transform/opacity; fermi con "Rimuovi animazioni").
+function NfcPulse({ two = false, ok = false }) {
+  const phone = flip => (
+    <span style={{ position: "relative", display: "flex", alignItems: "center", justifyContent: "center", width: 70, height: 112, borderRadius: 18, border: `2px solid ${ok ? PCX.green : PCX.text}`, background: "#0B0B0C", transform: flip ? "rotate(-8deg)" : "rotate(8deg)", flex: "none" }}>
+      <span style={{ fontFamily: F_HEAD, fontSize: 13, fontWeight: 900, color: ok ? PCX.green : PCX.text }}>B&amp;T</span>
+    </span>
+  );
+  return (
+    <div aria-hidden="true" style={{ position: "relative", height: 200, display: "flex", alignItems: "center", justifyContent: "center", gap: two ? 26 : 0, margin: "18px 0 6px", flex: "none" }}>
+      {[0, 1, 2].map(i => <span key={i} style={{ position: "absolute", left: "50%", top: "50%", width: 120, height: 120, margin: "-60px 0 0 -60px", borderRadius: "50%", border: `2px solid ${ok ? PCX.green : PCX.yellow}`, opacity: 0, animation: ok ? "none" : `pcxring 2.4s ease-out ${i * 0.8}s infinite` }} />)}
+      {phone(false)}{two && phone(true)}
+      {ok && <span data-nfc-ok="" style={{ position: "absolute", display: "flex", alignItems: "center", justifyContent: "center", width: 64, height: 64, borderRadius: "50%", background: PCX.green, animation: "pcxok .35s ease-out both" }}><PcIco d="check" size={36} color="#000" sw={3} /></span>}
+    </div>
+  );
+}
+// Chi invita (N4): il telefono fa da adesivo NFC col link finché questa schermata è aperta.
+function NfcShareOn({ url, on }) {
+  useEffect(() => {
+    const p = nfcPlug();
+    if (!on || !p || !p.share) return undefined;
+    Promise.resolve().then(() => p.share({ url })).catch(() => {});
+    return () => { Promise.resolve().then(() => p.stopShare && p.stopShare()).catch(() => {}); };
+  }, [url, on]);
+  return null;
+}
+// Chi entra (N2): lettura NFC accesa finché questa schermata è aperta; onUrl(link letto).
+function NfcReadOn({ on, onUrl, onError }) {
+  const cb = useRef({ onUrl, onError });
+  cb.current = { onUrl, onError };
+  useEffect(() => {
+    const p = nfcPlug();
+    if (!on || !p || !p.startRead) return undefined;
+    let off = false;
+    const hs = [];
+    (async () => {
+      try {
+        if (p.addListener) {
+          hs.push(await p.addListener("nfcUrl", e => { if (!off && e && e.url) cb.current.onUrl(String(e.url)); }));
+          hs.push(await p.addListener("nfcError", () => { if (!off) cb.current.onError(); }));
+        }
+        await p.startRead();
+      } catch (e) { if (!off) cb.current.onError(); }
+    })();
+    return () => {
+      off = true;
+      Promise.resolve().then(() => p.stopRead && p.stopRead()).catch(() => {});
+      hs.forEach(h => { try { if (h && h.remove) h.remove(); } catch (e) { /* niente */ } });
+    };
+  }, [on]);
+  return null;
+}
+// view: hub (N1) | leggi (N2) | scan | invita (N4) | invito (N5) | dentro (N6).
+function LegaNfcSheet({ view, nfc, leagues = [], inviteLeague = null, invite = null, meAid = null, busy = false, msg = null, onGo, onClose, onPickLeague, onShare, onJoin, onOpenFanta, onRead, onReadError, onScanned }) {
+  const [showQr, setShowQr] = useState(false);
+  const nfcOk = nfc.supported && nfc.enabled;
+  const top = title => (
+    <div style={{ display: "flex", alignItems: "center", height: 44, flex: "none" }}>
+      <button className="pcx-press" aria-label="Chiudi" onClick={onClose} style={{ display: "flex", alignItems: "center", justifyContent: "center", width: 44, height: 44, marginLeft: -10, background: "none", border: "none", color: PCX.text }}><PcIco d="close" size={24} /></button>
+      <h2 style={{ margin: 0, fontFamily: F_HEAD, fontSize: 17, fontWeight: 800 }}>{title}</h2>
+    </div>
+  );
+  const small = (text, extra) => <div style={{ fontSize: 12.5, fontWeight: 500, color: PCX.muted, lineHeight: "17px", ...extra }}>{text}</div>;
+  const btn = (label, icon, onClick, primary, data = {}) => (
+    <button className="pcx-press" onClick={onClick} disabled={busy} {...data} style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 10, width: "100%", height: 54, borderRadius: 16, background: primary ? PCX.text : "transparent", border: `1px solid ${primary ? PCX.text : PCX.btnLine}`, color: primary ? "#000" : PCX.text, fontFamily: F_HEAD, fontSize: 17, fontWeight: 800, opacity: busy ? .5 : 1 }}>
+      {icon && <PcIco d={icon} size={22} color={primary ? "#000" : PCX.text} />}{label}
+    </button>
+  );
+  const note = msg ? <p role="status" data-nfc-msg="" style={{ margin: 0, fontSize: 13, lineHeight: "18px", fontWeight: 600, color: PCX.red, textAlign: "center" }}>{msg}</p> : null;
+  const nfcLine = !nfc.supported ? "Questo telefono non ha l'NFC: usa il QR o il codice." : !nfc.enabled ? "L'NFC è spento: accendilo nelle impostazioni del telefono (Connessioni → NFC)." : null;
+  const avatars = (members, n) => (
+    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+      <div style={{ display: "flex" }}>{members.slice(0, 5).map((m, i) => <span key={m.aid || i} style={{ display: "flex", alignItems: "center", justifyContent: "center", width: 30, height: 30, marginLeft: i ? -8 : 0, borderRadius: "50%", background: m.color || PCX.key, border: `2px solid ${PCX.card}`, fontFamily: F_HEAD, fontSize: 12, fontWeight: 800, color: "#fff" }}>{nfcInitial(m.name)}</span>)}</div>
+      <span style={{ fontSize: 13, fontWeight: 700, color: PCX.muted }}>{n} {n === 1 ? "tifoso" : "tifosi"}</span>
+    </div>
+  );
+  const leagueCard = (l, extra) => (
+    <div data-nfc-league={l.code} style={{ marginTop: 14, padding: "14px 16px", borderRadius: 18, background: PCX.card, border: `1px solid ${PCX.line}`, flex: "none" }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>{pcPill("LEGA FANTAF1", PCX.yellow)}<span style={{ marginLeft: "auto", fontFamily: F_HEAD, fontSize: 13, fontWeight: 800, color: PCX.muted, letterSpacing: .6 }}>{l.code}</span></div>
+      <div style={{ marginTop: 10, fontFamily: F_HEAD, fontSize: 24, lineHeight: "28px", fontWeight: 800 }}>{l.name}</div>
+      <div style={{ marginTop: 10 }}>{avatars(l.members || [], (l.members || []).length)}</div>
+      {extra}
+    </div>
+  );
+  let body;
+  if (view === "hub") body = (
+    <>
+      {top("NFC")}
+      <div style={{ marginTop: 6, fontFamily: F_HEAD, fontSize: 26, lineHeight: "32px", fontWeight: 800 }}>Avvicina e fai</div>
+      {small("Un tocco tra due telefoni e sei nella lega dell'amico, senza codici.", { marginTop: 4 })}
+      {nfcLine && <p role="status" data-nfc-off="" style={{ margin: "10px 0 0", fontSize: 13, lineHeight: "18px", fontWeight: 600, color: PCX.yellow }}>{nfcLine}</p>}
+      <div style={{ marginTop: 14, borderRadius: 18, background: PCX.card, border: `1px solid ${PCX.line}`, flex: "none" }}>
+        {[["leggi", "flag", "Entra in una lega", "Tocca il telefono di chi ti invita"], ["invita", "trophy", "Invita nella tua lega", "L'amico avvicina il suo telefono al tuo"], ["pc", "tv", "Collega il PC", "Col QR sullo schermo: il PC dal browser non ha l'NFC"]].map(([k, ic, a, b], i) => (
+          <button key={k} className="pcx-press" data-nfc-go={k} onClick={() => onGo(k)} style={{ display: "flex", alignItems: "center", gap: 12, width: "100%", minHeight: 64, padding: "10px 14px", background: "none", border: "none", borderTop: i ? `1px solid ${PCX.line}` : "none", color: PCX.text, textAlign: "left" }}>
+            <span style={{ display: "flex", alignItems: "center", justifyContent: "center", width: 40, height: 40, borderRadius: 12, background: PCX.key, flex: "none" }}><PcIco d={ic} size={22} color={PCX.text} /></span>
+            <span style={{ flex: 1, minWidth: 0 }}><span style={{ display: "block", fontFamily: F_HEAD, fontSize: 15, fontWeight: 800 }}>{a}</span>{small(b)}</span>
+            <PcIco d="M9 6l6 6l-6 6" size={18} color={PCX.muted} />
+          </button>
+        ))}
+      </div>
+      <div style={{ marginTop: "auto", paddingTop: 14, display: "flex", flexDirection: "column", gap: 12 }}>
+        {small("Il telefono dell'amico non ha l'NFC? Usa il QR o il codice.", { textAlign: "center" })}
+        {note}
+        {camAvail() && btn("Inquadra un QR", "qr", () => onGo("scan"), false, { "data-nfc-go": "scan" })}
+      </div>
+    </>
+  );
+  else if (view === "leggi") body = (
+    <>
+      {top("Entra in una lega")}
+      <NfcReadOn on={nfcOk} onUrl={onRead} onError={onReadError} />
+      <NfcPulse two />
+      <div style={{ fontFamily: F_HEAD, fontSize: 24, lineHeight: "30px", fontWeight: 800, textAlign: "center" }}>Avvicina il telefono<br />di chi ti invita</div>
+      {small(nfcOk ? "Chi ti invita apre Profilo → NFC → Invita nella tua lega. Tenete i telefoni schiena contro schiena per un secondo." : nfcLine,{ textAlign: "center", marginTop: 8, color: nfcOk ? PCX.muted : PCX.yellow })}
+      {nfcOk && <div data-nfc-reading="" style={{ marginTop: 14, display: "flex", alignItems: "center", justifyContent: "center", gap: 8, fontSize: 13, fontWeight: 700, color: PCX.text }}><span aria-hidden="true" style={{ width: 8, height: 8, borderRadius: "50%", background: PCX.yellow, animation: "pcxblink 1.2s ease-in-out infinite" }} />Cerco il telefono…</div>}
+      <div style={{ marginTop: "auto", paddingTop: 14, display: "flex", flexDirection: "column", gap: 12 }}>
+        {note}
+        {camAvail() && btn("Usa il QR invece", "qr", () => onGo("scan"), !nfcOk, { "data-nfc-go": "scan" })}
+      </div>
+    </>
+  );
+  else if (view === "scan") return (
+    <div data-pc-ui="" data-nfc-sheet="scan" role="dialog" aria-modal="true" aria-label="Inquadra l'invito" style={{ position: "absolute", inset: 0, zIndex: 630 }}>
+      <style>{PC_CSS}</style>
+      <CamScan title="Inquadra l'invito" headline={<>Inquadra il QR<br />dell'invito</>} doneText="Apro l'invito…" onCode={onScanned} onType={onOpenFanta} onClose={onClose} />
+    </div>
+  );
+  else if (view === "invita") {
+    const l = inviteLeague;
+    const url = l ? Invite.link({ code: l.code, name: l.name, from: (l.members.find(m => m.aid === meAid) || {}).name }) : "";
+    body = (
+      <>
+        {top("Invita in lega")}
+        {!l ? (
+          <>
+            {small(leagues.length ? "Scegli la lega in cui invitare:" : "Non sei ancora in una lega: creane una o entra con un codice nel FANTA.", { marginTop: 10 })}
+            <div style={{ marginTop: 10, display: "flex", flexDirection: "column", gap: 8 }}>
+              {leagues.map(x => <button key={x.code} className="pcx-press" data-nfc-pick={x.code} onClick={() => onPickLeague(x)} style={{ display: "flex", alignItems: "center", gap: 10, minHeight: 56, padding: "0 14px", borderRadius: 16, background: PCX.card, border: `1px solid ${PCX.line}`, color: PCX.text, fontFamily: F_HEAD, fontSize: 15, fontWeight: 800, textAlign: "left" }}><span style={{ flex: 1 }}>{x.name}</span><span style={{ fontSize: 12, color: PCX.muted }}>{x.code}</span></button>)}
+            </div>
+            <div style={{ marginTop: "auto", paddingTop: 14 }}>{!leagues.length && btn("Vai al FANTA", null, onOpenFanta, true)}</div>
+          </>
+        ) : (
+          <>
+            <NfcShareOn url={url} on={nfcOk && nfc.hce} />
+            {leagueCard(l, showQr && <div data-nfc-qr="" style={{ marginTop: 14, display: "flex", justifyContent: "center" }}><div style={{ padding: 10, borderRadius: 14, background: "#fff" }}><PcQr text={url} size={200} label={"QR dell'invito nella lega " + l.name} /></div></div>)}
+            {!showQr && (nfcOk && nfc.hce ? (
+              <>
+                <NfcPulse two />
+                <div style={{ fontFamily: F_HEAD, fontSize: 20, lineHeight: "26px", fontWeight: 800, textAlign: "center" }}>Avvicina il telefono di un amico</div>
+                {small("Sul suo telefono: Profilo → NFC → Entra in una lega. Poi schiena contro schiena per un secondo ed entra, senza codici.", { textAlign: "center", marginTop: 6 })}
+              </>
+            ) : small(nfc.supported && !nfc.hce ? "Questo telefono non può fare da NFC: mostra il QR o condividi il link." : nfcLine || "", { marginTop: 14, textAlign: "center", color: PCX.yellow }))}
+            <div style={{ marginTop: "auto", paddingTop: 14, display: "flex", flexDirection: "column", gap: 12 }}>
+              {note}
+              {btn("Condividi il link", "M8 12l8 -4 M8 12l8 4 M6 12m-2 0a2 2 0 1 0 4 0a2 2 0 1 0 -4 0 M18 6m-2 0a2 2 0 1 0 4 0a2 2 0 1 0 -4 0 M18 18m-2 0a2 2 0 1 0 4 0a2 2 0 1 0 -4 0", () => onShare(url, l), true, { "data-nfc-share": "" })}
+              {btn(showQr ? "Nascondi il QR" : "Mostra il QR", "qr", () => setShowQr(v => !v), false, { "data-nfc-showqr": "" })}
+            </div>
+          </>
+        )}
+      </>
+    );
+  } else if (view === "invito" || view === "dentro") {
+    const l = invite && invite.league;
+    const inside = view === "dentro" || (l && l.members.some(m => m.aid === meAid));
+    return (
+      <div data-pc-ui="" data-nfc-sheet={view} role="dialog" aria-modal="true" aria-label="Invito in lega" onClick={e => { if (e.target === e.currentTarget && !busy) onClose(); }} style={{ position: "absolute", inset: 0, zIndex: 630, background: "rgba(0,0,0,.72)", display: "flex", alignItems: "flex-end" }}>
+        <style>{PC_CSS}</style>
+        <div style={{ width: "100%", boxSizing: "border-box", padding: "18px 20px calc(env(safe-area-inset-bottom, 0px) + 22px)", borderRadius: "24px 24px 0 0", background: PCX.bg, borderTop: `1px solid ${PCX.line}`, color: PCX.text, fontFamily: F_BODY, animation: "pcxin .3s ease-out both" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <h2 style={{ margin: 0, fontFamily: F_HEAD, fontSize: 17, fontWeight: 800 }}>{view === "dentro" ? "Sei nella lega" : "Leghe"}</h2>
+            <button className="pcx-press" aria-label="Chiudi" onClick={onClose} disabled={busy} style={{ marginLeft: "auto", display: "flex", alignItems: "center", justifyContent: "center", width: 44, height: 44, marginRight: -10, background: "none", border: "none", color: PCX.text }}><PcIco d="close" size={22} /></button>
+          </div>
+          {view === "invito" && invite && invite.from && <div style={{ marginTop: 4, fontFamily: F_HEAD, fontSize: 12, fontWeight: 800, letterSpacing: .5, color: PCX.yellow }}>INVITO DA {invite.from.toUpperCase()}</div>}
+          {!l && invite && invite.loading && small("Cerco la lega…", { marginTop: 14 })}
+          {!l && invite && invite.login && (
+            <div data-nfc-login="" style={{ marginTop: 14 }}>
+              <div style={{ fontFamily: F_HEAD, fontSize: 22, lineHeight: "28px", fontWeight: 800 }}>{invite.name || "Lega FantaF1"}</div>
+              <div style={{ marginTop: 2, fontFamily: F_HEAD, fontSize: 13, fontWeight: 800, color: PCX.muted, letterSpacing: .6 }}>{invite.code}</div>
+              {small("Per vedere la lega ed entrare serve un account: dopo l'accesso l'invito si riapre da solo.", { marginTop: 10 })}
+            </div>
+          )}
+          {!l && invite && !invite.loading && !invite.login && <p role="status" data-nfc-msg="" style={{ margin: "14px 0 0", fontSize: 14, fontWeight: 600, color: PCX.red }}>Non trovo la lega {invite.code}: forse è stata chiusa.</p>}
+          {l && leagueCard(l)}
+          {l && small(view === "dentro" ? "Da ora i tuoi punti contano nella classifica della lega, GP dopo GP." : inside ? "Sei già in questa lega." : "Entrando vedi la classifica della lega coi punti di tutti, GP dopo GP.", { marginTop: 12 })}
+          <div style={{ marginTop: 16, display: "flex", flexDirection: "column", gap: 12 }}>
+            {note}
+            {!l && invite && invite.login && btn("Accedi per entrare", "check", onJoin, true, { "data-nfc-join": "" })}
+            {l && view === "invito" && !inside && btn(busy ? "Entro…" : "Entra nella lega", "check", onJoin, true, { "data-nfc-join": "" })}
+            {l && (inside || view === "dentro") && btn("Vai alla classifica della lega", "list", onOpenFanta, true, { "data-nfc-fanta": "" })}
+            {view === "dentro" && l && btn("Invita altri amici", "trophy", () => onPickLeague(l), false, { "data-nfc-more": "" })}
+            {view === "invito" && !inside && (l || (invite && invite.login)) && btn("Non ora", null, onClose, false, { "data-nfc-later": "" })}
+          </div>
+        </div>
+      </div>
+    );
+  }
+  return (
+    <div data-pc-ui="" data-nfc-sheet={view} role="dialog" aria-modal="true" aria-label="NFC" className="scrollcol" style={{ position: "absolute", inset: 0, zIndex: 630, background: PCX.bg, color: PCX.text, fontFamily: F_BODY, display: "flex", flexDirection: "column", boxSizing: "border-box", padding: "calc(env(safe-area-inset-top, 0px) + 12px) 20px calc(env(safe-area-inset-bottom, 0px) + 24px)", overflowY: "auto" }}>
+      <style>{PC_CSS}</style>
+      {body}
     </div>
   );
 }
@@ -5403,6 +5622,8 @@ function pcPrefsOf(p) {
 
 // PC: codice nuovo ogni 2 minuti finché nessuno lo usa; ogni 2,5 secondi legge pair/<codice>. Collegato: tiene il
 // documento (riquadri, scelte, orologio) e risponde ogni ~10 secondi con pc.seen/pc.n; scollegato o scaduto: codice nuovo.
+// 22/11 (Edoardo: "il pc non resta collegato se viene chiusa"): il codice collegato resta nel browser (bt-pc-screen);
+// riaprendo la pagina si riprende quello finché il collegamento c'è (12 ore o Scollega), senza rifare il QR.
 function usePcScreen(on) {
   const [s, setS] = useState({ code: null, since: 0, doc: null, state: "attesa" });
   useEffect(() => {
@@ -5410,9 +5631,12 @@ function usePcScreen(on) {
     let alive = true, cur = null, busy = false, lastAck = 0;
     const ua = PairLogic.browserName(typeof navigator !== "undefined" ? navigator.userAgent : "");
     const fresh = () => {
+      local.del("bt-pc-screen");
       cur = { code: PairLogic.newCode(Math.random), since: nowMs(), linked: false };
       setS({ code: cur.code, since: cur.since, doc: null, state: "attesa" });
     };
+    const kept = local.get("bt-pc-screen");
+    const resume = kept && PairLogic.CODE_RE.test(String(kept.code)) ? String(kept.code) : null;
     const poll = async () => {
       if (!alive || busy || !cur) return;
       busy = true;
@@ -5425,25 +5649,192 @@ function usePcScreen(on) {
         // che c'era alla prima lettura": se la prima lettura arriva tardi (rete lenta), il telefono può aver già scritto.
         const st = PairLogic.status(doc, { old: null, now: nowMs() });
         if (st === "collegato") {
-          c.linked = true;
+          if (!c.linked) local.set("bt-pc-screen", { code: c.code });
+          c.linked = true; c.resume = false;
           setS(x => (x.code === c.code && x.state === "collegato" && sameJson(x.doc, doc) ? x : { ...x, doc, state: "collegato" }));
           if (Date.now() - lastAck > 9000 || !PairLogic.acked(doc, doc.at)) {
             lastAck = Date.now();
             dbSet("pair", c.code, { pc: PairLogic.ackOf(doc, ua) }, { fields: ["pc"] }).catch(() => {});
           }
-        } else if (c.linked || st === "scaduto" || PairLogic.codeStale(c.since, nowMs())) fresh();
-      } catch (e) { /* senza rete: si riprova al giro dopo */ }
+        } else if (c.linked || c.resume || st === "scaduto" || PairLogic.codeStale(c.since, nowMs())) fresh();
+      } catch (e) { /* senza rete: si riprova al giro dopo (il codice ripreso resta finché una lettura risponde) */ }
       finally { busy = false; }
     };
-    fresh();
+    if (resume) { cur = { code: resume, since: nowMs(), linked: false, resume: true }; setS({ code: resume, since: cur.since, doc: null, state: "riprendo" }); }
+    else fresh();
     const first = setTimeout(poll, 50), iv = setInterval(poll, 2500);
     return () => { alive = false; clearTimeout(first); clearInterval(iv); };
   }, [on]);
   return s;
 }
 
+// Lettore QR dentro l'app (22/11, Edoardo: "grafica dal html UI e chiedi consenso alla fotocamera", schermata "2 Scansiona
+// QR"). Nell'APK: plugin @capacitor-mlkit/barcode-scanning, startScan(): la fotocamera sta dietro la pagina, che diventa
+// trasparente (html.bt-cam) tranne questa schermata (data-cam-ui). Prima il nostro consenso, poi quello di Android; se è
+// negato, il tasto per le impostazioni. Senza startScan c'è il lettore di Google (scan()). Nel sito: fotocamera del
+// browser (getUserMedia) con BarcodeDetector, se ci sono. onCode(testo) → true se il QR va bene (si ferma), false se no.
+const CAM_CSS = "html.bt-cam,html.bt-cam body,html.bt-cam #root{background:transparent!important}html.bt-cam body *{visibility:hidden!important}html.bt-cam [data-cam-ui],html.bt-cam [data-cam-ui] *{visibility:visible!important}";
+const camWebOk = () => { try { return !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia) && "BarcodeDetector" in window; } catch (e) { return false; } };
+const camNative = () => { try { return !!(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform()); } catch (e) { return false; } };
+const camAvail = () => { const p = capPlugin("BarcodeScanner"); return !!(p && (p.startScan || p.scan)) || camNative() || camWebOk(); };
+const camGranted = s => !!s && (s.camera === "granted" || s.camera === "limited");
+function CamScan({ title, headline, busy = false, note = null, doneText = "QR letto.", onCode, onType, onClose }) {
+  const [step, setStep] = useState("avvio");   // avvio | consenso | negato | scan | ok | niente
+  const [msg, setMsg] = useState(null);
+  const [torch, setTorch] = useState(null);    // null: niente torcia; false/true: spenta/accesa
+  const [web, setWeb] = useState(false);
+  const video = useRef(null);
+  const run = useRef({ on: true, stop: () => {}, last: null });
+  const plug = capPlugin("BarcodeScanner");
+  const take = raw => {
+    if (!run.current.on || !raw) return;
+    if (onCode(String(raw))) { run.current.on = false; run.current.stop(); setMsg(null); setStep("ok"); fx.buzz("select"); return; }
+    if (run.current.last !== raw) { run.current.last = raw; fx.buzz("light"); setMsg("Questo QR non è di Sector 4: inquadra quello giusto."); }
+  };
+  const goNative = async () => {
+    const hs = [];
+    run.current.stop = () => {
+      try { document.documentElement.classList.remove("bt-cam"); } catch (e) { /* niente */ }
+      Promise.resolve().then(() => plug.stopScan && plug.stopScan()).catch(() => {});
+      hs.forEach(h => { try { if (h && h.remove) h.remove(); } catch (e) { /* niente */ } });
+    };
+    try {
+      if (plug.addListener) {
+        hs.push(await plug.addListener("barcodesScanned", e => { const b = e && e.barcodes && e.barcodes[0]; take(b && (b.rawValue || b.displayValue)); }));
+        hs.push(await plug.addListener("barcodeScanned", e => { const b = e && e.barcode; take(b && (b.rawValue || b.displayValue)); }));
+      }
+      document.documentElement.classList.add("bt-cam");
+      await plug.startScan({ formats: ["QR_CODE"] });
+      if (!run.current.on) { run.current.stop(); return; }
+      setStep("scan");
+      if (plug.isTorchAvailable) { const t = await Promise.resolve().then(() => plug.isTorchAvailable()).catch(() => null); if (t && t.available && run.current.on) setTorch(false); }
+    } catch (e) {
+      run.current.stop();
+      if (run.current.on) { setStep("niente"); setMsg("La fotocamera non si è accesa: riprova o scrivi il codice."); }
+    }
+  };
+  const goWeb = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" }, audio: false });
+      let t = 0;
+      run.current.stop = () => { clearTimeout(t); stream.getTracks().forEach(k => k.stop()); };
+      if (!run.current.on) { run.current.stop(); return; }
+      const det = new window.BarcodeDetector({ formats: ["qr_code"] });
+      setWeb(true); setStep("scan");
+      await new Promise(r => setTimeout(r, 30));
+      if (video.current) { video.current.srcObject = stream; await video.current.play().catch(() => {}); }
+      const tick = async () => {
+        if (!run.current.on) return;
+        try { const r = video.current ? await det.detect(video.current) : []; if (r && r[0]) take(r[0].rawValue); } catch (e) { /* fotogramma non pronto */ }
+        t = setTimeout(tick, 280);
+      };
+      tick();
+    } catch (e) { if (run.current.on) setStep("negato"); }
+  };
+  const start = async () => {
+    if (plug && plug.startScan) {
+      const s = plug.checkPermissions ? await Promise.resolve().then(() => plug.checkPermissions()).catch(() => null) : { camera: "granted" };
+      if (!run.current.on) return;
+      if (camGranted(s)) { goNative(); return; }
+      setStep(s && s.camera === "denied" ? "negato" : "consenso");
+      return;
+    }
+    if (plug && plug.scan) {   // lettore di Google (a tutto schermo, non nostro)
+      setStep("scan");
+      try {
+        if (plug.isGoogleBarcodeScannerModuleAvailable) {
+          const a = await plug.isGoogleBarcodeScannerModuleAvailable();
+          if (a && a.available === false) {
+            if (plug.installGoogleBarcodeScannerModule) Promise.resolve().then(() => plug.installGoogleBarcodeScannerModule()).catch(() => {});
+            setStep("niente"); setMsg("Sto scaricando il lettore QR di Google: riprova tra qualche secondo."); return;
+          }
+        }
+        const r = await plug.scan({ formats: ["QR_CODE"] });
+        const b = r && Array.isArray(r.barcodes) ? r.barcodes[0] : null;
+        if (b) take(b.rawValue || b.displayValue);
+      } catch (e) { if (!/cancel/i.test(String((e && e.message) || e || ""))) { setStep("niente"); setMsg("Il lettore QR non si è aperto: riprova o scrivi il codice."); } }
+      return;
+    }
+    if (camWebOk()) { goWeb(); return; }
+    setStep("niente"); setMsg("Su questo telefono il QR non si legge: scrivi il codice.");
+  };
+  const allow = async () => {
+    try {
+      const s = await plug.requestPermissions();
+      if (!run.current.on) return;
+      if (camGranted(s)) goNative(); else setStep("negato");
+    } catch (e) { setStep("negato"); }
+  };
+  const settings = () => { if (plug && plug.openSettings) Promise.resolve().then(() => plug.openSettings()).catch(() => {}); };
+  const flash = () => { if (!plug || !plug.toggleTorch) return; Promise.resolve().then(() => plug.toggleTorch()).then(() => setTorch(t => !t)).catch(() => {}); };
+  useEffect(() => {
+    run.current.on = true;
+    start();
+    return () => { run.current.on = false; run.current.stop(); };
+  }, []);   // eslint-disable-line react-hooks/exhaustive-deps
+  // Quando l'app va in secondo piano Android chiude la fotocamera: tornando si riparte da capo.
+  useEffect(() => {
+    const vis = () => { if (document.hidden || !run.current.on || step !== "scan" || web) return; run.current.stop(); start(); };
+    document.addEventListener("visibilitychange", vis);
+    return () => document.removeEventListener("visibilitychange", vis);
+  });
+  const cam = step === "scan" || step === "ok";
+  const ok = step === "ok";
+  const txt = (t, extra) => <p style={{ margin: 0, fontFamily: F_BODY, fontSize: 13, lineHeight: "18px", fontWeight: 600, color: PCX.muted, textAlign: "center", ...extra }}>{t}</p>;
+  const btn = (label, icon, onClick, primary, data = {}) => (
+    <button className="pcx-press" onClick={onClick} {...data} style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 10, width: "100%", height: 54, borderRadius: 16, background: primary ? PCX.text : "rgba(0,0,0,.55)", border: `1px solid ${primary ? PCX.text : PCX.btnLine}`, color: primary ? "#000" : PCX.text, fontFamily: F_HEAD, fontSize: 17, fontWeight: 800 }}>
+      {icon && <PcIco d={icon} size={22} color={primary ? "#000" : PCX.text} />}{label}
+    </button>
+  );
+  return (
+    <div data-cam-ui="" data-cam-step={step} style={{ position: "absolute", inset: 0, zIndex: 650, display: "flex", flexDirection: "column", boxSizing: "border-box", padding: "calc(env(safe-area-inset-top, 0px) + 12px) 20px calc(env(safe-area-inset-bottom, 0px) + 24px)", background: cam ? "transparent" : PCX.bg, color: PCX.text, fontFamily: F_BODY, overflow: "hidden" }}>
+      <style>{CAM_CSS}</style>
+      {web && <video ref={video} playsInline muted aria-hidden="true" style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover", zIndex: 0 }} />}
+      <div style={{ position: "relative", zIndex: 2, display: "flex", alignItems: "center", height: 44, flex: "none" }}>
+        <button className="pcx-press" aria-label="Chiudi" onClick={onClose} style={{ display: "flex", alignItems: "center", justifyContent: "center", width: 44, height: 44, marginLeft: -10, background: "none", border: "none", color: PCX.text }}><PcIco d="close" size={24} /></button>
+        <h2 style={{ margin: 0, fontFamily: F_HEAD, fontSize: 17, fontWeight: 800 }}>{title}</h2>
+        {torch !== null && cam && <button className="pcx-press" data-cam-torch={torch ? "on" : "off"} aria-pressed={torch ? "true" : "false"} aria-label="Torcia" onClick={flash} style={{ marginLeft: "auto", display: "flex", alignItems: "center", justifyContent: "center", width: 44, height: 44, borderRadius: 22, background: torch ? PCX.yellow : "rgba(0,0,0,.55)", border: "none", color: torch ? "#000" : PCX.text }}><PcIco d="bolt" size={20} /></button>}
+      </div>
+      {(step === "consenso" || step === "negato") ? (
+        <div style={{ position: "relative", zIndex: 2, flex: 1, display: "flex", flexDirection: "column", alignItems: "center", textAlign: "center", paddingTop: 40 }}>
+          <span aria-hidden="true" style={{ display: "flex", alignItems: "center", justifyContent: "center", width: 96, height: 96, borderRadius: "50%", background: step === "negato" ? "rgba(255,90,77,.14)" : PCX.key, animation: "pcxok .35s ease-out both" }}>
+            <PcIco d="M5 7h1a2 2 0 0 0 2 -2a1 1 0 0 1 1 -1h6a1 1 0 0 1 1 1a2 2 0 0 0 2 2h1a2 2 0 0 1 2 2v9a2 2 0 0 1 -2 2h-14a2 2 0 0 1 -2 -2v-9a2 2 0 0 1 2 -2 M12 13m-3 0a3 3 0 1 0 6 0a3 3 0 1 0 -6 0" size={46} color={step === "negato" ? PCX.red : PCX.text} />
+          </span>
+          <div style={{ marginTop: 22, fontFamily: F_HEAD, fontSize: 24, lineHeight: "30px", fontWeight: 800 }}>{step === "negato" ? "La fotocamera è bloccata" : "Serve la fotocamera"}</div>
+          {txt(step === "negato"
+            ? (camNative() ? "Per leggere il QR dai il permesso nelle impostazioni dell'app: Autorizzazioni → Fotocamera." : "Il browser non ha il permesso della fotocamera: dallo nelle impostazioni del sito.")
+            : "La usiamo solo per leggere il QR, mentre lo inquadri. Non salviamo foto né video.", { marginTop: 10, maxWidth: 300 })}
+          <div style={{ marginTop: "auto", width: "100%", display: "flex", flexDirection: "column", gap: 12 }}>
+            {step === "consenso" && btn("Consenti la fotocamera", "check", allow, true, { "data-cam-allow": "" })}
+            {step === "negato" && camNative() && plug && plug.openSettings && btn("Apri le impostazioni", null, settings, true, { "data-cam-settings": "" })}
+            {btn("Scrivi il codice", "keys", onType, false, { "data-pc-go": "code" })}
+          </div>
+        </div>
+      ) : (
+        <div style={{ position: "relative", zIndex: 2, flex: 1, display: "flex", flexDirection: "column", minHeight: 0 }}>
+          <div style={{ marginTop: 6, fontFamily: F_HEAD, fontSize: 26, lineHeight: "32px", fontWeight: 800, letterSpacing: -.5, textAlign: "center", textShadow: cam ? "0 1px 8px rgba(0,0,0,.6)" : "none" }}>{headline}</div>
+          {/* mirino: fuori dal riquadro la fotocamera è scurita (ombra grandissima), dentro si vede pulita */}
+          <div data-cam-box="" style={{ position: "relative", width: 280, height: 280, margin: "36px auto 0", flex: "none", borderRadius: 18, boxShadow: cam && !web ? "0 0 0 200vmax rgba(0,0,0,.6)" : cam ? "0 0 0 200vmax rgba(0,0,0,.45)" : "none", zIndex: -1 }}>
+            {[0, 90, 180, 270].map(r => <span key={r} aria-hidden="true" style={{ position: "absolute", left: r === 90 || r === 180 ? "auto" : 0, right: r === 90 || r === 180 ? 0 : "auto", top: r === 180 || r === 270 ? "auto" : 0, bottom: r === 180 || r === 270 ? 0 : "auto", width: 44, height: 44, boxSizing: "border-box", borderTop: `4px solid ${ok ? PCX.green : PCX.text}`, borderLeft: `4px solid ${ok ? PCX.green : PCX.text}`, borderRadius: "14px 0 0 0", transform: `rotate(${r}deg)` }} />)}
+            {!cam && <div aria-hidden="true" style={{ position: "absolute", inset: 26, display: "flex", alignItems: "center", justifyContent: "center", opacity: .18 }}><PcIco d="qr" size={200} color={PCX.text} sw={1.2} /></div>}
+            {cam && !ok && <div aria-hidden="true" style={{ position: "absolute", left: 14, right: 14, top: 14, height: 3, borderRadius: 2, background: PCX.yellow, boxShadow: `0 0 18px ${PCX.yellow}`, "--h": "250px", animation: "pcxline 3s ease-in-out infinite" }} />}
+            {ok && <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center" }}><span data-pc-scan-ok="" style={{ display: "flex", alignItems: "center", justifyContent: "center", width: 72, height: 72, borderRadius: "50%", background: PCX.green, animation: "pcxok .35s ease-out both" }}><PcIco d="check" size={40} color="#000" sw={3} /></span></div>}
+          </div>
+          <div style={{ marginTop: 24 }}>{txt(ok ? (busy ? doneText : "QR letto.") : step === "avvio" ? "Accendo la fotocamera…" : step === "niente" ? "" : "Tieni il telefono fermo. Il codice si legge da solo.", { color: PCX.text, textShadow: cam ? "0 1px 8px rgba(0,0,0,.7)" : "none" })}</div>
+          <div style={{ marginTop: "auto", display: "flex", flexDirection: "column", gap: 12 }}>
+            {(msg || note) && <p role="status" data-pc-msg="" style={{ margin: 0, padding: "8px 12px", borderRadius: 12, background: "rgba(0,0,0,.7)", fontFamily: F_BODY, fontSize: 13, lineHeight: "18px", fontWeight: 600, color: PCX.red, textAlign: "center" }}>{note || msg}</p>}
+            {txt("La fotocamera si usa solo per leggere il QR. Non salviamo foto.", { fontSize: 12, textShadow: cam ? "0 1px 6px rgba(0,0,0,.8)" : "none" })}
+            {step === "niente" && btn("Riprova", "retry", () => { setMsg(null); setStep("avvio"); run.current.on = true; start(); }, true, { "data-cam-retry": "" })}
+            {btn("Scrivi il codice", "keys", onType, false, { "data-pc-go": "code" })}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // Telefono: Profilo → Collega PC (schermate 1-5). view: intro | scan | code | expired | remote.
-function PcLinkSheet({ view, scanAvail, digits, busy, msg, scanOk, onGo, onKey, onClose, link, st, panels, prefs, onFocus, onPanel, onMove, onUnlink }) {
+function PcLinkSheet({ view, scanAvail, digits, busy, msg, onScanned, onGo, onKey, onClose, link, st, panels, prefs, onFocus, onPanel, onMove, onUnlink }) {
   const top = (title, close = true) => (
     <div style={{ display: "flex", alignItems: "center", height: 44, flex: "none" }}>
       {close && <button className="pcx-press" aria-label="Chiudi" onClick={onClose} style={{ display: "flex", alignItems: "center", justifyContent: "center", width: 44, height: 44, marginLeft: -10, background: "none", border: "none", color: PCX.text }}><PcIco d="close" size={24} /></button>}
@@ -5497,24 +5888,12 @@ function PcLinkSheet({ view, scanAvail, digits, busy, msg, scanOk, onGo, onKey, 
       </div>
     </>
   );
-  else if (view === "scan") body = (
-    <>
-      {top("Scansiona il QR")}
-      {big(<>Inquadra il QR<br />sullo schermo del PC</>, true)}
-      <div style={{ position: "relative", width: 280, height: 280, margin: "36px auto 0", flex: "none" }}>
-        {[0, 90, 180, 270].map(r => <span key={r} aria-hidden="true" style={{ position: "absolute", left: r === 90 || r === 180 ? "auto" : 0, right: r === 90 || r === 180 ? 0 : "auto", top: r === 180 || r === 270 ? "auto" : 0, bottom: r === 180 || r === 270 ? 0 : "auto", width: 44, height: 44, boxSizing: "border-box", borderTop: `4px solid ${scanOk ? PCX.green : PCX.text}`, borderLeft: `4px solid ${scanOk ? PCX.green : PCX.text}`, borderRadius: "14px 0 0 0", transform: `rotate(${r}deg)` }} />)}
-        <div aria-hidden="true" style={{ position: "absolute", inset: 26, display: "flex", alignItems: "center", justifyContent: "center", opacity: .18 }}><PcIco d="qr" size={200} color={PCX.text} sw={1.2} /></div>
-        {!scanOk && <div aria-hidden="true" style={{ position: "absolute", left: 14, right: 14, top: 14, height: 3, borderRadius: 2, background: PCX.yellow, boxShadow: `0 0 18px ${PCX.yellow}`, "--h": "250px", animation: "pcxline 3s ease-in-out infinite" }} />}
-        {scanOk && <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center" }}><span data-pc-scan-ok="" style={{ display: "flex", alignItems: "center", justifyContent: "center", width: 72, height: 72, borderRadius: "50%", background: PCX.green, animation: "pcxok .35s ease-out both" }}><PcIco d="check" size={40} color="#000" sw={3} /></span></div>}
-      </div>
-      <div style={{ marginTop: 24, textAlign: "center" }}>{small(scanOk ? (busy ? "QR letto: collego il PC…" : "QR letto.") : "Il lettore si apre a tutto schermo: inquadra il QR sul PC e il codice si legge da solo.")}</div>
-      <div style={{ marginTop: "auto", paddingTop: 14, display: "flex", flexDirection: "column", gap: 12 }}>
-        {note}
-        {small("La fotocamera si usa solo per leggere il QR. Non salviamo foto.", { textAlign: "center" })}
-        {!scanOk && btn("Inquadra il QR", "qr", () => onGo("scan"), true, { "data-pc-go": "scan" })}
-        {btn("Scrivi il codice", "keys", () => onGo("code"), false, { "data-pc-go": "code" })}
-      </div>
-    </>
+  else if (view === "scan") return (
+    <div data-pc-ui="" data-pc-sheet="scan" role="dialog" aria-modal="true" aria-label="Scansiona il QR" style={{ position: "absolute", inset: 0, zIndex: 630 }}>
+      <style>{PC_CSS}</style>
+      <CamScan title="Scansiona il QR" headline={<>Inquadra il QR<br />sullo schermo del PC</>} busy={busy} note={msg} doneText="QR letto: collego il PC…"
+        onCode={onScanned} onType={() => onGo("code")} onClose={onClose} />
+    </div>
   );
   else if (view === "code") body = (
     <>
@@ -9597,7 +9976,7 @@ const LEAGUE_ZONES = {
   q1: { label: "ZONA Q1", bg: "rgba(255,24,1,.13)", line: "rgba(255,90,95,.45)", ink: "#FF5A5F" },
   q2: { label: "ZONA Q2", bg: "rgba(255,210,31,.11)", line: "rgba(255,210,31,.45)", ink: "#FFD23F" },
 };
-function FantaScreen({ elo = null, squad, setSquad, base, freeTransfers, budget, stats, listing = null, race, lock, weekends = [], isPremium, onPremium, onToast, bonus = [], leagues = [], seasonPts = 0, realWeek = null, meAid = null, onCreateLeague, onJoinLeague, onLeaveLeague, onRenameLeague, needAccount, predictions = [], predAnswers = {}, predLockOf, onAnswerPrediction, standings, raceNameOf = null }) {
+function FantaScreen({ onInvite = null, onJoinTap = null, elo = null,squad, setSquad, base, freeTransfers, budget, stats, listing = null, race, lock, weekends = [], isPremium, onPremium, onToast, bonus = [], leagues = [], seasonPts = 0, realWeek = null, meAid = null, onCreateLeague, onJoinLeague, onLeaveLeague, onRenameLeague, needAccount, predictions = [], predAnswers = {}, predLockOf, onAnswerPrediction, standings, raceNameOf = null }) {
   const [, setTick] = useState(0);
   useEffect(() => { const iv = setInterval(() => setTick(n => n + 1), 30000); return () => clearInterval(iv); }, []);
   const bonusPts = bonus.reduce((a, b) => a + b.pts, 0);
@@ -9628,6 +10007,7 @@ function FantaScreen({ elo = null, squad, setSquad, base, freeTransfers, budget,
     Promise.resolve(p).then(r => { if (!r) return; setMode(null); setDraft(""); if (typeof r === "string") setActiveLeague(r); });
   };
   const invite = () => {
+    if (onInvite) { onInvite(league); return; }   // 22/11: schermata "Invita in lega" (QR, link, NFC)
     const txt = `Entra nella mia lega FantaF1 "${league.name}" su B&T: FANTA → Entra con un codice → ${league.code}`;
     if (nativeShareKind()) { shareNative({ title: "Lega FantaF1", text: txt }, "Invita nella lega"); return; }
     Promise.resolve(copyText(txt)).then(ok => onToast(ok ? "Invito copiato: mandalo ai tuoi amici" : "Codice della lega: " + league.code), () => onToast("Codice della lega: " + league.code));
@@ -9718,6 +10098,13 @@ function FantaScreen({ elo = null, squad, setSquad, base, freeTransfers, budget,
           <label htmlFor="leagueDraft" style={{ position: "absolute", width: 1, height: 1, overflow: "hidden" }}>{mode === "join" ? "Codice della lega" : "Nome della lega"}</label>
           <input id="leagueDraft" value={draft} onChange={e => setDraft(mode === "join" ? e.target.value.toUpperCase() : e.target.value)} placeholder={mode === "join" ? "Codice, per esempio BT-7Q2K" : "Nome della lega"} maxLength={40} style={input} />
           {smallBtn(mode === "create" ? "Crea lega" : mode === "join" ? "Entra" : "Salva nome", submit, { primary: true, disabled: !draft.trim() })}
+        </div>
+      )}
+      {mode === "join" && onJoinTap && (nfcPlug() || camAvail()) && (
+        <div data-league-join-alt="" style={{ display: "flex", gap: 8, margin: "-4px 16px 12px", flexWrap: "wrap" }}>
+          <span style={{ width: "100%", fontFamily: F_BODY, fontSize: 11, color: C.dim }}>Oppure, senza scrivere il codice:</span>
+          {nfcPlug() && smallBtn("Avvicina i telefoni (NFC)", () => onJoinTap("leggi"))}
+          {camAvail() && smallBtn("Inquadra il QR", () => onJoinTap("scan"))}
         </div>
       )}
       {!leagues.length && !mode && <p data-league-empty="" style={{ margin: "0 20px 16px", fontFamily: F_BODY, fontSize: 12, color: C.dim, lineHeight: 1.5 }}>Crea una lega o entra col codice di un amico. I punti si calcolano dai risultati veri di ogni GP, con le regole del FantaF1 e la squadra che ognuno aveva al via del weekend.</p>}
@@ -9889,7 +10276,7 @@ function TrophyCase({ trophies = {}, helmet = null, defs = TROPHIES, onOpen }) {
   );
 }
 
-function ProfiloScreen({ onPcLink = null, pcLinked = false, onPromo = null, promoUntil = 0,tv = false, onTv = null, onChangelog = null, onHack = null, onCoffee = null, coffeePrice = null, fanLevel = null, reminders = true, onReminders = null, halfway = true, onHalfway = null, news = true, onNews = null, trophiesOn = true, onTrophiesOn = null, holidays = true, onHolidays = null, miniPit = true, onMiniPit = null, ig, onOpenIg, trial = null, trialUsed = false, onBack, onNotifiche, onPremium, onAdmin, onLogout, isPremium, onAbout, onHelp, onFeedback, aboutMe, onSaveAboutMe, favTeam, favDriver, onPickTeam, onPickDriver, guest, onLogin, onTerms, blocked = [], onUnblock, onDeleteAccount, savedCount = 0, onOpenSaved, account = null, onSaveName, isAdmin = false, onTheme, sounds = true, haptics = true, onSounds, onHaptics, helmet = null, onHelmet, trophies = {}, trophyProg = {}, trophyList = TROPHIES, onAdPrivacy = null }) {
+function ProfiloScreen({ onPcLink = null, pcLinked = false, onNfc = null,onPromo = null, promoUntil = 0,tv = false, onTv = null, onChangelog = null, onHack = null, onCoffee = null, coffeePrice = null, fanLevel = null, reminders = true, onReminders = null, halfway = true, onHalfway = null, news = true, onNews = null, trophiesOn = true, onTrophiesOn = null, holidays = true, onHolidays = null, miniPit = true, onMiniPit = null, ig, onOpenIg, trial = null, trialUsed = false, onBack, onNotifiche, onPremium, onAdmin, onLogout, isPremium, onAbout, onHelp, onFeedback, aboutMe, onSaveAboutMe, favTeam, favDriver, onPickTeam, onPickDriver, guest, onLogin, onTerms, blocked = [], onUnblock, onDeleteAccount, savedCount = 0, onOpenSaved, account = null, onSaveName, isAdmin = false, onTheme, sounds = true, haptics = true, onSounds, onHaptics, helmet = null, onHelmet, trophies = {}, trophyProg = {}, trophyList = TROPHIES, onAdPrivacy = null }) {
   const ft = favTeam ? teamById(favTeam) : null;
   const fd = favDriver ? driverById(favDriver) : null;
   const favRows = [
@@ -9936,6 +10323,8 @@ function ProfiloScreen({ onPcLink = null, pcLinked = false, onPromo = null, prom
     { icon: "bell", label: "Notifiche", onClick: onNotifiche, chevron: true },
     // 21/11 (Edoardo): il Second Screen grande sul PC, collegato col QR; il telefono fa da telecomando.
     ...(onPcLink ? [{ icon: "tv", label: "Collega PC", value: pcLinked ? "Collegato" : null, onClick: onPcLink, chevron: true }] : []),
+    // 22/11 (Edoardo): NFC, un tocco tra due telefoni per entrare nella lega dell'amico (e il QR per chi non l'ha).
+    ...(onNfc ? [{ icon: "share", label: "NFC: avvicina e fai", onClick: onNfc, chevron: true }] : []),
     // 8/11 (Edoardo): colori, suoni, vibrazioni, temi delle feste, Pit Board e promemoria in una sola voce che si apre.
     { icon: "palette", label: "Personalizza l'app", onClick: () => setPersOpen(o => !o), chevron: true, group: true, open: persOpen },
     ...(persOpen ? [
@@ -13864,10 +14253,11 @@ function App() {
     if (!me) { needLogin("Per creare una lega serve un account."); return null; }
     return FantaL.createLeague(name, me, squadLog).then(l => { addLeague(l); fx.play("done"); showToast(`Lega "${l.name}" creata: invita i tuoi amici col codice ${l.code}`); return l.code; }, () => { showToast(NOT_SAVED); return null; });
   };
-  const joinLeague = code => {
+  // quiet (22/11): dalla schermata dell'invito, che già dice "Sei nella lega", niente avviso in basso sopra i tasti.
+  const joinLeague = (code, quiet = false) => {
     const me = leagueMe();
     if (!me) { needLogin("Per entrare in una lega serve un account."); return null; }
-    return FantaL.joinLeague(code, me, squadLog).then(l => { addLeague(l); fx.play("done"); showToast(`Sei entrato nella lega "${l.name}"`); return l.code; }, e => { showToast(e && e.code === "not-found" ? "Nessuna lega con questo codice" : NOT_SAVED); return null; });
+    return FantaL.joinLeague(code, me, squadLog).then(l => { addLeague(l); fx.play("done"); if (!quiet) showToast(`Sei entrato nella lega "${l.name}"`); return l.code; }, e => { showToast(e && e.code === "not-found" ? "Nessuna lega con questo codice" : NOT_SAVED); return null; });
   };
   const leaveLeague = code => { const me = leagueMe(); if (!me) return; FantaL.leaveLeague(code, me.aid).then(() => { setLeagueCodes(cs => cs.filter(c => c !== code)); setLeagues(ls => ls.filter(l => l.code !== code)); showToast("Sei uscito dalla lega"); }, () => showToast(NOT_SAVED)); };
   const renameLeague = (code, name) => FantaL.renameLeague(code, name).then(() => { setLeagues(ls => ls.map(l => (l.code === code ? { ...l, name: name.trim() } : l))); showToast("Nome della lega aggiornato"); return true; }, () => { showToast(NOT_SAVED); return null; });
@@ -14526,7 +14916,7 @@ function App() {
   const pcPanelsSet = f => { const v = f(pcPanels); if (v === pcPanels) return; local.set("bt-pc-panels", v); setPcPanels(v); fx.play("tick"); };
   const [pcRemote, setPcRemote] = useState(null);   // { n: battito del PC, seenAt: quando è cambiato (orologio del telefono), ua }
   const pcTry = useRef(0);   // tentativo in corso: chiudendo o riprovando, quello di prima si ferma
-  const pcScanAvail = !!(capPlugin("BarcodeScanner") && capPlugin("BarcodeScanner").scan);
+  const pcScanAvail = camAvail();
   useBack(!!pcView, () => { pcTry.current++; setPcBusy(false); setPcView(null); });
   const pcSetLink = v => { if (v) local.set("bt-pc-link", v); else local.del("bt-pc-link"); setPcLink(v); };
   const pcClaim = async code => {
@@ -14562,29 +14952,15 @@ function App() {
       setPcBusy(false); setPcScanOk(false); setPcMsg("Non riesco a collegare il PC: controlla la rete e riprova.");
     }
   };
-  // Lettore QR di Google (plugin @capacitor-mlkit/barcode-scanning): si apre a tutto schermo e torna col testo letto.
-  const pcScan = async () => {
-    setPcView("scan"); setPcMsg(null); setPcScanOk(false);
-    const p = capPlugin("BarcodeScanner");
-    if (!p || !p.scan) { setPcMsg("Su questo telefono il lettore QR non c'è: scrivi il codice."); return; }
-    try {
-      if (p.isGoogleBarcodeScannerModuleAvailable) {
-        const a = await p.isGoogleBarcodeScannerModuleAvailable();
-        if (a && a.available === false) {
-          if (p.installGoogleBarcodeScannerModule) Promise.resolve().then(() => p.installGoogleBarcodeScannerModule()).catch(() => {});
-          setPcMsg("Sto scaricando il lettore QR di Google: riprova tra qualche secondo."); return;
-        }
-      }
-      const r = await p.scan({ formats: ["QR_CODE"] });
-      const b0 = r && Array.isArray(r.barcodes) ? r.barcodes[0] : null, raw = b0 ? (b0.rawValue || b0.displayValue || "") : "";
-      if (!raw) return;   // chiuso senza leggere niente
-      const code = PairLogic.parseCode(raw);
-      if (!code) { fx.buzz("light"); setPcMsg("Questo QR non è di Sector 4: inquadra quello sullo schermo del PC."); return; }
-      setPcScanOk(true); fx.buzz("select");
-      pcClaim(code);
-    } catch (e) {
-      if (!/cancel/i.test(String((e && e.message) || e || ""))) setPcMsg("Il lettore QR non si è aperto: riprova o scrivi il codice.");
-    }
+  // 22/11: il lettore QR è dentro l'app (CamScan, con la grafica e il consenso alla fotocamera): qui solo cosa fare
+  // col testo letto. Un QR del PC collega; un invito a una lega apre l'invito (InviteSheet). Falso = QR non nostro.
+  const pcScan = () => { setPcMsg(null); setPcScanOk(false); setPcView("scan"); };
+  const pcScanned = raw => {
+    const code = PairLogic.parseCode(raw);
+    if (code) { setPcScanOk(true); pcClaim(code); return true; }
+    const inv = Invite.parse(raw);
+    if (inv) { setPcView(null); openInvite(inv); return true; }
+    return false;
   };
   const pcGo = kind => {
     if (guest || !account) { setPcView(null); needLogin("Per collegare il PC serve un account."); return; }
@@ -14695,9 +15071,86 @@ function App() {
     try { window.history.replaceState(null, "", window.location.pathname); } catch (e) { /* niente */ }
     proGate("ss", () => { setPcView("code"); setPcDigits(PAGE.link); pcClaim(PAGE.link); });
   }, [authed, guest]);   // eslint-disable-line react-hooks/exhaustive-deps
+  // ── NFC e inviti in lega (22/11, LegaNfcSheet) ──
+  const [nfcView, setNfcView] = useState(null);
+  const [nfc, setNfc] = useState(NFC_NONE);
+  const [nfcLeague, setNfcLeague] = useState(null);   // la lega in cui invito (N4)
+  const [nfcInv, setNfcInv] = useState(null);         // invito ricevuto: { code, name, from, league, loading }
+  const [nfcBusy, setNfcBusy] = useState(false);
+  const [nfcMsg, setNfcMsg] = useState(null);
+  useBack(!!nfcView, () => { if (!nfcBusy) setNfcView(null); });
+  const nfcOpen = view => { setNfcMsg(null); setNfcView(view); nfcStatus().then(setNfc); };
+  const openInvite = inv => {
+    if (!inv || !Invite.LEAGUE_RE.test(inv.code)) return;
+    setNfcMsg(null); setNfcView("invito"); fx.buzz("select");
+    // senza account la lega non si legge (regole: fanta solo con l'accesso): si tiene l'invito per dopo l'accesso
+    if (!account) { local.set("bt-inv", { code: inv.code, name: inv.name || "", from: inv.from || "" }); setNfcInv({ ...inv, league: null, loading: false, login: true }); return; }
+    setNfcInv({ ...inv, league: null, loading: true });
+    FantaL.loadLeague(inv.code).then(l => setNfcInv(x => (x && x.code === inv.code ? { ...x, league: l, loading: false } : x)), () => setNfcInv(x => (x && x.code === inv.code ? { ...x, loading: false } : x)));
+  };
+  const nfcJoin = () => {
+    if (!nfcInv || nfcBusy) return;
+    if (guest || !account) { needLogin("Per entrare in una lega serve un account."); return; }
+    setNfcBusy(true);
+    Promise.resolve(joinLeague(nfcInv.code, true)).then(code => {
+      setNfcBusy(false);
+      if (!code) { setNfcMsg("Non sono riuscito a entrare: riprova."); return; }
+      FantaL.loadLeague(code).then(l => { if (l) setNfcInv(x => (x ? { ...x, league: l } : x)); }).catch(() => {});
+      setNfcView("dentro");
+    });
+  };
+  const nfcInviteFrom = l => { setNfcLeague(l || null); nfcOpen("invita"); };
+  const nfcShare = (url, l) => {
+    const txt = `Entra nella mia lega FantaF1 "${l.name}" su Sector 4: ${url}`;
+    if (nativeShareKind()) { shareNative({ title: "Lega FantaF1", text: txt, url }, "Invita nella lega"); return; }
+    Promise.resolve(copyText(url)).then(ok => showToast(ok ? "Link copiato: mandalo ai tuoi amici" : "Codice della lega: " + l.code), () => showToast("Codice della lega: " + l.code));
+  };
+  // Un link letto (NFC o QR): invito in lega → l'invito; codice del PC → il collegamento; altro → avviso.
+  const nfcGot = raw => {
+    const inv = Invite.parse(raw);
+    if (inv) { openInvite(inv); return true; }
+    const code = PairLogic.parseCode(raw);
+    if (code) { setNfcView(null); proGate("ss", () => { setPcView("code"); setPcDigits(code); pcClaim(code); }); return true; }
+    setNfcMsg("Questo non è un invito di Sector 4."); fx.buzz("light");
+    return false;
+  };
+  const nfcGo = k => {
+    if (k === "pc") { setNfcView(null); setPcMsg(null); setPcView(pcLink ? "remote" : "intro"); return; }
+    if (k === "invita") { nfcInviteFrom(leagues.length === 1 ? leagues[0] : null); return; }
+    nfcOpen(k);
+  };
+  // Il sito aperto da un invito (?lega=) e l'app aperta toccando un telefono o un adesivo col link (BtNfc).
+  const invPageDone = useRef(false);
+  useEffect(() => {
+    if (account === undefined && !guest) return;
+    if (!invPageDone.current) {
+      invPageDone.current = true;
+      const inv = Invite.fromPage(window.location);
+      if (inv) {
+        try { window.history.replaceState(null, "", window.location.pathname); } catch (e) { /* niente */ }
+        local.set("bt-inv", { code: inv.code, name: inv.name, from: inv.from });
+      }
+    }
+    const inv = local.get("bt-inv");
+    if (!inv || !Invite.LEAGUE_RE.test(String(inv.code || ""))) return;
+    if (account) { local.del("bt-inv"); openInvite(inv); }   // dopo l'accesso si riapre l'invito
+    else if (guest) openInvite(inv);
+  }, [account, guest]);   // eslint-disable-line react-hooks/exhaustive-deps
+  const nfcGotRef = useRef(nfcGot); nfcGotRef.current = nfcGot;
+  useEffect(() => {
+    const p = nfcPlug();
+    if (!p || PAGE.pc) return undefined;
+    let h = null, off = false, last = { u: "", t: 0 };
+    // l'app aperta da Android col link arriva due volte (takePending e l'evento tenuto per il primo ascoltatore): una basta
+    const got = u => { const t = Date.now(); if (off || (u === last.u && t - last.t < 5000)) return; last = { u, t }; nfcGotRef.current(u); };
+    Promise.resolve().then(() => p.takePending && p.takePending()).then(r => { if (r && r.url) got(String(r.url)); }).catch(() => {});
+    // con la lettura accesa (Entra in una lega) il link lo prende NfcReadOn: qui solo quelli da Android (app riaperta)
+    if (p.addListener) Promise.resolve().then(() => p.addListener("nfcUrl", e => { if (e && e.url && !document.querySelector("[data-nfc-reading]")) got(String(e.url)); })).then(x => { h = x; if (off && h && h.remove) h.remove(); }).catch(() => {});
+    return () => { off = true; if (h && h.remove) h.remove(); };
+  }, []);
   if (PAGE.pc) {
     const d = pcScr.doc;
-    if (pcScr.state !== "collegato" || !d) return <PcWaitScreen code={pcScr.code} since={pcScr.since} />;
+    if (pcScr.state !== "collegato" || !d) return <PcWaitScreen code={pcScr.code} since={pcScr.since} resuming={pcScr.state === "riprendo"} />;
     if (!d.pro) return <PcProScreen name={d.name} />;
     const pcSt = live ? (st0 => (st0 && live.ongoing && st0.finished ? { ...st0, finished: false } : st0))(live.sim.state()) : null;
     const own = pcOwn && Date.now() - pcOwn.at < 8000 ? pcOwn : null;
@@ -14847,7 +15300,7 @@ function App() {
     mode={swipe.mode || "taste"} onMode={m => { if (!guest && !userDataWait()) setSwipe(s => ({ ...s, mode: m })); }} rain={psRain} onEgg={psEgg} streak={{ n: (swipe.streak || {}).n || 0 }}
     endInfo={psEndInfo} onSaved={() => { setSavedOnly(true); setView("tab"); goTab("home"); }} onShare={psShare} onDuel={!guest ? sendDuel : null} />;
   else if (view === "chats") body = <ChatsView chats={chats} onOpen={openChat} blocked={blocked} onBack={viewBack.chats} unreadOf={(id, ms) => Chat.unread(id, ms)} />;
-  else if (view === "profilo") body = <ProfiloScreen onPcLink={() => { setPcMsg(null); setPcView(pcLink ? "remote" : "intro"); }} pcLinked={!!pcLink} onPromo={() => setPromoOpen(true)}promoUntil={promoMine.until} tv={tvMode} onTv={v => { setTvMode(v); local.set("bt-tv", v); fx.play("tick"); showToast(v ? "Modalità TV: lo schermo resta acceso finché l'app è aperta" : "Modalità TV spenta"); }} onChangelog={changelogGo} onCoffee={Billing.where() ? buyCoffee : null} coffeePrice={playPrices.coffee || null} ig={ig} onOpenIg={() => { setIgFrom("profilo"); setView("instagram"); }} aboutMe={aboutMe} onSaveAboutMe={a => Account.updateAbout(a).catch(e => showToast(e && (e.code === "too-young" || e.code === "not-loaded") ? messageOf(e) : NOT_SAVED))} account={account} onSaveName={n => Account.updateName(n)} isAdmin={Account.isAdmin()} trial={trialActive ? trial : null} trialUsed={!!trial} onBack={viewBack.profilo} onNotifiche={() => setView("notifiche")} onPremium={() => setPremiumOpen(true)} onAdmin={() => guest ? needLogin("Accedi per usare il pannello admin.") : setView(adminUnlocked ? "admin" : "hack")} onHack={() => { setView("hack"); if (account && Account.refreshAdmin) Account.refreshAdmin().catch(() => {}); }} onLogout={logout} isPremium={isPaid} onAbout={() => setInfoModal({ title: "Info su B&T", body: ABOUT_TEXT, credits: true })} onFeedback={() => setFeedbackOpen(true)} onHelp={() => setInfoModal({ title: "Assistenza", body: HELP_TEXT })} favTeam={favTeam} favDriver={favDriver} onPickTeam={() => guest ? needLogin("Per scegliere scuderia e pilota del cuore serve un account.") : setPicker("team")} onPickDriver={() => guest ? needLogin("Per scegliere scuderia e pilota del cuore serve un account.") : setPicker("driver")} guest={guest} onLogin={() => needLogin(null)} onTerms={() => setTermsOpen(true)} blocked={blocked} onUnblock={unblockUser} onDeleteAccount={deleteAccount} savedCount={saved.length} onOpenSaved={openSaved} onTheme={() => setThemeOpen(true)} helmet={helmet} onHelmet={() => setHelmetOpen(true)} trophies={trophies} trophyProg={trophyProg} trophyList={trophyList}
+  else if (view === "profilo") body = <ProfiloScreen onPcLink={() => { setPcMsg(null); setPcView(pcLink ? "remote" : "intro"); }} pcLinked={!!pcLink} onNfc={nfcPlug() ? () => nfcOpen("hub") : null} onPromo={() => setPromoOpen(true)}promoUntil={promoMine.until} tv={tvMode} onTv={v => { setTvMode(v); local.set("bt-tv", v); fx.play("tick"); showToast(v ? "Modalità TV: lo schermo resta acceso finché l'app è aperta" : "Modalità TV spenta"); }} onChangelog={changelogGo} onCoffee={Billing.where() ? buyCoffee : null} coffeePrice={playPrices.coffee || null} ig={ig} onOpenIg={() => { setIgFrom("profilo"); setView("instagram"); }} aboutMe={aboutMe} onSaveAboutMe={a => Account.updateAbout(a).catch(e => showToast(e && (e.code === "too-young" || e.code === "not-loaded") ? messageOf(e) : NOT_SAVED))} account={account} onSaveName={n => Account.updateName(n)} isAdmin={Account.isAdmin()} trial={trialActive ? trial : null} trialUsed={!!trial} onBack={viewBack.profilo} onNotifiche={() => setView("notifiche")} onPremium={() => setPremiumOpen(true)} onAdmin={() => guest ? needLogin("Accedi per usare il pannello admin.") : setView(adminUnlocked ? "admin" : "hack")} onHack={() => { setView("hack"); if (account && Account.refreshAdmin) Account.refreshAdmin().catch(() => {}); }} onLogout={logout} isPremium={isPaid} onAbout={() => setInfoModal({ title: "Info su B&T", body: ABOUT_TEXT, credits: true })} onFeedback={() => setFeedbackOpen(true)} onHelp={() => setInfoModal({ title: "Assistenza", body: HELP_TEXT })} favTeam={favTeam} favDriver={favDriver} onPickTeam={() => guest ? needLogin("Per scegliere scuderia e pilota del cuore serve un account.") : setPicker("team")} onPickDriver={() => guest ? needLogin("Per scegliere scuderia e pilota del cuore serve un account.") : setPicker("driver")} guest={guest} onLogin={() => needLogin(null)} onTerms={() => setTermsOpen(true)} blocked={blocked} onUnblock={unblockUser} onDeleteAccount={deleteAccount} savedCount={saved.length} onOpenSaved={openSaved} onTheme={() => setThemeOpen(true)} helmet={helmet} onHelmet={() => setHelmetOpen(true)} trophies={trophies} trophyProg={trophyProg} trophyList={trophyList}
     onAdPrivacy={Ads.privacyRequired() ? () => Ads.openPrivacy().catch(() => showToast("Le preferenze sulla privacy degli annunci non sono disponibili in questo momento.")) : null}
     sounds={sounds} haptics={haptics} onSounds={v => { if (userDataWait()) return; setSounds(v); fx.setSounds(v); if (v) fx.play("tick"); }} onHaptics={v => { if (userDataWait()) return; setHaptics(v); fx.setHaptics(v); if (v) fx.buzz("light"); }}
     holidays={holidaysOn} onHolidays={v => { if (userDataWait()) return; setHolidaysOn(v); local.set("bt-holidays-on", v); fx.play("tick"); }}
@@ -14883,7 +15336,7 @@ function App() {
     else if (tab === "garage") body = <GarageScreen openGame={garageGame} onGameOpened={() => setGarageGame(null)} races={races} pitBest={pitBest} onPitResult={t => {
       if (activeDuel && myAid) { const id = activeDuel; setActiveDuel(null); Duels.reply({ id, aid: myAid, time: t }).then(item => { setDuelsArr(a => [...a, item]); showToast("Sfida giocata: risultato in Home"); }, () => showToast("Risposta alla sfida non inviata")); }
       if (!userDataWait()) { setPitBest(b => b == null || t < b ? t : b); psBump("pit"); } }} sillyPreds={sillyPreds} onPredict={predictSeat} sillyOfficial={sillyOfficial} live={live} stratPreds={stratPreds} onStrat={(id, st) => { if (!userDataWait()) setStratPreds(x => ({ ...x, [id]: { stints: st, at: nowMs() } })); }} bluffTags={bluffNow} onBluffRefresh={loadBluffTags} />;
-    else if (tab === "fanta") body = <FantaScreen standings={shownStandings} squad={squad} setSquad={setSquad} base={squadBase} freeTransfers={freeTransfers} budget={FANTA_BUDGET} listing={fantaStats} stats={shownFantaStats} race={fantaRace} lock={teamLockInfo} weekends={fantaLive} isPremium={isPremium} onPremium={() => setPremiumOpen(true)} onToast={showToast} bonus={bonus} leagues={leagueRows} elo={fantaElo} seasonPts={fantaSeason.total} realWeek={fantaRace ? fantaSeason.rounds.find(r => r.round === fantaRace.round) || null : null} meAid={account ? account.aid : null} onCreateLeague={createLeague} onJoinLeague={joinLeague} onLeaveLeague={leaveLeague} onRenameLeague={renameLeague} needAccount={needAccount} predictions={predictionsOpen} predAnswers={predAnswers} predLockOf={predLockOf} onAnswerPrediction={answerPrediction} raceNameOf={round => { const r = races.find(x => x.round === round); return r ? r.name : ""; }} />;
+    else if (tab === "fanta") body = <FantaScreen onInvite={l => nfcInviteFrom(leagues.find(x => x.code === l.code) || l)} onJoinTap={v => nfcOpen(v)} standings={shownStandings} squad={squad} setSquad={setSquad} base={squadBase} freeTransfers={freeTransfers} budget={FANTA_BUDGET} listing={fantaStats} stats={shownFantaStats} race={fantaRace} lock={teamLockInfo} weekends={fantaLive} isPremium={isPremium} onPremium={() => setPremiumOpen(true)} onToast={showToast} bonus={bonus} leagues={leagueRows} elo={fantaElo} seasonPts={fantaSeason.total} realWeek={fantaRace ? fantaSeason.rounds.find(r => r.round === fantaRace.round) || null : null} meAid={account ? account.aid : null} onCreateLeague={createLeague} onJoinLeague={joinLeague} onLeaveLeague={leaveLeague} onRenameLeague={renameLeague} needAccount={needAccount} predictions={predictionsOpen} predAnswers={predAnswers} predLockOf={predLockOf} onAnswerPrediction={answerPrediction} raceNameOf={round => { const r = races.find(x => x.round === round); return r ? r.name : ""; }} />;
     return body;
   }
 
@@ -14966,7 +15419,8 @@ function App() {
         {ssOpen && <SecondScreen chat={chats.find(c => c.id === "generale")} blocked={blocked} onChatSend={guest ? () => needLogin("Per scrivere in chat serve un account.") : t => sendMessage("generale", t)} race={live ? races.find(r => r.id === live.raceId) : weekendRace(races)} live={live} st={liveSt} standings={shownStandings} layout={ssLayout} setLayout={setSsLayout} prefs={ssPrefs} setPrefs={setSsPrefs} vote={live ? votesNow.dotd[live.raceId] || {} : {}} onVote={(k, id) => live && voteDotd(live.raceId, k, id)} notice={notice} onCloseNotice={nextNotice} onClose={() => setSsOpen(false)} />}
         {payFail && <PayFailCard onDone={() => setPayFail(false)} />}
         {champShow && <ChampionTakeover champ={champion} onClose={() => { local.set(champKey, true); setChampSeen(true); }} />}
-        {pcView && <PcLinkSheet view={pcView} scanAvail={pcScanAvail} digits={pcDigits} busy={pcBusy} msg={pcMsg} scanOk={pcScanOk} onGo={pcGo} onKey={pcKey} onClose={() => { pcTry.current++; setPcBusy(false); setPcView(null); }} link={{ fresh: !!pcRemote && nowMs() - pcRemote.seenAt < PairLogic.ACK_MS, ua: pcRemote && pcRemote.ua }} st={liveSt} panels={pcPanels} prefs={ssPrefs} onFocus={id => setSsPrefs(p => ({ ...p, tel: id }))} onPanel={id => pcPanelsSet(l => PairLogic.togglePanel(l, id))} onMove={(id, dir) => pcPanelsSet(l => PairLogic.movePanel(l, id, dir))} onUnlink={pcUnlink} />}
+        {pcView && <PcLinkSheet view={pcView} scanAvail={pcScanAvail} digits={pcDigits} busy={pcBusy} msg={pcMsg} onScanned={pcScanned} onGo={pcGo} onKey={pcKey} onClose={() => { pcTry.current++; setPcBusy(false); setPcView(null); }} link={{ fresh: !!pcRemote && nowMs() - pcRemote.seenAt < PairLogic.ACK_MS, ua: pcRemote && pcRemote.ua }} st={liveSt} panels={pcPanels} prefs={ssPrefs} onFocus={id => setSsPrefs(p => ({ ...p, tel: id }))} onPanel={id => pcPanelsSet(l => PairLogic.togglePanel(l, id))} onMove={(id, dir) => pcPanelsSet(l => PairLogic.movePanel(l, id, dir))} onUnlink={pcUnlink} />}
+        {nfcView && <LegaNfcSheet view={nfcView} nfc={nfc} leagues={leagues} inviteLeague={nfcLeague} invite={nfcInv} meAid={account ? account.aid : null} busy={nfcBusy} msg={nfcMsg} onGo={nfcGo} onClose={() => { if (nfcBusy) return; setNfcView(null); local.del("bt-inv"); }} onPickLeague={nfcInviteFrom} onShare={nfcShare} onJoin={nfcJoin} onOpenFanta={() => { setNfcView(null); goTab("fanta"); }} onRead={nfcGot} onReadError={() => setNfcMsg("Non ho letto bene: riavvicina i telefoni e tienili fermi.")} onScanned={nfcGot} />}
         {proAsk && <ProGateSheet what={proAsk.what} hint={proHintOf(proAsk.what)} busy={adBusy} onAd={Ads.canReward() ? () => watchAdPro(proAsk.then) : null} onPremium={() => { setProAsk(null); setPremiumOpen(true); }} onClose={() => setProAsk(null)} />}
         {lapList && live && liveSt && <LapTimesModal live={live} st={liveSt} carId={lapList} onOpenLap={n => setTelemetry({ carId: lapList, lapNo: n, sector: 0 })} onClose={() => setLapList(null)} />}
         {telemetry && live && liveSt && <TelemetryModal live={live} st={liveSt} carId={telemetry.carId} lapNo={telemetry.lapNo} sector={telemetry.sector} onClose={() => setTelemetry(null)} />}

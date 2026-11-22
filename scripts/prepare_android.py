@@ -238,3 +238,73 @@ if "SecureScreenPlugin" not in src:
         sys.exit(f"ERRORE: MainActivity diversa da quella di Capacitor, SecureScreen non registrato ({main_act})")
     open(main_act, "w", encoding="utf-8").write(src)
 print("Plugin SecureScreen aggiunto (notizie protette dagli screenshot)")
+
+# ── 21/11 NFC: inviti in lega e collegamenti col tocco ──
+# Plugin nativo BtNfc (lettura di tag e telefoni, condivisione di un link con l'emulazione di tag) + servizio BtHceService.
+# I sorgenti sono modelli in resources/android-nfc/ con __PKG__ al posto del package di MainActivity.
+NFC_SRC = "resources/android-nfc"
+java_dir = os.path.dirname(main_act)
+for name in ("BtNfcPlugin.java", "BtHceService.java"):
+    tpl = open(os.path.join(NFC_SRC, name), encoding="utf-8").read()
+    open(os.path.join(java_dir, name), "w", encoding="utf-8").write(tpl.replace("__PKG__", pkg))
+xml_dir = os.path.join(RES_DIR, "xml")
+os.makedirs(xml_dir, exist_ok=True)
+shutil.copyfile(os.path.join(NFC_SRC, "apduservice.xml"), os.path.join(xml_dir, "bt_apduservice.xml"))
+print("Plugin NFC (BtNfcPlugin, BtHceService, bt_apduservice.xml) copiato nel progetto")
+
+# Registrazione in MainActivity, subito dopo SecureScreen
+src = open(main_act, encoding="utf-8").read()
+if "BtNfcPlugin" not in src:
+    anchor = "registerPlugin(SecureScreenPlugin.class);"
+    if anchor not in src:
+        sys.exit(f"ERRORE: riga di SecureScreen non trovata in {main_act}, plugin NFC non registrato")
+    src = src.replace(anchor, anchor + "\n        registerPlugin(BtNfcPlugin.class);", 1)
+    open(main_act, "w", encoding="utf-8").write(src)
+print("Plugin NFC registrato in MainActivity")
+
+# Manifest: permessi, funzioni, servizio di emulazione e filtro per i link del sito
+manifest = open(MANIFEST).read()
+if "android.permission.NFC" not in manifest:
+    manifest = manifest.replace(
+        "<application",
+        '<uses-permission android:name="android.permission.NFC" />\n'
+        '    <uses-feature android:name="android.hardware.nfc" android:required="false" />\n'
+        '    <uses-feature android:name="android.hardware.nfc.hce" android:required="false" />\n'
+        "    <application",
+        1,
+    )
+if "BtHceService" not in manifest:
+    # Nome completo col package di MainActivity: il namespace del manifest potrebbe essere diverso
+    manifest = manifest.replace(
+        "</application>",
+        f'    <service android:name="{pkg}.BtHceService" android:exported="true" '
+        'android:permission="android.permission.BIND_NFC_SERVICE">'
+        '<intent-filter><action android:name="android.nfc.cardemulation.action.HOST_APDU_SERVICE" /></intent-filter>'
+        '<meta-data android:name="android.nfc.cardemulation.host_apdu_service" android:resource="@xml/bt_apduservice" />'
+        "</service>\n    </application>",
+        1,
+    )
+if "NDEF_DISCOVERED" not in manifest:
+    manifest, n = re.subn(
+        r'(<activity\b[^>]*android:name="[^"]*MainActivity"[^>]*>.*?)(</activity>)',
+        lambda m: m.group(1)
+        + '    <intent-filter><action android:name="android.nfc.action.NDEF_DISCOVERED" />'
+        '<category android:name="android.intent.category.DEFAULT" />'
+        '<data android:scheme="https" android:host="bt-app-2.vercel.app" /></intent-filter>\n        '
+        + m.group(2),
+        manifest,
+        count=1,
+        flags=re.S,
+    )
+    if not n:
+        sys.exit(f"ERRORE: <activity> di MainActivity non trovata in {MANIFEST}")
+if "android.permission.CAMERA" not in manifest:
+    manifest = manifest.replace(
+        "<application",
+        '<uses-permission android:name="android.permission.CAMERA" />\n'
+        '    <uses-feature android:name="android.hardware.camera" android:required="false" />\n'
+        "    <application",
+        1,
+    )
+open(MANIFEST, "w").write(manifest)
+print("NFC e fotocamera (lettore QR) aggiunti al manifest")

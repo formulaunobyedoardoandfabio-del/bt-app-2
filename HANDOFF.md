@@ -1357,3 +1357,33 @@ Misure prima del lavoro (pagina di prova, CPU rallentata 4x come un telefono med
   nessun PC mostra, senza Pro. Le pagine che aspettano vanno in primo piano (Chrome rallenta i timer delle schede dietro).
 - DA FARE A MANO (Edoardo): pubblicare in Firebase le regole nuove di `docs/firestore.rules` (blocco 8, `pair/`),
   sennò il collegamento dà "permessi mancanti".
+
+### 22/11 notte: lettore QR dentro l'app, PC che resta collegato, NFC e inviti in lega
+- Richiesta di Edoardo: lettore QR dentro l'APK con la grafica "Scansiona" e il consenso alla fotocamera; il PC resta
+  collegato se si chiude la pagina; collegamento anche con l'NFC, anche per far entrare gli amici nella propria lega
+  (grafiche N1-N8 in "B&T: Collega PC").
+- Lettore QR: `CamScan` (passi avvio, consenso, negato, scan, ok, niente) col plugin
+  `@capacitor-mlkit/barcode-scanning` (`startScan` con la fotocamera dietro la pagina trasparente, classe `bt-cam`),
+  permesso CAMERA nel manifest; senza `startScan` usa il lettore di Google, sul sito `getUserMedia` + BarcodeDetector.
+  Lo usano "Collega PC" e gli inviti.
+- PC: `local` `bt-pc-screen` col codice; riaprendo la pagina "RICOLLEGO IL TELEFONO…" e torna collegato
+  (`usePcScreen`, stato "riprendo"). Prova in `run134` (ricarico).
+- Inviti in lega: link `https://bt-app-2.vercel.app/?lega=BT-XXXX&n=<nome>&da=<chi invita>` (`src/logic/invite.js`,
+  `test/unit/invite.test.js`, 3). `LegaNfcSheet`: hub NFC (N1, Profilo → "NFC: avvicina e fai", solo nell'APK),
+  "Entra in una lega" (N2, lettura NFC), "Inquadra l'invito" (lettore QR), "Invita in lega" (N4, da FANTA → Invita amici:
+  scheda della lega, il telefono fa da NFC col link, Condividi il link, Mostra il QR), invito (N5, "INVITO DA …",
+  Entra nella lega / Non ora), "Sei nella lega" (N6). FANTA → "Entra con un codice" mostra anche "Avvicina i telefoni
+  (NFC)" e "Inquadra il QR". Il sito aperto da un invito senza account tiene l'invito (`bt-inv`) e lo riapre dopo
+  l'accesso (le leghe si leggono solo con l'accesso).
+- NFC nativo: plugin `BtNfc` scritto da noi (`resources/android-nfc/`: `BtNfcPlugin.java`, `BtHceService.java`
+  emulazione di un tag NFC Forum Type 4 col link, `apduservice.xml`), messo da `scripts/prepare_android.py` (copia
+  col package giusto, `registerPlugin`, permesso NFC, servizio, filtro NDEF_DISCOVERED per i link del sito: toccando
+  un telefono che presta l'invito, Android apre l'app). Il link si toglie dall'NFC quando l'app va in pausa.
+- Non fatti (deciso): PC con l'NFC (nei browser del PC l'NFC non c'è: Web NFC solo Chrome per Android; il PC resta
+  col QR e le cifre); N7 "Aggiungi un tifoso" (non c'è un sistema di amici).
+- Prova `test/e2e/run135-nfc-lega.js` (8, BtNfc e BarcodeScanner finti): Invita amici (NFC col link, QR uguale al
+  link), entra col tocco, link sul sito senza account, QR con consenso, fotocamera negata, senza NFC o NFC spento,
+  app aperta da Android col link, sul sito niente NFC.
+- DA PROVARE A MANO (Edoardo, due telefoni Android con l'APK nuovo): NFC acceso su tutti e due; uno apre FANTA →
+  Invita amici, l'altro Profilo → NFC → Entra in una lega, schiena contro schiena. L'NFC qui non si prova: solo la
+  compilazione su GitHub.

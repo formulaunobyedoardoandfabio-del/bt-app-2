@@ -88,9 +88,9 @@ run({
     await p.screenshot({ path: path.join(SHOTS, 'tel-telecomando-390.png') });
     if (!remote) {
       const reads = pg => pg.evaluate(c => window.firebase.__fake.reads.filter(r => r === 'pair/' + c).length, code);
-      const why = { telReads: await reads(p), pcReads: await reads(pc), pcHidden: await pc.evaluate(() => document.visibilityState), tel: await sheet(p), pcNow: (await pcLook(pc)).code, code };
+      const why = { telReads: await reads(p), pcReads: await reads(pc), pcHidden: await pc.evaluate(() => document.visibilityState), pcNow: (await pcLook(pc)).code, code, doc: await p.evaluate(c => window.firebase.__fake.doc('pair/' + c), code), pcErrs, errs };
       await ctx.close();
-      throw new Error('il telefono non diventa il telecomando: ' + JSON.stringify(why).slice(0, 600));
+      throw new Error('il telefono non diventa il telecomando: ' + JSON.stringify(why).slice(0, 1400));
     }
     const linked = await until(async () => { const l = await pcLook(pc); return l.ss ? l : null; });
     await pc.screenshot({ path: path.join(SHOTS, 'pc-pannelli-1280.png') });
@@ -166,7 +166,11 @@ run({
     const phone = await until(async () => { const s = await p.evaluate(() => [...document.querySelectorAll('[data-pc-row]')].filter(r => r.querySelector('[role="switch"][aria-checked="true"]')).map(r => r.getAttribute('data-pc-row')).join()); return s === want ? s : null; }, 14000);
     const kept = await p.evaluate(() => JSON.parse(localStorage.getItem('bt_bt-pc-panels') || 'null'));
     const stable = (await pcLook(pc)).slots.join();
+    // 22/11 (Edoardo: "il pc non resta collegato se viene chiusa"): riaprendo la pagina del PC si ricollega da solo
+    await pc.reload({ waitUntil: 'load' });
+    const again = await until(async () => { const l = await pcLook(pc); return l.ss ? l : null; }, 12000);
     await ctx.close();
+    assert(again && again.slots.join() === want, 'il PC riaperto torna collegato con gli stessi pannelli: ' + JSON.stringify(again && again.slots));
     assert(remote, 'collegati');
     assert(big && big.id === 'classifica' && big.w > 900 && big.rows > 12, 'pannello grande: ' + JSON.stringify(big));
     assert(closed, 'si richiude');
