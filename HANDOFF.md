@@ -1551,3 +1551,11 @@ Misure prima del lavoro (pagina di prova, CPU rallentata 4x come un telefono med
   bt_gara.ogg = fruscio F1 (3 s con sfumata) per inizio e metà gara. Nomi dei file e canali uguali: chi ha già
   installato l'APK di prima sente subito i suoni giusti (il canale punta al file per nome).
 - Prova unit notif-sounds controlla anche le durate (avvitatore corto, fruscio lungo).
+
+## 22/11 notte (5): crediti dei suoni
+- Profilo → Info su B&T (ABOUT_TEXT in src/App.jsx): "Suoni delle notifiche da Freesound.org, licenza CC BY:
+  avvitatore del pit “air impact wrench” di sevenbsb, fruscio F1 “formula 1 whoosh zip flyby 6” di Geoff-Bremner-Audio."
+- Autori presi dai nomi dei file di Freesound (745819__geoff-bremner-audio__formula-1-whoosh..., 349398-sevenbsb-air-
+  impact-wrench). Edoardo li aveva scritti al contrario: da controllare sulle due pagine di Freesound, con la versione
+  della licenza (3.0 o 4.0), che da qui non si aprono.
+- Prova: unit sound-credits (1).
