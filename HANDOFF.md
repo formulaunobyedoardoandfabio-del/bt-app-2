@@ -1507,3 +1507,12 @@ Misure prima del lavoro (pagina di prova, CPU rallentata 4x come un telefono med
   FirebaseMessaging) non chiedono niente da soli (controllato anche il sorgente del plugin FCM).
 - Prove: unit auto-news (6), run99 (5), run85 promemoria (2, aggiornate al tocco), run100, run102, run103, run136,
   run137, run10-run19 verdi. La prova completa non è stata rifatta.
+
+## 22/11 notte (2): DA FARE (chiesti da Edoardo, non iniziati: uso settimanale al 95%)
+1. Funzione box (quadrante con le auto che girano in senso orario) anche durante la gara live.
+2. Replay e funzioni delle gare passate anche per quelle appena corse (es. Las Vegas), in automatico per tutte.
+   Visto: public/data/replay/index.json fermo al 15/11; replay-f1.yml gira lunedì e martedì alle 6:17 UTC, quindi
+   Las Vegas dovrebbe arrivare da sola lunedì 23/11 (da controllare). L'archivio 2026 (src/data/real-weekend.js) ha i
+   round 1-16: capire perché dati-f1.yml non aggiunge 17-21 e farlo andare da solo dopo ogni gara.
+3. Ordine personalizzabile degli elementi di ogni pagina (Home, Race, Fanta, Profilo...): da progettare (elenco
+   sezioni per pagina, "Modifica ordine" con trascinamento, salvato in account/telefono).
