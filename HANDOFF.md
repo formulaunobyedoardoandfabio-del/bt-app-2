@@ -1559,3 +1559,11 @@ Misure prima del lavoro (pagina di prova, CPU rallentata 4x come un telefono med
   impact-wrench). Edoardo li aveva scritti al contrario: da controllare sulle due pagine di Freesound, con la versione
   della licenza (3.0 o 4.0), che da qui non si aprono.
 - Prova: unit sound-credits (1).
+
+## 24/11: Play Console "android.hardware.screen.portrait" obbligatorio
+- Il lettore QR (@capacitor-mlkit/barcode-scanning → GmsBarcodeScanningDelegateActivity di Google) è bloccato in
+  verticale: Play ne deduce lo schermo verticale obbligatorio e toglie tablet, Chromebook e Android XR.
+- scripts/prepare_android.py aggiunge `<uses-feature android:name="android.hardware.screen.portrait"
+  android:required="false" />` (vale per l'APK di prova e per l'AAB di Codemagic "B&T - Play Store").
+- Da fare: Edoardo rifà l'AAB su Codemagic, lo carica in una release nuova (versionCode più alto) e Play non dà più
+  l'avviso. Prova: unit prepare-android-icons (5).

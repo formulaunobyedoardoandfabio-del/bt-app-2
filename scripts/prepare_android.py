@@ -306,8 +306,17 @@ if "android.permission.CAMERA" not in manifest:
         "    <application",
         1,
     )
+# 24/11 Play Console: il lettore QR di Google (GmsBarcodeScanningDelegateActivity) è bloccato in verticale, e Play ne
+# deduce "android.hardware.screen.portrait" obbligatorio: tablet, PC e Android XR non potevano installare l'app.
+if "android.hardware.screen.portrait" not in manifest:
+    manifest = manifest.replace(
+        "<application",
+        '<uses-feature android:name="android.hardware.screen.portrait" android:required="false" />\n'
+        "    <application",
+        1,
+    )
 open(MANIFEST, "w").write(manifest)
-print("NFC e fotocamera (lettore QR) aggiunti al manifest")
+print("NFC, fotocamera (lettore QR) e schermo verticale facoltativo nel manifest")
 
 # ── 22/11 SUONI DELLE NOTIFICHE (resources/sounds -> res/raw): bt_news (notizie), bt_gara (inizio e metà gara) ──
 if os.path.isdir("resources/sounds"):
