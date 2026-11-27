@@ -1,0 +1,8 @@
+{
+  "appId": "it.btapp.app",
+  "appName": "Sector 4",
+  "webDir": "build",
+  "server": {
+    "androidScheme": "https"
+  }
+}

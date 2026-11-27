@@ -1,0 +1,292 @@
+{
+ "_nota": "Esempi veri dei documenti Firebase di oggi: valori di partenza di bt-app-flutter/src/App.jsx (D_NEWS, D_RACES, D_PILOTI, D_COSTR, D_IG) e i formati di docs/riferimenti/confronto-app-oggi-2.0.md (B2), più qualche caso strano (Review Focus 3).",
+ "news": [
+  {
+   "id": "n1",
+   "title": "Vi presentiamo l'app B&T!!",
+   "summary": "Introduzione all'app ufficiale",
+   "category": "APP",
+   "author": "Team B&T",
+   "image": "",
+   "published": true,
+   "date": "2026-09-01T10:00:00",
+   "content": "Benvenuti nell'app ufficiale B&T Formula1!\n\nQui troverete tutte le ultime notizie, classifiche mondiali in tempo reale, live race tracking con dati dalle gomme ai distacchi, e presto anche il Fanta F1.\n\nRestate sintonizzati per tutti gli aggiornamenti della stagione 2026!"
+  },
+  {
+   "id": "mz4k1abc",
+   "title": "Mercato piloti: chi cambia squadra",
+   "summary": "Le voci della settimana",
+   "category": "Mercato",
+   "author": "Edoardo",
+   "image": "fsimg:mz4k0xyz",
+   "published": false,
+   "date": "2026-10-05T18:30:00.000Z",
+   "content": "Primo paragrafo.\n\nSecondo paragrafo."
+  }
+ ],
+ "races": [
+  {
+   "id": "r1",
+   "name": "Madrid GP",
+   "circuit": "MADRING",
+   "country": "Spagna",
+   "round": 17,
+   "date": "2026-09-13T15:00:00",
+   "status": "CONCLUSA",
+   "totalLaps": 57
+  },
+  {
+   "id": "r2",
+   "name": "Azerbaijan GP",
+   "circuit": "CIRCUITO DI BAKU",
+   "country": "Azerbaijan",
+   "round": 18,
+   "date": "2026-09-26T13:00:00",
+   "status": "IN ARRIVO",
+   "totalLaps": 51
+  },
+  {
+   "id": "r3",
+   "name": "GP di Fantasia",
+   "circuit": "Pista Inventata",
+   "country": "Atlantide",
+   "round": "30",
+   "date": "2026-12-31",
+   "status": "IN ARRIVO",
+   "totalLaps": 40
+  }
+ ],
+ "piloti": [
+  {
+   "id": "p1",
+   "name": "Andrea Kimi Antonelli",
+   "team": "MERCEDES",
+   "position": 1,
+   "points": 267
+  },
+  {
+   "id": "p2",
+   "name": "George Russell",
+   "team": "MERCEDES",
+   "position": 2,
+   "points": 201
+  },
+  {
+   "id": "p3",
+   "name": "Lewis Hamilton",
+   "team": "FERRARI",
+   "position": 3,
+   "points": 191
+  },
+  {
+   "id": "p4",
+   "name": "Lando Norris",
+   "team": "MCLAREN",
+   "position": 4,
+   "points": 171
+  },
+  {
+   "id": "p5",
+   "name": "Charles Leclerc",
+   "team": "FERRARI",
+   "position": 5,
+   "points": 155
+  },
+  {
+   "id": "p6",
+   "name": "Max Verstappen",
+   "team": "RED BULL",
+   "position": 6,
+   "points": 127
+  },
+  {
+   "id": "p7",
+   "name": "Oscar Piastri",
+   "team": "MCLAREN",
+   "position": 7,
+   "points": 116
+  },
+  {
+   "id": "p8",
+   "name": "Isack Hadjar",
+   "team": "RED BULL",
+   "position": 8,
+   "points": 71
+  },
+  {
+   "id": "p9",
+   "name": "Liam Lawson",
+   "team": "RB F1 TEAM",
+   "position": 9,
+   "points": 51
+  },
+  {
+   "id": "p10",
+   "name": "Pierre Gasly",
+   "team": "ALPINE F1 TEAM",
+   "position": 10,
+   "points": 41
+  },
+  {
+   "id": "p11",
+   "name": "Mario Rossi",
+   "team": "FERRARI",
+   "position": 11,
+   "points": null
+  }
+ ],
+ "costruttori": [
+  {
+   "id": "c1",
+   "name": "Mercedes",
+   "position": 1,
+   "points": 468
+  },
+  {
+   "id": "c2",
+   "name": "Ferrari",
+   "position": 2,
+   "points": 346
+  },
+  {
+   "id": "c3",
+   "name": "McLaren",
+   "position": 3,
+   "points": 287
+  },
+  {
+   "id": "c4",
+   "name": "Red Bull",
+   "position": 4,
+   "points": 204
+  },
+  {
+   "id": "c5",
+   "name": "RB F1 Team",
+   "position": 5,
+   "points": 75
+  },
+  {
+   "id": "c6",
+   "name": "Alpine F1 Team",
+   "position": 6,
+   "points": 62
+  },
+  {
+   "id": "c7",
+   "name": "Haas F1 Team",
+   "position": 7,
+   "points": 21
+  },
+  {
+   "id": "c8",
+   "name": "Audi",
+   "position": 8,
+   "points": 16
+  },
+  {
+   "id": "c9",
+   "name": "Williams",
+   "position": 9,
+   "points": 11
+  },
+  {
+   "id": "c10",
+   "name": "Aston Martin",
+   "position": 10,
+   "points": 3
+  },
+  {
+   "id": "c11",
+   "name": "Cadillac F1 Team",
+   "position": 11,
+   "points": 0
+  }
+ ],
+ "ig": {
+  "followers": 128544,
+  "videos": [
+   {
+    "id": "v1",
+    "title": "Sorpasso impossibile alla Variante del Rettifilo",
+    "thumbnail": "https://images.unsplash.com/photo-1624778305680-f4d2cd2e5949?w=600&q=80",
+    "views": "342.000",
+    "likes": "28.400",
+    "url": "https://www.instagram.com/bt_formula1/"
+   },
+   {
+    "id": "v2",
+    "title": "Monza di notte vista dal drone: spettacolare",
+    "thumbnail": "https://images.unsplash.com/photo-1567829155043-e31e94e5e0a3?w=600&q=80",
+    "views": "276.000",
+    "likes": "21.900",
+    "url": "https://www.instagram.com/bt_formula1/"
+   },
+   {
+    "id": "v3",
+    "title": "Il pit stop perfetto di Ferrari a Singapore",
+    "thumbnail": "https://images.unsplash.com/photo-1552519507-da3b142c6e3d?w=600&q=80",
+    "views": "198.000",
+    "likes": "15.700",
+    "url": "https://www.instagram.com/bt_formula1/"
+   }
+  ]
+ },
+ "notifs": [
+  {
+   "id": "nt1",
+   "title": "Benvenuti!",
+   "text": "La nuova app B&T è arrivata.",
+   "date": "2026-10-01T09:00:00.000Z",
+   "read": false
+  },
+  {
+   "id": "nt2",
+   "title": "Gara LIVE",
+   "text": "Segui Singapore con noi.",
+   "date": "2026-10-06T12:00:00.000Z",
+   "read": false
+  }
+ ],
+ "chat": [
+  {
+   "id": "m1",
+   "user": "Edo",
+   "txt": "messaggio vecchio senza aid",
+   "t": 1727000000000
+  },
+  {
+   "id": "m2",
+   "user": "Edo",
+   "aid": "u_altro",
+   "txt": "un omonimo",
+   "t": 1727000001000
+  }
+ ],
+ "report": {
+  "id": "rp1",
+  "room": "fantaf1",
+  "msgId": "m2",
+  "txt": "un omonimo",
+  "author": "Edo",
+  "aid": "u_altro",
+  "by": "Fabio",
+  "byAid": "u_fabio",
+  "t": 1727000002000
+ },
+ "oldUser": {
+  "name": "Edo",
+  "nick": "Edo",
+  "email": "edo@b.it",
+  "pw": "segreta",
+  "isPremium": false,
+  "premium": false,
+  "notif": {
+   "news": true,
+   "live": true,
+   "fanta": true
+  },
+  "ts": 1726000000000,
+  "plan": "free"
+ }
+}

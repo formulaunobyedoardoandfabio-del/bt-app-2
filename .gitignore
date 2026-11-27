@@ -8,5 +8,11 @@ __pycache__/
 *.pyc
 .superpowers/
 
-# Area di lavoro del piano (non va su GitHub)
-.superpowers/
+
+# Pagina e log delle prove (si rigenerano)
+test/e2e/app.js
+test/e2e/test.html
+test/e2e/video/
+test/logs/
+# Schermate che le prove della 2.0 (run9) salvano nella cartella principale
+/*.png
